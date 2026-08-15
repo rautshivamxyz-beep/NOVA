@@ -31,16 +31,24 @@ jobs:
           sdkmanager "build-tools;35.0.0"
           sdkmanager "ndk;25.2.9519653"
 
+      - name: Fix Buildozer legacy sdkmanager
+        run: |
+          mkdir -p "$ANDROID_SDK_ROOT/tools/bin"
+
+          mv "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" \
+             "$ANDROID_SDK_ROOT/tools/bin/sdkmanager.old" 2>/dev/null || true
+
+          cat > "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" <<'SCRIPT'
+          #!/bin/bash
+          exec "$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager" "$@"
+          SCRIPT
+
+          chmod +x "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
+
       - name: Install Buildozer
         run: |
           python3 -m pip install --upgrade pip
           pip install buildozer cython
-
-      - name: Prepare SDK tools for Buildozer
-        run: |
-          mkdir -p "$HOME/.buildozer/android/platform"
-          rm -rf "$HOME/.buildozer/android/platform/android-sdk"
-          ln -s "$ANDROID_SDK_ROOT" "$HOME/.buildozer/android/platform/android-sdk"
 
       - name: Build APK
         run: |
