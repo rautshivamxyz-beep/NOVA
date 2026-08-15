@@ -9,7 +9,7 @@ source.include_exts = py,kv,json,png,jpg,jpeg
 
 version = 1.0
 
-requirements = python3,kivy
+requirements = python3,kivy,kivymd
 
 orientation = portrait
 
