@@ -1,8 +1,11 @@
-from kivy.app import App
-from kivy.uix.label import Label
+from kivymd.app import MDApp
+from kivymd.uix.label import MDLabel
 
-class NOVAApp(App):
+class NOVATest(MDApp):
     def build(self):
-        return Label(text="NOVA TEST - KIVY WORKS")
+        return MDLabel(
+            text="NOVA TEST - KIVYMD WORKS",
+            halign="center"
+        )
 
-NOVAApp().run()
+NOVATest().run()
