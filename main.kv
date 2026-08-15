@@ -1,0 +1,47 @@
+#:import dp kivy.metrics.dp
+
+MDScreen:
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        # TOP BAR
+        MDTopAppBar:
+            title: "🤖 NOVA"
+            elevation: 4
+            right_action_items:
+                [
+                ["theme-light-dark", lambda x: app.toggle_theme()],
+                ["delete-outline", lambda x: app.clear_chat()]
+                ]
+
+        # CHAT AREA
+        ScrollView:
+            id: chat_scroll
+            do_scroll_x: False
+
+            MDBoxLayout:
+                id: chat_list
+                orientation: "vertical"
+                adaptive_height: True
+                padding: dp(12)
+                spacing: dp(12)
+
+        # INPUT AREA
+        MDBoxLayout:
+            size_hint_y: None
+            height: dp(70)
+            padding: dp(8)
+            spacing: dp(8)
+
+            MDTextField:
+                id: message_input
+                hint_text: "Message NOVA..."
+                mode: "outlined"
+                multiline: False
+                on_text_validate: app.send_message()
+
+            MDIconButton:
+                icon: "send"
+                pos_hint: {"center_y": .5}
+                on_release: app.send_message()
