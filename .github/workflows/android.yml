@@ -20,20 +20,35 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Fix old SDK manager
+        run: |
+          rm -f "$ANDROID_HOME/tools/bin/sdkmanager"
+          ln -s "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
+                "$ANDROID_HOME/tools/bin/sdkmanager"
+
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --licenses || true
 
       - name: Install Android SDK
         run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-33"
-          sdkmanager "build-tools;33.0.2"
-          sdkmanager "ndk;25.2.9519653"
+          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "ndk;25.2.9519653"
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake libtool pkg-config
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            autopoint \
+            libtool \
+            libltdl-dev \
+            libffi-dev \
+            pkg-config
           python3 -m pip install --upgrade pip
           pip install buildozer cython
 
