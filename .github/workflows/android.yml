@@ -8,6 +8,11 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -49,8 +54,8 @@ jobs:
             libltdl-dev \
             libffi-dev \
             pkg-config
-          python3 -m pip install --upgrade pip
-          pip install buildozer cython
+          python -m pip install --upgrade "pip<25"
+          python -m pip install "setuptools<70" "cython<3.1" buildozer
 
       - name: Build APK
         run: buildozer android debug
