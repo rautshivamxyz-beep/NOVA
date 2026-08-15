@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -25,19 +25,13 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Fix old SDK manager
-        run: |
-          rm -f "$ANDROID_HOME/tools/bin/sdkmanager"
-          ln -s "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
-                "$ANDROID_HOME/tools/bin/sdkmanager"
-
       - name: Accept Android SDK licenses
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --licenses || true
+          yes | sdkmanager --licenses || true
 
       - name: Install Android SDK
         run: |
-          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
+          sdkmanager \
             "platform-tools" \
             "platforms;android-33" \
             "build-tools;33.0.2" \
@@ -54,11 +48,26 @@ jobs:
             libltdl-dev \
             libffi-dev \
             pkg-config
+
+      - name: Install Python build tools
+        run: |
           python -m pip install --upgrade "pip<25"
-          python -m pip install "setuptools<70" "cython<3.1" buildozer
+          python -m pip install \
+            "setuptools<70" \
+            "cython<3.1" \
+            "python-for-android==2024.1.21" \
+            buildozer
+
+      - name: Show build versions
+        run: |
+          python --version
+          pip --version
+          buildozer --version
+          python -m pip show python-for-android
 
       - name: Build APK
-        run: buildozer android debug
+        run: |
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
