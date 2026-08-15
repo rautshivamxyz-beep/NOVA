@@ -20,11 +20,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Fix old Android SDK tools
+        run: |
+          sudo rm -rf "$ANDROID_SDK_ROOT/tools"
+          sudo ln -s "$ANDROID_SDK_ROOT/cmdline-tools/16.0" "$ANDROID_SDK_ROOT/tools"
+
       - name: Accept Android SDK licenses
         run: |
           yes | sdkmanager --licenses || true
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-33"
@@ -36,18 +41,7 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install buildozer cython
 
-      - name: Configure Buildozer
-        run: |
-          mkdir -p ~/.buildozer
-          cat > ~/.buildozer/default.spec <<'SPEC'
-          [buildozer]
-          log_level = 2
-          SPEC
-
       - name: Build APK
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
           buildozer android debug
 
