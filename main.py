@@ -6,6 +6,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.uix.label import Label
+from kivy.core.window import Window
 
 from nova import ask_nova
 
@@ -18,6 +19,7 @@ class NovaApp(App):
         return Builder.load_file("main.kv")
 
     def on_start(self):
+        Window.softinput_mode = "below_target"
         self.load_chat_history()
 
         if not self.chat_history:

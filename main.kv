@@ -23,19 +23,21 @@ BoxLayout:
 
     BoxLayout:
         size_hint_y: None
-        height: dp(65)
-        padding: dp(8)
-        spacing: dp(8)
+        height: dp(60)
+        padding: dp(6)
+        spacing: dp(6)
 
         TextInput:
             id: message_input
             hint_text: "Message NOVA..."
             multiline: False
             write_tab: False
+            font_size: dp(17)
+            padding: dp(10), dp(10)
             on_text_validate: app.send_message()
 
         Button:
             text: "SEND"
             size_hint_x: None
-            width: dp(80)
+            width: dp(75)
             on_release: app.send_message()
