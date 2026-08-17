@@ -64,7 +64,7 @@ class MainActivity : Activity() {
         input = EditText(this)
         input.hint = "Message NOVA..."
         input.textSize = 17f
-        input.singleLine = true
+        input.setSingleLine(true)
 
         send = Button(this)
         send.text = "SEND"
@@ -157,7 +157,7 @@ class MainActivity : Activity() {
             try {
 
                 engine =
-                    AiChat.INSTANCE.getInferenceEngine(this@MainActivity)
+                    com.arm.aichat.AiChat.INSTANCE.getInferenceEngine(this@MainActivity)
 
                 engine.setSystemPrompt(
                     "You are NOVA, a helpful offline AI assistant. " +
