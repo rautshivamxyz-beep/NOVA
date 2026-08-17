@@ -1,0 +1,43 @@
+name: Build llama.android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Checkout llama.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          path: llama.cpp
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0" "cmake;3.31.6" "ndk;25.2.9519653"
+
+      - name: Build llama.android
+        working-directory: llama.cpp/examples/llama.android
+        run: |
+          chmod +x gradlew
+          ./gradlew :lib:assembleRelease
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-android-release
+          path: llama.cpp/examples/llama.android/lib/build/outputs/aar/*.aar
