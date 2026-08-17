@@ -159,14 +159,14 @@ class MainActivity : Activity() {
                 val aiChat = AiChat::class.java.getField("INSTANCE").get(null) as AiChat
                 engine = aiChat.getInferenceEngine(this@MainActivity)
 
+                val path = copyModelToPrivateStorage(uri)
+                engine.loadModel(path)
+
+                
                 engine.setSystemPrompt(
                     "You are NOVA, a helpful offline AI assistant. " +
                     "Answer clearly and concisely."
                 )
-
-                val path = copyModelToPrivateStorage(uri)
-
-                engine.loadModel(path)
 
                 status.text = "🟢 NOVA ready — offline"
 
