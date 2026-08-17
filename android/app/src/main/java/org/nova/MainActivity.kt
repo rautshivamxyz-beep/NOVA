@@ -156,7 +156,6 @@ class MainActivity : Activity() {
 
             try {
 
-                engine =
                 val aiChat = AiChat::class.java.getField("INSTANCE").get(null) as AiChat
                 engine = aiChat.getInferenceEngine(this@MainActivity)
 
