@@ -157,7 +157,8 @@ class MainActivity : Activity() {
             try {
 
                 engine =
-                    com.arm.aichat.AiChat.INSTANCE.getInferenceEngine(this@MainActivity)
+                val aiChat = AiChat::class.java.getField("INSTANCE").get(null) as AiChat
+                engine = aiChat.getInferenceEngine(this@MainActivity)
 
                 engine.setSystemPrompt(
                     "You are NOVA, a helpful offline AI assistant. " +
