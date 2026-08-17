@@ -1,6 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:theme="@style/AppTheme"
@@ -20,5 +19,7 @@
         </activity>
 
     </application>
+
+    <uses-sdk tools:overrideLibrary="com.arm.aichat" />
 
 </manifest>
