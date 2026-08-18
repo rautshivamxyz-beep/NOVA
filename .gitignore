@@ -1,3 +1,27 @@
-models/*.gguf
+# Android / Gradle
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+build/
+
+# Temporary analysis files
+tmp/
+classdump/
+nova-test/
+*.jar
+*.so
+*.txt
+
+# Python cache
 __pycache__/
 *.pyc
+
+# Backups
+*_backup.py
+main_before_*.py
+main_before_*.kv
+nova_before_*.py
+
+# Local Llama models
+models/
