@@ -45,7 +45,7 @@ jobs:
 
       - name: Build NOVA APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Show APK
         run: |
