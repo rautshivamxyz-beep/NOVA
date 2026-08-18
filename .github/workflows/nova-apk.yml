@@ -1,6 +1,9 @@
 name: Build NOVA APK
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -23,8 +26,8 @@ jobs:
       - name: Install Android SDK
         run: |
           sdkmanager "platform-tools" \
-                     "platforms;android-35" \
-                     "build-tools;35.0.0"
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -39,10 +42,7 @@ jobs:
       - name: Verify APK
         working-directory: android
         run: |
-          echo "=== APK ==="
           ls -lh app/build/outputs/apk/debug/app-debug.apk
-          echo "=== APK manifest ==="
-          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/debug/app-debug.apk | head -5
 
       - name: Upload NOVA APK
         uses: actions/upload-artifact@v4
