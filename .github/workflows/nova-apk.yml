@@ -1,10 +1,10 @@
 name: Build NOVA APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
@@ -29,6 +29,15 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+      - name: Download Llama 3.2 1B GGUF
+        run: |
+          mkdir -p android/app/src/main/assets
+          curl -L --fail --retry 3 \
+            "https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf?download=true" \
+            -o android/app/src/main/assets/llama-3.2-1b-instruct-q4_k_m.gguf
+
+          ls -lh android/app/src/main/assets/llama-3.2-1b-instruct-q4_k_m.gguf
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -36,13 +45,11 @@ jobs:
 
       - name: Build NOVA APK
         working-directory: android
-        run: |
-          gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
-      - name: Verify APK
-        working-directory: android
+      - name: Show APK
         run: |
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload NOVA APK
         uses: actions/upload-artifact@v4
