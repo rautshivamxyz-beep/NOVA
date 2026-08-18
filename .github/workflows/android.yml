@@ -1,26 +1,28 @@
-name: Build NOVA APK
+name: NOVA Android APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build NOVA APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
+          cache: gradle
 
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
@@ -31,18 +33,43 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.10"
+      - name: Prepare Gradle
+        working-directory: android
+        run: chmod +x gradlew
 
-      - name: Build NOVA APK
+      - name: Verify environment
         working-directory: android
         run: |
-          gradle clean assembleDebug --stacktrace
+          echo "===== JAVA ====="
+          java -version
 
-      - name: Upload APK
+          echo
+          echo "===== GRADLE ====="
+          ./gradlew --version
+
+          echo
+          echo "===== AAPT2 OVERRIDE CHECK ====="
+          if grep -q '^android.aapt2FromMavenOverride=' gradle.properties 2>/dev/null; then
+            echo "ERROR: AAPT2 override still exists"
+            exit 1
+          else
+            echo "OK: No custom AAPT2 override"
+          fi
+
+      - name: Build NOVA Debug APK
+        working-directory: android
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Show APK
+        run: |
+          echo "===== APK ====="
+          find android/app/build/outputs/apk -type f -name "*.apk" -print
+
+      - name: Upload NOVA APK
         uses: actions/upload-artifact@v4
         with:
-          name: NOVA-APK
+          name: NOVA-debug-APK
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
