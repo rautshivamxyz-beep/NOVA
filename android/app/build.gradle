@@ -4,6 +4,9 @@ plugins {
 }
 
 android {
+    androidResources {
+        noCompress += ["gguf"]
+    }
     namespace 'org.nova'
     compileSdk 35
 
