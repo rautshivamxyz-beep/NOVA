@@ -6,9 +6,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.view.inputmethod.InputMethodManager
-import android.content.Context
 import android.widget.*
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
 import kotlinx.coroutines.*
@@ -25,7 +25,7 @@ class MainActivity : Activity() {
     private val scope =
         CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private fun bg(color: String, radius: Float): GradientDrawable {
+    private fun box(color: String, radius: Float): GradientDrawable {
         return GradientDrawable().apply {
             setColor(Color.parseColor(color))
             cornerRadius = radius
@@ -38,64 +38,54 @@ class MainActivity : Activity() {
         window.statusBarColor = Color.parseColor("#080B10")
         window.navigationBarColor = Color.parseColor("#080B10")
 
-        buildUI()
-        loadBundledModel()
+        createUI()
+        loadModel()
     }
 
-    private fun buildUI() {
+    private fun createUI() {
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#080B10"))
-        }
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.setBackgroundColor(Color.parseColor("#080B10"))
 
-        // HEADER
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(18, 14, 14, 10)
-        }
+        val header = LinearLayout(this)
+        header.orientation = LinearLayout.HORIZONTAL
+        header.gravity = Gravity.CENTER_VERTICAL
+        header.setPadding(18, 16, 14, 12)
 
-        val logo = TextView(this).apply {
-            text = "✦"
-            textSize = 32f
-            gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#60A5FA"))
-        }
+        val logo = TextView(this)
+        logo.text = "✦"
+        logo.textSize = 32f
+        logo.setTextColor(Color.parseColor("#60A5FA"))
+        logo.gravity = Gravity.CENTER
 
-        val titleBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(12, 0, 0, 0)
-        }
+        val titleBox = LinearLayout(this)
+        titleBox.orientation = LinearLayout.VERTICAL
+        titleBox.setPadding(12, 0, 0, 0)
 
-        val title = TextView(this).apply {
-            text = "NOVA"
-            textSize = 24f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-        }
+        val title = TextView(this)
+        title.text = "NOVA"
+        title.textSize = 24f
+        title.typeface = Typeface.DEFAULT_BOLD
+        title.setTextColor(Color.WHITE)
 
-        status = TextView(this).apply {
-            text = "Starting..."
-            textSize = 12f
-            setTextColor(Color.parseColor("#7D8797"))
-        }
+        status = TextView(this)
+        status.text = "Starting..."
+        status.textSize = 12f
+        status.setTextColor(Color.parseColor("#7D8797"))
 
         titleBox.addView(title)
         titleBox.addView(status)
 
-        val clear = Button(this).apply {
-            text = "CLEAR"
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            background = bg("#1A202A", 18f)
-            setPadding(8, 0, 8, 0)
+        val clear = Button(this)
+        clear.text = "CLEAR"
+        clear.textSize = 11f
+        clear.setTextColor(Color.WHITE)
+        clear.background = box("#1A202A", 18f)
 
-            setOnClickListener {
-                chat.removeAllViews()
-                addMessage("NOVA", "Chat cleared. I'm ready.")
-            }
+        clear.setOnClickListener {
+            chat.removeAllViews()
+            addMessage("NOVA", "Chat cleared. I'm ready.")
         }
 
         header.addView(
@@ -115,49 +105,41 @@ class MainActivity : Activity() {
 
         root.addView(header)
 
-        // CHAT AREA
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-        }
+        val scroll = ScrollView(this)
 
-        chat = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(12, 8, 12, 20)
-        }
+        chat = LinearLayout(this)
+        chat.orientation = LinearLayout.VERTICAL
+        chat.setPadding(12, 8, 12, 20)
 
         scroll.addView(chat)
 
         root.addView(
             scroll,
-            LinearLayout.LayoutParams( -1, 0, 1f )
+            LinearLayout.LayoutParams( -1, 0, 1f)
         )
 
-        // INPUT AREA
-        val bottom = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(10, 8, 10, 12)
-            setBackgroundColor(Color.parseColor("#0E131A"))
-        }
+        val bottom = LinearLayout(this)
+        bottom.orientation = LinearLayout.HORIZONTAL
+        bottom.gravity = Gravity.CENTER_VERTICAL
+        bottom.setPadding(10, 8, 10, 12)
+        bottom.setBackgroundColor(Color.parseColor("#0E131A"))
 
-        input = EditText(this).apply {
-            hint = "Message NOVA..."
-            hintTextColor = Color.parseColor("#697386")
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setSingleLine(true)
-            setPadding(18, 0, 18, 0)
-            background = bg("#1A202A", 28f)
-        }
+        input = EditText(this)
+        input.hint = "Message NOVA..."
+        input.setHintTextColor(Color.parseColor("#697386"))
+        input.setTextColor(Color.WHITE)
+        input.textSize = 16f
+        input.setSingleLine(true)
+        input.setPadding(18, 0, 18, 0)
+        input.background = box("#1A202A", 28f)
 
-        send = Button(this).apply {
-            text = "➤"
-            textSize = 21f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            background = bg("#2563EB", 28f)
-            isEnabled = false
-        }
+        send = Button(this)
+        send.text = "➤"
+        send.textSize = 21f
+        send.typeface = Typeface.DEFAULT_BOLD
+        send.setTextColor(Color.WHITE)
+        send.background = box("#2563EB", 28f)
+        send.isEnabled = false
 
         bottom.addView(
             input,
@@ -177,34 +159,26 @@ class MainActivity : Activity() {
 
             val message = input.text.toString().trim()
 
-            if (message.isNotEmpty()) {
-
-                input.text.clear()
-
-                val keyboard =
-                    getSystemService(Context.INPUT_METHOD_SERVICE)
-                        as InputMethodManager
-
-                keyboard.hideSoftInputFromWindow(
-                    input.windowToken,
-                    0
-                )
-
-                sendMessage(message)
-            }
-        }
-
-        input.setOnEditorActionListener { _, _, _ ->
-
-            if (send.isEnabled) {
-                send.performClick()
+            if (message.isEmpty()) {
+                return@setOnClickListener
             }
 
-            true
+            input.text.clear()
+
+            val keyboard =
+                getSystemService(Context.INPUT_METHOD_SERVICE)
+                    as InputMethodManager
+
+            keyboard.hideSoftInputFromWindow(
+                input.windowToken,
+                0
+            )
+
+            sendMessage(message)
         }
     }
 
-    private fun loadBundledModel() {
+    private fun loadModel() {
 
         status.text = "Loading Llama 3.2 1B..."
 
@@ -231,14 +205,14 @@ class MainActivity : Activity() {
 
                         assets.open(
                             "llama-3.2-1b-instruct-q4_k_m.gguf"
-                        ).use { inputStream ->
+                        ).use { source ->
 
                             java.io.FileOutputStream(
                                 modelFile
-                            ).use { outputStream ->
+                            ).use { destination ->
 
-                                inputStream.copyTo(
-                                    outputStream,
+                                source.copyTo(
+                                    destination,
                                     1024 * 1024
                                 )
                             }
@@ -251,11 +225,8 @@ class MainActivity : Activity() {
                 )
 
                 engine.setSystemPrompt(
-                    """
-                    You are NOVA, a friendly offline AI assistant.
-                    Give clear and natural answers.
-                    Keep answers reasonably concise.
-                    """.trimIndent()
+                    "You are NOVA, a friendly offline AI assistant. " +
+                    "Give clear and natural answers."
                 )
 
                 status.text = "● READY • OFFLINE"
@@ -288,19 +259,13 @@ class MainActivity : Activity() {
     private fun sendMessage(message: String) {
 
         if (!::engine.isInitialized) {
-
-            addMessage(
-                "NOVA",
-                "I'm still loading the model."
-            )
-
+            addMessage("NOVA", "I'm still loading the model.")
             return
         }
 
         addMessage("You", message)
 
         send.isEnabled = false
-
         status.text = "● THINKING..."
         status.setTextColor(
             Color.parseColor("#FBBF24")
@@ -343,7 +308,6 @@ class MainActivity : Activity() {
                 )
 
             } finally {
-
                 send.isEnabled = true
             }
         }
@@ -354,73 +318,50 @@ class MainActivity : Activity() {
         message: String
     ) {
 
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(4, 5, 4, 5)
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.VERTICAL
+        row.setPadding(4, 5, 4, 5)
+
+        val name = TextView(this)
+        name.text = sender.uppercase()
+        name.textSize = 10f
+        name.typeface = Typeface.DEFAULT_BOLD
+        name.setPadding(12, 2, 12, 3)
+
+        if (sender == "You") {
+            name.setTextColor(Color.parseColor("#60A5FA"))
+            name.gravity = Gravity.END
+        } else {
+            name.setTextColor(Color.parseColor("#94A3B8"))
+            name.gravity = Gravity.START
         }
 
-        val name = TextView(this).apply {
+        val bubble = TextView(this)
+        bubble.text = message
+        bubble.textSize = 16f
+        bubble.setTextColor(Color.WHITE)
+        bubble.setPadding(18, 14, 18, 14)
 
-            text = sender.uppercase()
-            textSize = 10f
-            typeface = Typeface.DEFAULT_BOLD
-
-            setTextColor(
-                if (sender == "You")
-                    Color.parseColor("#60A5FA")
-                else
-                    Color.parseColor("#94A3B8")
-            )
-
-            gravity =
-                if (sender == "You")
-                    Gravity.END
-                else
-                    Gravity.START
-
-            setPadding(12, 2, 12, 3)
+        if (sender == "You") {
+            bubble.background = box("#2563EB", 22f)
+        } else {
+            bubble.background = box("#171D26", 22f)
         }
 
-        val bubble = TextView(this).apply {
+        val params = LinearLayout.LayoutParams(
+            -2,
+            -2
+        )
 
-            text = message
-            textSize = 16f
-            setTextColor(Color.WHITE)
-
-            setPadding(
-                18,
-                14,
-                18,
-                14
-            )
-
-            background =
-                if (sender == "You")
-                    bg("#2563EB", 22f)
-                else
-                    bg("#171D26", 22f)
-
-            val params =
-                LinearLayout.LayoutParams(
-                    -2,
-                    -2
-                )
-
-            params.gravity =
-                if (sender == "You")
-                    Gravity.END
-                else
-                    Gravity.START
-
-            params.setMargins(
-                8,
-                0,
-                8,
-                0
-            )
-
-            layoutParams = params
+        if (sender == "You") {
+            params.gravity = Gravity.END
+        } else {
+            params.gravity = Gravity.START
         }
+
+        params.setMargins(8, 0, 8, 0)
+
+        bubble.layoutParams = params
 
         row.addView(name)
         row.addView(bubble)
