@@ -1,18 +1,17 @@
-name: NOVA Android APK
+name: Build NOVA APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
-    name: Build NOVA APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout NOVA
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -20,56 +19,31 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          sdkmanager "platform-tools" \
+                     "platforms;android-35" \
+                     "build-tools;35.0.0"
 
-      - name: Prepare Gradle
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build APK
         working-directory: android
-        run: chmod +x gradlew
-
-      - name: Verify environment
-        working-directory: android
-        run: |
-          echo "===== JAVA ====="
-          java -version
-
-          echo
-          echo "===== GRADLE ====="
-          ./gradlew --version
-
-          echo
-          echo "===== AAPT2 OVERRIDE CHECK ====="
-          if grep -q '^android.aapt2FromMavenOverride=' gradle.properties 2>/dev/null; then
-            echo "ERROR: AAPT2 override still exists"
-            exit 1
-          else
-            echo "OK: No custom AAPT2 override"
-          fi
-
-      - name: Build NOVA Debug APK
-        working-directory: android
-        run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Show APK
         run: |
-          echo "===== APK ====="
-          find android/app/build/outputs/apk -type f -name "*.apk" -print
+          echo "===== APK FILES ====="
+          find android/app/build/outputs -type f -name "*.apk" -exec ls -lh {} \;
 
-      - name: Upload NOVA APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NOVA-debug-APK
+          name: NOVA-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 30
