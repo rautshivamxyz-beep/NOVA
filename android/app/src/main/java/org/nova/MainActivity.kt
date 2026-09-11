@@ -178,6 +178,7 @@ class MainActivity : Activity() {
         }
     }
 
+
     private fun loadModel() {
 
         status.text = "Loading Llama 3.2 1B..."
@@ -185,15 +186,14 @@ class MainActivity : Activity() {
         scope.launch {
 
             try {
+                status.text = "STEP 1: Getting engine..."
 
-                val aiChat =
+                val aiChat = withContext(Dispatchers.IO) {
                     AiChat::class.java
                         .getField("INSTANCE")
                         .get(null) as AiChat
+                }
 
-                status.text = "STEP 1: Getting engine..."
-                engine =
-                    aiChat.getInferenceEngine(this@MainActivity)
                 status.text = "STEP 2: Engine OK"
 
                 val modelFile = java.io.File(
@@ -202,17 +202,15 @@ class MainActivity : Activity() {
                 )
 
                 if (!modelFile.exists()) {
+                    status.text = "STEP 3: Copying model..."
 
                     withContext(Dispatchers.IO) {
-
                         assets.open(
                             "llama-3.2-1b-instruct-q4_k_m.gguf"
                         ).use { source ->
-
                             java.io.FileOutputStream(
                                 modelFile
                             ).use { destination ->
-
                                 source.copyTo(
                                     destination,
                                     1024 * 1024
@@ -222,45 +220,45 @@ class MainActivity : Activity() {
                     }
                 }
 
-                status.text = "STEP 3: Loading model..."
-                engine.loadModel(
-                    modelFile.absolutePath
-                )
-                status.text = "STEP 4: Model loaded"
+                status.text = "STEP 4: Loading model..."
 
-                engine.setSystemPrompt(
-                    "You are NOVA, a friendly offline AI assistant. " +
-                    "Give clear and natural answers."
-                )
+                withContext(Dispatchers.IO) {
+                    engine = aiChat.getInferenceEngine(this@MainActivity)
+                    engine.loadModel(modelFile.absolutePath)
+                    engine.setSystemPrompt(
+                        "You are NOVA, a friendly offline AI assistant. " +
+                        "Give clear and natural answers."
+                    )
+                }
 
                 status.text = "● READY • OFFLINE"
-                status.setTextColor(
-                    Color.parseColor("#4ADE80")
-                )
+                status.setTextColor(Color.parseColor("#4ADE80"))
 
                 send.isEnabled = true
 
                 addMessage(
                     "NOVA",
-                    "Hello! 👋\nI'm ready. Llama 3.2 1B is running offline."
+                    "Hello! 👋
+I'm ready. Llama 3.2 1B is running offline."
                 )
 
-            } catch (e: Throwable) {
+            } catch (t: Throwable) {
 
-                e.printStackTrace()
+                t.printStackTrace()
 
-                status.text = "CRASH: ${e.javaClass.simpleName}"
+                status.text = "CRASH: ${t.javaClass.simpleName}"
                 status.setTextColor(Color.RED)
 
                 addMessage(
                     "CRASH",
-                    android.util.Log.getStackTraceString(e)
+                    android.util.Log.getStackTraceString(t)
                 )
             }
         }
     }
 
     private fun sendMessage(message: String) {
+
 
         if (!::engine.isInitialized) {
             addMessage("NOVA", "I'm still loading the model.")
