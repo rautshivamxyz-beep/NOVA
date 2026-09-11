@@ -191,8 +191,10 @@ class MainActivity : Activity() {
                         .getField("INSTANCE")
                         .get(null) as AiChat
 
+                status.text = "STEP 1: Getting engine..."
                 engine =
                     aiChat.getInferenceEngine(this@MainActivity)
+                status.text = "STEP 2: Engine OK"
 
                 val modelFile = java.io.File(
                     filesDir,
@@ -220,9 +222,11 @@ class MainActivity : Activity() {
                     }
                 }
 
+                status.text = "STEP 3: Loading model..."
                 engine.loadModel(
                     modelFile.absolutePath
                 )
+                status.text = "STEP 4: Model loaded"
 
                 engine.setSystemPrompt(
                     "You are NOVA, a friendly offline AI assistant. " +
