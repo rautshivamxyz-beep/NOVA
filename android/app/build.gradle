@@ -10,6 +10,19 @@ android {
     namespace 'org.nova'
     compileSdk 35
 
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs += ['src/main/jniLibs']
+        }
+    }
+
     defaultConfig {
         applicationId 'org.nova'
         minSdk 30
