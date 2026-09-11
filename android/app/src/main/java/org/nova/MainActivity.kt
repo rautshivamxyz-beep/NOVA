@@ -245,16 +245,16 @@ class MainActivity : Activity() {
                     "Hello! 👋\nI'm ready. Llama 3.2 1B is running offline."
                 )
 
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
 
-                status.text = "● MODEL ERROR"
-                status.setTextColor(
-                    Color.parseColor("#F87171")
-                )
+                e.printStackTrace()
+
+                status.text = "CRASH: ${e.javaClass.simpleName}"
+                status.setTextColor(Color.RED)
 
                 addMessage(
-                    "ERROR",
-                    e.message ?: e.toString()
+                    "CRASH",
+                    android.util.Log.getStackTraceString(e)
                 )
             }
         }
