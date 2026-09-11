@@ -1,0 +1,27 @@
+[1mdiff --git a/android/app/src/main/java/org/nova/MainActivity.kt b/android/app/src/main/java/org/nova/MainActivity.kt[m
+[1mindex 640ef5e..e9324e6 100644[m
+[1m--- a/android/app/src/main/java/org/nova/MainActivity.kt[m
+[1m+++ b/android/app/src/main/java/org/nova/MainActivity.kt[m
+[36m@@ -191,8 +191,10 @@[m [mclass MainActivity : Activity() {[m
+                         .getField("INSTANCE")[m
+                         .get(null) as AiChat[m
+ [m
+[32m+[m[32m                status.text = "STEP 1: Getting engine..."[m
+                 engine =[m
+                     aiChat.getInferenceEngine(this@MainActivity)[m
+[32m+[m[32m                status.text = "STEP 2: Engine OK"[m
+ [m
+                 val modelFile = java.io.File([m
+                     filesDir,[m
+[36m@@ -220,9 +222,11 @@[m [mclass MainActivity : Activity() {[m
+                     }[m
+                 }[m
+ [m
+[32m+[m[32m                status.text = "STEP 3: Loading model..."[m
+                 engine.loadModel([m
+                     modelFile.absolutePath[m
+                 )[m
+[32m+[m[32m                status.text = "STEP 4: Model loaded"[m
+ [m
+                 engine.setSystemPrompt([m
+                     "You are NOVA, a friendly offline AI assistant. " +[m
