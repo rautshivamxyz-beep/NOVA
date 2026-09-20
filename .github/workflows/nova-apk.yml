@@ -20,31 +20,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" > /dev/null
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
 
-      # Models are no longer bundled in the APK — NOVA downloads them
-      # in-app from Hugging Face (or imports local .gguf files), so the
-      # APK stays small and users pick models that fit their device.
-
       - name: Build NOVA APK
         working-directory: android
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Show APK
-        run: |
-          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+        run: ls -lh android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload NOVA APK
         uses: actions/upload-artifact@v4
