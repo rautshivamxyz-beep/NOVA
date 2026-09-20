@@ -348,7 +348,7 @@ class MainActivity : Activity() {
             val tokens = Settings.LENGTH_OPTIONS[i]
             b.setOnClickListener {
                 settings.predictLength = tokens
-                lengthBtns.forEach { it.setTextColor(textDim) }
+                for (child in 0 until lengthRow.childCount) (lengthRow.getChildAt(child) as? Button)?.setTextColor(textDim)
                 b.setTextColor(accent)
             }
             if (tokens == settings.predictLength) b.setTextColor(accent)
