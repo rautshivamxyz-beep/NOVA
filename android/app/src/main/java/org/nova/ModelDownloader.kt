@@ -162,7 +162,7 @@ object ModelDownloader {
             if (total > 0 && done < total) throw IOException("incomplete download")
             if (!part.renameTo(dest)) {
                 // rename can fail across weird mount points; fall back to copy
-                part.copyTo(dest, 64 * 1024)
+                part.copyTo(dest, overwrite = true)
                 part.delete()
             }
             State.Done(dest)

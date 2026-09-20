@@ -11,7 +11,7 @@ import android.os.Build.VERSION
 object DeviceCapabilities {
 
     fun memoryInfo(context: Context): ActivityManager.MemoryInfo =
-        ActivityManager.MemoryInfo().also { am(context).memoryInfo = it }
+        ActivityManager.MemoryInfo().also { am(context).getMemoryInfo(it) }
 
     private fun am(context: Context) =
         context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager

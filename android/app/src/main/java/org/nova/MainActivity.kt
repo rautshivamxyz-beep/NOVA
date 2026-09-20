@@ -343,15 +343,15 @@ class MainActivity : Activity() {
             setPadding(0, dp(16), 0, dp(6))
         })
         val lengthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens ->
-            smallButton("$tokens", textDim).apply {
-                setOnClickListener {
-                    settings.predictLength = tokens
-                    lengthBtns.forEach { it.setTextColor(textDim) }
-                    setTextColor(accent)
-                }
-                if (tokens == settings.predictLength) setTextColor(accent)
+        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens -> smallButton("$tokens", textDim) }
+        lengthBtns.forEachIndexed { i, b ->
+            val tokens = Settings.LENGTH_OPTIONS[i]
+            b.setOnClickListener {
+                settings.predictLength = tokens
+                lengthBtns.forEach { it.setTextColor(textDim) }
+                b.setTextColor(accent)
             }
+            if (tokens == settings.predictLength) b.setTextColor(accent)
         }
         lengthBtns.forEach { b ->
             lengthRow.addView(b, LinearLayout.LayoutParams(
