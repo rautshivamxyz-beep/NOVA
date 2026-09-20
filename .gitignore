@@ -1,27 +1,20 @@
-# Android / Gradle
+# Gradle
 .gradle/
-android/.gradle/
-android/app/build/
-android/build/
 build/
+local.properties
+**/build/
 
-# Temporary analysis files
-tmp/
-classdump/
-nova-test/
-*.jar
-*.so
-*.txt
+# Android Studio / IDE
+.idea/
+*.iml
+captures/
 
-# Python cache
-__pycache__/
-*.pyc
+# Native build outputs
+.cxx/
+*.so.debug
 
-# Backups
-*_backup.py
-main_before_*.py
-main_before_*.kv
-nova_before_*.py
+# OS
+.DS_Store
 
-# Local Llama models
-models/
+# Old experiments (kept in repo history if needed)
+# main.py nova.py main.kv buildozer.spec are NOT part of the Android app

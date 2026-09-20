@@ -1,382 +1,481 @@
 package org.nova
 
 import android.app.Activity
-import android.os.Bundle
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
-import android.widget.*
-import android.content.Context
-import android.view.inputmethod.InputMethodManager
-import com.arm.aichat.AiChat
-import com.arm.aichat.InferenceEngine
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collect
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+/**
+ * NOVA — local AI chat.
+ *
+ * Chat UI on top of the llama.cpp Android binding. Everything runs
+ * on-device; nothing leaves the phone.
+ */
 class MainActivity : Activity() {
 
-    private lateinit var engine: InferenceEngine
-    private lateinit var chat: LinearLayout
-    private lateinit var input: EditText
-    private lateinit var send: Button
     private lateinit var status: TextView
+    private lateinit var messagesRv: RecyclerView
+    private lateinit var emptyView: TextView
+    private lateinit var input: EditText
+    private lateinit var sendBtn: Button
+    private val adapter = MessageAdapter()
 
-    private val scope =
-        CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private lateinit var settings: Settings
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var generationJob: Job? = null
 
-    private fun box(color: String, radius: Float): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(Color.parseColor(color))
-            cornerRadius = radius
-        }
-    }
+    private val bg = Color.parseColor("#080B10")
+    private val surface = Color.parseColor("#10151D")
+    private val accent = Color.parseColor("#60A5FA")
+    private val textMain = Color.parseColor("#E8ECF3")
+    private val textDim = Color.parseColor("#7D8797")
+    private val stopColor = Color.parseColor("#F87171")
+
+    // ------------------------------------------------------------------ UI
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        window.statusBarColor = Color.parseColor("#080B10")
-        window.navigationBarColor = Color.parseColor("#080B10")
-
-        createUI()
-        loadModel()
-    }
-
-    private fun createUI() {
-
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        root.setBackgroundColor(Color.parseColor("#080B10"))
-
-        val header = LinearLayout(this)
-        header.orientation = LinearLayout.HORIZONTAL
-        header.gravity = Gravity.CENTER_VERTICAL
-        header.setPadding(18, 16, 14, 12)
-
-        val logo = TextView(this)
-        logo.text = "✦"
-        logo.textSize = 32f
-        logo.setTextColor(Color.parseColor("#60A5FA"))
-        logo.gravity = Gravity.CENTER
-
-        val titleBox = LinearLayout(this)
-        titleBox.orientation = LinearLayout.VERTICAL
-        titleBox.setPadding(12, 0, 0, 0)
-
-        val title = TextView(this)
-        title.text = "NOVA"
-        title.textSize = 24f
-        title.typeface = Typeface.DEFAULT_BOLD
-        title.setTextColor(Color.WHITE)
-
-        status = TextView(this)
-        status.text = "Starting..."
-        status.textSize = 12f
-        status.setTextColor(Color.parseColor("#7D8797"))
-
-        titleBox.addView(title)
-        titleBox.addView(status)
-
-        val clear = Button(this)
-        clear.text = "CLEAR"
-        clear.textSize = 11f
-        clear.setTextColor(Color.WHITE)
-        clear.background = box("#1A202A", 18f)
-
-        clear.setOnClickListener {
-            chat.removeAllViews()
-            addMessage("NOVA", "Chat cleared. I'm ready.")
-        }
-
-        header.addView(
-            logo,
-            LinearLayout.LayoutParams(48, 60)
-        )
-
-        header.addView(
-            titleBox,
-            LinearLayout.LayoutParams(0, 60, 1f)
-        )
-
-        header.addView(
-            clear,
-            LinearLayout.LayoutParams(82, 46)
-        )
-
-        root.addView(header)
-
-        val scroll = ScrollView(this)
-
-        chat = LinearLayout(this)
-        chat.orientation = LinearLayout.VERTICAL
-        chat.setPadding(12, 8, 12, 20)
-
-        scroll.addView(chat)
-
-        root.addView(
-            scroll,
-            LinearLayout.LayoutParams( -1, 0, 1f)
-        )
-
-        val bottom = LinearLayout(this)
-        bottom.orientation = LinearLayout.HORIZONTAL
-        bottom.gravity = Gravity.CENTER_VERTICAL
-        bottom.setPadding(10, 8, 10, 12)
-        bottom.setBackgroundColor(Color.parseColor("#0E131A"))
-
-        input = EditText(this)
-        input.hint = "Message NOVA..."
-        input.setHintTextColor(Color.parseColor("#697386"))
-        input.setTextColor(Color.WHITE)
-        input.textSize = 16f
-        input.setSingleLine(true)
-        input.setPadding(18, 0, 18, 0)
-        input.background = box("#1A202A", 28f)
-
-        send = Button(this)
-        send.text = "➤"
-        send.textSize = 21f
-        send.typeface = Typeface.DEFAULT_BOLD
-        send.setTextColor(Color.WHITE)
-        send.background = box("#2563EB", 28f)
-        send.isEnabled = false
-
-        bottom.addView(
-            input,
-            LinearLayout.LayoutParams(0, 58, 1f)
-        )
-
-        val sendParams = LinearLayout.LayoutParams(62, 58)
-        sendParams.setMargins(8, 0, 0, 0)
-
-        bottom.addView(send, sendParams)
-
-        root.addView(bottom)
-
-        setContentView(root)
-
-        send.setOnClickListener {
-
-            val message = input.text.toString().trim()
-
-            if (message.isEmpty()) {
-                return@setOnClickListener
-            }
-
-            input.text.clear()
-
-            val keyboard =
-                getSystemService(Context.INPUT_METHOD_SERVICE)
-                    as InputMethodManager
-
-            keyboard.hideSoftInputFromWindow(
-                input.windowToken,
-                0
-            )
-
-            sendMessage(message)
-        }
-    }
-
-    private fun loadModel() {
-
-        status.text = "Loading Llama 3.2 1B..."
-
-        scope.launch {
-
-            try {
-
-                val aiChat =
-                    AiChat::class.java
-                        .getField("INSTANCE")
-                        .get(null) as AiChat
-
-                engine =
-                    aiChat.getInferenceEngine(this@MainActivity)
-
-                val modelFile = java.io.File(
-                    filesDir,
-                    "llama-3.2-1b-instruct-q4_k_m.gguf"
-                )
-
-                if (!modelFile.exists()) {
-
-                    withContext(Dispatchers.IO) {
-
-                        assets.open(
-                            "llama-3.2-1b-instruct-q4_k_m.gguf"
-                        ).use { source ->
-
-                            java.io.FileOutputStream(
-                                modelFile
-                            ).use { destination ->
-
-                                source.copyTo(
-                                    destination,
-                                    1024 * 1024
-                                )
-                            }
-                        }
-                    }
-                }
-
-                engine.loadModel(
-                    modelFile.absolutePath
-                )
-
-                engine.setSystemPrompt(
-                    "You are NOVA, a friendly offline AI assistant. " +
-                    "Give clear and natural answers."
-                )
-
-                status.text = "● READY • OFFLINE"
-                status.setTextColor(
-                    Color.parseColor("#4ADE80")
-                )
-
-                send.isEnabled = true
-
-                addMessage(
-                    "NOVA",
-                    "Hello! 👋\nI'm ready. Llama 3.2 1B is running offline."
-                )
-
-            } catch (e: Exception) {
-
-                status.text = "● MODEL ERROR"
-                status.setTextColor(
-                    Color.parseColor("#F87171")
-                )
-
-                addMessage(
-                    "ERROR",
-                    e.message ?: e.toString()
-                )
-            }
-        }
-    }
-
-    private fun sendMessage(message: String) {
-
-        if (!::engine.isInitialized) {
-            addMessage("NOVA", "I'm still loading the model.")
-            return
-        }
-
-        addMessage("You", message)
-
-        send.isEnabled = false
-        status.text = "● THINKING..."
-        status.setTextColor(
-            Color.parseColor("#FBBF24")
-        )
-
-        scope.launch {
-
-            try {
-
-                var answer = ""
-
-                engine.sendUserPrompt(
-                    message,
-                    128
-                ).collect { token ->
-
-                    answer += token
-                }
-
-                addMessage(
-                    "NOVA",
-                    answer.trim()
-                )
-
-                status.text = "● READY • OFFLINE"
-                status.setTextColor(
-                    Color.parseColor("#4ADE80")
-                )
-
-            } catch (e: Exception) {
-
-                addMessage(
-                    "ERROR",
-                    e.message ?: e.toString()
-                )
-
-                status.text = "● GENERATION ERROR"
-                status.setTextColor(
-                    Color.parseColor("#F87171")
-                )
-
-            } finally {
-                send.isEnabled = true
-            }
-        }
-    }
-
-    private fun addMessage(
-        sender: String,
-        message: String
-    ) {
-
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.VERTICAL
-        row.setPadding(4, 5, 4, 5)
-
-        val name = TextView(this)
-        name.text = sender.uppercase()
-        name.textSize = 10f
-        name.typeface = Typeface.DEFAULT_BOLD
-        name.setPadding(12, 2, 12, 3)
-
-        if (sender == "You") {
-            name.setTextColor(Color.parseColor("#60A5FA"))
-            name.gravity = Gravity.END
-        } else {
-            name.setTextColor(Color.parseColor("#94A3B8"))
-            name.gravity = Gravity.START
-        }
-
-        val bubble = TextView(this)
-        bubble.text = message
-        bubble.textSize = 16f
-        bubble.setTextColor(Color.WHITE)
-        bubble.setPadding(18, 14, 18, 14)
-
-        if (sender == "You") {
-            bubble.background = box("#2563EB", 22f)
-        } else {
-            bubble.background = box("#171D26", 22f)
-        }
-
-        val params = LinearLayout.LayoutParams(
-            -2,
-            -2
-        )
-
-        if (sender == "You") {
-            params.gravity = Gravity.END
-        } else {
-            params.gravity = Gravity.START
-        }
-
-        params.setMargins(8, 0, 8, 0)
-
-        bubble.layoutParams = params
-
-        row.addView(name)
-        row.addView(bubble)
-
-        chat.addView(row)
+        settings = Settings(this)
+        setContentView(buildUi())
+        // restoreLastModel() runs in onResume, which fires right after this
     }
 
     override fun onDestroy() {
+        super.onDestroy()
+        // The engine (native code + mmap) outlives the Activity instance by
+        // design: it's a process-wide singleton. Do not destroy it here so
+        // the model stays warm when the screen rotates / app is reopened.
+    }
 
-        if (::engine.isInitialized) {
-            engine.cleanUp()
+    private fun buildUi(): View {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(bg)
+            setPadding(0, dp(36), 0, dp(8))
         }
 
-        scope.cancel()
+        // ---- Header
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(6), dp(18), dp(10))
+        }
+        header.addView(TextView(this).apply {
+            text = "✦"
+            textSize = 28f
+            setTextColor(accent)
+        })
+        val titleCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), 0, 0, 0)
+        }
+        titleCol.addView(TextView(this).apply {
+            text = "NOVA"
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        })
+        status = TextView(this).apply {
+            text = "starting…"
+            textSize = 12f
+            setTextColor(textDim)
+        }
+        titleCol.addView(status)
+        header.addView(titleCol, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(smallButton("Models", accent).apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity, ModelsActivity::class.java)) }
+        })
+        header.addView(smallButton("New", textDim).apply {
+            setOnClickListener { newConversation() }
+        })
+        header.addView(smallButton("⚙", textDim).apply {
+            setOnClickListener { showSettings() }
+        })
+        root.addView(header, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        super.onDestroy()
+        // ---- Messages
+        messagesRv = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@MainActivity).apply { stackFromEnd = true }
+            adapter = this@MainActivity.adapter
+            setPadding(dp(14), dp(4), dp(14), dp(4))
+        }
+        root.addView(FrameLayout(this).apply {
+            addView(TextView(this@MainActivity).apply {
+                text = "No conversation yet.\nTap Models to download an AI, then say hi — fully offline."
+                setTextColor(textDim)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(40), dp(80), dp(40), dp(80))
+                also { emptyView = it }
+            })
+            addView(messagesRv)
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            private fun refresh() { emptyView.visibility =
+                if (adapter.itemCount == 0) View.VISIBLE else View.GONE }
+            override fun onChanged() = refresh()
+            override fun onItemRangeInserted(p0: Int, p1: Int) = refresh()
+            override fun onItemRangeRemoved(p0: Int, p1: Int) = refresh()
+        })
+
+        // ---- Input
+        val inputRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+        }
+        input = EditText(this).apply {
+            hint = "Message NOVA…"
+            setHintTextColor(textDim)
+            setTextColor(textMain)
+            textSize = 15f
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(22).toFloat()
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            maxLines = 5
+            imeOptions = EditorInfo.IME_ACTION_SEND
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) { send(); true } else false
+            }
+        }
+        inputRow.addView(input, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        sendBtn = Button(this).apply {
+            text = "➤"
+            textSize = 16f
+            background = GradientDrawable().apply {
+                setColor(accent)
+                cornerRadius = dp(24).toFloat()
+            }
+            setTextColor(Color.parseColor("#080B10"))
+            setOnClickListener { send() }
+        }
+        inputRow.addView(sendBtn, LinearLayout.LayoutParams(
+            dp(46), dp(46)).apply { leftMargin = dp(8) })
+        root.addView(inputRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        return root
     }
+
+    // ------------------------------------------------------------- models
+
+    private fun restoreLastModel() {
+        if (NovaEngine.isLoading) {
+            // a load started elsewhere (e.g. ModelsActivity) — just refresh UI
+            setStatus()
+            return
+        }
+        if (NovaEngine.isModelLoaded) {
+            setStatus()
+            return
+        }
+        val path = settings.lastModelPath
+        if (path != null && java.io.File(path).exists()) {
+            status.text = "loading ${settings.lastModelLabel}…"
+            scope.launch {
+                try {
+                    NovaEngine.load(this@MainActivity, path, settings.lastModelLabel, settings.systemPrompt)
+                    setStatus()
+                } catch (e: Exception) {
+                    status.text = "model failed to load"
+                }
+            }
+        } else {
+            setStatus()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        restoreLastModel()
+    }
+
+    private fun setStatus(generating: Boolean = false) {
+        val label = NovaEngine.activeModelLabel.ifBlank { settings.lastModelLabel }
+        status.text = if (label.isBlank()) {
+            "no model — open Models"
+        } else {
+            "$label · ${if (generating) "generating…" else "ready"}"
+        }
+        input.isEnabled = NovaEngine.isModelLoaded
+        input.hint = if (NovaEngine.isModelLoaded) "Message NOVA…" else "Load a model first (Models ↑)"
+    }
+
+    // -------------------------------------------------------------- chat
+
+    private fun send() {
+        if (generationJob?.isActive == true) {
+            // acts as Stop
+            sendBtn.text = "➤"
+            generationJob?.cancel()
+            return
+        }
+        if (!NovaEngine.isModelLoaded) {
+            Toast.makeText(this, "Load a model first — tap Models", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val text = input.text.toString().trim()
+        if (text.isEmpty()) return
+        input.setText("")
+
+        adapter.add(Msg(Role.USER, text))
+        scrollToEnd()
+        setStatus(generating = true)
+        sendBtn.text = "■"
+        sendBtn.setTextColor(stopColor)
+
+        val last = Msg(Role.ASSISTANT, "")
+        adapter.add(last)
+        scrollToEnd()
+
+        generationJob = scope.launch {
+            try {
+                NovaEngine.send(text, settings.predictLength)
+                    .collect { token ->
+                        adapter.appendToLast(token)
+                        scrollToEnd()
+                    }
+            } catch (e: CancellationException) {
+                adapter.appendToLast(" ⏹")
+            } catch (e: Exception) {
+                adapter.appendToLast("\n[error: ${e.message}]")
+                Toast.makeText(this@MainActivity, "Generation error", Toast.LENGTH_SHORT).show()
+            } finally {
+                withContext(Dispatchers.Main) {
+                    sendBtn.text = "➤"
+                    sendBtn.setTextColor(Color.parseColor("#080B10"))
+                    setStatus()
+                }
+            }
+        }
+    }
+
+    private fun scrollToEnd() {
+        if (adapter.itemCount > 0) {
+            messagesRv.smoothScrollToPosition(adapter.itemCount - 1)
+        }
+    }
+
+    /**
+     * Fresh conversation: reload the model (native side keeps chat history,
+     * so reloading is the way to clear it) and wipe the bubbles.
+     */
+    private fun newConversation() {
+        if (generationJob?.isActive == true) {
+            generationJob?.cancel()
+        }
+        scope.launch {
+            try {
+                val hadModel = NovaEngine.reload(this@MainActivity, settings.systemPrompt)
+                if (!hadModel) toast("No model loaded")
+            } catch (e: Exception) {
+                toast("Reload failed: ${e.message}")
+            }
+            adapter.clear()
+            setStatus()
+        }
+    }
+
+    // ----------------------------------------------------------- settings
+
+    private fun showSettings() {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(10), dp(20), dp(4))
+        }
+        outer.addView(TextView(this).apply {
+            text = "System prompt (applies when the model is reloaded)"
+            setTextColor(textDim)
+            textSize = 12f
+            setPadding(0, 0, 0, dp(6))
+        })
+        val promptEdit = EditText(this).apply {
+            setText(settings.systemPrompt)
+            setTextColor(textMain)
+            textSize = 14f
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 3
+            maxLines = 6
+            setSingleLine(false)
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(10).toFloat()
+            }
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        outer.addView(promptEdit)
+        outer.addView(TextView(this).apply {
+            text = "Max response length"
+            setTextColor(textDim)
+            textSize = 12f
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        val lengthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens ->
+            smallButton("$tokens", textDim).apply {
+                setOnClickListener {
+                    settings.predictLength = tokens
+                    lengthBtns.forEach { it.setTextColor(textDim) }
+                    setTextColor(accent)
+                }
+                if (tokens == settings.predictLength) setTextColor(accent)
+            }
+        }
+        lengthBtns.forEach { b ->
+            lengthRow.addView(b, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { rightMargin = dp(8) })
+        }
+        outer.addView(lengthRow)
+
+        AlertDialog.Builder(this)
+            .setTitle("NOVA settings")
+            .setView(outer)
+            .setPositiveButton("Save") { _, _ ->
+                val newPrompt = promptEdit.text.toString()
+                val changed = newPrompt != settings.systemPrompt
+                settings.systemPrompt = newPrompt
+                if (changed && NovaEngine.isModelLoaded) {
+                    AlertDialog.Builder(this)
+                        .setMessage("Apply the new system prompt now? This clears the conversation.")
+                        .setPositiveButton("Apply now") { _, _ -> newConversation() }
+                        .setNegativeButton("Later", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // -------------------------------------------------------------- utils
+
+    private fun smallButton(label: String, color: Int): Button = Button(this).apply {
+        text = label
+        textSize = 13f
+        isAllCaps = false
+        setTextColor(color)
+        background = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            setStroke(dp(1), color)
+            cornerRadius = dp(20).toFloat()
+        }
+        setPadding(dp(14), dp(6), dp(14), dp(6))
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+}
+
+// ---------------------------------------------------------------- adapter
+
+enum class Role { USER, ASSISTANT }
+
+class Msg(val role: Role, var text: String)
+
+class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
+
+    private val items = mutableListOf<Msg>()
+
+    fun add(m: Msg) {
+        items.add(m)
+        notifyItemInserted(items.size - 1)
+    }
+
+    fun appendToLast(token: String) {
+        if (items.isEmpty()) return
+        items[items.size - 1].text += token
+        notifyItemChanged(items.size - 1)
+    }
+
+    fun clear() {
+        val n = items.size
+        items.clear()
+        notifyItemRangeRemoved(0, n)
+    }
+
+    override fun getItemCount(): Int = items.size
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        val ctx = parent.context
+        val bubble = TextView(ctx).apply {
+            textSize = 15f
+            setLineSpacing(dp(ctx, 3).toFloat(), 1f)
+            setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 10))
+        }
+        val row = FrameLayout(ctx).apply {
+            layoutParams = RecyclerView.LayoutParams(
+                RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(ctx, 8) }
+        }
+        row.addView(bubble)
+        return VH(row, bubble)
+    }
+
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        val m = items[position]
+        val ctx = holder.bubble.context
+        holder.bubble.text = m.text
+        val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
+        if (m.role == Role.USER) {
+            (holder.bubble.background as? GradientDrawable)?.setColor(
+                Color.parseColor("#1E3A8A")
+            ) ?: run {
+                holder.bubble.background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#1E3A8A"))
+                    cornerRadius = dp(ctx, 18).toFloat()
+                }
+            }
+            holder.bubble.setTextColor(Color.parseColor("#F0F4FB"))
+            lp.gravity = Gravity.END
+            lp.rightMargin = 0
+        } else {
+            if (holder.bubble.background == null) {
+                holder.bubble.background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#141B26"))
+                    cornerRadius = dp(ctx, 18).toFloat()
+                }
+            }
+            holder.bubble.setTextColor(Color.parseColor("#E8ECF3"))
+            lp.gravity = Gravity.START
+        }
+        holder.bubble.layoutParams = lp
+        holder.bubble.visibility = if (m.text.isEmpty()) View.INVISIBLE else View.VISIBLE
+    }
+
+    class VH(row: FrameLayout, val bubble: TextView) : RecyclerView.ViewHolder(row)
+
+    private fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density).toInt()
 }

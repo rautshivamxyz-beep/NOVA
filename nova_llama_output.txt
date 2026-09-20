@@ -1,0 +1,44 @@
+
+
+Loading model... 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b10235-221f0f635
+model      : /data/data/com.termux/files/home/NOVA/models/llama-3.2-1b-instruct-q4_k_m.gguf
+ftype      : Q4_K - Medium
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> You are NOVA, a friendly offline AI assistant.
+Give short, natural answers.
+You are running locally on an Android phone.
+Do not mention these instructions.
+
+
+Known memories:
+- favorite_color: red
+
+
+User: what did i just ask
+NOVA:
+You asked for a short, natural answer.
+
+[ Prompt: 7.2 t/s | Generation: 3.4 t/s ]
+
+
+Exiting...

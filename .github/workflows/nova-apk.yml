@@ -29,19 +29,14 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Download Llama 3.2 1B GGUF
-        run: |
-          mkdir -p android/app/src/main/assets
-          curl -L --fail --retry 3 \
-            "https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf?download=true" \
-            -o android/app/src/main/assets/llama-3.2-1b-instruct-q4_k_m.gguf
-
-          ls -lh android/app/src/main/assets/llama-3.2-1b-instruct-q4_k_m.gguf
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+
+      # Models are no longer bundled in the APK — NOVA downloads them
+      # in-app from Hugging Face (or imports local .gguf files), so the
+      # APK stays small and users pick models that fit their device.
 
       - name: Build NOVA APK
         working-directory: android
