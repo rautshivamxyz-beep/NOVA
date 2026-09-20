@@ -4,22 +4,46 @@ import android.content.Context
 import android.os.SystemClock
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * App-scoped holder for the llama.cpp inference engine.
  *
- * The engine is a process-wide singleton provided by the com.arm.aichat
- * binding (llama-release.aar, built from ggml-org/llama.cpp's
- * examples/llama.android). This wrapper adds:
- *
- *  - safe initialization (waits for the native lib to finish loading)
- *  - load / reload with a system prompt
- *  - "new conversation" (the native layer keeps chat history, so a fresh
- *    conversation means unloading and loading the model again)
+ * IMPORTANT: model loading runs in [scope], which lives as long as the
+ * process — NOT in any Activity's scope. That way leaving the Models
+ * screen or rotating the phone never cancels a load halfway through
+ * (that was the "job cancelled" bug). UIs observe [loadState].
  */
 object NovaEngine {
+
+    /** Lifecycle of a model load, for the UI to observe. */
+    sealed class LoadState {
+        object Idle : LoadState()
+        data class Loading(val label: String) : LoadState()
+        object Ready : LoadState()
+        data class Failed(val label: String, val error: String?) : LoadState()
+    }
+
+    private val _loadState = MutableStateFlow<LoadState>(LoadState.Idle)
+    val loadState: StateFlow<LoadState> = _loadState.asStateFlow()
+
+    /** Dismiss a terminal (Ready/Failed) state back to Idle. */
+    fun acknowledgeLoad() {
+        val s = _loadState.value
+        if (s is LoadState.Ready || s is LoadState.Failed) _loadState.value = LoadState.Idle
+    }
+
+    /** App-lifetime scope: model loads run here so they survive navigation. */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     @Volatile
     private var engineRef: InferenceEngine? = null
@@ -36,24 +60,19 @@ object NovaEngine {
         engineRef ?: AiChat.getInferenceEngine(context.applicationContext).also { engineRef = it }
 
     /**
-     * Current engine state, or null if the engine has not been created yet.
-     */
-    suspend fun state(context: Context): InferenceEngine.State? = try {
-        get(context).state.value
-    } catch (e: Exception) {
-        null
-    }
-
-    /**
-     * Waits until the native library is fully initialized and no other
-     * engine operation is in flight, then makes sure no model is loaded
-     * (unloading / resetting error state as needed).
+     * Waits until the native library is initialized and no other engine
+     * operation is in flight, then makes sure no model is loaded.
      */
     private suspend fun ensureReady(engine: InferenceEngine) {
         val start = SystemClock.elapsedRealtime()
         while (true) {
-            if (SystemClock.elapsedRealtime() - start > 90_000L) {
-                throw IllegalStateException("Engine busy or init timed out")
+            val timeout = when (engine.state.value) {
+                is InferenceEngine.State.Uninitialized,
+                is InferenceEngine.State.Initializing -> 60_000L
+                else -> 600_000L
+            }
+            if (SystemClock.elapsedRealtime() - start > timeout) {
+                throw IllegalStateException("engine busy or init timed out")
             }
             when (engine.state.value) {
                 is InferenceEngine.State.Uninitialized,
@@ -63,7 +82,7 @@ object NovaEngine {
                 is InferenceEngine.State.ProcessingSystemPrompt,
                 is InferenceEngine.State.ProcessingUserPrompt,
                 is InferenceEngine.State.Generating,
-                is InferenceEngine.State.Benchmarking -> delay(150)
+                is InferenceEngine.State.Benchmarking -> delay(200)
 
                 is InferenceEngine.State.ModelReady -> engine.cleanUp()
                 is InferenceEngine.State.Error -> engine.cleanUp()
@@ -79,45 +98,54 @@ object NovaEngine {
     val isLoading: Boolean get() = loading
 
     /**
-     * Loads a GGUF model. Sends the system prompt right after load as the
-     * binding requires. A blank system prompt is skipped.
-     *
-     * @param label human readable model name for the UI
+     * Starts loading a model in the app scope (survives navigation).
+     * Observe [loadState] for the result.
      */
-    suspend fun load(context: Context, path: String, label: String, systemPrompt: String) {
-        if (loading) return // a load is already running
+    fun loadAsync(context: Context, path: String, label: String, systemPrompt: String) {
+        if (loading) return
         loading = true
-        try {
-            val engine = get(context)
-            ensureReady(engine)
-            engine.loadModel(path)
-            if (systemPrompt.isNotBlank()) {
-                try {
-                    engine.setSystemPrompt(systemPrompt)
-                } catch (e: Exception) {
-                    // Not fatal: model still works without a system prompt
+        _loadState.value = LoadState.Loading(label)
+        val appContext = context.applicationContext
+        scope.launch {
+            try {
+                load(appContext, path, label, systemPrompt)
+                Settings(appContext).let {
+                    it.lastModelPath = path
+                    it.lastModelLabel = label
                 }
+                _loadState.value = LoadState.Ready
+            } catch (e: CancellationException) {
+                _loadState.value = LoadState.Failed(label, "cancelled")
+            } catch (e: Exception) {
+                _loadState.value = LoadState.Failed(label, e.message ?: "unknown error")
+            } finally {
+                loading = false
             }
-            activeModelPath = path
-            activeModelLabel = label
-        } finally {
-            loading = false
         }
     }
 
-    /**
-     * Reloads the currently active model, starting a fresh conversation.
-     */
-    suspend fun reload(context: Context, systemPrompt: String): Boolean {
-        val path = activeModelPath ?: return false
-        val label = activeModelLabel
-        load(context, path, label, systemPrompt)
-        return true
+    suspend fun load(context: Context, path: String, label: String, systemPrompt: String) {
+        val engine = get(context)
+        ensureReady(engine)
+        engine.loadModel(path)
+        if (systemPrompt.isNotBlank()) {
+            try {
+                engine.setSystemPrompt(systemPrompt)
+            } catch (e: Exception) {
+                // Not fatal: model still works without a system prompt
+            }
+        }
+        activeModelPath = path
+        activeModelLabel = label
     }
 
-    /**
-     * Unloads the current model (if any) and clears the active model pointer.
-     */
+    /** Reloads the active model, starting a fresh conversation. */
+    fun reloadAsync(context: Context, systemPrompt: String) {
+        val path = activeModelPath ?: return
+        val label = activeModelLabel
+        loadAsync(context, path, label, systemPrompt)
+    }
+
     suspend fun unload(context: Context) {
         activeModelPath = null
         activeModelLabel = ""
@@ -132,10 +160,6 @@ object NovaEngine {
         }
     }
 
-    /**
-     * Sends a user message and returns the token stream.
-     * Conversation history is kept by the native layer.
-     */
     fun send(message: String, predictLength: Int): Flow<String> {
         val engine = requireNotNull(engineRef) { "No model loaded" }
         return engine.sendUserPrompt(message, predictLength)

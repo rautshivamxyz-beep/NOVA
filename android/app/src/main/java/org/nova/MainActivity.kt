@@ -17,7 +17,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -29,18 +29,18 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
- * NOVA — local AI chat.
- *
- * Chat UI on top of the llama.cpp Android binding. Everything runs
- * on-device; nothing leaves the phone.
+ * NOVA — local AI chat, Aria-style UI.
+ * Clean dark chat: rounded bubbles, pill input, live status, thinking dots.
  */
 class MainActivity : Activity() {
 
     private lateinit var status: TextView
+    private lateinit var busyDot: ProgressBar
     private lateinit var messagesRv: RecyclerView
-    private lateinit var emptyView: TextView
+    private lateinit var emptyView: View
     private lateinit var input: EditText
     private lateinit var sendBtn: Button
     private val adapter = MessageAdapter()
@@ -48,100 +48,114 @@ class MainActivity : Activity() {
     private lateinit var settings: Settings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var generationJob: Job? = null
+    private var generating = false
 
-    private val bg = Color.parseColor("#080B10")
-    private val surface = Color.parseColor("#10151D")
-    private val accent = Color.parseColor("#60A5FA")
-    private val textMain = Color.parseColor("#E8ECF3")
-    private val textDim = Color.parseColor("#7D8797")
-    private val stopColor = Color.parseColor("#F87171")
-
-    // ------------------------------------------------------------------ UI
+    private val bg = Color.parseColor("#0A0D12")
+    private val surface = Color.parseColor("#141926")
+    private val accent = Color.parseColor("#5B9BFF")
+    private val accentDeep = Color.parseColor("#2E6BE6")
+    private val textMain = Color.parseColor("#EAF0FA")
+    private val textDim = Color.parseColor("#8B94A7")
+    private val stopColor = Color.parseColor("#FF6B6B")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
         setContentView(buildUi())
-        // restoreLastModel() runs in onResume, which fires right after this
+        observeEngine()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        // The engine (native code + mmap) outlives the Activity instance by
-        // design: it's a process-wide singleton. Do not destroy it here so
-        // the model stays warm when the screen rotates / app is reopened.
+    override fun onResume() {
+        super.onResume()
+        restoreLastModel()
     }
 
     private fun buildUi(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bg)
-            setPadding(0, dp(36), 0, dp(8))
+            setPadding(0, dp(38), 0, dp(10))
         }
 
         // ---- Header
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(6), dp(18), dp(10))
+            setPadding(dp(18), dp(6), dp(14), dp(10))
         }
-        header.addView(TextView(this).apply {
+        val brandCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        brandRow.addView(TextView(this).apply {
             text = "✦"
-            textSize = 28f
+            textSize = 17f
             setTextColor(accent)
+            setPadding(0, 0, dp(6), 0)
         })
-        val titleCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), 0, 0, 0)
-        }
-        titleCol.addView(TextView(this).apply {
+        brandRow.addView(TextView(this).apply {
             text = "NOVA"
-            textSize = 20f
+            textSize = 19f
+            letterSpacing = 0.14f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
+            setTextColor(textMain)
         })
         status = TextView(this).apply {
             text = "starting…"
-            textSize = 12f
+            textSize = 11.5f
             setTextColor(textDim)
+            setPadding(dp(17), dp(2), 0, 0)
         }
-        titleCol.addView(status)
-        header.addView(titleCol, LinearLayout.LayoutParams(
+        busyDot = ProgressBar(this).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(accent)
+            visibility = View.GONE
+        }
+        brandCol.addView(brandRow)
+        brandCol.addView(status)
+        header.addView(brandCol, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(smallButton("Models", accent).apply {
-            setOnClickListener { startActivity(Intent(this@MainActivity, ModelsActivity::class.java)) }
+        header.addView(busyDot, FrameLayout.LayoutParams(dp(18), dp(18)).apply {
+            rightMargin = dp(12)
         })
-        header.addView(smallButton("New", textDim).apply {
+        header.addView(roundButton("+", textDim).apply {
             setOnClickListener { newConversation() }
-        })
-        header.addView(smallButton("⚙", textDim).apply {
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(8) })
+        header.addView(roundButton("≡", textDim).apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity, ModelsActivity::class.java)) }
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(8) })
+        header.addView(roundButton("⚙", textDim).apply {
             setOnClickListener { showSettings() }
-        })
+        }, LinearLayout.LayoutParams(dp(34), dp(34)))
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        root.addView(View(this).apply { setBackgroundColor(Color.parseColor("#1A2030")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         // ---- Messages
         messagesRv = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@MainActivity).apply { stackFromEnd = true }
             adapter = this@MainActivity.adapter
-            setPadding(dp(14), dp(4), dp(14), dp(4))
+            setPadding(dp(16), dp(10), dp(16), dp(6))
+        }
+        emptyView = TextView(this).apply {
+            text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi."
+            setTextColor(textDim)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding(dp(48), dp(70), dp(48), dp(70))
         }
         root.addView(FrameLayout(this).apply {
-            addView(TextView(this@MainActivity).apply {
-                text = "No conversation yet.\nTap Models to download an AI, then say hi — fully offline."
-                setTextColor(textDim)
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(dp(40), dp(80), dp(40), dp(80))
-                also { emptyView = it }
-            })
+            addView(emptyView)
             addView(messagesRv)
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            private fun refresh() { emptyView.visibility =
-                if (adapter.itemCount == 0) View.VISIBLE else View.GONE }
+            private fun refresh() {
+                emptyView.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
+            }
             override fun onChanged() = refresh()
             override fun onItemRangeInserted(p0: Int, p1: Int) = refresh()
             override fun onItemRangeRemoved(p0: Int, p1: Int) = refresh()
@@ -160,9 +174,10 @@ class MainActivity : Activity() {
             textSize = 15f
             background = GradientDrawable().apply {
                 setColor(surface)
-                cornerRadius = dp(22).toFloat()
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), Color.parseColor("#242C3C"))
             }
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(dp(18), dp(13), dp(18), dp(13))
             maxLines = 5
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, actionId, _ ->
@@ -173,77 +188,90 @@ class MainActivity : Activity() {
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sendBtn = Button(this).apply {
             text = "➤"
-            textSize = 16f
+            textSize = 15f
             background = GradientDrawable().apply {
-                setColor(accent)
-                cornerRadius = dp(24).toFloat()
+                setColor(accentDeep)
+                cornerRadius = dp(23).toFloat()
             }
-            setTextColor(Color.parseColor("#080B10"))
+            setTextColor(Color.WHITE)
             setOnClickListener { send() }
         }
-        inputRow.addView(sendBtn, LinearLayout.LayoutParams(
-            dp(46), dp(46)).apply { leftMargin = dp(8) })
+        inputRow.addView(sendBtn, FrameLayout.LayoutParams(dp(46), dp(46)).apply {
+            leftMargin = dp(10)
+        })
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         return root
     }
 
-    // ------------------------------------------------------------- models
-
     private fun restoreLastModel() {
-        if (NovaEngine.isLoading) {
-            // a load started elsewhere (e.g. ModelsActivity) — just refresh UI
-            setStatus()
-            return
-        }
-        if (NovaEngine.isModelLoaded) {
-            setStatus()
-            return
-        }
+        if (NovaEngine.isLoading) { setStatus(); return }
+        if (NovaEngine.isModelLoaded) { setStatus(); return }
         val path = settings.lastModelPath
-        if (path != null && java.io.File(path).exists()) {
-            status.text = "loading ${settings.lastModelLabel}…"
-            scope.launch {
-                try {
-                    NovaEngine.load(this@MainActivity, path, settings.lastModelLabel, settings.systemPrompt)
-                    setStatus()
-                } catch (e: Exception) {
-                    status.text = "model failed to load"
-                }
-            }
+        if (path != null && File(path).exists()) {
+            NovaEngine.loadAsync(
+                this, path,
+                settings.lastModelLabel.ifBlank { "model" },
+                settings.systemPrompt
+            )
         } else {
             setStatus()
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        restoreLastModel()
-    }
-
-    private fun setStatus(generating: Boolean = false) {
-        val label = NovaEngine.activeModelLabel.ifBlank { settings.lastModelLabel }
-        status.text = if (label.isBlank()) {
-            "no model — open Models"
-        } else {
-            "$label · ${if (generating) "generating…" else "ready"}"
+    private fun observeEngine() {
+        scope.launch {
+            NovaEngine.loadState.collect { renderLoadState(it) }
         }
-        input.isEnabled = NovaEngine.isModelLoaded
-        input.hint = if (NovaEngine.isModelLoaded) "Message NOVA…" else "Load a model first (Models ↑)"
     }
 
-    // -------------------------------------------------------------- chat
+    private fun renderLoadState(st: NovaEngine.LoadState) {
+        when (st) {
+            is NovaEngine.LoadState.Loading -> {
+                status.text = "loading ${st.label}…"
+                busyDot.visibility = View.VISIBLE
+                input.isEnabled = false
+                input.hint = "Loading model… (takes a while)"
+            }
+            NovaEngine.LoadState.Ready -> {
+                NovaEngine.acknowledgeLoad()
+                setStatus()
+                toast("Model ready — say hi!")
+            }
+            is NovaEngine.LoadState.Failed -> {
+                NovaEngine.acknowledgeLoad()
+                busyDot.visibility = View.GONE
+                status.text = "✗ ${st.error}"
+                input.isEnabled = false
+                input.hint = "Model failed to load — try a smaller one (≡)"
+                toast("Model failed: ${st.error}")
+            }
+            NovaEngine.LoadState.Idle -> setStatus()
+        }
+    }
+
+    private fun setStatus() {
+        val busy = generating || NovaEngine.isLoading
+        busyDot.visibility = if (busy) View.VISIBLE else View.GONE
+        val label = NovaEngine.activeModelLabel.ifBlank { settings.lastModelLabel }
+        status.text = when {
+            generating -> "generating…"
+            label.isBlank() -> "no model — tap ≡"
+            else -> label
+        }
+        val ready = NovaEngine.isModelLoaded && !NovaEngine.isLoading
+        input.isEnabled = ready
+        input.hint = if (ready) "Message NOVA…" else "Tap ≡ to load a model"
+    }
 
     private fun send() {
         if (generationJob?.isActive == true) {
-            // acts as Stop
-            sendBtn.text = "➤"
             generationJob?.cancel()
             return
         }
         if (!NovaEngine.isModelLoaded) {
-            Toast.makeText(this, "Load a model first — tap Models", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Load a model first — tap ≡", Toast.LENGTH_SHORT).show()
             return
         }
         val text = input.text.toString().trim()
@@ -251,14 +279,13 @@ class MainActivity : Activity() {
         input.setText("")
 
         adapter.add(Msg(Role.USER, text))
+        adapter.add(Msg(Role.ASSISTANT, ""))
         scrollToEnd()
-        setStatus(generating = true)
+
         sendBtn.text = "■"
         sendBtn.setTextColor(stopColor)
-
-        val last = Msg(Role.ASSISTANT, "")
-        adapter.add(last)
-        scrollToEnd()
+        generating = true
+        setStatus()
 
         generationJob = scope.launch {
             try {
@@ -271,11 +298,11 @@ class MainActivity : Activity() {
                 adapter.appendToLast(" ⏹")
             } catch (e: Exception) {
                 adapter.appendToLast("\n[error: ${e.message}]")
-                Toast.makeText(this@MainActivity, "Generation error", Toast.LENGTH_SHORT).show()
             } finally {
                 withContext(Dispatchers.Main) {
                     sendBtn.text = "➤"
-                    sendBtn.setTextColor(Color.parseColor("#080B10"))
+                    sendBtn.setTextColor(Color.WHITE)
+                    generating = false
                     setStatus()
                 }
             }
@@ -288,32 +315,18 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Fresh conversation: reload the model (native side keeps chat history,
-     * so reloading is the way to clear it) and wipe the bubbles.
-     */
     private fun newConversation() {
-        if (generationJob?.isActive == true) {
-            generationJob?.cancel()
-        }
-        scope.launch {
-            try {
-                val hadModel = NovaEngine.reload(this@MainActivity, settings.systemPrompt)
-                if (!hadModel) toast("No model loaded")
-            } catch (e: Exception) {
-                toast("Reload failed: ${e.message}")
-            }
-            adapter.clear()
-            setStatus()
-        }
+        if (generationJob?.isActive == true) generationJob?.cancel()
+        if (!NovaEngine.isModelLoaded) { toast("No model loaded"); return }
+        NovaEngine.reloadAsync(this, settings.systemPrompt)
+        adapter.clear()
+        toast("New conversation")
     }
-
-    // ----------------------------------------------------------- settings
 
     private fun showSettings() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(10), dp(20), dp(4))
+            setPadding(dp(22), dp(10), dp(22), dp(4))
         }
         outer.addView(TextView(this).apply {
             text = "System prompt (applies when the model is reloaded)"
@@ -331,9 +344,10 @@ class MainActivity : Activity() {
             setSingleLine(false)
             background = GradientDrawable().apply {
                 setColor(surface)
-                cornerRadius = dp(10).toFloat()
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Color.parseColor("#242C3C"))
             }
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
         }
         outer.addView(promptEdit)
         outer.addView(TextView(this).apply {
@@ -343,17 +357,15 @@ class MainActivity : Activity() {
             setPadding(0, dp(16), 0, dp(6))
         })
         val lengthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens -> smallButton("$tokens", textDim) }
+        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens -> roundButton("$tokens", textDim) }
         lengthBtns.forEachIndexed { i, b ->
             val tokens = Settings.LENGTH_OPTIONS[i]
             b.setOnClickListener {
                 settings.predictLength = tokens
-                for (child in 0 until lengthRow.childCount) (lengthRow.getChildAt(child) as? Button)?.setTextColor(textDim)
+                lengthBtns.forEach { it.setTextColor(textDim) }
                 b.setTextColor(accent)
             }
             if (tokens == settings.predictLength) b.setTextColor(accent)
-        }
-        lengthBtns.forEach { b ->
             lengthRow.addView(b, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { rightMargin = dp(8) })
@@ -369,7 +381,7 @@ class MainActivity : Activity() {
                 settings.systemPrompt = newPrompt
                 if (changed && NovaEngine.isModelLoaded) {
                     AlertDialog.Builder(this)
-                        .setMessage("Apply the new system prompt now? This clears the conversation.")
+                        .setMessage("Apply the new system prompt now? This starts a new conversation.")
                         .setPositiveButton("Apply now") { _, _ -> newConversation() }
                         .setNegativeButton("Later", null)
                         .show()
@@ -379,27 +391,25 @@ class MainActivity : Activity() {
             .show()
     }
 
-    // -------------------------------------------------------------- utils
-
-    private fun smallButton(label: String, color: Int): Button = Button(this).apply {
+    private fun roundButton(label: String, color: Int): Button = Button(this).apply {
         text = label
-        textSize = 13f
+        textSize = 14f
         isAllCaps = false
         setTextColor(color)
         background = GradientDrawable().apply {
-            setColor(Color.TRANSPARENT)
-            setStroke(dp(1), color)
-            cornerRadius = dp(20).toFloat()
+            setColor(surface)
+            setStroke(dp(1), Color.parseColor("#28314A"))
+            cornerRadius = dp(17).toFloat()
         }
-        setPadding(dp(14), dp(6), dp(14), dp(6))
+        setPadding(0, 0, 0, 0)
+        minWidth = 0
+        minimumWidth = 0
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 }
-
-// ---------------------------------------------------------------- adapter
 
 enum class Role { USER, ASSISTANT }
 
@@ -431,14 +441,14 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
         val bubble = TextView(ctx).apply {
-            textSize = 15f
+            textSize = 15.5f
             setLineSpacing(dp(ctx, 3).toFloat(), 1f)
-            setPadding(dp(ctx, 14), dp(ctx, 10), dp(ctx, 14), dp(ctx, 10))
+            setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
         }
         val row = FrameLayout(ctx).apply {
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(ctx, 8) }
+            ).apply { bottomMargin = dp(ctx, 10) }
         }
         row.addView(bubble)
         return VH(row, bubble)
@@ -447,32 +457,30 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     override fun onBindViewHolder(holder: VH, position: Int) {
         val m = items[position]
         val ctx = holder.bubble.context
-        holder.bubble.text = m.text
-        val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
-        if (m.role == Role.USER) {
-            (holder.bubble.background as? GradientDrawable)?.setColor(
-                Color.parseColor("#1E3A8A")
-            ) ?: run {
-                holder.bubble.background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#1E3A8A"))
-                    cornerRadius = dp(ctx, 18).toFloat()
-                }
-            }
-            holder.bubble.setTextColor(Color.parseColor("#F0F4FB"))
-            lp.gravity = Gravity.END
-            lp.rightMargin = 0
-        } else {
-            if (holder.bubble.background == null) {
-                holder.bubble.background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#141B26"))
-                    cornerRadius = dp(ctx, 18).toFloat()
-                }
-            }
-            holder.bubble.setTextColor(Color.parseColor("#E8ECF3"))
-            lp.gravity = Gravity.START
+        val user = m.role == Role.USER
+
+        holder.bubble.background = GradientDrawable().apply {
+            val r = dp(ctx, 20).toFloat()
+            val s = dp(ctx, 5).toFloat()
+            if (user) setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
+            else setCornerRadii(floatArrayOf(r, r, r, r, r, r, s, s))
+            setColor(if (user) Color.parseColor("#2E6BE6") else Color.parseColor("#171C26"))
+            if (!user) setStroke(dp(ctx, 1), Color.parseColor("#232B3A"))
         }
+
+        if (!user && m.text.isEmpty()) {
+            holder.bubble.text = "● ● ●"
+            holder.bubble.setTextColor(Color.parseColor("#5B9BFF"))
+        } else {
+            holder.bubble.text = m.text
+            holder.bubble.setTextColor(if (user) Color.parseColor("#FFFFFF") else Color.parseColor("#EAF0FA"))
+        }
+
+        val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
+        lp.gravity = if (user) Gravity.END else Gravity.START
+        lp.leftMargin = if (user) dp(ctx, 64) else 0
+        lp.rightMargin = if (user) 0 else dp(ctx, 64)
         holder.bubble.layoutParams = lp
-        holder.bubble.visibility = if (m.text.isEmpty()) View.INVISIBLE else View.VISIBLE
     }
 
     class VH(row: FrameLayout, val bubble: TextView) : RecyclerView.ViewHolder(row)

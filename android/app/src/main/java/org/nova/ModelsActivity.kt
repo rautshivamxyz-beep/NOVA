@@ -399,7 +399,7 @@ class ModelsActivity : Activity() {
             return
         }
         toast("Loading ${f.name}…")
-        scope.launch {
+        NovaEngine.scope.launch {
             try {
                 NovaEngine.load(this@ModelsActivity, f.absolutePath, ModelCatalog.labelFor(f), settings.systemPrompt)
                 settings.lastModelPath = f.absolutePath
