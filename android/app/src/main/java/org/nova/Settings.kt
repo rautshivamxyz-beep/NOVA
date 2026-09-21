@@ -34,6 +34,16 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_READ_ALOUD, false)
         set(value) = prefs.edit().putBoolean(KEY_READ_ALOUD, value).apply()
 
+    /** Facts about the user, injected into every prompt. */
+    var memory: String
+        get() = prefs.getString(KEY_MEMORY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_MEMORY, value).apply()
+
+    /** Conversation mode: auto-listen + auto-send after each reply. */
+    var autoListen: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -41,6 +51,8 @@ class Settings(context: Context) {
         private const val KEY_LAST_MODEL_LABEL = "last_model_label"
         private const val KEY_CURRENT_CHAT = "current_chat_id"
         private const val KEY_READ_ALOUD = "read_aloud"
+        private const val KEY_MEMORY = "memory"
+        private const val KEY_AUTO_LISTEN = "auto_listen"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a careful AI assistant running fully offline on this phone.\n" +

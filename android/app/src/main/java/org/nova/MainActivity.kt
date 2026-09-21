@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -51,6 +52,8 @@ class MainActivity : Activity() {
     private lateinit var sendBtn: Button
     private lateinit var micBtn: Button
     private val adapter = MessageAdapter()
+
+    init { adapter.onContinue = { continueAnswer() } }
 
     private lateinit var settings: Settings
     private lateinit var currentChat: Chat
@@ -92,6 +95,7 @@ class MainActivity : Activity() {
         setContentView(buildUi())
         displayChatMessages()
         observeEngine()
+        handleSharedText()
 
         tts = TextToSpeech(this) { code ->
             ttsReady = code == TextToSpeech.SUCCESS
@@ -302,8 +306,12 @@ class MainActivity : Activity() {
                 val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 val heard = results?.firstOrNull()
                 if (!heard.isNullOrBlank()) {
-                    if (heard.trim().endsWith(" send", ignoreCase = true)) {
-                        input.setText(heard.trim().dropLast(4).trim())
+                    val said = heard.trim()
+                    val sendNow = settings.autoListen || said.endsWith(" send", ignoreCase = true)
+                    if (sendNow) {
+                        input.setText(
+                            if (said.endsWith(" send", ignoreCase = true)) said.dropLast(4).trim()
+                            else said)
                         send()
                     } else {
                         input.setText(heard)
@@ -312,6 +320,12 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSharedText()
     }
 
     private fun openChat(id: String) {
@@ -404,12 +418,17 @@ class MainActivity : Activity() {
         spokenLength = 0
         speechCancelled = false
 
-        val prompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
+        val basePrompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
             val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
                 (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
             }
             "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
         } else text
+
+        val memory = settings.memory.trim()
+        val prompt = if (memory.isNotEmpty())
+            "(Facts about the user, always remember: $memory)\n\n$basePrompt"
+        else basePrompt
 
         val userMsg = Msg(Role.USER, text)
         currentChat.messages.add(userMsg)
@@ -450,6 +469,15 @@ class MainActivity : Activity() {
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
                     // speak whatever is left of the reply
                     if (!speechCancelled) speakNewSentences(stripThinking(replyMsg.text), flush = true)
+                    // conversation mode: listen again once the voice finishes
+                    if (settings.autoListen) scope.launch {
+                        var waited = 0
+                        while (tts?.isSpeaking == true && waited < 600) {
+                            delay(200)
+                            waited++
+                        }
+                        if (settings.autoListen && !generating) startSpeech()
+                    }
                 }
             }
         }
@@ -508,6 +536,47 @@ class MainActivity : Activity() {
         }
     }
 
+    // ------------------------------------------------------- share-in
+
+    /** Handles text shared from other apps (Share -> NOVA). */
+    private fun handleSharedText() {
+        val shared = intent?.takeIf { it.action == Intent.ACTION_SEND }
+            ?.getStringExtra(Intent.EXTRA_TEXT)?.trim()
+        if (shared.isNullOrEmpty() || generating) return
+        val preview = if (shared.length > 280) shared.take(280) + "…" else shared
+        val opts = arrayOf(
+            "💡 Explain this",
+            "🌐 Translate to English",
+            "📝 Summarize",
+            "🖍 Use as my message"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Shared with NOVA")
+            .setMessage(preview)
+            .setItems(opts) { _, which ->
+                when (which) {
+                    0 -> sendShared("Explain the following text in simple words:\n\n$shared")
+                    1 -> sendShared("Translate the following text to English. Reply with only the translation:\n\n$shared")
+                    2 -> sendShared("Summarize the following text in 3 short bullet points:\n\n$shared")
+                    3 -> { input.setText(shared); input.setSelection(shared.length) }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun sendShared(prompt: String) {
+        input.setText(prompt)
+        send()
+    }
+
+    /** Tap-continue on the last reply. */
+    private fun continueAnswer() {
+        if (generating || !NovaEngine.isModelLoaded) return
+        input.setText("Continue your previous answer exactly where it stopped. Do not repeat anything.")
+        send()
+    }
+
     private fun scrollToEnd(force: Boolean = true) {
         if (adapter.itemCount == 0) return
         if (force || atBottom) messagesRv.scrollToPosition(adapter.itemCount - 1)
@@ -542,6 +611,28 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(10), dp(14), dp(10))
         }
         outer.addView(promptEdit)
+        outer.addView(TextView(this).apply {
+            text = "🧠 Memory — NOVA remembers this in every chat"
+            setTextColor(textDim)
+            textSize = 12f
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        val memoryEdit = EditText(this).apply {
+            setText(settings.memory)
+            setTextColor(textMain)
+            textSize = 14f
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 2
+            maxLines = 4
+            setSingleLine(false)
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Color.parseColor("#242C3C"))
+            }
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        outer.addView(memoryEdit)
         outer.addView(TextView(this).apply {
             text = "Max response length"
             setTextColor(textDim)
@@ -578,11 +669,25 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(14) })
 
+        val listenBtn = roundButton(
+            if (settings.autoListen) "🎧 Conversation mode: ON" else "🎧 Conversation mode: OFF",
+            if (settings.autoListen) accent else textDim
+        )
+        listenBtn.setOnClickListener {
+            settings.autoListen = !settings.autoListen
+            listenBtn.text = if (settings.autoListen) "🎧 Conversation mode: ON" else "🎧 Conversation mode: OFF"
+            listenBtn.setTextColor(if (settings.autoListen) accent else textDim)
+        }
+        outer.addView(listenBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
+
         AlertDialog.Builder(this)
             .setTitle("NOVA settings")
             .setView(outer)
             .setPositiveButton("Save") { _, _ ->
                 val newPrompt = promptEdit.text.toString()
+                settings.memory = memoryEdit.text.toString()
                 val changed = newPrompt != settings.systemPrompt
                 settings.systemPrompt = newPrompt
                 if (changed && NovaEngine.isModelLoaded) {
@@ -660,6 +765,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     private val items = mutableListOf<Msg>()
     private var markwon: Markwon? = null
+    var onContinue: (() -> Unit)? = null
 
     fun add(m: Msg) {
         items.add(m)
@@ -765,6 +871,19 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 }
                 .show()
             true
+        }
+
+        // tap the last finished reply to continue it
+        if (m.role == Role.ASSISTANT && m.done && position == items.size - 1) {
+            holder.bubble.setOnClickListener {
+                AlertDialog.Builder(ctx)
+                    .setMessage("Continue this answer?")
+                    .setPositiveButton("Continue") { _, _ -> onContinue?.invoke() }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        } else {
+            holder.bubble.setOnClickListener(null)
         }
     }
 
