@@ -215,10 +215,12 @@ class MainActivity : Activity() {
         header.addView(busyDot, FrameLayout.LayoutParams(dp(18), dp(18)).apply {
             rightMargin = dp(10)
         })
-        header.addView(roundButton("+", textDim).apply {
+        header.addView(roundButton("", textDim).apply {
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_add, textDim), null, null, null)
             setOnClickListener { newConversation() }
         }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
-        header.addView(roundButton("☰", textDim).apply {
+        header.addView(roundButton("", textDim).apply {
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_menu, textDim), null, null, null)
             setOnClickListener { openDrawer() }
         }, LinearLayout.LayoutParams(dp(34), dp(34)))
         root.addView(header, LinearLayout.LayoutParams(
@@ -266,15 +268,17 @@ class MainActivity : Activity() {
                 setPadding(0, 0, 0, dp(20))
             })
             val suggestions = listOf(
-                "💡 Explain something to me",
-                "🌐 Translate to Hindi",
-                "✍️ Help me write code",
-                "📝 Summarize a topic"
+                "Explain something to me" to R.drawable.ic_lightbulb,
+                "Translate to Hindi" to R.drawable.ic_globe,
+                "Help me write code" to R.drawable.ic_edit,
+                "Summarize a topic" to R.drawable.ic_doc
             )
-            for (s in suggestions) {
+            for ((s, ico) in suggestions) {
                 addView(Button(this@MainActivity).apply {
                     text = s
                     isAllCaps = false
+                    compoundDrawablePadding = dp(10)
+                    setCompoundDrawablesWithIntrinsicBounds(icon(ico, NovaTheme.dim), null, null, null)
                     textSize = 14f
                     setTextColor(textMain)
                     setPadding(dp(18), 0, dp(18), 0)
@@ -326,14 +330,12 @@ class MainActivity : Activity() {
         docBanner.addView(docLabel, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val docClear = Button(this).apply {
-            text = "✕"
             isAllCaps = false
-            textSize = 13f
-            setTextColor(textDim)
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_close, textDim), null, null, null)
             background = null
             minWidth = 0
             minimumWidth = 0
-            setPadding(dp(8), 0, dp(8), 0)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener {
                 docName = null; docContext = null; docInjected = false
                 updateDocBanner()
@@ -378,9 +380,8 @@ class MainActivity : Activity() {
             setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
             setOnClickListener { startSpeech() }
         }
-        docBtn = roundButton("📎", textDim).apply {
-            textSize = 13f
-            background = null
+        docBtn = roundButton("", textDim).apply {
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_attach, textDim), null, null, null)
             setOnClickListener { openDocPicker() }
         }
         pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
@@ -406,7 +407,7 @@ class MainActivity : Activity() {
         pill.addView(input, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sendBtn = Button(this).apply {
-            text = "↑"
+            text = ""
             textSize = 18f
             isAllCaps = false
             setTextColor(Color.WHITE)
@@ -481,11 +482,11 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-        drawerPane.addView(drawerRow("＋  New chat") { newConversation() })
-        drawerPane.addView(drawerRow("📝  All chats") {
+        drawerPane.addView(drawerRow("New chat", R.drawable.ic_add) { newConversation() })
+        drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
-        drawerPane.addView(drawerRow("⚙  Settings") { showSettings() })
+        drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         drawerPane.addView(TextView(this).apply {
@@ -658,7 +659,7 @@ class MainActivity : Activity() {
                 NovaEngine.reloadAsync(this, settings.systemPrompt); false
             }
             else -> {
-                toast("Load a model first — tap ☰"); false
+                toast("Load a model first — open the menu"); false
             }
         }
     }
@@ -686,13 +687,13 @@ class MainActivity : Activity() {
         val basePrompt: String = docPart + when {
             needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
-                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(300)
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
                 "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
-                val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
-                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
                 "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
             }
@@ -702,7 +703,7 @@ class MainActivity : Activity() {
         var prompt = basePrompt
         // Memory rides along in the engine's context, so it only needs to be
         // injected once per conversation (or when its text changes).
-        val mem = settings.memory.trim()
+        val mem = settings.memory.trim().take(500)
         if (mem.isNotEmpty() && (
                     currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
                     )) {
@@ -738,25 +739,41 @@ class MainActivity : Activity() {
         spokenLength = replyMsg.text.length   // speak only the new part
         scrollToEnd()
 
-        sendBtn.text = "■"
-        sendBtn.setTextColor(stopColor)
+        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+            icon(R.drawable.ic_stop, stopColor), null, null, null)
         generating = true
         setStatus()
 
         generationJob = scope.launch {
+            // efficiency: batch tokens, redraw + speak ~8x per second
+            val pending = StringBuilder()
+            var lastFlush = 0L
+            fun flush() {
+                if (pending.isNotEmpty()) {
+                    adapter.appendToLast(pending.toString())
+                    pending.setLength(0)
+                }
+            }
             try {
                 NovaEngine.send(prompt, settings.predictLength)
                     .collect { token ->
-                        adapter.appendToLast(token)
-                        scrollToEnd(force = false)
-                        speakNewSentences(stripThinking(replyMsg.text), flush = false)
+                        pending.append(token)
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (now - lastFlush >= 120 || pending.length > 400) {
+                            lastFlush = now
+                            flush()
+                            scrollToEnd(force = false)
+                            speakNewSentences(stripThinking(replyMsg.text), flush = false)
+                        }
                     }
             } catch (e: CancellationException) {
+                flush()
                 adapter.appendToLast(" ⏹")
                 speechCancelled = true
             } catch (e: Exception) {
                 adapter.appendToLast("\n[error: ${e.message}]")
             } finally {
+                flush()
                 withContext(Dispatchers.Main) {
                     generating = false
                     updateSendLook()
@@ -818,23 +835,24 @@ class MainActivity : Activity() {
     private fun updateDocBanner() {
         val has = docContext != null
         docBanner.visibility = if (has) View.VISIBLE else View.GONE
-        if (has) docLabel.text = "📄 $docName • ${docContext!!.length} chars"
+        if (has) docLabel.text = "$docName • ${docContext!!.length} chars"
     }
 
     /** Send button: dim when there is nothing to type, bright blue when ready. */
     private fun updateSendLook() {
         if (generating) return
-        sendBtn.text = "↑"
         if (input.text.isNotBlank()) {
             sendBtn.background = GradientDrawable().apply {
                 setColor(accentDeep); cornerRadius = dp(20).toFloat()
             }
-            sendBtn.setTextColor(Color.WHITE)
+            sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+                icon(R.drawable.ic_send, Color.WHITE), null, null, null)
         } else {
             sendBtn.background = GradientDrawable().apply {
                 setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
             }
-            sendBtn.setTextColor(NovaTheme.sendDimText)
+            sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+                icon(R.drawable.ic_send, NovaTheme.sendDimText), null, null, null)
         }
     }
 
@@ -893,7 +911,7 @@ class MainActivity : Activity() {
         docContext = text
         docInjected = false
         updateDocBanner()
-        val opts = arrayOf("📝  Summarize it", "✨  Key points", "❓  I'll ask questions")
+        val opts = arrayOf("Summarize it", "Key points", "I'll ask questions")
         AlertDialog.Builder(this)
             .setTitle("📄 $name")
             .setMessage("${text.length} characters loaded. What should NOVA do with it?")
@@ -923,7 +941,7 @@ class MainActivity : Activity() {
 
     // ---------- side drawer ----------
 
-    private fun drawerRow(label: String, onClick: () -> Unit): View =
+    private fun drawerRow(label: String, iconRes: Int, onClick: () -> Unit): View =
         Button(this).apply {
             text = label
             isAllCaps = false
@@ -932,6 +950,9 @@ class MainActivity : Activity() {
             setTextColor(NovaTheme.text)
             background = null
             setPadding(dp(4), dp(12), dp(4), dp(12))
+            compoundDrawablePadding = dp(14)
+            if (iconRes != 0)
+                setCompoundDrawablesWithIntrinsicBounds(icon(iconRes, NovaTheme.dim), null, null, null)
             setOnClickListener { closeDrawer(); onClick() }
         }
 
@@ -1064,10 +1085,10 @@ class MainActivity : Activity() {
         if (generating) return
         val preview = if (shared.length > 280) shared.take(280) + "…" else shared
         val opts = arrayOf(
-            "💡 Explain this",
-            "🌐 Translate to English",
-            "📝 Summarize",
-            "🖍 Use as my message"
+            "Explain this",
+            "Translate to English",
+            "Summarize",
+            "Use as my message"
         )
         AlertDialog.Builder(this)
             .setTitle("Shared with NOVA")
@@ -1152,7 +1173,7 @@ class MainActivity : Activity() {
         scope.launch {
             val old = currentChat.messages.dropLast(6)
                 .joinToString("\n") { m ->
-                    (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(300)
+                    (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(250)
                 }
             val sb = StringBuilder()
             try {
@@ -1201,7 +1222,7 @@ class MainActivity : Activity() {
             .format(java.util.Date(whenMs))
         AlertDialog.Builder(this)
             .setTitle("Set reminder?")
-            .setMessage(task + "\n\n⏰ " + human)
+            .setMessage(task + "\n\n" + human)
             .setPositiveButton("Set") { _, _ ->
                 Reminder.schedule(this, whenMs, task)
                 toast("Reminder set: $human")
@@ -1251,6 +1272,11 @@ class MainActivity : Activity() {
 
     private fun showSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    private fun icon(res: Int, color: Int) = getDrawable(res)!!.mutate().apply {
+        colorFilter = android.graphics.PorterDuffColorFilter(
+            color, android.graphics.PorterDuff.Mode.SRC_IN)
     }
 
     private fun roundButton(label: String, color: Int): Button = Button(this).apply {
@@ -1384,13 +1410,17 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(ctx, 15), 0, 0, dp(ctx, 2))
         }
+        fun actIcon(res: Int) = ctx.getDrawable(res)!!.mutate().apply {
+            colorFilter = android.graphics.PorterDuffColorFilter(
+                NovaTheme.dim, android.graphics.PorterDuff.Mode.SRC_IN)
+        }
         val copyBtn = TextView(ctx).apply {
-            text = "📋"; textSize = 13f
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 18), dp(ctx, 6))
+            setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_copy), null, null, null)
         }
         val regenBtn = TextView(ctx).apply {
-            text = "🔄"; textSize = 13f
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6))
+            setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_refresh), null, null, null)
         }
         actions.addView(copyBtn)
         actions.addView(regenBtn)
@@ -1483,34 +1513,34 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val code = CODE_BLOCK.findAll(msgText)
                 .joinToString("\n\n") { it.groupValues[1].trim() }
             val options = mutableListOf<String>()
-            if (user) options += "\u270F\uFE0F  Edit & resend"
-            if (code.isNotBlank()) options += "📋  Copy code"
-            options += "📋  Copy"
-            options += "↗  Share"
+            if (user) options += "Edit & resend"
+            if (code.isNotBlank()) options += "Copy code"
+            options += "Copy"
+            options += "Share"
             val tools = if (user) linkedMapOf(
-                "✨  Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\n$msgText\n-----",
-                "🔄  Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\n$msgText\n-----",
-                "🌐  Translate to Hindi" to "Translate the text between the lines into Hindi. Reply with ONLY the translation:\n-----\n$msgText\n-----",
-                "✂  Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\n$msgText\n-----",
-                "➕  Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
+                "Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\n$msgText\n-----",
+                "Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\n$msgText\n-----",
+                "Translate to Hindi" to "Translate the text between the lines into Hindi. Reply with ONLY the translation:\n-----\n$msgText\n-----",
+                "Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\n$msgText\n-----",
+                "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
             ) else linkedMapOf(
-                "🔄  Regenerate" to ""
+                "Regenerate" to ""
             )
             options += tools.keys
             AlertDialog.Builder(ctx)
                 .setItems(options.toTypedArray()) { _, which ->
                     when (val chosen = options[which]) {
-                        "\u270F\uFE0F  Edit & resend" -> onEditResend?.invoke(m)
-                        "📋  Copy code" -> copyToClipboard(ctx, code)
-                        "📋  Copy" -> copyToClipboard(ctx, plainText(msgText))
-                        "↗  Share" -> {
+                        "Edit & resend" -> onEditResend?.invoke(m)
+                        "Copy code" -> copyToClipboard(ctx, code)
+                        "Copy" -> copyToClipboard(ctx, plainText(msgText))
+                        "Share" -> {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, msgText)
                             }
                             ctx.startActivity(Intent.createChooser(send, "Share message"))
                         }
-                        "🔄  Regenerate" -> onRegenerate?.invoke()
+                        "Regenerate" -> onRegenerate?.invoke()
                         else -> tools[chosen]?.let { onTool?.invoke(it) }
                     }
                 }
