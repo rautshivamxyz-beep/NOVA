@@ -27,6 +27,8 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity android:name=".ChatsActivity" android:exported="false" />
+
     </application>
 
     <uses-sdk tools:overrideLibrary="com.arm.aichat" />

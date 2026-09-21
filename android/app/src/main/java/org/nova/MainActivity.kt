@@ -2,12 +2,16 @@ package org.nova
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -22,6 +26,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import io.noties.markwon.Markwon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,10 +35,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 /**
- * NOVA — local AI chat, Aria-style UI.
- * Clean dark chat: rounded bubbles, pill input, live status, thinking dots.
+ * NOVA — local AI chat (Aria-style).
+ * Voice input, read-aloud, markdown, copy/share, saved multi-chat history.
  */
 class MainActivity : Activity() {
 
@@ -43,12 +49,20 @@ class MainActivity : Activity() {
     private lateinit var emptyView: View
     private lateinit var input: EditText
     private lateinit var sendBtn: Button
+    private lateinit var micBtn: Button
     private val adapter = MessageAdapter()
 
     private lateinit var settings: Settings
+    private lateinit var currentChat: Chat
+
+    /** True when the displayed history is NOT in the engine's context (chat was resumed). */
+    private var needsContextCarry = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var generationJob: Job? = null
     private var generating = false
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     private val bg = Color.parseColor("#0A0D12")
     private val surface = Color.parseColor("#141926")
@@ -61,13 +75,32 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
+
+        currentChat = if (settings.currentChatId.isNotBlank()) {
+            ChatStore.load(this, settings.currentChatId) ?: ChatStore.newChat()
+        } else ChatStore.newChat()
+        settings.currentChatId = currentChat.id
+        needsContextCarry = currentChat.messages.isNotEmpty()
+
         setContentView(buildUi())
+        displayChatMessages()
         observeEngine()
+
+        tts = TextToSpeech(this) { code ->
+            ttsReady = code == TextToSpeech.SUCCESS
+            if (ttsReady) tts?.language = Locale.getDefault()
+        }
     }
 
     override fun onResume() {
         super.onResume()
         restoreLastModel()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        tts?.stop()
+        tts?.shutdown()
     }
 
     private fun buildUi(): View {
@@ -117,14 +150,20 @@ class MainActivity : Activity() {
         header.addView(brandCol, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(busyDot, FrameLayout.LayoutParams(dp(18), dp(18)).apply {
-            rightMargin = dp(12)
+            rightMargin = dp(10)
         })
         header.addView(roundButton("+", textDim).apply {
             setOnClickListener { newConversation() }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(8) })
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
+        header.addView(roundButton("▤", textDim).apply {
+            setOnClickListener {
+                startActivityForResult(
+                    Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
+            }
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
         header.addView(roundButton("≡", textDim).apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, ModelsActivity::class.java)) }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(8) })
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
         header.addView(roundButton("⚙", textDim).apply {
             setOnClickListener { showSettings() }
         }, LinearLayout.LayoutParams(dp(34), dp(34)))
@@ -141,11 +180,11 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(10), dp(16), dp(6))
         }
         emptyView = TextView(this).apply {
-            text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi."
+            text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi.\nTap 🎤 to speak instead of typing."
             setTextColor(textDim)
             textSize = 14f
             gravity = Gravity.CENTER
-            setPadding(dp(48), dp(70), dp(48), dp(70))
+            setPadding(dp(48), dp(60), dp(48), dp(60))
         }
         root.addView(FrameLayout(this).apply {
             addView(emptyView)
@@ -167,6 +206,12 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(8), dp(14), dp(8))
         }
+        micBtn = roundButton("🎤", textDim).apply {
+            setOnClickListener { startSpeech() }
+        }
+        inputRow.addView(micBtn, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
+            rightMargin = dp(8)
+        })
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
@@ -205,6 +250,68 @@ class MainActivity : Activity() {
         return root
     }
 
+    // ------------------------------------------------------------- chats
+
+    private fun displayChatMessages() {
+        adapter.clear()
+        for (m in currentChat.messages) adapter.add(m)
+        if (currentChat.messages.isNotEmpty()) scrollToEnd()
+    }
+
+    private fun newConversation() {
+        if (generationJob?.isActive == true) generationJob?.cancel()
+        tts?.stop()
+        if (NovaEngine.isModelLoaded) {
+            NovaEngine.reloadAsync(this, settings.systemPrompt)
+            needsContextCarry = false
+        }
+        currentChat = ChatStore.newChat()
+        settings.currentChatId = currentChat.id
+        adapter.clear()
+        toast("New conversation")
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_CHATS && resultCode == Activity.RESULT_OK && data != null) {
+            if (data.getBooleanExtra(ChatsActivity.EXTRA_NEW_CHAT, false)) {
+                newConversation()
+            } else {
+                val id = data.getStringExtra(ChatsActivity.EXTRA_CHAT_ID)
+                if (id != null && id != currentChat.id) openChat(id)
+            }
+        }
+        if (requestCode == REQ_SPEECH) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val heard = results?.firstOrNull()
+                if (!heard.isNullOrBlank()) {
+                    if (heard.trim().endsWith(" send", ignoreCase = true)) {
+                        input.setText(heard.trim().dropLast(4).trim())
+                        send()
+                    } else {
+                        input.setText(heard)
+                        input.setSelection(heard.length)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun openChat(id: String) {
+        if (generationJob?.isActive == true) generationJob?.cancel()
+        tts?.stop()
+        val chat = ChatStore.load(this, id) ?: return
+        currentChat = chat
+        settings.currentChatId = chat.id
+        if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+        needsContextCarry = chat.messages.isNotEmpty()
+        displayChatMessages()
+    }
+
+    // ------------------------------------------------------------- models
+
     private fun restoreLastModel() {
         if (NovaEngine.isLoading) { setStatus(); return }
         if (NovaEngine.isModelLoaded) { setStatus(); return }
@@ -237,7 +344,6 @@ class MainActivity : Activity() {
             NovaEngine.LoadState.Ready -> {
                 NovaEngine.acknowledgeLoad()
                 setStatus()
-                toast("Model ready — say hi!")
             }
             is NovaEngine.LoadState.Failed -> {
                 NovaEngine.acknowledgeLoad()
@@ -265,6 +371,8 @@ class MainActivity : Activity() {
         input.hint = if (ready) "Message NOVA…" else "Tap ≡ to load a model"
     }
 
+    // -------------------------------------------------------------- chat
+
     private fun send() {
         if (generationJob?.isActive == true) {
             generationJob?.cancel()
@@ -277,9 +385,22 @@ class MainActivity : Activity() {
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         input.setText("")
+        tts?.stop()
 
-        adapter.add(Msg(Role.USER, text))
-        adapter.add(Msg(Role.ASSISTANT, ""))
+        val prompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
+            val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
+                (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+            }
+            "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
+        } else text
+
+        val userMsg = Msg(Role.USER, text)
+        currentChat.messages.add(userMsg)
+        adapter.add(userMsg)
+
+        val replyMsg = Msg(Role.ASSISTANT, "", done = false)
+        currentChat.messages.add(replyMsg)
+        adapter.add(replyMsg)
         scrollToEnd()
 
         sendBtn.text = "■"
@@ -289,7 +410,7 @@ class MainActivity : Activity() {
 
         generationJob = scope.launch {
             try {
-                NovaEngine.send(text, settings.predictLength)
+                NovaEngine.send(prompt, settings.predictLength)
                     .collect { token ->
                         adapter.appendToLast(token)
                         scrollToEnd()
@@ -304,8 +425,34 @@ class MainActivity : Activity() {
                     sendBtn.setTextColor(Color.WHITE)
                     generating = false
                     setStatus()
+                    adapter.finalizeLast()
+                    needsContextCarry = false
+                    val toSpeak = replyMsg.text
+                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                    if (settings.readAloud && ttsReady && toSpeak.isNotBlank()) {
+                        tts?.speak(toSpeak, TextToSpeech.QUEUE_FLUSH, null, "nova")
+                    }
                 }
             }
+        }
+    }
+
+    private fun startSpeech() {
+        if (generating || !NovaEngine.isModelLoaded) {
+            toast("Load a model first — tap ≡")
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to NOVA… (say \"send\" at the end to send)")
+        }
+        try {
+            startActivityForResult(intent, REQ_SPEECH)
+        } catch (e: android.content.ActivityNotFoundException) {
+            toast("Speech input is not available on this phone")
         }
     }
 
@@ -315,13 +462,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun newConversation() {
-        if (generationJob?.isActive == true) generationJob?.cancel()
-        if (!NovaEngine.isModelLoaded) { toast("No model loaded"); return }
-        NovaEngine.reloadAsync(this, settings.systemPrompt)
-        adapter.clear()
-        toast("New conversation")
-    }
+    // ----------------------------------------------------------- settings
 
     private fun showSettings() {
         val outer = LinearLayout(this).apply {
@@ -372,6 +513,20 @@ class MainActivity : Activity() {
         }
         outer.addView(lengthRow)
 
+        val ttsBtn = roundButton(
+            if (settings.readAloud) "🔊 Read replies aloud: ON" else "🔇 Read replies aloud: OFF",
+            if (settings.readAloud) accent else textDim
+        )
+        ttsBtn.setOnClickListener {
+            settings.readAloud = !settings.readAloud
+            ttsBtn.text = if (settings.readAloud) "🔊 Read replies aloud: ON" else "🔇 Read replies aloud: OFF"
+            ttsBtn.setTextColor(if (settings.readAloud) accent else textDim)
+            if (!settings.readAloud) tts?.stop()
+        }
+        outer.addView(ttsBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(14) })
+
         AlertDialog.Builder(this)
             .setTitle("NOVA settings")
             .setView(outer)
@@ -391,6 +546,8 @@ class MainActivity : Activity() {
             .show()
     }
 
+    // -------------------------------------------------------------- utils
+
     private fun roundButton(label: String, color: Int): Button = Button(this).apply {
         text = label
         textSize = 14f
@@ -409,15 +566,19 @@ class MainActivity : Activity() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    companion object {
+        private const val REQ_SPEECH = 4251
+        private const val REQ_CHATS = 4252
+    }
 }
 
-enum class Role { USER, ASSISTANT }
-
-class Msg(val role: Role, var text: String)
+// ---------------------------------------------------------------- adapter
 
 class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     private val items = mutableListOf<Msg>()
+    private var markwon: Markwon? = null
 
     fun add(m: Msg) {
         items.add(m)
@@ -427,6 +588,12 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     fun appendToLast(token: String) {
         if (items.isEmpty()) return
         items[items.size - 1].text += token
+        notifyItemChanged(items.size - 1)
+    }
+
+    fun finalizeLast() {
+        if (items.isEmpty()) return
+        items[items.size - 1].done = true
         notifyItemChanged(items.size - 1)
     }
 
@@ -440,6 +607,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
+        if (markwon == null) markwon = Markwon.create(ctx)
         val bubble = TextView(ctx).apply {
             textSize = 15.5f
             setLineSpacing(dp(ctx, 3).toFloat(), 1f)
@@ -467,13 +635,15 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             setColor(if (user) Color.parseColor("#2E6BE6") else Color.parseColor("#171C26"))
             if (!user) setStroke(dp(ctx, 1), Color.parseColor("#232B3A"))
         }
+        holder.bubble.setTextColor(if (user) Color.WHITE else Color.parseColor("#EAF0FA"))
 
-        if (!user && m.text.isEmpty()) {
+        if (!user && !m.done && m.text.isEmpty()) {
             holder.bubble.text = "● ● ●"
             holder.bubble.setTextColor(Color.parseColor("#5B9BFF"))
+        } else if (!user && m.done && m.text.isNotBlank() && markwon != null) {
+            markwon?.setMarkdown(holder.bubble, m.text)
         } else {
             holder.bubble.text = m.text
-            holder.bubble.setTextColor(if (user) Color.parseColor("#FFFFFF") else Color.parseColor("#EAF0FA"))
         }
 
         val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
@@ -481,6 +651,30 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         lp.leftMargin = if (user) dp(ctx, 64) else 0
         lp.rightMargin = if (user) 0 else dp(ctx, 64)
         holder.bubble.layoutParams = lp
+
+        holder.bubble.setOnLongClickListener {
+            if (m.text.isBlank()) return@setOnLongClickListener true
+            val options = arrayOf("📋  Copy", "↗  Share")
+            AlertDialog.Builder(ctx)
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> {
+                            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("NOVA", m.text))
+                            Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+                        }
+                        1 -> {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, m.text)
+                            }
+                            ctx.startActivity(Intent.createChooser(send, "Share message"))
+                        }
+                    }
+                }
+                .show()
+            true
+        }
     }
 
     class VH(row: FrameLayout, val bubble: TextView) : RecyclerView.ViewHolder(row)
