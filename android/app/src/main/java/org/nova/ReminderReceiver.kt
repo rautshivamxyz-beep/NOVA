@@ -52,7 +52,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val notif = NotificationCompat.Builder(context, "nova_reminders")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("⏰ NOVA reminder")
+            .setContentTitle("NOVA reminder")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
