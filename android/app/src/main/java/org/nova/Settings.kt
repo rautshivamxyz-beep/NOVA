@@ -54,7 +54,7 @@ class Settings(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_KNOWLEDGE, value).apply()
 
     companion object {
-        private const val KEY_SYSTEM_PROMPT = "system_prompt"
+        private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
         private const val KEY_LAST_MODEL = "last_model_path"
         private const val KEY_LAST_MODEL_LABEL = "last_model_label"
