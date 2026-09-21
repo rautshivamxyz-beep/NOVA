@@ -434,6 +434,8 @@ class MainActivity : Activity() {
             visibility = View.GONE
             setOnClickListener { closeDrawer() }
         }
+        frame.addView(root, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         frame.addView(scrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         drawerPane = LinearLayout(this).apply {
@@ -497,8 +499,6 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerList, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         frame.addView(drawerPane, FrameLayout.LayoutParams(dp(292), FrameLayout.LayoutParams.MATCH_PARENT))
-        frame.addView(root, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         return frame
     }
 
@@ -923,7 +923,7 @@ class MainActivity : Activity() {
         scrim.visibility = View.VISIBLE
         scrim.alpha = 0f
         scrim.animate().alpha(1f).setDuration(200).start()
-        drawerPane.translationX = -drawerPane.width.toFloat()
+        drawerPane.translationX = -dp(292).toFloat()
         drawerPane.animate().translationX(0f).setDuration(220).start()
     }
 
