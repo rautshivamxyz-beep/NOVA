@@ -15,8 +15,10 @@ import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.net.Uri
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.animation.AlphaAnimation
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -27,11 +29,15 @@ import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
+import io.noties.markwon.syntax.Prism4jThemeDefault
+import io.noties.markwon.syntax.SyntaxHighlightPlugin
+import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -52,11 +58,41 @@ class MainActivity : Activity() {
     private lateinit var micBtn: Button
     private val adapter = MessageAdapter()
 
+    init {
+        adapter.onContinue = { continueAnswer() }
+        adapter.onEditResend = { showEditResend(it) }
+        adapter.onTool = { runTool(it) }
+        adapter.onRegenerate = { regenerateLast() }
+    }
+
     private lateinit var settings: Settings
     private lateinit var currentChat: Chat
 
     /** True when the displayed history is NOT in the engine's context (chat was resumed). */
     private var needsContextCarry = false
+
+    /** Last memory text injected into this engine context. */
+    private var lastInjectedMemory: String? = null
+
+    /** Guards runaway auto-continues. */
+    private var autoContinueCount = 0
+
+    /** Compressed summary of older turns (auto-compact). */
+    private var compactSummary: String? = null
+    private var compacting = false
+
+    /** Attached document (PDF / text file) the user can ask about. */
+    private var docName: String? = null
+    private var docContext: String? = null
+    private var docInjected = false
+    private lateinit var docBanner: LinearLayout
+    private lateinit var docLabel: TextView
+    private lateinit var docBtn: Button
+
+    /** Side drawer. */
+    private lateinit var drawerPane: LinearLayout
+    private lateinit var scrim: View
+    private lateinit var drawerList: LinearLayout
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var generationJob: Job? = null
@@ -71,17 +107,34 @@ class MainActivity : Activity() {
     /** True while the chat is scrolled to the bottom; see scrollToEnd(). */
     private var atBottom = true
 
-    private val bg = Color.parseColor("#0A0D12")
-    private val surface = Color.parseColor("#141926")
-    private val accent = Color.parseColor("#5B9BFF")
-    private val accentDeep = Color.parseColor("#2E6BE6")
-    private val textMain = Color.parseColor("#EAF0FA")
-    private val textDim = Color.parseColor("#8B94A7")
+    private var bg = Color.BLACK
+    private var surface = Color.BLACK
+    private var accent = Color.WHITE
+    private var accentDeep = Color.BLUE
+    private var textMain = Color.BLACK
+    private var textDim = Color.GRAY
     private val stopColor = Color.parseColor("#FF6B6B")
+    private var appliedTheme = ""
+
+    /** Applies the current theme to this screen and the status bar. */
+    private fun applyTheme() {
+        NovaTheme.apply(settings.theme == "light")
+        bg = NovaTheme.bg
+        surface = NovaTheme.surface
+        accent = NovaTheme.accent
+        accentDeep = NovaTheme.accentDeep
+        textMain = NovaTheme.text
+        textDim = NovaTheme.dim
+        window.statusBarColor = NovaTheme.bg
+        window.navigationBarColor = NovaTheme.bg
+        appliedTheme = settings.theme
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
+        applyTheme()
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
 
         currentChat = if (settings.currentChatId.isNotBlank()) {
             ChatStore.load(this, settings.currentChatId) ?: ChatStore.newChat()
@@ -92,6 +145,13 @@ class MainActivity : Activity() {
         setContentView(buildUi())
         displayChatMessages()
         observeEngine()
+        handleSharedText()
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4253)
+        }
 
         tts = TextToSpeech(this) { code ->
             ttsReady = code == TextToSpeech.SUCCESS
@@ -99,10 +159,6 @@ class MainActivity : Activity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        restoreLastModel()
-    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -162,22 +218,13 @@ class MainActivity : Activity() {
         header.addView(roundButton("+", textDim).apply {
             setOnClickListener { newConversation() }
         }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
-        header.addView(roundButton("▤", textDim).apply {
-            setOnClickListener {
-                startActivityForResult(
-                    Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
-            }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
-        header.addView(roundButton("≡", textDim).apply {
-            setOnClickListener { startActivity(Intent(this@MainActivity, ModelsActivity::class.java)) }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
-        header.addView(roundButton("⚙", textDim).apply {
-            setOnClickListener { showSettings() }
+        header.addView(roundButton("☰", textDim).apply {
+            setOnClickListener { openDrawer() }
         }, LinearLayout.LayoutParams(dp(34), dp(34)))
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        root.addView(View(this).apply { setBackgroundColor(Color.parseColor("#1A2030")) },
+        root.addView(View(this).apply { setBackgroundColor(NovaTheme.divider) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         // ---- Messages
@@ -194,17 +241,109 @@ class MainActivity : Activity() {
                 atBottom = !rv.canScrollVertically(1)
             }
         })
-        emptyView = TextView(this).apply {
-            text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi.\nTap 🎤 to speak instead of typing."
-            setTextColor(textDim)
-            textSize = 14f
+        emptyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(48), dp(60), dp(48), dp(60))
+            setPadding(dp(36), dp(30), dp(36), dp(20))
+            addView(TextView(this@MainActivity).apply {
+                text = "✦"
+                textSize = 34f
+                setTextColor(accent)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "How can I help you today?"
+                textSize = 20f
+                setTextColor(textMain)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Your private AI. Runs 100% on this phone."
+                textSize = 12f
+                setTextColor(textDim)
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, dp(20))
+            })
+            val suggestions = listOf(
+                "💡 Explain something to me",
+                "🌐 Translate to Hindi",
+                "✍️ Help me write code",
+                "📝 Summarize a topic"
+            )
+            for (s in suggestions) {
+                addView(Button(this@MainActivity).apply {
+                    text = s
+                    isAllCaps = false
+                    textSize = 14f
+                    setTextColor(textMain)
+                    setPadding(dp(18), 0, dp(18), 0)
+                    minWidth = 0
+                    minimumWidth = 0
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        setColor(NovaTheme.pill)
+                        cornerRadius = dp(22).toFloat()
+                        setStroke(dp(1), NovaTheme.border)
+                    }
+                    setOnClickListener {
+                        input.setText(
+                            when {
+                                s.contains("Explain") -> "Explain in simple words: "
+                                s.contains("Translate") -> "Translate to Hindi: "
+                                s.contains("code") -> "Write me code for: "
+                                else -> "Summarize this in 3 points: "
+                            })
+                        input.setSelection(input.text.length)
+                    }
+                }, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)
+                ).apply {
+                    topMargin = dp(10); gravity = Gravity.CENTER_HORIZONTAL
+                })
+            }
         }
         root.addView(FrameLayout(this).apply {
-            addView(emptyView)
+            addView(emptyView, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT))
             addView(messagesRv)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // ---- Attached document banner (PDF / text loaded for questions)
+        docBanner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(6), dp(20), dp(2))
+            visibility = View.GONE
+        }
+        docLabel = TextView(this).apply {
+            textSize = 12f
+            setTextColor(accent)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        }
+        docBanner.addView(docLabel, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val docClear = Button(this).apply {
+            text = "✕"
+            isAllCaps = false
+            textSize = 13f
+            setTextColor(textDim)
+            background = null
+            minWidth = 0
+            minimumWidth = 0
+            setPadding(dp(8), 0, dp(8), 0)
+            setOnClickListener {
+                docName = null; docContext = null; docInjected = false
+                updateDocBanner()
+                toast("Document removed")
+            }
+        }
+        docBanner.addView(docClear, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(docBanner, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
             private fun refresh() {
@@ -215,54 +354,152 @@ class MainActivity : Activity() {
             override fun onItemRangeRemoved(p0: Int, p1: Int) = refresh()
         })
 
-        // ---- Input
+        // ---- Input (ChatGPT-style pill)
         val inputRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setPadding(dp(12), dp(8), dp(12), dp(10))
         }
-        micBtn = roundButton("🎤", textDim).apply {
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }
+        micBtn = roundButton("", textDim).apply {
+            val icon = getDrawable(R.drawable.ic_mic)!!.mutate()
+            icon.colorFilter = android.graphics.PorterDuffColorFilter(
+                textDim, android.graphics.PorterDuff.Mode.SRC_IN)
+            gravity = Gravity.CENTER
+            background = null
+            setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
             setOnClickListener { startSpeech() }
         }
-        inputRow.addView(micBtn, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
-            rightMargin = dp(8)
-        })
+        docBtn = roundButton("📎", textDim).apply {
+            textSize = 13f
+            background = null
+            setOnClickListener { openDocPicker() }
+        }
+        pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+        pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
             setTextColor(textMain)
             textSize = 15f
-            background = GradientDrawable().apply {
-                setColor(surface)
-                cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), Color.parseColor("#242C3C"))
-            }
-            setPadding(dp(18), dp(13), dp(18), dp(13))
+            background = null
+            setPadding(dp(10), dp(12), dp(10), dp(12))
             maxLines = 5
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) { send(); true } else false
             }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { updateSendLook() }
+            })
         }
-        inputRow.addView(input, LinearLayout.LayoutParams(
+        pill.addView(input, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sendBtn = Button(this).apply {
-            text = "➤"
-            textSize = 15f
+            text = "↑"
+            textSize = 18f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
             background = GradientDrawable().apply {
                 setColor(accentDeep)
-                cornerRadius = dp(23).toFloat()
+                cornerRadius = dp(20).toFloat()
             }
-            setTextColor(Color.WHITE)
             setOnClickListener { send() }
         }
-        inputRow.addView(sendBtn, FrameLayout.LayoutParams(dp(46), dp(46)).apply {
-            leftMargin = dp(10)
-        })
+        pill.addView(sendBtn, LinearLayout.LayoutParams(dp(40), dp(40)))
+        inputRow.addView(pill, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        updateSendLook()
 
-        return root
+        // ---- Side drawer (ChatGPT style)
+        val frame = FrameLayout(this)
+        scrim = View(this).apply {
+            setBackgroundColor(NovaTheme.scrim)
+            alpha = 0f
+            visibility = View.GONE
+            setOnClickListener { closeDrawer() }
+        }
+        frame.addView(scrim, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        drawerPane = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(NovaTheme.pill)
+            setPadding(dp(20), dp(44), dp(16), dp(20))
+            visibility = View.GONE
+        }
+        drawerPane.addView(TextView(this).apply {
+            text = "✦"
+            textSize = 24f
+            setTextColor(NovaTheme.accent)
+        })
+        drawerPane.addView(TextView(this).apply {
+            text = "NOVA"
+            textSize = 22f
+            letterSpacing = 0.14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(NovaTheme.text)
+            setPadding(0, dp(2), 0, dp(4))
+        })
+        val modelLabel = settings.lastModelLabel.ifBlank { "Download a model" }
+        val modelRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), dp(12), dp(2), dp(12))
+            setOnClickListener {
+                closeDrawer()
+                startActivity(Intent(this@MainActivity, ModelsActivity::class.java))
+            }
+        }
+        modelRow.addView(TextView(this).apply {
+            text = modelLabel
+            textSize = 13f
+            setTextColor(NovaTheme.dim)
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        modelRow.addView(TextView(this).apply {
+            text = "›"; textSize = 16f; setTextColor(NovaTheme.dim)
+        })
+        drawerPane.addView(modelRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        drawerPane.addView(drawerRow("＋  New chat") { newConversation() })
+        drawerPane.addView(drawerRow("📝  All chats") {
+            startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
+        })
+        drawerPane.addView(drawerRow("⚙  Settings") { showSettings() })
+        drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        drawerPane.addView(TextView(this).apply {
+            text = "RECENT"
+            textSize = 11f
+            letterSpacing = 0.12f
+            setTextColor(NovaTheme.dim)
+            setPadding(dp(4), dp(14), 0, dp(6))
+        })
+        drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        drawerPane.addView(drawerList, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        frame.addView(drawerPane, FrameLayout.LayoutParams(dp(292), FrameLayout.LayoutParams.MATCH_PARENT))
+        frame.addView(root, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        return frame
     }
 
     // ------------------------------------------------------------- chats
@@ -271,6 +508,7 @@ class MainActivity : Activity() {
         adapter.clear()
         for (m in currentChat.messages) adapter.add(m)
         if (currentChat.messages.isNotEmpty()) scrollToEnd()
+        updateDocBanner()
     }
 
     private fun newConversation() {
@@ -283,12 +521,19 @@ class MainActivity : Activity() {
         currentChat = ChatStore.newChat()
         settings.currentChatId = currentChat.id
         adapter.clear()
+        docName = null; docContext = null; docInjected = false
+        compactSummary = null
+        updateDocBanner()
         toast("New conversation")
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7700 && resultCode == RESULT_OK) {
+            data?.data?.let { loadSharedDocument(it) }
+            return
+        }
         if (requestCode == REQ_CHATS && resultCode == Activity.RESULT_OK && data != null) {
             if (data.getBooleanExtra(ChatsActivity.EXTRA_NEW_CHAT, false)) {
                 newConversation()
@@ -302,8 +547,12 @@ class MainActivity : Activity() {
                 val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 val heard = results?.firstOrNull()
                 if (!heard.isNullOrBlank()) {
-                    if (heard.trim().endsWith(" send", ignoreCase = true)) {
-                        input.setText(heard.trim().dropLast(4).trim())
+                    val said = heard.trim()
+                    val sendNow = settings.autoListen || said.endsWith(" send", ignoreCase = true)
+                    if (sendNow) {
+                        input.setText(
+                            if (said.endsWith(" send", ignoreCase = true)) said.dropLast(4).trim()
+                            else said)
                         send()
                     } else {
                         input.setText(heard)
@@ -312,6 +561,12 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSharedText()
     }
 
     private fun openChat(id: String) {
@@ -397,27 +652,73 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Load a model first — tap ≡", Toast.LENGTH_SHORT).show()
             return
         }
+        if (compacting) {
+            toast("Compressing older messages — one moment")
+            return
+        }
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         input.setText("")
-        tts?.stop()
-        spokenLength = 0
-        speechCancelled = false
+        maybeAutoRemember(text)
+        maybeSetReminder(text)
 
-        val prompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
-            val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
-                (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+        val docPart = if (docContext != null && !docInjected) {
+            docInjected = true
+            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docContext!!.take(6000)}\n-----\nEnd of document.)\n\n"
+        } else ""
+        val basePrompt: String = docPart + when {
+            needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
+                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(300)
+                }
+                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text"
             }
-            "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
-        } else text
+            needsContextCarry && currentChat.messages.isNotEmpty() -> {
+                val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+                }
+                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
+            }
+            else -> text
+        }
 
-        val userMsg = Msg(Role.USER, text)
-        currentChat.messages.add(userMsg)
-        adapter.add(userMsg)
+        var prompt = basePrompt
+        // Memory rides along in the engine's context, so it only needs to be
+        // injected once per conversation (or when its text changes).
+        val mem = settings.memory.trim()
+        if (mem.isNotEmpty() && (
+                    currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
+                    )) {
+            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
+            lastInjectedMemory = mem
+        }
+        autoContinueCount = 0
+        startGeneration(prompt, text)
+    }
 
-        val replyMsg = Msg(Role.ASSISTANT, "", done = false)
-        currentChat.messages.add(replyMsg)
-        adapter.add(replyMsg)
+    /**
+     * Runs one generation turn. userText == null for internal prompts
+     * (chips, auto-continue, edit-resend) - no user bubble is shown.
+     * newBubble == false keeps appending to the existing last reply.
+     */
+    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true) {
+        if (userText != null) {
+            val userMsg = Msg(Role.USER, userText)
+            currentChat.messages.add(userMsg)
+            adapter.add(userMsg)
+        }
+        val replyMsg: Msg
+        if (newBubble) {
+            replyMsg = Msg(Role.ASSISTANT, "", done = false)
+            currentChat.messages.add(replyMsg)
+            adapter.add(replyMsg)
+        } else {
+            replyMsg = currentChat.messages.last()
+            replyMsg.done = false
+        }
+        tts?.stop()
+        speechCancelled = false
+        spokenLength = replyMsg.text.length   // speak only the new part
         scrollToEnd()
 
         sendBtn.text = "■"
@@ -440,26 +741,249 @@ class MainActivity : Activity() {
                 adapter.appendToLast("\n[error: ${e.message}]")
             } finally {
                 withContext(Dispatchers.Main) {
-                    sendBtn.text = "➤"
-                    sendBtn.setTextColor(Color.WHITE)
                     generating = false
+                    updateSendLook()
                     setStatus()
                     adapter.finalizeLast()
                     needsContextCarry = false
+                    // show chips the moment the reply ends - before anything
+                    // that could fail (storage, voice) gets a chance to skip it
+                    val willContinue = newBubble && autoContinueCount < 2 &&
+                        shouldAutoContinue(replyMsg.text)
                     // persist the conversation
-                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                    try {
+                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                    } catch (e: Exception) { }
                     // speak whatever is left of the reply
-                    if (!speechCancelled) speakNewSentences(stripThinking(replyMsg.text), flush = true)
+                    if (!speechCancelled) {
+                        try { speakNewSentences(stripThinking(replyMsg.text), flush = true) }
+                        catch (e: Exception) { }
+                    }
+                    // conversation mode: listen again once the voice finishes
+                    if (settings.autoListen) scope.launch {
+                        var waited = 0
+                        while (tts?.isSpeaking == true && waited < 600) {
+                            delay(200)
+                            waited++
+                        }
+                        if (settings.autoListen && !generating) startSpeech()
+                    }
+                    // auto-continue: if the reply was cut off at the token
+                    // limit, continue it in the same bubble
+                    if (willContinue) {
+                        autoContinueCount++
+                        startGeneration(
+                            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
+                            null, newBubble = false)
+                    } else {
+                        // auto-compact: compress old turns once the chat grows
+                        if (!speechCancelled && !compacting &&
+                            currentChat.messages.size > 20
+                        ) {
+                            compactOldTurns()
+                        }
+                    }
                 }
             }
         }
     }
 
-    /**
-     * Speaks finished sentences as they stream in (queued), so the voice
-     * keeps pace with the text instead of waiting for the whole reply.
-     * Strips markdown so it reads naturally.
-     */
+    /** True when a reply looks cut off mid-sentence at the token limit. */
+    private fun shouldAutoContinue(text: String): Boolean {
+        val t = stripThinking(text).trim()
+        if (t.length < settings.predictLength * 3) return false
+        val last = t.lastOrNull() ?: return false
+        return last !in ".!?\u2026\"'`)]}*"
+    }
+
+    /** Quick-action chips under a finished reply. */
+    private fun updateDocBanner() {
+        val has = docContext != null
+        docBanner.visibility = if (has) View.VISIBLE else View.GONE
+        if (has) docLabel.text = "📄 $docName • ${docContext!!.length} chars"
+    }
+
+    /** Send button: dim when there is nothing to type, bright blue when ready. */
+    private fun updateSendLook() {
+        if (generating) return
+        sendBtn.text = "↑"
+        if (input.text.isNotBlank()) {
+            sendBtn.background = GradientDrawable().apply {
+                setColor(accentDeep); cornerRadius = dp(20).toFloat()
+            }
+            sendBtn.setTextColor(Color.WHITE)
+        } else {
+            sendBtn.background = GradientDrawable().apply {
+                setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
+            }
+            sendBtn.setTextColor(NovaTheme.sendDimText)
+        }
+    }
+
+    /** Runs a hidden-prompt tool action (no duplicate user bubble). */
+    private fun runTool(prompt: String) {
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!NovaEngine.isModelLoaded) { toast("Load a model first — tap ☰"); return }
+        startGeneration(prompt, null)
+    }
+
+    /** Long-press a reply -> answer the last question again. */
+    private fun regenerateLast() {
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!NovaEngine.isModelLoaded) { toast("Load a model first — tap ☰"); return }
+        val msgs = currentChat.messages
+        if (msgs.lastOrNull()?.role == Role.ASSISTANT) {
+            currentChat.messages.removeAt(msgs.size - 1)
+            adapter.removeLast()
+        }
+        val lastUser = currentChat.messages.lastOrNull { it.role == Role.USER }
+        if (lastUser == null) { toast("Nothing to regenerate"); return }
+        startGeneration(lastUser.text, null)
+    }
+
+    /** Loads a shared or picked file (PDF / plain text) as document context. */
+    private fun loadSharedDocument(uri: Uri) {
+        val name = try {
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst())
+                    c.getString(c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME))
+                else null
+            }
+        } catch (e: Exception) { null } ?: "document"
+        toast("Reading $name…")
+        scope.launch {
+            val isPdf = name.endsWith(".pdf", true) ||
+                contentResolver.getType(uri)?.contains("pdf", true) == true
+            val text = withContext(Dispatchers.IO) {
+                try {
+                    if (isPdf) PdfDoc.extractText(this@MainActivity, uri)
+                    else contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
+                } catch (e: Exception) { "" }
+            }
+            if (text.isBlank() || text.trim().length < 40) {
+                toast("Couldn't read that — NOVA reads PDF and text files")
+                return@launch
+            }
+            attachDocument(name, text.trim())
+        }
+    }
+
+    private fun attachDocument(name: String, text: String) {
+        docName = name
+        docContext = text
+        docInjected = false
+        updateDocBanner()
+        val opts = arrayOf("📝  Summarize it", "✨  Key points", "❓  I'll ask questions")
+        AlertDialog.Builder(this)
+            .setTitle("📄 $name")
+            .setMessage("${text.length} characters loaded. What should NOVA do with it?")
+            .setItems(opts) { _, which ->
+                when (which) {
+                    0 -> runTool("Summarize this document in a few short paragraphs.")
+                    1 -> runTool("List the key points of this document as short bullet points.")
+                    2 -> toast("Ask anything about $name — then tap ↑")
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun openDocPicker() {
+        try {
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain"))
+            }
+            startActivityForResult(pick, 7700)
+        } catch (e: Exception) {
+            toast("No file picker available")
+        }
+    }
+
+    // ---------- side drawer ----------
+
+    private fun drawerRow(label: String, onClick: () -> Unit): View =
+        Button(this).apply {
+            text = label
+            isAllCaps = false
+            textSize = 15f
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setTextColor(NovaTheme.text)
+            background = null
+            setPadding(dp(4), dp(12), dp(4), dp(12))
+            setOnClickListener { closeDrawer(); onClick() }
+        }
+
+    private fun openDrawer() {
+        refreshDrawer()
+        drawerPane.visibility = View.VISIBLE
+        scrim.visibility = View.VISIBLE
+        scrim.alpha = 0f
+        scrim.animate().alpha(1f).setDuration(200).start()
+        drawerPane.translationX = -drawerPane.width.toFloat()
+        drawerPane.animate().translationX(0f).setDuration(220).start()
+    }
+
+    private fun closeDrawer() {
+        if (scrim.visibility != View.VISIBLE) return
+        scrim.animate().alpha(0f).setDuration(180)
+            .withEndAction { scrim.visibility = View.GONE }.start()
+        drawerPane.animate().translationX(-drawerPane.width.toFloat()).setDuration(200)
+            .withEndAction { drawerPane.visibility = View.GONE }.start()
+    }
+
+    private fun refreshDrawer() {
+        drawerList.removeAllViews()
+        val byTime = ChatStore.list(this).asReversed()
+        for (chat in byTime.take(12)) {
+            val first = chat.messages.firstOrNull { it.role == Role.USER }?.text ?: "Chat"
+            val title = if (first.length > 38) first.take(38) + "…" else first
+            drawerList.addView(TextView(this).apply {
+                text = title
+                textSize = 14f
+                maxLines = 1
+                setTextColor(NovaTheme.text)
+                setPadding(dp(4), dp(10), dp(4), dp(10))
+                setOnClickListener { openChatFromDrawer(chat.id) }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        if (byTime.isEmpty()) {
+            drawerList.addView(TextView(this).apply {
+                text = "No chats yet"
+                textSize = 13f
+                setTextColor(NovaTheme.dim)
+                setPadding(dp(4), dp(10), dp(4), dp(10))
+            })
+        }
+    }
+
+    private fun openChatFromDrawer(id: String) {
+        closeDrawer()
+        val chat = ChatStore.load(this, id) ?: return
+        if (generationJob?.isActive == true) generationJob?.cancel()
+        tts?.stop()
+        currentChat = chat
+        settings.currentChatId = chat.id
+        needsContextCarry = chat.messages.isNotEmpty()
+        compactSummary = null
+        docName = null; docContext = null; docInjected = false
+        if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+        displayChatMessages()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (appliedTheme.isNotEmpty() && settings.theme != appliedTheme) {
+            recreate()
+            return
+        }
+        restoreLastModel()
+    }
+
     private fun speakNewSentences(full: String, flush: Boolean) {
         if (!settings.readAloud || !ttsReady || tts == null) return
         if (spokenLength >= full.length) return
@@ -508,6 +1032,198 @@ class MainActivity : Activity() {
         }
     }
 
+    // ------------------------------------------------------- share-in
+
+    /** Handles text shared from other apps (Share -> NOVA). */
+    private fun handleSharedText() {
+        val sendIntent = intent?.takeIf { it.action == Intent.ACTION_SEND } ?: return
+        val shared = sendIntent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
+        if (shared.isNullOrEmpty()) {
+            // no text - maybe a file (PDF / txt) was shared to NOVA
+            @Suppress("DEPRECATION")
+            val stream = sendIntent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            if (stream != null) loadSharedDocument(stream)
+            return
+        }
+        if (generating) return
+        val preview = if (shared.length > 280) shared.take(280) + "…" else shared
+        val opts = arrayOf(
+            "💡 Explain this",
+            "🌐 Translate to English",
+            "📝 Summarize",
+            "🖍 Use as my message"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Shared with NOVA")
+            .setMessage(preview)
+            .setItems(opts) { _, which ->
+                when (which) {
+                    0 -> sendShared("Explain the following text in simple words:\n\n$shared")
+                    1 -> sendShared("Translate the following text to English. Reply with only the translation:\n\n$shared")
+                    2 -> sendShared("Summarize the following text in 3 short bullet points:\n\n$shared")
+                    3 -> { input.setText(shared); input.setSelection(shared.length) }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun sendShared(prompt: String) {
+        input.setText(prompt)
+        send()
+    }
+
+    /** Tap-continue on the last reply. */
+    private fun continueAnswer() {
+        if (generating || !NovaEngine.isModelLoaded) return
+        input.setText("Continue your previous answer exactly where it stopped. Do not repeat anything.")
+        send()
+    }
+
+    /** Detects "remember that ..." and offers to save it to Memory. */
+    private fun maybeAutoRemember(text: String) {
+        val m = Regex("(?i)\\bremember\\b[\\s:,]+(.{4,400})").find(text) ?: return
+        var fact = m.groupValues[1].trim().trimEnd('.', '!', '?')
+        fact = fact.removePrefix("that ").removePrefix("That ")
+        if (fact.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Add to NOVA's memory?")
+            .setMessage(fact)
+            .setPositiveButton("Add") { _, _ ->
+                settings.memory = if (settings.memory.isBlank()) fact
+                else settings.memory.trimEnd() + "\n- " + fact
+                toast("Added to memory")
+            }
+            .setNegativeButton("No", null)
+            .show()
+    }
+
+    /** Long-press own message -> edit & resend. */
+    private fun showEditResend(m: Msg) {
+        if (generating || !NovaEngine.isModelLoaded) {
+            toast("Wait for the current reply to finish")
+            return
+        }
+        val edit = EditText(this).apply {
+            setText(m.text)
+            setTextColor(textMain)
+            textSize = 14f
+            setSingleLine(false)
+            minLines = 2
+            maxLines = 6
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Edit & resend")
+            .setView(edit)
+            .setPositiveButton("Resend") { _, _ ->
+                val newText = edit.text.toString().trim()
+                if (newText.isEmpty()) return@setPositiveButton
+                m.text = newText
+                adapter.notifyChanged(m)
+                startGeneration(newText, null)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Auto-compact: summarize old turns so the engine context stays small. */
+    private fun compactOldTurns() {
+        compacting = true
+        toast("Compressing older messages to keep replies fast…")
+        scope.launch {
+            val old = currentChat.messages.dropLast(6)
+                .joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(300)
+                }
+            val sb = StringBuilder()
+            try {
+                NovaEngine.send(
+                    "Summarize this conversation in one short paragraph. " +
+                        "Keep all key facts, decisions, names and numbers:\n\n$old",
+                    256
+                ).collect { sb.append(it) }
+                val summary = stripThinking(sb.toString()).trim()
+                if (summary.length > 40) {
+                    compactSummary = summary
+                    needsContextCarry = true
+                    docInjected = false
+                    NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                }
+            } catch (e: Exception) {
+                // failed - keep full context, retry next turn
+            }
+            compacting = false
+        }
+    }
+
+    /** Detects "remind me to X at/in TIME" and schedules a local notification. */
+    private fun maybeSetReminder(text: String) {
+        val m = Regex("(?i)\\bremind me\\b(?:\\s+to)?\\s+(.+)").find(text) ?: return
+        val rest = m.groupValues[1].trim()
+        val task: String
+        val timeStr: String
+        val rel = Regex("(?i)^in\\s+(\\d+\\s*\\w+)$").find(rest)
+        if (rel != null) {
+            task = "Reminder"
+            timeStr = rel.groupValues[1]
+        } else {
+            var idx = -1
+            for (k in listOf(" at ", " in ", " on ")) {
+                val j = rest.lastIndexOf(k)
+                if (j > idx) idx = j
+            }
+            if (idx <= 0) return
+            task = rest.substring(0, idx).trim()
+            timeStr = rest.substring(idx + 1).trim()
+            if (task.isEmpty()) return
+        }
+        val whenMs = parseReminderTime(timeStr) ?: return
+        val human = java.text.SimpleDateFormat("EEE, d MMM h:mm a", Locale.getDefault())
+            .format(java.util.Date(whenMs))
+        AlertDialog.Builder(this)
+            .setTitle("Set reminder?")
+            .setMessage(task + "\n\n⏰ " + human)
+            .setPositiveButton("Set") { _, _ ->
+                Reminder.schedule(this, whenMs, task)
+                toast("Reminder set: $human")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun parseReminderTime(s: String): Long? {
+        val now = java.util.Calendar.getInstance()
+        val t = s.trim().lowercase()
+        // "in 20 minutes" / "in 3 hours" / "in 45 sec"
+        Regex("(?i)^(?:in\\s+)?(\\d+)\\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|hr|hrs)\\b").find(t)?.let { mm ->
+            val n = mm.groupValues[1].toLongOrNull() ?: return null
+            val unit = mm.groupValues[2]
+            val ms = when {
+                unit.startsWith("sec") -> n * 1000L
+                unit.startsWith("min") -> n * 60_000L
+                else -> n * 3_600_000L
+            }
+            return now.timeInMillis + ms
+        }
+        // "6pm", "18:30", "9 am", "tomorrow 10am"
+        val tomorrow = t.contains("tomorrow")
+        val tm = Regex("(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?").find(t.replace("tomorrow", "")) ?: return null
+        var hour = tm.groupValues[1].toIntOrNull() ?: return null
+        val minute = tm.groupValues[2].toIntOrNull() ?: 0
+        val ampm = tm.groupValues[3]
+        if (ampm == "pm" && hour < 12) hour += 12
+        if (ampm == "am" && hour == 12) hour = 0
+        if (hour > 23) return null
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        cal.set(java.util.Calendar.SECOND, 0)
+        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        else if (cal.timeInMillis <= now.timeInMillis) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        return cal.timeInMillis
+    }
+
     private fun scrollToEnd(force: Boolean = true) {
         if (adapter.itemCount == 0) return
         if (force || atBottom) messagesRv.scrollToPosition(adapter.itemCount - 1)
@@ -516,88 +1232,8 @@ class MainActivity : Activity() {
     // ----------------------------------------------------------- settings
 
     private fun showSettings() {
-        val outer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(10), dp(22), dp(4))
-        }
-        outer.addView(TextView(this).apply {
-            text = "System prompt (applies when the model is reloaded)"
-            setTextColor(textDim)
-            textSize = 12f
-            setPadding(0, 0, 0, dp(6))
-        })
-        val promptEdit = EditText(this).apply {
-            setText(settings.systemPrompt)
-            setTextColor(textMain)
-            textSize = 14f
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            minLines = 3
-            maxLines = 6
-            setSingleLine(false)
-            background = GradientDrawable().apply {
-                setColor(surface)
-                cornerRadius = dp(12).toFloat()
-                setStroke(dp(1), Color.parseColor("#242C3C"))
-            }
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-        }
-        outer.addView(promptEdit)
-        outer.addView(TextView(this).apply {
-            text = "Max response length"
-            setTextColor(textDim)
-            textSize = 12f
-            setPadding(0, dp(16), 0, dp(6))
-        })
-        val lengthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val lengthBtns = Settings.LENGTH_OPTIONS.map { tokens -> roundButton("$tokens", textDim) }
-        lengthBtns.forEachIndexed { i, b ->
-            val tokens = Settings.LENGTH_OPTIONS[i]
-            b.setOnClickListener {
-                settings.predictLength = tokens
-                lengthBtns.forEach { it.setTextColor(textDim) }
-                b.setTextColor(accent)
-            }
-            if (tokens == settings.predictLength) b.setTextColor(accent)
-            lengthRow.addView(b, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { rightMargin = dp(8) })
-        }
-        outer.addView(lengthRow)
-
-        val ttsBtn = roundButton(
-            if (settings.readAloud) "🔊 Read replies aloud: ON" else "🔇 Read replies aloud: OFF",
-            if (settings.readAloud) accent else textDim
-        )
-        ttsBtn.setOnClickListener {
-            settings.readAloud = !settings.readAloud
-            ttsBtn.text = if (settings.readAloud) "🔊 Read replies aloud: ON" else "🔇 Read replies aloud: OFF"
-            ttsBtn.setTextColor(if (settings.readAloud) accent else textDim)
-            if (!settings.readAloud) tts?.stop()
-        }
-        outer.addView(ttsBtn, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(14) })
-
-        AlertDialog.Builder(this)
-            .setTitle("NOVA settings")
-            .setView(outer)
-            .setPositiveButton("Save") { _, _ ->
-                val newPrompt = promptEdit.text.toString()
-                val changed = newPrompt != settings.systemPrompt
-                settings.systemPrompt = newPrompt
-                if (changed && NovaEngine.isModelLoaded) {
-                    AlertDialog.Builder(this)
-                        .setMessage("Apply the new system prompt now? This starts a new conversation.")
-                        .setPositiveButton("Apply now") { _, _ -> newConversation() }
-                        .setNegativeButton("Later", null)
-                        .show()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        startActivity(Intent(this, SettingsActivity::class.java))
     }
-
-    // -------------------------------------------------------------- utils
 
     private fun roundButton(label: String, color: Int): Button = Button(this).apply {
         text = label
@@ -660,6 +1296,10 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     private val items = mutableListOf<Msg>()
     private var markwon: Markwon? = null
+    var onContinue: (() -> Unit)? = null
+    var onTool: ((String) -> Unit)? = null
+    var onRegenerate: (() -> Unit)? = null
+    var onEditResend: ((Msg) -> Unit)? = null
 
     fun add(m: Msg) {
         items.add(m)
@@ -688,55 +1328,135 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         notifyItemRangeRemoved(0, n)
     }
 
+    fun lastMessage(): Msg? = items.lastOrNull()
+
+    fun removeLast() {
+        if (items.isEmpty()) return
+        items.removeAt(items.size - 1)
+        notifyItemRemoved(items.size)
+    }
+
+    fun notifyChanged(m: Msg) {
+        val i = items.indexOf(m)
+        if (i >= 0) notifyItemChanged(i)
+    }
+
     override fun getItemCount(): Int = items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
-        if (markwon == null) markwon = Markwon.create(ctx)
+        if (markwon == null) {
+            val prism4j = Prism4j(NovaGrammarLocator)
+            markwon = Markwon.builder(ctx)
+                .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
+                .build()
+        }
+        val avatar = TextView(ctx).apply {
+            text = "✦"
+            textSize = 14f
+            setTextColor(NovaTheme.accent)
+            setPadding(0, dp(ctx, 9), 0, 0)
+        }
         val bubble = TextView(ctx).apply {
             textSize = 15.5f
             setLineSpacing(dp(ctx, 3).toFloat(), 1f)
             setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
         }
-        val row = FrameLayout(ctx).apply {
+        val actions = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(ctx, 15), 0, 0, dp(ctx, 2))
+        }
+        val copyBtn = TextView(ctx).apply {
+            text = "📋"; textSize = 13f
+            setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 18), dp(ctx, 6))
+        }
+        val regenBtn = TextView(ctx).apply {
+            text = "🔄"; textSize = 13f
+            setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6))
+        }
+        actions.addView(copyBtn)
+        actions.addView(regenBtn)
+        val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(bubble, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        col.addView(actions)
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(ctx, 10) }
+            ).apply { bottomMargin = dp(ctx, 14) }
         }
-        row.addView(bubble)
-        return VH(row, bubble)
+        row.addView(avatar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { rightMargin = dp(ctx, 10) })
+        row.addView(col, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        return VH(row, avatar, bubble, actions, copyBtn, regenBtn)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val m = items[position]
         val ctx = holder.bubble.context
         val user = m.role == Role.USER
+        holder.bubble.clearAnimation()
 
-        holder.bubble.background = GradientDrawable().apply {
-            val r = dp(ctx, 20).toFloat()
-            val s = dp(ctx, 5).toFloat()
-            if (user) setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
-            else setCornerRadii(floatArrayOf(r, r, r, r, r, r, s, s))
-            setColor(if (user) Color.parseColor("#2E6BE6") else Color.parseColor("#171C26"))
-            if (!user) setStroke(dp(ctx, 1), Color.parseColor("#232B3A"))
+        if (user) {
+            holder.avatar.visibility = View.GONE
+            holder.actions.visibility = View.GONE
+            (holder.bubble.layoutParams as LinearLayout.LayoutParams).apply {
+                width = LinearLayout.LayoutParams.WRAP_CONTENT
+                weight = 0f
+                gravity = Gravity.END
+                leftMargin = dp(ctx, 48)
+                rightMargin = 0
+            }
+            holder.bubble.background = GradientDrawable().apply {
+                val r = dp(ctx, 20).toFloat()
+                val s = dp(ctx, 5).toFloat()
+                setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
+                setColor(NovaTheme.bubble)
+            }
+            holder.bubble.setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
+            holder.bubble.setTextColor(Color.WHITE)
+        } else {
+            holder.avatar.visibility = View.VISIBLE
+            val showActions = m.done && stripThinking(m.text).isNotBlank()
+            holder.actions.visibility = if (showActions) View.VISIBLE else View.GONE
+            if (showActions) {
+                holder.copyBtn.setOnClickListener {
+                    copyToClipboard(ctx, plainText(stripThinking(m.text).trim()))
+                }
+                holder.regenBtn.setOnClickListener { onRegenerate?.invoke() }
+            }
+            (holder.bubble.layoutParams as LinearLayout.LayoutParams).apply {
+                width = 0
+                weight = 1f
+                gravity = Gravity.START
+                leftMargin = 0
+                rightMargin = 0
+            }
+            holder.bubble.background = null
+            holder.bubble.setPadding(0, dp(ctx, 8), 0, dp(ctx, 8))
+            holder.bubble.setTextColor(NovaTheme.text)
         }
-        holder.bubble.setTextColor(if (user) Color.WHITE else Color.parseColor("#EAF0FA"))
 
         if (!user && !m.done && stripThinking(m.text).isEmpty()) {
             // model is reasoning in a hidden thinking block, or not started
-            holder.bubble.text = if (m.text.isEmpty()) "● ● ●" else "🧠 thinking…"
-            holder.bubble.setTextColor(Color.parseColor("#5B9BFF"))
+            holder.bubble.text = "•\u00A0\u00A0•\u00A0\u00A0•"
+            val dots = AlphaAnimation(0.25f, 1f).apply {
+                duration = 420
+                repeatMode = AlphaAnimation.REVERSE
+                repeatCount = AlphaAnimation.INFINITE
+            }
+            holder.bubble.startAnimation(dots)
+            holder.bubble.setTextColor(NovaTheme.accent)
         } else if (!user && m.done && m.text.isNotBlank() && markwon != null) {
             markwon?.setMarkdown(holder.bubble, m.text)
         } else {
             holder.bubble.text = stripThinking(m.text)
         }
 
-        val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
-        lp.gravity = if (user) Gravity.END else Gravity.START
-        lp.leftMargin = if (user) dp(ctx, 64) else 0
-        lp.rightMargin = if (user) 0 else dp(ctx, 64)
-        holder.bubble.layoutParams = lp
+        holder.bubble.layoutParams = holder.bubble.layoutParams
 
         holder.bubble.setOnLongClickListener {
             val msgText = stripThinking(m.text).trim()
@@ -745,30 +1465,58 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val code = CODE_BLOCK.findAll(msgText)
                 .joinToString("\n\n") { it.groupValues[1].trim() }
             val options = mutableListOf<String>()
+            if (user) options += "\u270F\uFE0F  Edit & resend"
             if (code.isNotBlank()) options += "📋  Copy code"
             options += "📋  Copy"
             options += "↗  Share"
+            val tools = if (user) linkedMapOf(
+                "✨  Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\n$msgText\n-----",
+                "🔄  Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\n$msgText\n-----",
+                "🌐  Translate to Hindi" to "Translate the text between the lines into Hindi. Reply with ONLY the translation:\n-----\n$msgText\n-----",
+                "✂  Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\n$msgText\n-----",
+                "➕  Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
+            ) else linkedMapOf(
+                "🔄  Regenerate" to ""
+            )
+            options += tools.keys
             AlertDialog.Builder(ctx)
                 .setItems(options.toTypedArray()) { _, which ->
-                    when {
-                        which == 0 && code.isNotBlank() -> copyToClipboard(ctx, code)
-                        which == 0 || (which == 1 && code.isNotBlank()) ->
-                            copyToClipboard(ctx, plainText(msgText))
-                        else -> {
+                    when (val chosen = options[which]) {
+                        "\u270F\uFE0F  Edit & resend" -> onEditResend?.invoke(m)
+                        "📋  Copy code" -> copyToClipboard(ctx, code)
+                        "📋  Copy" -> copyToClipboard(ctx, plainText(msgText))
+                        "↗  Share" -> {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, msgText)
                             }
                             ctx.startActivity(Intent.createChooser(send, "Share message"))
                         }
+                        "🔄  Regenerate" -> onRegenerate?.invoke()
+                        else -> tools[chosen]?.let { onTool?.invoke(it) }
                     }
                 }
                 .show()
             true
         }
+
+        // tap the last finished reply to continue it
+        if (m.role == Role.ASSISTANT && m.done && position == items.size - 1) {
+            holder.bubble.setOnClickListener {
+                AlertDialog.Builder(ctx)
+                    .setMessage("Continue this answer?")
+                    .setPositiveButton("Continue") { _, _ -> onContinue?.invoke() }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        } else {
+            holder.bubble.setOnClickListener(null)
+        }
     }
 
-    class VH(row: FrameLayout, val bubble: TextView) : RecyclerView.ViewHolder(row)
+    class VH(row: LinearLayout, val avatar: TextView, val bubble: TextView,
+             val actions: LinearLayout, val copyBtn: TextView, val regenBtn: TextView) :
+        RecyclerView.ViewHolder(row)
 
     private fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density).toInt()
 }

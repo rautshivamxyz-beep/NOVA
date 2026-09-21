@@ -40,9 +40,14 @@ class Settings(context: Context) {
         set(value) = prefs.edit().putString(KEY_MEMORY, value).apply()
 
     /** Conversation mode: auto-listen + auto-send after each reply. */
+    var theme: String
+        get() = prefs.getString(KEY_THEME, "dark") ?: "dark"
+        set(value) = prefs.edit().putString(KEY_THEME, value).apply()
+
     var autoListen: Boolean
         get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
+
 
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
@@ -53,6 +58,7 @@ class Settings(context: Context) {
         private const val KEY_READ_ALOUD = "read_aloud"
         private const val KEY_MEMORY = "memory"
         private const val KEY_AUTO_LISTEN = "auto_listen"
+        private const val KEY_THEME = "theme"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a careful AI assistant running fully offline on this phone.\n" +
