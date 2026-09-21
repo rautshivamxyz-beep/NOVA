@@ -50,7 +50,6 @@ class Settings(context: Context) {
                 "3. If the question is ambiguous, ask one short clarifying question first.\n" +
                 "4. Keep answers clear and concise; use markdown when it helps.\n" +
                 "5. Reply in the language the user writes in."
-            "You are NOVA, a helpful, concise AI assistant that runs fully offline on this phone. " +
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }
