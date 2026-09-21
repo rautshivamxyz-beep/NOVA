@@ -600,16 +600,26 @@ class MainActivity : Activity() {
                 adapter.appendToLast("\n[error: ${e.message}]")
             } finally {
                 withContext(Dispatchers.Main) {
-                    sendBtn.text = "➤"
+                    sendBtn.text = "↑"
                     sendBtn.setTextColor(Color.WHITE)
                     generating = false
                     setStatus()
                     adapter.finalizeLast()
                     needsContextCarry = false
+                    // show chips the moment the reply ends - before anything
+                    // that could fail (storage, voice) gets a chance to skip it
+                    val willContinue = newBubble && autoContinueCount < 2 &&
+                        shouldAutoContinue(replyMsg.text)
+                    if (!willContinue) updateChips()
                     // persist the conversation
-                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                    try {
+                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                    } catch (e: Exception) { }
                     // speak whatever is left of the reply
-                    if (!speechCancelled) speakNewSentences(stripThinking(replyMsg.text), flush = true)
+                    if (!speechCancelled) {
+                        try { speakNewSentences(stripThinking(replyMsg.text), flush = true) }
+                        catch (e: Exception) { }
+                    }
                     // conversation mode: listen again once the voice finishes
                     if (settings.autoListen) scope.launch {
                         var waited = 0
@@ -621,7 +631,7 @@ class MainActivity : Activity() {
                     }
                     // auto-continue: if the reply was cut off at the token
                     // limit, continue it in the same bubble
-                    if (newBubble && autoContinueCount < 2 && shouldAutoContinue(replyMsg.text)) {
+                    if (willContinue) {
                         autoContinueCount++
                         startGeneration(
                             "Continue your previous answer exactly where it stopped. Do not repeat anything.",
