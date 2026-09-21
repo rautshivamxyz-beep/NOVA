@@ -39,7 +39,7 @@ import java.util.Locale
 
 /**
  * NOVA — local AI chat (Aria-style).
- * Voice input, read-aloud, markdown, copy/share, saved multi-chat history.
+ * Voice input, streaming read-aloud, markdown, copy/share, saved chats.
  */
 class MainActivity : Activity() {
 
@@ -63,6 +63,10 @@ class MainActivity : Activity() {
     private var generating = false
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+
+    // streaming TTS: how much of the reply has been spoken already
+    private var spokenLength = 0
+    private var speechCancelled = false
 
     private val bg = Color.parseColor("#0A0D12")
     private val surface = Color.parseColor("#141926")
@@ -386,6 +390,8 @@ class MainActivity : Activity() {
         if (text.isEmpty()) return
         input.setText("")
         tts?.stop()
+        spokenLength = 0
+        speechCancelled = false
 
         val prompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
             val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
@@ -414,9 +420,11 @@ class MainActivity : Activity() {
                     .collect { token ->
                         adapter.appendToLast(token)
                         scrollToEnd()
+                        speakNewSentences(replyMsg.text, flush = false)
                     }
             } catch (e: CancellationException) {
                 adapter.appendToLast(" ⏹")
+                speechCancelled = true
             } catch (e: Exception) {
                 adapter.appendToLast("\n[error: ${e.message}]")
             } finally {
@@ -427,13 +435,46 @@ class MainActivity : Activity() {
                     setStatus()
                     adapter.finalizeLast()
                     needsContextCarry = false
-                    val toSpeak = replyMsg.text
+                    // persist the conversation
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
-                    if (settings.readAloud && ttsReady && toSpeak.isNotBlank()) {
-                        tts?.speak(toSpeak, TextToSpeech.QUEUE_FLUSH, null, "nova")
-                    }
+                    // speak whatever is left of the reply
+                    if (!speechCancelled) speakNewSentences(replyMsg.text, flush = true)
                 }
             }
+        }
+    }
+
+    /**
+     * Speaks finished sentences as they stream in (queued), so the voice
+     * keeps pace with the text instead of waiting for the whole reply.
+     * Strips markdown so it reads naturally.
+     */
+    private fun speakNewSentences(full: String, flush: Boolean) {
+        if (!settings.readAloud || !ttsReady || tts == null) return
+        if (spokenLength >= full.length) return
+        val pending = full.substring(spokenLength)
+
+        var idx = -1
+        for (d in charArrayOf('.', '!', '?', '\n', ';', ':')) {
+            val i = pending.lastIndexOf(d)
+            if (i > idx) idx = i
+        }
+        val chunk: String? = when {
+            flush && pending.isNotBlank() -> pending
+            idx >= 24 -> pending.substring(0, idx + 1)
+            else -> null
+        }
+        if (chunk != null) {
+            val clean = chunk
+                .replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")   // links -> text
+                .replace(Regex("```[a-zA-Z0-9]*"), " code: ")            // code fences
+                .replace(Regex("[*_`>#~|]+"), "")                       // emphasis etc.
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (clean.isNotBlank()) {
+                tts?.speak(clean, TextToSpeech.QUEUE_ADD, null, "nova$spokenLength")
+            }
+            spokenLength += chunk.length
         }
     }
 
