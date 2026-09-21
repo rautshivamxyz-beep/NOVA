@@ -18,3 +18,11 @@ captures/
 
 # Old experiments (kept in repo history if needed)
 # main.py nova.py main.kv buildozer.spec are NOT part of the Android app
+
+# local junk
+__pycache__/
+classdump/
+.debug/
+companion.txt
+classes-check.jar
+cpu-armv8*.so
