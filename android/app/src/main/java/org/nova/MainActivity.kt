@@ -27,6 +27,9 @@ import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
+import io.noties.markwon.syntax.Prism4jThemeDefault
+import io.noties.markwon.syntax.SyntaxHighlightPlugin
+import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,15 +54,26 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var sendBtn: Button
     private lateinit var micBtn: Button
+    private lateinit var fastToggle: Button
+    private lateinit var chipsRow: LinearLayout
     private val adapter = MessageAdapter()
 
-    init { adapter.onContinue = { continueAnswer() } }
+    init {
+        adapter.onContinue = { continueAnswer() }
+        adapter.onEditResend = { showEditResend(it) }
+    }
 
     private lateinit var settings: Settings
     private lateinit var currentChat: Chat
 
     /** True when the displayed history is NOT in the engine's context (chat was resumed). */
     private var needsContextCarry = false
+
+    /** Last memory text injected into this engine context. */
+    private var lastInjectedMemory: String? = null
+
+    /** Guards runaway auto-continues. */
+    private var autoContinueCount = 0
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var generationJob: Job? = null
@@ -210,6 +224,14 @@ class MainActivity : Activity() {
             addView(messagesRv)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        // ---- Quick chips (act on the last reply)
+        chipsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(16), dp(8), dp(16), 0)
+        }
+        root.addView(chipsRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
             private fun refresh() {
                 emptyView.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
@@ -225,7 +247,22 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(8), dp(14), dp(8))
         }
-        micBtn = roundButton("🎤", textDim).apply {
+        fastToggle = roundButton("⚡", if (settings.fastMode) accent else textDim).apply {
+            setOnClickListener {
+                settings.fastMode = !settings.fastMode
+                fastToggle.setTextColor(if (settings.fastMode) accent else textDim)
+                toast(if (settings.fastMode) "Fast: thinking skipped" else "Deep thinking ON")
+            }
+        }
+        inputRow.addView(fastToggle, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
+            rightMargin = dp(8)
+        })
+        micBtn = roundButton("", textDim).apply {
+            val icon = getDrawable(R.drawable.ic_mic)!!.mutate()
+            icon.colorFilter = android.graphics.PorterDuffColorFilter(
+                textDim, android.graphics.PorterDuff.Mode.SRC_IN)
+            gravity = Gravity.CENTER
+            setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
             setOnClickListener { startSpeech() }
         }
         inputRow.addView(micBtn, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
@@ -275,6 +312,7 @@ class MainActivity : Activity() {
         adapter.clear()
         for (m in currentChat.messages) adapter.add(m)
         if (currentChat.messages.isNotEmpty()) scrollToEnd()
+        updateChips()
     }
 
     private fun newConversation() {
@@ -287,6 +325,7 @@ class MainActivity : Activity() {
         currentChat = ChatStore.newChat()
         settings.currentChatId = currentChat.id
         adapter.clear()
+        updateChips()
         toast("New conversation")
     }
 
@@ -414,9 +453,7 @@ class MainActivity : Activity() {
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         input.setText("")
-        tts?.stop()
-        spokenLength = 0
-        speechCancelled = false
+        maybeAutoRemember(text)
 
         val basePrompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
             val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
@@ -425,23 +462,52 @@ class MainActivity : Activity() {
             "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
         } else text
 
-        val memory = settings.memory.trim()
-        val prompt = if (memory.isNotEmpty())
-            "(Facts about the user, always remember: $memory)\n\n$basePrompt"
-        else basePrompt
+        var prompt = basePrompt
+        // Memory rides along in the engine's context, so it only needs to be
+        // injected once per conversation (or when its text changes).
+        val mem = settings.memory.trim()
+        if (mem.isNotEmpty() && (
+                    currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
+                    )) {
+            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
+            lastInjectedMemory = mem
+        }
+        // fast mode: skip Qwen3's hidden reasoning - much faster replies
+        if (settings.fastMode) prompt += " /no_think"
 
-        val userMsg = Msg(Role.USER, text)
-        currentChat.messages.add(userMsg)
-        adapter.add(userMsg)
+        autoContinueCount = 0
+        startGeneration(prompt, text)
+    }
 
-        val replyMsg = Msg(Role.ASSISTANT, "", done = false)
-        currentChat.messages.add(replyMsg)
-        adapter.add(replyMsg)
+    /**
+     * Runs one generation turn. userText == null for internal prompts
+     * (chips, auto-continue, edit-resend) - no user bubble is shown.
+     * newBubble == false keeps appending to the existing last reply.
+     */
+    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true) {
+        if (userText != null) {
+            val userMsg = Msg(Role.USER, userText)
+            currentChat.messages.add(userMsg)
+            adapter.add(userMsg)
+        }
+        val replyMsg: Msg
+        if (newBubble) {
+            replyMsg = Msg(Role.ASSISTANT, "", done = false)
+            currentChat.messages.add(replyMsg)
+            adapter.add(replyMsg)
+        } else {
+            replyMsg = currentChat.messages.last()
+            replyMsg.done = false
+        }
+        tts?.stop()
+        speechCancelled = false
+        spokenLength = replyMsg.text.length   // speak only the new part
         scrollToEnd()
 
         sendBtn.text = "■"
         sendBtn.setTextColor(stopColor)
         generating = true
+        updateChips()
         setStatus()
 
         generationJob = scope.launch {
@@ -478,8 +544,51 @@ class MainActivity : Activity() {
                         }
                         if (settings.autoListen && !generating) startSpeech()
                     }
+                    // auto-continue: if the reply was cut off at the token
+                    // limit, continue it in the same bubble
+                    if (newBubble && autoContinueCount < 2 && shouldAutoContinue(replyMsg.text)) {
+                        autoContinueCount++
+                        startGeneration(
+                            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
+                            null, newBubble = false)
+                    } else {
+                        updateChips()
+                    }
                 }
             }
+        }
+    }
+
+    /** True when a reply looks cut off mid-sentence at the token limit. */
+    private fun shouldAutoContinue(text: String): Boolean {
+        val t = stripThinking(text).trim()
+        if (t.length < settings.predictLength * 3) return false
+        val last = t.lastOrNull() ?: return false
+        return last !in ".!?\u2026\"'`)]}*"
+    }
+
+    /** Quick-action chips under a finished reply. */
+    private fun updateChips() {
+        chipsRow.removeAllViews()
+        val last = adapter.lastMessage()
+        val show = last != null && last.role == Role.ASSISTANT && last.done &&
+            stripThinking(last.text).isNotBlank()
+        chipsRow.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) return
+        val chips = listOf(
+            "💡 Explain" to "Explain your previous answer in simpler words.",
+            "🌐 Hindi" to "Translate your previous answer into Hindi. Keep markdown formatting.",
+            "📝 Summarize" to "Summarize your previous answer in 3 short bullet points.",
+            "\u2702 Shorter" to "Rewrite your previous answer much shorter, keeping the key facts."
+        )
+        for ((label, p) in chips) {
+            chipsRow.addView(roundButton(label, textDim).apply {
+                textSize = 13f
+                minimumHeight = dp(30)
+                setOnClickListener { startGeneration(p, null) }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)
+            ).apply { rightMargin = dp(8) })
         }
     }
 
@@ -577,6 +686,53 @@ class MainActivity : Activity() {
         send()
     }
 
+    /** Detects "remember that ..." and offers to save it to Memory. */
+    private fun maybeAutoRemember(text: String) {
+        val m = Regex("(?i)\\bremember\\b[\\s:,]+(.{4,400})").find(text) ?: return
+        var fact = m.groupValues[1].trim().trimEnd('.', '!', '?')
+        fact = fact.removePrefix("that ").removePrefix("That ")
+        if (fact.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Add to NOVA's memory?")
+            .setMessage(fact)
+            .setPositiveButton("Add") { _, _ ->
+                settings.memory = if (settings.memory.isBlank()) fact
+                else settings.memory.trimEnd() + "\n- " + fact
+                toast("Added to memory")
+            }
+            .setNegativeButton("No", null)
+            .show()
+    }
+
+    /** Long-press own message -> edit & resend. */
+    private fun showEditResend(m: Msg) {
+        if (generating || !NovaEngine.isModelLoaded) {
+            toast("Wait for the current reply to finish")
+            return
+        }
+        val edit = EditText(this).apply {
+            setText(m.text)
+            setTextColor(textMain)
+            textSize = 14f
+            setSingleLine(false)
+            minLines = 2
+            maxLines = 6
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Edit & resend")
+            .setView(edit)
+            .setPositiveButton("Resend") { _, _ ->
+                val newText = edit.text.toString().trim()
+                if (newText.isEmpty()) return@setPositiveButton
+                m.text = newText
+                adapter.notifyChanged(m)
+                startGeneration(newText, null)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun scrollToEnd(force: Boolean = true) {
         if (adapter.itemCount == 0) return
         if (force || atBottom) messagesRv.scrollToPosition(adapter.itemCount - 1)
@@ -633,6 +789,22 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(10), dp(14), dp(10))
         }
         outer.addView(memoryEdit)
+        val memCount = TextView(this).apply {
+            text = "${settings.memory.length}/300"
+            setTextColor(if (settings.memory.length > 300) stopColor else textDim)
+            textSize = 11f
+            setPadding(0, dp(3), 0, 0)
+        }
+        memoryEdit.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val n = s?.length ?: 0
+                memCount.text = "$n/300"
+                memCount.setTextColor(if (n > 300) stopColor else textDim)
+            }
+        })
+        outer.addView(memCount)
         outer.addView(TextView(this).apply {
             text = "Max response length"
             setTextColor(textDim)
@@ -679,6 +851,19 @@ class MainActivity : Activity() {
             listenBtn.setTextColor(if (settings.autoListen) accent else textDim)
         }
         outer.addView(listenBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
+
+        val fastBtn = roundButton(
+            if (settings.fastMode) "\u26A1 Fast mode (skip thinking): ON" else "\u26A1 Fast mode (skip thinking): OFF",
+            if (settings.fastMode) accent else textDim
+        )
+        fastBtn.setOnClickListener {
+            settings.fastMode = !settings.fastMode
+            fastBtn.text = if (settings.fastMode) "\u26A1 Fast mode (skip thinking): ON" else "\u26A1 Fast mode (skip thinking): OFF"
+            fastBtn.setTextColor(if (settings.fastMode) accent else textDim)
+        }
+        outer.addView(fastBtn, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
 
@@ -766,6 +951,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     private val items = mutableListOf<Msg>()
     private var markwon: Markwon? = null
     var onContinue: (() -> Unit)? = null
+    var onEditResend: ((Msg) -> Unit)? = null
 
     fun add(m: Msg) {
         items.add(m)
@@ -794,11 +980,23 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         notifyItemRangeRemoved(0, n)
     }
 
+    fun lastMessage(): Msg? = items.lastOrNull()
+
+    fun notifyChanged(m: Msg) {
+        val i = items.indexOf(m)
+        if (i >= 0) notifyItemChanged(i)
+    }
+
     override fun getItemCount(): Int = items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
-        if (markwon == null) markwon = Markwon.create(ctx)
+        if (markwon == null) {
+            val prism4j = Prism4j(NovaGrammarLocator)
+            markwon = Markwon.builder(ctx)
+                .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
+                .build()
+        }
         val bubble = TextView(ctx).apply {
             textSize = 15.5f
             setLineSpacing(dp(ctx, 3).toFloat(), 1f)
@@ -851,15 +1049,16 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val code = CODE_BLOCK.findAll(msgText)
                 .joinToString("\n\n") { it.groupValues[1].trim() }
             val options = mutableListOf<String>()
+            if (user) options += "\u270F\uFE0F  Edit & resend"
             if (code.isNotBlank()) options += "📋  Copy code"
             options += "📋  Copy"
             options += "↗  Share"
             AlertDialog.Builder(ctx)
                 .setItems(options.toTypedArray()) { _, which ->
-                    when {
-                        which == 0 && code.isNotBlank() -> copyToClipboard(ctx, code)
-                        which == 0 || (which == 1 && code.isNotBlank()) ->
-                            copyToClipboard(ctx, plainText(msgText))
+                    when (options[which]) {
+                        "\u270F\uFE0F  Edit & resend" -> onEditResend?.invoke(m)
+                        "📋  Copy code" -> copyToClipboard(ctx, code)
+                        "📋  Copy" -> copyToClipboard(ctx, plainText(msgText))
                         else -> {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
