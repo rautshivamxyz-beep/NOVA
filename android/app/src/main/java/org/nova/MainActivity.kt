@@ -765,7 +765,8 @@ class MainActivity : Activity() {
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
                     // that could fail (storage, voice) gets a chance to skip it
-                    val willContinue = newBubble && autoContinueCount < 2 &&
+                    val willContinue = newBubble && !speechCancelled &&
+                        autoContinueCount < 2 &&
                         shouldAutoContinue(replyMsg.text)
                     // persist the conversation
                     try {
@@ -1090,9 +1091,11 @@ class MainActivity : Activity() {
 
     /** Tap-continue on the last reply. */
     private fun continueAnswer() {
-        if (generating || !NovaEngine.isModelLoaded) return
-        input.setText("Continue your previous answer exactly where it stopped. Do not repeat anything.")
-        send()
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating || !ensureModelReady()) return
+        startGeneration(
+            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
+            null, newBubble = false)
     }
 
     /** Detects "remember that ..." and offers to save it to Memory. */
