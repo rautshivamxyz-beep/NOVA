@@ -284,7 +284,9 @@ class MainActivity : Activity() {
             }
         }
         root.addView(FrameLayout(this).apply {
-            addView(emptyView)
+            addView(emptyView, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT))
             addView(messagesRv)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
@@ -360,6 +362,8 @@ class MainActivity : Activity() {
             setOnClickListener { send() }
         }
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+        inputRow.addView(pill, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
