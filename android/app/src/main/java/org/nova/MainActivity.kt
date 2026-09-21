@@ -483,6 +483,9 @@ class MainActivity : Activity() {
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         drawerPane.addView(drawerRow("New chat", R.drawable.ic_add) { newConversation() })
+        drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
+            startActivity(Intent(this, KnowledgeActivity::class.java))
+        })
         drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
@@ -710,6 +713,15 @@ class MainActivity : Activity() {
             prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
             lastInjectedMemory = mem
         }
+        // knowledge base (offline RAG): relevant notes from the user's documents
+        if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+            val hits = Knowledge.search(this, text)
+            if (hits.isNotEmpty()) {
+                var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
+                if (notes.length > 2400) notes = notes.substring(0, 2400) + "\n[...more omitted]"
+                prompt = "(Relevant notes from the user's documents — use them if they help:\n$notes)\n\n$prompt"
+            }
+        }
         autoContinueCount = 0
         startGeneration(prompt, text)
     }
@@ -911,15 +923,16 @@ class MainActivity : Activity() {
         docContext = text
         docInjected = false
         updateDocBanner()
-        val opts = arrayOf("Summarize it", "Key points", "I'll ask questions")
+        val opts = arrayOf("Summarize it", "Key points", "Quiz me", "I'll ask questions")
         AlertDialog.Builder(this)
-            .setTitle("📄 $name")
+            .setTitle(name)
             .setMessage("${text.length} characters loaded. What should NOVA do with it?")
             .setItems(opts) { _, which ->
                 when (which) {
                     0 -> runTool("Summarize this document in a few short paragraphs.")
                     1 -> runTool("List the key points of this document as short bullet points.")
-                    2 -> toast("Ask anything about $name — then tap ↑")
+                    2 -> runTool("Create a quiz of 10 short questions from this material. Number them 1-10, cover the whole material, and write the correct answer in brackets right after each question.")
+                    3 -> toast("Ask anything about $name — then tap ↑")
                 }
             }
             .setNegativeButton("Close", null)
