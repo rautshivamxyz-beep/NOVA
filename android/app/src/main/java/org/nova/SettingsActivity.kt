@@ -1,0 +1,201 @@
+package org.nova
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+
+/**
+ * Full settings screen: voice, memory, personality, appearance and data.
+ */
+class SettingsActivity : Activity() {
+
+    private lateinit var settings: Settings
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        settings = Settings(this)
+        NovaTheme.apply(settings.theme == "light")
+        window.statusBarColor = NovaTheme.bg
+        window.navigationBarColor = NovaTheme.bg
+        setContentView(build())
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun card(title: String): LinearLayout {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(14))
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12) }
+        }
+        outer.addView(TextView(this).apply {
+            text = title
+            textSize = 12f
+            letterSpacing = 0.1f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(NovaTheme.dim)
+        })
+        return outer
+    }
+
+    private fun switchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, dp(2))
+        }
+        row.addView(TextView(this).apply {
+            text = label; textSize = 15f; setTextColor(NovaTheme.text)
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        row.addView(Switch(this).apply {
+            isChecked = checked
+            setOnCheckedChangeListener { _, v -> onChange(v) }
+        })
+        return row
+    }
+
+    private fun editField(text: String, hint: String, onChange: (String) -> Unit): EditText =
+        EditText(this).apply {
+            setText(text)
+            this.hint = hint
+            setHintTextColor(NovaTheme.dim)
+            setTextColor(NovaTheme.text)
+            textSize = 14f
+            setSingleLine(false)
+            minLines = 2
+            maxLines = 6
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.bg)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    onChange(s?.toString() ?: "")
+                }
+            })
+        }
+
+    private fun build(): View {
+        val scroll = ScrollView(this)
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(NovaTheme.bg)
+            setPadding(dp(14), dp(28), dp(14), dp(30))
+        }
+
+        // header
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(6))
+        }
+        header.addView(Button(this).apply {
+            text = "←"; isAllCaps = false; textSize = 18f
+            setTextColor(NovaTheme.text)
+            background = null
+            setOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
+        header.addView(TextView(this).apply {
+            text = "Settings"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(NovaTheme.text)
+        })
+        col.addView(header)
+
+        // Voice
+        val voice = card("VOICE")
+        voice.addView(switchRow("Read replies aloud", settings.readAloud) { settings.readAloud = it })
+        voice.addView(switchRow("Auto-listen (conversation mode)", settings.autoListen) { settings.autoListen = it })
+        col.addView(voice)
+
+        // Memory
+        val memory = card("MEMORY")
+        memory.addView(TextView(this).apply {
+            text = "Facts NOVA always remembers"
+            textSize = 12f; setTextColor(NovaTheme.dim)
+            setPadding(0, dp(8), 0, dp(6))
+        })
+        memory.addView(editField(settings.memory, "e.g. My exam is on 12 May") { settings.memory = it })
+        col.addView(memory)
+
+        // Personality
+        val person = card("PERSONALITY")
+        person.addView(TextView(this).apply {
+            text = "System prompt — how NOVA should behave"
+            textSize = 12f; setTextColor(NovaTheme.dim)
+            setPadding(0, dp(8), 0, dp(6))
+        })
+        person.addView(editField(settings.systemPrompt, "") { settings.systemPrompt = it })
+        col.addView(person)
+
+        // Appearance
+        val looks = card("APPEARANCE")
+        looks.addView(switchRow("Light theme", settings.theme == "light") {
+            settings.theme = if (it) "light" else "dark"
+            NovaTheme.apply(it)
+            toast("Theme changes when you go back")
+        })
+        col.addView(looks)
+
+        // Data
+        val data = card("DATA")
+        data.addView(Button(this).apply {
+            text = "Delete all chats"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(android.graphics.Color.parseColor("#FF6B6B"))
+            background = null
+            setPadding(0, dp(10), 0, dp(4))
+            setOnClickListener {
+                AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("Delete all chats?")
+                    .setMessage("This cannot be undone.")
+                    .setPositiveButton("Delete") { _, _ ->
+                        ChatStore.clearAll(this@SettingsActivity)
+                        toast("All chats deleted")
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        })
+        col.addView(data)
+
+        // About
+        val about = card("ABOUT")
+        about.addView(TextView(this).apply {
+            text = "NOVA — your private AI.\nRuns 100% on this phone. Nothing leaves it."
+            textSize = 13f; setTextColor(NovaTheme.dim)
+            setPadding(0, dp(8), 0, dp(4))
+        })
+        col.addView(about)
+
+        scroll.addView(col, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        return scroll
+    }
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+}

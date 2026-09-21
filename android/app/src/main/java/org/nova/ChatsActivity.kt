@@ -29,11 +29,11 @@ class ChatsActivity : Activity() {
     private lateinit var listInner: LinearLayout
     private lateinit var settings: Settings
 
-    private val bg = Color.parseColor("#0A0D12")
-    private val surface = Color.parseColor("#141926")
-    private val accent = Color.parseColor("#5B9BFF")
-    private val textMain = Color.parseColor("#EAF0FA")
-    private val textDim = Color.parseColor("#8B94A7")
+    private val bg = NovaTheme.bg
+    private val surface = NovaTheme.pill
+    private val accent = NovaTheme.accent
+    private val textMain = NovaTheme.text
+    private val textDim = NovaTheme.dim
 
     private var exportChat: Chat? = null
 

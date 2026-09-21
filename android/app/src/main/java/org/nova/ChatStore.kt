@@ -93,6 +93,10 @@ object ChatStore {
             ?.sortedByDescending { it.updatedAt }
             ?: emptyList()
 
+    fun clearAll(context: Context) {
+        dir(context).listFiles()?.forEach { it.delete() }
+    }
+
     fun delete(context: Context, id: String) {
         File(dir(context), id + ".json").delete()
     }

@@ -56,7 +56,3 @@ dependencies {
     implementation 'io.noties.markwon:syntax-highlight:4.6.2'
     implementation 'io.noties:prism4j:2.0.0'
 }
-
-configurations.all {
-    exclude group: 'org.jetbrains', module: 'annotations-java5'
-}

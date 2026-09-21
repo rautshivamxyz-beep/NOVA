@@ -44,7 +44,6 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
 
-
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_PREDICT_LENGTH = "predict_length"

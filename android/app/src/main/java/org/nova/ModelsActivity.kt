@@ -50,12 +50,12 @@ class ModelsActivity : Activity() {
     private lateinit var settings: Settings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private val bg = Color.parseColor("#080B10")
-    private val surface = Color.parseColor("#10151D")
-    private val surfaceAlt = Color.parseColor("#151C27")
-    private val accent = Color.parseColor("#60A5FA")
-    private val textMain = Color.parseColor("#E8ECF3")
-    private val textDim = Color.parseColor("#7D8797")
+    private val bg = NovaTheme.bg
+    private val surface = NovaTheme.pill
+    private val surfaceAlt = NovaTheme.surface
+    private val accent = NovaTheme.accent
+    private val textMain = NovaTheme.text
+    private val textDim = NovaTheme.dim
     private val ok = Color.parseColor("#4ADE80")
     private val warn = Color.parseColor("#FBBF24")
     private val bad = Color.parseColor("#F87171")
