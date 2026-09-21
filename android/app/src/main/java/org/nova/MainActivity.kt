@@ -643,15 +643,32 @@ class MainActivity : Activity() {
 
     // -------------------------------------------------------------- chat
 
+    /**
+     * True when the model is ready. If it died (e.g. after a stopped reply)
+     * it silently restarts it instead of nagging the user.
+     */
+    private fun ensureModelReady(): Boolean {
+        if (NovaEngine.isModelLoaded) return true
+        return when {
+            NovaEngine.isLoading -> {
+                toast("Model is still loading — one moment"); false
+            }
+            NovaEngine.activeModelPath != null -> {
+                toast("Restarting the model — try again shortly")
+                NovaEngine.reloadAsync(this, settings.systemPrompt); false
+            }
+            else -> {
+                toast("Load a model first — tap ☰"); false
+            }
+        }
+    }
+
     private fun send() {
         if (generationJob?.isActive == true) {
             generationJob?.cancel()
             return
         }
-        if (!NovaEngine.isModelLoaded) {
-            Toast.makeText(this, "Load a model first — tap ≡", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!ensureModelReady()) return
         if (compacting) {
             toast("Compressing older messages — one moment")
             return
@@ -824,7 +841,7 @@ class MainActivity : Activity() {
     private fun runTool(prompt: String) {
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
-        if (!NovaEngine.isModelLoaded) { toast("Load a model first — tap ☰"); return }
+        if (!ensureModelReady()) return
         startGeneration(prompt, null)
     }
 
@@ -832,7 +849,7 @@ class MainActivity : Activity() {
     private fun regenerateLast() {
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
-        if (!NovaEngine.isModelLoaded) { toast("Load a model first — tap ☰"); return }
+        if (!ensureModelReady()) return
         val msgs = currentChat.messages
         if (msgs.lastOrNull()?.role == Role.ASSISTANT) {
             currentChat.messages.removeAt(msgs.size - 1)
@@ -1014,10 +1031,8 @@ class MainActivity : Activity() {
     }
 
     private fun startSpeech() {
-        if (generating || !NovaEngine.isModelLoaded) {
-            toast("Load a model first — tap ≡")
-            return
-        }
+        if (generating) return
+        if (!ensureModelReady()) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -1429,8 +1444,8 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 holder.regenBtn.setOnClickListener { onRegenerate?.invoke() }
             }
             (holder.bubble.layoutParams as LinearLayout.LayoutParams).apply {
-                width = 0
-                weight = 1f
+                width = LinearLayout.LayoutParams.MATCH_PARENT
+                weight = 0f
                 gravity = Gravity.START
                 leftMargin = 0
                 rightMargin = 0
