@@ -54,7 +54,6 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var sendBtn: Button
     private lateinit var micBtn: Button
-    private lateinit var fastToggle: Button
     private lateinit var chipsRow: LinearLayout
     private val adapter = MessageAdapter()
 
@@ -74,6 +73,10 @@ class MainActivity : Activity() {
 
     /** Guards runaway auto-continues. */
     private var autoContinueCount = 0
+
+    /** Compressed summary of older turns (auto-compact). */
+    private var compactSummary: String? = null
+    private var compacting = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var generationJob: Job? = null
@@ -110,6 +113,12 @@ class MainActivity : Activity() {
         displayChatMessages()
         observeEngine()
         handleSharedText()
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4253)
+        }
 
         tts = TextToSpeech(this) { code ->
             ttsReady = code == TextToSpeech.SUCCESS
@@ -212,12 +221,67 @@ class MainActivity : Activity() {
                 atBottom = !rv.canScrollVertically(1)
             }
         })
-        emptyView = TextView(this).apply {
-            text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi.\nTap 🎤 to speak instead of typing."
-            setTextColor(textDim)
-            textSize = 14f
+        emptyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(48), dp(60), dp(48), dp(60))
+            setPadding(dp(36), dp(30), dp(36), dp(20))
+            addView(TextView(this@MainActivity).apply {
+                text = "✦"
+                textSize = 34f
+                setTextColor(accent)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "How can I help you today?"
+                textSize = 20f
+                setTextColor(textMain)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(4))
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Your private AI. Runs 100% on this phone."
+                textSize = 12f
+                setTextColor(textDim)
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, dp(20))
+            })
+            val suggestions = listOf(
+                "💡 Explain something to me",
+                "🌐 Translate to Hindi",
+                "✍️ Help me write code",
+                "📝 Summarize a topic"
+            )
+            for (s in suggestions) {
+                addView(Button(this@MainActivity).apply {
+                    text = s
+                    isAllCaps = false
+                    textSize = 14f
+                    setTextColor(textMain)
+                    setPadding(dp(18), 0, dp(18), 0)
+                    minWidth = 0
+                    minimumWidth = 0
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#141926"))
+                        cornerRadius = dp(22).toFloat()
+                        setStroke(dp(1), Color.parseColor("#242C3C"))
+                    }
+                    setOnClickListener {
+                        input.setText(
+                            when {
+                                s.contains("Explain") -> "Explain in simple words: "
+                                s.contains("Translate") -> "Translate to Hindi: "
+                                s.contains("code") -> "Write me code for: "
+                                else -> "Summarize this in 3 points: "
+                            })
+                        input.setSelection(input.text.length)
+                    }
+                }, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)
+                ).apply {
+                    topMargin = dp(10); gravity = Gravity.CENTER_HORIZONTAL
+                })
+            }
         }
         root.addView(FrameLayout(this).apply {
             addView(emptyView)
@@ -241,65 +305,61 @@ class MainActivity : Activity() {
             override fun onItemRangeRemoved(p0: Int, p1: Int) = refresh()
         })
 
-        // ---- Input
+        // ---- Input (ChatGPT-style pill)
         val inputRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(12), dp(8), dp(12), dp(10))
+        }
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(8))
-        }
-        fastToggle = roundButton("⚡", if (settings.fastMode) accent else textDim).apply {
-            setOnClickListener {
-                settings.fastMode = !settings.fastMode
-                fastToggle.setTextColor(if (settings.fastMode) accent else textDim)
-                toast(if (settings.fastMode) "Fast: thinking skipped" else "Deep thinking ON")
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#141926"))
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), Color.parseColor("#242C3C"))
             }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
         }
-        inputRow.addView(fastToggle, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
-            rightMargin = dp(8)
-        })
         micBtn = roundButton("", textDim).apply {
             val icon = getDrawable(R.drawable.ic_mic)!!.mutate()
             icon.colorFilter = android.graphics.PorterDuffColorFilter(
                 textDim, android.graphics.PorterDuff.Mode.SRC_IN)
             gravity = Gravity.CENTER
+            background = null
             setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
             setOnClickListener { startSpeech() }
         }
-        inputRow.addView(micBtn, FrameLayout.LayoutParams(dp(40), dp(40)).apply {
-            rightMargin = dp(8)
-        })
+        pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
             setTextColor(textMain)
             textSize = 15f
-            background = GradientDrawable().apply {
-                setColor(surface)
-                cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), Color.parseColor("#242C3C"))
-            }
-            setPadding(dp(18), dp(13), dp(18), dp(13))
+            background = null
+            setPadding(dp(10), dp(12), dp(10), dp(12))
             maxLines = 5
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) { send(); true } else false
             }
         }
-        inputRow.addView(input, LinearLayout.LayoutParams(
+        pill.addView(input, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sendBtn = Button(this).apply {
-            text = "➤"
-            textSize = 15f
+            text = "↑"
+            textSize = 18f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
             background = GradientDrawable().apply {
                 setColor(accentDeep)
-                cornerRadius = dp(23).toFloat()
+                cornerRadius = dp(19).toFloat()
             }
-            setTextColor(Color.WHITE)
             setOnClickListener { send() }
         }
-        inputRow.addView(sendBtn, FrameLayout.LayoutParams(dp(46), dp(46)).apply {
-            leftMargin = dp(10)
-        })
+        pill.addView(sendBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
@@ -450,17 +510,31 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Load a model first — tap ≡", Toast.LENGTH_SHORT).show()
             return
         }
+        if (compacting) {
+            toast("Compressing older messages — one moment")
+            return
+        }
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         input.setText("")
         maybeAutoRemember(text)
+        maybeSetReminder(text)
 
-        val basePrompt: String = if (needsContextCarry && currentChat.messages.isNotEmpty()) {
-            val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
-                (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+        val basePrompt: String = when {
+            needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
+                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(300)
+                }
+                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text"
             }
-            "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
-        } else text
+            needsContextCarry && currentChat.messages.isNotEmpty() -> {
+                val recent = currentChat.messages.takeLast(8).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
+                }
+                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
+            }
+            else -> text
+        }
 
         var prompt = basePrompt
         // Memory rides along in the engine's context, so it only needs to be
@@ -472,9 +546,6 @@ class MainActivity : Activity() {
             prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
             lastInjectedMemory = mem
         }
-        // fast mode: skip Qwen3's hidden reasoning - much faster replies
-        if (settings.fastMode) prompt += " /no_think"
-
         autoContinueCount = 0
         startGeneration(prompt, text)
     }
@@ -553,6 +624,12 @@ class MainActivity : Activity() {
                             null, newBubble = false)
                     } else {
                         updateChips()
+                        // auto-compact: compress old turns once the chat grows
+                        if (!speechCancelled && !compacting &&
+                            currentChat.messages.size > 20
+                        ) {
+                            compactOldTurns()
+                        }
                     }
                 }
             }
@@ -733,6 +810,102 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /** Auto-compact: summarize old turns so the engine context stays small. */
+    private fun compactOldTurns() {
+        compacting = true
+        toast("Compressing older messages to keep replies fast…")
+        scope.launch {
+            val old = currentChat.messages.dropLast(6)
+                .joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(300)
+                }
+            val sb = StringBuilder()
+            try {
+                NovaEngine.send(
+                    "Summarize this conversation in one short paragraph. " +
+                        "Keep all key facts, decisions, names and numbers:\n\n$old",
+                    256
+                ).collect { sb.append(it) }
+                val summary = stripThinking(sb.toString()).trim()
+                if (summary.length > 40) {
+                    compactSummary = summary
+                    needsContextCarry = true
+                    NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                }
+            } catch (e: Exception) {
+                // failed - keep full context, retry next turn
+            }
+            compacting = false
+        }
+    }
+
+    /** Detects "remind me to X at/in TIME" and schedules a local notification. */
+    private fun maybeSetReminder(text: String) {
+        val m = Regex("(?i)\\bremind me\\b(?:\\s+to)?\\s+(.+)").find(text) ?: return
+        val rest = m.groupValues[1].trim()
+        val task: String
+        val timeStr: String
+        val rel = Regex("(?i)^in\\s+(\\d+\\s*\\w+)$").find(rest)
+        if (rel != null) {
+            task = "Reminder"
+            timeStr = rel.groupValues[1]
+        } else {
+            var idx = -1
+            for (k in listOf(" at ", " in ", " on ")) {
+                val j = rest.lastIndexOf(k)
+                if (j > idx) idx = j
+            }
+            if (idx <= 0) return
+            task = rest.substring(0, idx).trim()
+            timeStr = rest.substring(idx + 1).trim()
+            if (task.isEmpty()) return
+        }
+        val whenMs = parseReminderTime(timeStr) ?: return
+        val human = java.text.SimpleDateFormat("EEE, d MMM h:mm a", Locale.getDefault())
+            .format(java.util.Date(whenMs))
+        AlertDialog.Builder(this)
+            .setTitle("Set reminder?")
+            .setMessage(task + "\n\n⏰ " + human)
+            .setPositiveButton("Set") { _, _ ->
+                Reminder.schedule(this, whenMs, task)
+                toast("Reminder set: $human")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun parseReminderTime(s: String): Long? {
+        val now = java.util.Calendar.getInstance()
+        val t = s.trim().lowercase()
+        // "in 20 minutes" / "in 3 hours" / "in 45 sec"
+        Regex("(?i)^(?:in\\s+)?(\\d+)\\s*(sec|secs|second|seconds|min|mins|minute|minutes|hour|hours|hr|hrs)\\b").find(t)?.let { mm ->
+            val n = mm.groupValues[1].toLongOrNull() ?: return null
+            val unit = mm.groupValues[2]
+            val ms = when {
+                unit.startsWith("sec") -> n * 1000L
+                unit.startsWith("min") -> n * 60_000L
+                else -> n * 3_600_000L
+            }
+            return now.timeInMillis + ms
+        }
+        // "6pm", "18:30", "9 am", "tomorrow 10am"
+        val tomorrow = t.contains("tomorrow")
+        val tm = Regex("(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?").find(t.replace("tomorrow", "")) ?: return null
+        var hour = tm.groupValues[1].toIntOrNull() ?: return null
+        val minute = tm.groupValues[2].toIntOrNull() ?: 0
+        val ampm = tm.groupValues[3]
+        if (ampm == "pm" && hour < 12) hour += 12
+        if (ampm == "am" && hour == 12) hour = 0
+        if (hour > 23) return null
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        cal.set(java.util.Calendar.SECOND, 0)
+        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        else if (cal.timeInMillis <= now.timeInMillis) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        return cal.timeInMillis
+    }
+
     private fun scrollToEnd(force: Boolean = true) {
         if (adapter.itemCount == 0) return
         if (force || atBottom) messagesRv.scrollToPosition(adapter.itemCount - 1)
@@ -854,18 +1027,6 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
 
-        val fastBtn = roundButton(
-            if (settings.fastMode) "\u26A1 Fast mode (skip thinking): ON" else "\u26A1 Fast mode (skip thinking): OFF",
-            if (settings.fastMode) accent else textDim
-        )
-        fastBtn.setOnClickListener {
-            settings.fastMode = !settings.fastMode
-            fastBtn.text = if (settings.fastMode) "\u26A1 Fast mode (skip thinking): ON" else "\u26A1 Fast mode (skip thinking): OFF"
-            fastBtn.setTextColor(if (settings.fastMode) accent else textDim)
-        }
-        outer.addView(fastBtn, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(10) })
 
         AlertDialog.Builder(this)
             .setTitle("NOVA settings")
@@ -997,18 +1158,29 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
                 .build()
         }
+        val avatar = TextView(ctx).apply {
+            text = "✦"
+            textSize = 14f
+            setTextColor(Color.parseColor("#5B9BFF"))
+            setPadding(0, dp(ctx, 9), 0, 0)
+        }
         val bubble = TextView(ctx).apply {
             textSize = 15.5f
             setLineSpacing(dp(ctx, 3).toFloat(), 1f)
             setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
         }
-        val row = FrameLayout(ctx).apply {
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(ctx, 10) }
+            ).apply { bottomMargin = dp(ctx, 14) }
         }
-        row.addView(bubble)
-        return VH(row, bubble)
+        row.addView(avatar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { rightMargin = dp(ctx, 10) })
+        row.addView(bubble, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        return VH(row, avatar, bubble)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
@@ -1016,15 +1188,36 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         val ctx = holder.bubble.context
         val user = m.role == Role.USER
 
-        holder.bubble.background = GradientDrawable().apply {
-            val r = dp(ctx, 20).toFloat()
-            val s = dp(ctx, 5).toFloat()
-            if (user) setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
-            else setCornerRadii(floatArrayOf(r, r, r, r, r, r, s, s))
-            setColor(if (user) Color.parseColor("#2E6BE6") else Color.parseColor("#171C26"))
-            if (!user) setStroke(dp(ctx, 1), Color.parseColor("#232B3A"))
+        if (user) {
+            holder.avatar.visibility = View.GONE
+            (holder.bubble.layoutParams as LinearLayout.LayoutParams).apply {
+                width = LinearLayout.LayoutParams.WRAP_CONTENT
+                weight = 0f
+                gravity = Gravity.END
+                leftMargin = dp(ctx, 48)
+                rightMargin = 0
+            }
+            holder.bubble.background = GradientDrawable().apply {
+                val r = dp(ctx, 20).toFloat()
+                val s = dp(ctx, 5).toFloat()
+                setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
+                setColor(Color.parseColor("#2E6BE6"))
+            }
+            holder.bubble.setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
+            holder.bubble.setTextColor(Color.WHITE)
+        } else {
+            holder.avatar.visibility = View.VISIBLE
+            (holder.bubble.layoutParams as LinearLayout.LayoutParams).apply {
+                width = 0
+                weight = 1f
+                gravity = Gravity.START
+                leftMargin = 0
+                rightMargin = 0
+            }
+            holder.bubble.background = null
+            holder.bubble.setPadding(0, dp(ctx, 8), 0, dp(ctx, 8))
+            holder.bubble.setTextColor(Color.parseColor("#EAF0FA"))
         }
-        holder.bubble.setTextColor(if (user) Color.WHITE else Color.parseColor("#EAF0FA"))
 
         if (!user && !m.done && stripThinking(m.text).isEmpty()) {
             // model is reasoning in a hidden thinking block, or not started
@@ -1036,11 +1229,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             holder.bubble.text = stripThinking(m.text)
         }
 
-        val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
-        lp.gravity = if (user) Gravity.END else Gravity.START
-        lp.leftMargin = if (user) dp(ctx, 64) else 0
-        lp.rightMargin = if (user) 0 else dp(ctx, 64)
-        holder.bubble.layoutParams = lp
+        holder.bubble.layoutParams = holder.bubble.layoutParams
 
         holder.bubble.setOnLongClickListener {
             val msgText = stripThinking(m.text).trim()
@@ -1086,7 +1275,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         }
     }
 
-    class VH(row: FrameLayout, val bubble: TextView) : RecyclerView.ViewHolder(row)
+    class VH(row: LinearLayout, val avatar: TextView, val bubble: TextView) : RecyclerView.ViewHolder(row)
 
     private fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density).toInt()
 }

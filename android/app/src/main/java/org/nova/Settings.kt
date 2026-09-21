@@ -44,10 +44,6 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
 
-    /** Fast mode: skip Qwen3's hidden reasoning (/no_think) - much faster. */
-    var fastMode: Boolean
-        get() = prefs.getBoolean(KEY_FAST_MODE, true)
-        set(value) = prefs.edit().putBoolean(KEY_FAST_MODE, value).apply()
 
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
@@ -58,7 +54,6 @@ class Settings(context: Context) {
         private const val KEY_READ_ALOUD = "read_aloud"
         private const val KEY_MEMORY = "memory"
         private const val KEY_AUTO_LISTEN = "auto_listen"
-        private const val KEY_FAST_MODE = "fast_mode"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a careful AI assistant running fully offline on this phone.\n" +
