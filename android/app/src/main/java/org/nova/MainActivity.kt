@@ -68,6 +68,9 @@ class MainActivity : Activity() {
     private var spokenLength = 0
     private var speechCancelled = false
 
+    /** True while the chat is scrolled to the bottom; see scrollToEnd(). */
+    private var atBottom = true
+
     private val bg = Color.parseColor("#0A0D12")
     private val surface = Color.parseColor("#141926")
     private val accent = Color.parseColor("#5B9BFF")
@@ -183,6 +186,14 @@ class MainActivity : Activity() {
             adapter = this@MainActivity.adapter
             setPadding(dp(16), dp(10), dp(16), dp(6))
         }
+        // Track whether the user is at the bottom of the chat. We only
+        // auto-scroll during streaming when they're already there — this
+        // prevents the up-down fighting between overlapping smooth scrolls.
+        messagesRv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                atBottom = !rv.canScrollVertically(1)
+            }
+        })
         emptyView = TextView(this).apply {
             text = "✦\n\nYour private AI.\nRuns 100% on this phone.\n\nTap ≡ to download a model, then say hi.\nTap 🎤 to speak instead of typing."
             setTextColor(textDim)
@@ -419,8 +430,8 @@ class MainActivity : Activity() {
                 NovaEngine.send(prompt, settings.predictLength)
                     .collect { token ->
                         adapter.appendToLast(token)
-                        scrollToEnd()
-                        speakNewSentences(replyMsg.text, flush = false)
+                        scrollToEnd(force = false)
+                        speakNewSentences(stripThinking(replyMsg.text), flush = false)
                     }
             } catch (e: CancellationException) {
                 adapter.appendToLast(" ⏹")
@@ -438,7 +449,7 @@ class MainActivity : Activity() {
                     // persist the conversation
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
                     // speak whatever is left of the reply
-                    if (!speechCancelled) speakNewSentences(replyMsg.text, flush = true)
+                    if (!speechCancelled) speakNewSentences(stripThinking(replyMsg.text), flush = true)
                 }
             }
         }
@@ -497,10 +508,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun scrollToEnd() {
-        if (adapter.itemCount > 0) {
-            messagesRv.smoothScrollToPosition(adapter.itemCount - 1)
-        }
+    private fun scrollToEnd(force: Boolean = true) {
+        if (adapter.itemCount == 0) return
+        if (force || atBottom) messagesRv.scrollToPosition(adapter.itemCount - 1)
     }
 
     // ----------------------------------------------------------- settings
@@ -616,6 +626,36 @@ class MainActivity : Activity() {
 
 // ---------------------------------------------------------------- adapter
 
+/**
+ * Removes hidden model "thinking" blocks (e.g. Qwen3) so only the actual
+ * answer is shown, spoken and saved. While a block is still open (streaming),
+ * everything from the opening tag on is hidden.
+ */
+fun stripThinking(s: String): String {
+    var out = s.replace(Regex("(?s)<think>.*?</think>"), "")
+    val open = out.indexOf("<think>")
+    if (open >= 0) out = out.substring(0, open)
+    return out
+}
+private val CODE_BLOCK = Regex("(?s)```[a-zA-Z0-9+#.-]*\\n?(.*?)```")
+
+/** Markdown stripped to plain text - clean for pasting as a prompt. */
+fun plainText(s: String): String = s
+    .replace(CODE_BLOCK, "$1")
+    .replace(Regex("\\[([^\\]]*)\\](\\[^)]*)\\)"), "$1")
+    .replace(Regex("[*_`~]+"), "")
+    .replace(Regex("(?m)^#{1,6}\\s*"), "")
+    .replace(Regex("(?m)^>\\s?"), "")
+    .replace(Regex("(?m)^[-*+] "), "- ")
+    .trim()
+
+private fun copyToClipboard(ctx: Context, text: String) {
+    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("NOVA", text))
+    Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+}
+
+
 class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     private val items = mutableListOf<Msg>()
@@ -634,7 +674,11 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     fun finalizeLast() {
         if (items.isEmpty()) return
-        items[items.size - 1].done = true
+        val last = items[items.size - 1]
+        last.done = true
+        // permanently remove hidden thinking text - this is what gets
+        // shown, copied, spoken and saved to the chat transcript
+        last.text = stripThinking(last.text).trim()
         notifyItemChanged(items.size - 1)
     }
 
@@ -678,13 +722,14 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         }
         holder.bubble.setTextColor(if (user) Color.WHITE else Color.parseColor("#EAF0FA"))
 
-        if (!user && !m.done && m.text.isEmpty()) {
-            holder.bubble.text = "● ● ●"
+        if (!user && !m.done && stripThinking(m.text).isEmpty()) {
+            // model is reasoning in a hidden thinking block, or not started
+            holder.bubble.text = if (m.text.isEmpty()) "● ● ●" else "🧠 thinking…"
             holder.bubble.setTextColor(Color.parseColor("#5B9BFF"))
         } else if (!user && m.done && m.text.isNotBlank() && markwon != null) {
             markwon?.setMarkdown(holder.bubble, m.text)
         } else {
-            holder.bubble.text = m.text
+            holder.bubble.text = stripThinking(m.text)
         }
 
         val lp = holder.bubble.layoutParams as FrameLayout.LayoutParams
@@ -694,20 +739,25 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         holder.bubble.layoutParams = lp
 
         holder.bubble.setOnLongClickListener {
-            if (m.text.isBlank()) return@setOnLongClickListener true
-            val options = arrayOf("📋  Copy", "↗  Share")
+            val msgText = stripThinking(m.text).trim()
+            if (msgText.isBlank()) return@setOnLongClickListener true
+            // code inside fences, without the fence markers
+            val code = CODE_BLOCK.findAll(msgText)
+                .joinToString("\n\n") { it.groupValues[1].trim() }
+            val options = mutableListOf<String>()
+            if (code.isNotBlank()) options += "📋  Copy code"
+            options += "📋  Copy"
+            options += "↗  Share"
             AlertDialog.Builder(ctx)
-                .setItems(options) { _, which ->
-                    when (which) {
-                        0 -> {
-                            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("NOVA", m.text))
-                            Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
-                        }
-                        1 -> {
+                .setItems(options.toTypedArray()) { _, which ->
+                    when {
+                        which == 0 && code.isNotBlank() -> copyToClipboard(ctx, code)
+                        which == 0 || (which == 1 && code.isNotBlank()) ->
+                            copyToClipboard(ctx, plainText(msgText))
+                        else -> {
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, m.text)
+                                putExtra(Intent.EXTRA_TEXT, msgText)
                             }
                             ctx.startActivity(Intent.createChooser(send, "Share message"))
                         }
