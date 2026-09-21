@@ -74,9 +74,8 @@ class SettingsActivity : Activity() {
         return row
     }
 
-    private fun editField(text: String, hint: String, onChange: (String) -> Unit): EditText =
-        EditText(this).apply {
-            setText(text)
+    private fun editField(text: String, hint: String, onChange: (String) -> Unit): EditText {
+        val field = EditText(this).apply {
             this.hint = hint
             setHintTextColor(NovaTheme.dim)
             setTextColor(NovaTheme.text)
@@ -90,14 +89,19 @@ class SettingsActivity : Activity() {
                 setStroke(dp(1), NovaTheme.border)
             }
             setPadding(dp(12), dp(10), dp(12), dp(10))
-            addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: android.text.Editable?) {
-                    onChange(s?.toString() ?: "")
-                }
-            })
         }
+        // listener added AFTER setText so opening the screen never saves the
+        // initial text over the user's (or the default) value
+        field.setText(text)
+        field.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                onChange(s?.toString() ?: "")
+            }
+        })
+        return field
+    }
 
     private fun build(): View {
         val scroll = ScrollView(this)
