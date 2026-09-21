@@ -42,6 +42,8 @@
 
         <activity android:name=".SettingsActivity" android:exported="false" />
 
+        <activity android:name=".KnowledgeActivity" android:exported="false" />
+
     </application>
 
     <uses-sdk tools:overrideLibrary="com.arm.aichat" />
