@@ -114,8 +114,11 @@ class SettingsActivity : Activity() {
             setPadding(dp(4), dp(4), dp(4), dp(6))
         }
         header.addView(Button(this).apply {
-            text = "←"; isAllCaps = false; textSize = 18f
-            setTextColor(NovaTheme.text)
+            isAllCaps = false
+            val d = getDrawable(R.drawable.ic_back)!!.mutate()
+            d.colorFilter = android.graphics.PorterDuffColorFilter(
+                NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
+            setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
             background = null
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
