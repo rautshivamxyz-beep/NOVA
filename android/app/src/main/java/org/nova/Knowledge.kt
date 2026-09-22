@@ -51,8 +51,8 @@ object Knowledge {
             val arr = JSONArray()
             for (c in chunks) arr.put(JSONObject().put("d", c.doc).put("t", c.text))
             file(ctx).writeText(arr.toString())
+            cache = chunks
         } catch (e: Exception) { }
-        cache = chunks
     }
 
     fun hasDocs(ctx: Context): Boolean = load(ctx).isNotEmpty()
@@ -124,6 +124,29 @@ object Knowledge {
     /** All chunks of one document, in stored order. */
     fun docChunks(ctx: Context, name: String): List<String> =
         load(ctx).filter { it.doc == name }.map { it.text }
+
+    /**
+     * Best document for a summary request, matching ANY query term - used
+     * for routing "summarise power sharing" to the right notes even when
+     * no single chunk contains every word. null when nothing matches.
+     */
+    fun bestDocName(ctx: Context, query: String): String? {
+        val terms = tokenize(query)
+        if (terms.isEmpty()) return null
+        val chunks = load(ctx)
+        if (chunks.isEmpty()) return null
+        val docScores = HashMap<String, Int>()
+        for (c in chunks) {
+            val dl = c.doc.lowercase()
+            var s = 0
+            for (t in terms) {
+                if (c.low.contains(t)) s += 2
+                if (dl.contains(t)) s += 3
+            }
+            if (s > 0) docScores[c.doc] = (docScores[c.doc] ?: 0) + s
+        }
+        return docScores.maxByOrNull { it.value }?.key
+    }
 
     /** Chunks for a summary request: picks the ONE best document for the
      *  query, then either the whole document (when the query names it, e.g.
