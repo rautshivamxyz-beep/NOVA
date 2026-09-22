@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -13,17 +12,17 @@ import java.io.FileWriter
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 
 /**
- * Offline Wikipedia: downloads the "vital articles" collection (levels 2-4,
- * ~11,000 core topics) once, then finds matching articles for a question so
- * NOVA can answer from real knowledge instead of guessing.
+ * Offline Wikipedia: downloads a pre-built "vital articles" dataset
+ * (one gzip file from this repo, built by the wiki-dataset workflow),
+ * then finds matching articles for a question so NOVA can answer from
+ * real knowledge instead of guessing.
  *
  * Storage is one line per article in wiki/articles.txt:
  *   TITLE <unit-sep> paragraph <unit-sep> paragraph ...
- * done.txt records which titles were fetched (resumable), and the title
- * index is built in memory on first search (or app start via [warmUp]).
+ * done.txt records the titles, and the title index is built in memory
+ * on first search (or app start via [warmUp]).
  */
 object WikiCore {
 
@@ -61,9 +60,11 @@ object WikiCore {
     // ----------------------------------------------------------- download
 
     /**
-     * Downloads/updates the article set. Batches 20 titles per request,
-     * keeps a light pause between batches, and resumes from where a
-     * previous (interrupted) run stopped.
+     * One reliable download instead of ~550 rate-limited API calls: the
+     * whole vital-articles set is pre-built into a single text file in the
+     * repo (by the "Build Wikipedia dataset" workflow) and fetched with
+     * one gzip connection. Line format is the storage format, so lines
+     * are copied straight into articles.txt.
      */
     suspend fun download(ctx: Context) = withContext(Dispatchers.IO) {
         if (downloading) return@withContext
@@ -71,80 +72,39 @@ object WikiCore {
         lastError = null
         val d = dir(ctx)
         try {
-            // 1) collect the topic list from the vital-articles pages.
-            //    (titles need the "Wikipedia:" prefix, and the /Level/N
-            //    forms redirect - links() follows redirects)
-            val titles = linkedSetOf<String>()
-            val lists = mutableListOf(
-                "Wikipedia:Vital articles/Level 2",
-                "Wikipedia:Vital articles/Level 3"
-            )
-            try { lists += level4Subpages() } catch (e: Exception) {
-                try { Thread.sleep(3000) } catch (x: Exception) { }
-                try { lists += level4Subpages() } catch (e2: Exception) { }
-            }
-            for ((i, page) in lists.withIndex()) {
-                _state.value = Pair((i + 1f) / lists.size * 0.05f,
-                    "reading topic list ${i + 1}/${lists.size}")
-                var got: List<String>? = null
-                try { got = links(page) } catch (e: Exception) { }
-                if (got == null || got.isEmpty()) {
-                    try { Thread.sleep(3000) } catch (x: Exception) { }
-                    try { got = links(page) } catch (e2: Exception) { }
-                }
-                titles += (got ?: emptyList())
-            }
-            if (titles.isEmpty()) {
-                lastError = "couldn't reach Wikipedia - check internet, then try again"
+            _state.value = Pair(0.04f, "downloading Wikipedia data")
+            val url = "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA/main/wiki/articles-v1.txt"
+            val text = http(url)
+            val lines = text.split("\n").filter { it.contains("\u241F") }
+            if (lines.size < 100) {
+                lastError = "dataset file not ready yet - try again in a few minutes"
                 _state.value = Pair(0f, lastError ?: "")
                 return@withContext
             }
-
-            // 2) fetch intro texts, 20 titles per request, resumable
-            val done = doneFile(ctx).readLines().toHashSet()
-            val queue = titles.filter { it !in done }
-            var total = articleCount(ctx)
-            val nTotal = queue.size
-            var fetched = 0
-            val bw = BufferedWriter(FileWriter(articlesFile(ctx), true))
-            val dw = BufferedWriter(FileWriter(doneFile(ctx), true))
-            fun store(batch: List<String>) {
-                val pages = fetchBatch(batch)
-                for ((t, text) in pages) {
-                    if (text.length > 200) {
-                        bw.write(t.replace('\n', ' '))
-                        bw.write("\u241F")
-                        bw.write(text.trim().replace('\n', '\u241F'))
-                        bw.write("\n")
-                        dw.write(t.replace('\n', ' ')); dw.write("\n")
-                        total++
-                    }
+            val bw = BufferedWriter(FileWriter(articlesFile(ctx), false))
+            val dw = BufferedWriter(FileWriter(doneFile(ctx), false))
+            var n = 0
+            for (line in lines) {
+                val title = line.substringBefore('\u241F').trim()
+                if (title.isEmpty()) continue
+                bw.write(line)
+                bw.write("\n")
+                dw.write(title.replace('\n', ' '))
+                dw.write("\n")
+                n++
+                if (n % 400 == 0) {
+                    _state.value = Pair(0.04f + 0.9f * n / lines.size, "saving $n articles")
+                    bw.flush(); dw.flush()
+                    File(d, "count").writeText(n.toString())
                 }
-                // mark the whole requested batch as handled either way,
-                // so redirects and misses are not retried forever
-                for (t in batch) { dw.write(t.replace('\n', ' ')); dw.write("\n") }
-                File(d, "count").writeText(total.toString())
-                bw.flush(); dw.flush()
-            }
-            var i = 0
-            while (i < queue.size) {
-                val batch = queue.subList(i, minOf(i + 20, queue.size))
-                i += 20
-                try {
-                    store(batch)
-                } catch (e: Exception) {
-                    // one retry after a pause - Wikipedia rate-limits bursts
-                    try { Thread.sleep(2500) } catch (x: Exception) { }
-                    try { store(batch) } catch (e2: Exception) { }
-                }
-                fetched += batch.size
-                _state.value = Pair(0.05f + 0.95f * fetched / nTotal,
-                    "$fetched/$nTotal articles")
-                Thread.sleep(350)
             }
             bw.close(); dw.close()
+            File(d, "count").writeText(n.toString())
             index = null
-            _state.value = Pair(0f, "done - $total articles saved")
+            _state.value = Pair(0f, "done - $n articles saved")
+        } catch (e: Exception) {
+            lastError = "download failed - check internet, then try again"
+            _state.value = Pair(0f, lastError ?: "")
         } finally {
             downloading = false
             if (lastError == null) {
@@ -154,53 +114,12 @@ object WikiCore {
         }
     }
 
-    /** Fetches plain-text intro extracts for up to 20 titles. */
-    private fun fetchBatch(titles: List<String>): List<Pair<String, String>> {
-        val q = titles.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
-        val url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts" +
-            "&explaintext&exintro&exlimit=20&redirects=1&format=json&titles=$q"
-        val pages = JSONObject(http(url)).getJSONObject("query").getJSONObject("pages")
-        val out = mutableListOf<Pair<String, String>>()
-        for (k in pages.keys()) {
-            val p = pages.getJSONObject(k)
-            val t = p.optString("title")
-            val e = p.optString("extract", "")
-            if (t.isNotEmpty() && e.isNotEmpty()) out.add(t to e)
-        }
-        return out
-    }
-
-    /** Article titles linked from a vital-articles list page. */
-    private fun links(page: String): List<String> {
-        val u = "https://en.wikipedia.org/w/api.php?action=parse&prop=links&redirects=1&format=json&page=" +
-            URLEncoder.encode(page, "UTF-8")
-        val arr = JSONObject(http(u)).getJSONObject("parse").getJSONArray("links")
-        val out = mutableListOf<String>()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            if (o.optInt("ns") == 0) out.add(o.optString("*"))
-        }
-        return out
-    }
-
-    /** The ~55 subpages of "Vital articles/Level/4" (People, History, ...). */
-    private fun level4Subpages(): List<String> {
-        val u = "https://en.wikipedia.org/w/api.php?action=query&list=allpages&apprefix=" +
-            URLEncoder.encode("Vital articles/Level/4/", "UTF-8") +
-            "&apnamespace=4&aplimit=500&format=json"
-        val arr = JSONObject(http(u)).getJSONObject("query").getJSONArray("allpages")
-        val out = mutableListOf<String>()
-        for (i in 0 until arr.length()) out.add(arr.getJSONObject(i).optString("title"))
-        return out
-    }
-
     private fun http(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 15000
-        conn.readTimeout = 30000
+        conn.readTimeout = 60000
         conn.setRequestProperty("User-Agent", "NOVA-local-assistant/1.0 (offline study)")
-        // gzip cuts the transfer to ~1/4 - the vital-articles set is ~40 MB
-        // uncompressed, this matters a lot on mobile data
+        // gzip cuts the transfer to ~1/4 - the dataset is several MB
         conn.setRequestProperty("Accept-Encoding", "gzip")
         try {
             val stream = if (conn.contentEncoding?.equals("gzip", true) == true)
@@ -235,7 +154,11 @@ object WikiCore {
         if (!isReady(ctx)) return emptyList()
         val qw = words(query)
         if (qw.isEmpty()) return emptyList()
-        val ix = index ?: buildIndex(ctx).also { index = it }
+        // NEVER build the index here: it reads the whole multi-MB articles
+        // file, and doing that on the UI thread froze the first message of
+        // every chat. warmUp() builds it in the background after app start;
+        // until it's ready, this one question just runs without Wikipedia.
+        val ix = index ?: return emptyList()
         if (ix.isEmpty()) return emptyList()
         val ql = query.lowercase()
         val scored = ix.mapNotNull { (title, off) ->
