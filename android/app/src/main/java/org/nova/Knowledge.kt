@@ -20,7 +20,8 @@ object Knowledge {
         "its", "his", "her", "him", "them", "our", "out", "get", "got", "any",
         "all", "not", "but", "she", "then", "than",
         "notes", "note", "summarise", "summarize", "summary", "material",
-        "give", "show", "tell", "read", "topic", "chapter", "gimme"
+        "give", "show", "tell", "read", "topic", "chapter", "gimme",
+        "want", "whole", "full", "complete"
     )
 
     private var cache: ArrayList<Chunk>? = null
@@ -118,6 +119,33 @@ object Knowledge {
         }
         scored.sortByDescending { it.first }
         return scored.take(maxResults).map { it.second }
+    }
+
+    /** All chunks of one document, in stored order. */
+    fun docChunks(ctx: Context, name: String): List<String> =
+        load(ctx).filter { it.doc == name }.map { it.text }
+
+    /** Up to [maxChunks] query-relevant chunks across all docs, returned in
+     *  document order (doc-name matches count extra, so "sst" pulls whole
+     *  "SST notes" chapters while "power sharing" pulls just those parts). */
+    fun bestChunks(ctx: Context, query: String, maxChunks: Int = 18): List<String> {
+        val terms = tokenize(query)
+        if (terms.isEmpty()) return emptyList()
+        val chunks = load(ctx)
+        if (chunks.isEmpty()) return emptyList()
+        val scored = ArrayList<Pair<Int, Int>>()
+        for ((i, c) in chunks.withIndex()) {
+            var score = 0
+            val dl = c.doc.lowercase()
+            for (t in terms) {
+                if (c.low.contains(t)) score += 2
+                if (dl.contains(t)) score += 3
+            }
+            if (score > 0) scored.add(score to i)
+        }
+        if (scored.isEmpty()) return emptyList()
+        scored.sortByDescending { it.first }
+        return scored.take(maxChunks).map { it.second }.sorted().map { chunks[it].text }
     }
 
     private fun tokenize(s: String): List<String> {
