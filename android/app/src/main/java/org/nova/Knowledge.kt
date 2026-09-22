@@ -125,27 +125,43 @@ object Knowledge {
     fun docChunks(ctx: Context, name: String): List<String> =
         load(ctx).filter { it.doc == name }.map { it.text }
 
-    /** Up to [maxChunks] query-relevant chunks across all docs, returned in
-     *  document order (doc-name matches count extra, so "sst" pulls whole
-     *  "SST notes" chapters while "power sharing" pulls just those parts). */
+    /** Chunks for a summary request: picks the ONE best document for the
+     *  query, then either the whole document (when the query names it, e.g.
+     *  "sst") or only its chunks that match the topic well - so a
+     *  "power sharing" summary never drags in federalism paragraphs that
+     *  merely mention "power". Returned in document order. */
     fun bestChunks(ctx: Context, query: String, maxChunks: Int = 18): List<String> {
         val terms = tokenize(query)
         if (terms.isEmpty()) return emptyList()
         val chunks = load(ctx)
         if (chunks.isEmpty()) return emptyList()
-        val scored = ArrayList<Pair<Int, Int>>()
+        // 1) pick the single best document for this query
+        val docScores = HashMap<String, Int>()
+        val chunkScores = IntArray(chunks.size)
         for ((i, c) in chunks.withIndex()) {
-            var score = 0
             val dl = c.doc.lowercase()
+            var docHit = 0
+            var textHit = 0
             for (t in terms) {
-                if (c.low.contains(t)) score += 2
-                if (dl.contains(t)) score += 3
+                if (c.low.contains(t)) {
+                    textHit += 2
+                    docScores[c.doc] = (docScores[c.doc] ?: 0) + 2
+                }
+                if (dl.contains(t)) docHit += 3
             }
-            if (score > 0) scored.add(score to i)
+            docScores[c.doc] = (docScores[c.doc] ?: 0) + docHit
+            chunkScores[i] = textHit + docHit
         }
-        if (scored.isEmpty()) return emptyList()
-        scored.sortByDescending { it.first }
-        return scored.take(maxChunks).map { it.second }.sorted().map { chunks[it].text }
+        val bestDoc = docScores.maxByOrNull { it.value }?.key ?: return emptyList()
+        val nameHit = terms.any { bestDoc.lowercase().contains(it) }
+        val idxs = chunks.indices.filter { chunks[it].doc == bestDoc && chunkScores[it] > 0 }
+        // 2a) the query names this chapter -> summarize the whole document
+        if (nameHit || idxs.isEmpty())
+            return chunks.filter { it.doc == bestDoc }.map { it.text }.take(maxChunks)
+        // 2b) topic inside a bigger document -> only well-matching chunks
+        val top = idxs.maxOf { chunkScores[it] }
+        val min = if (terms.size >= 2) top - 1 else top
+        return idxs.filter { chunkScores[it] >= min }.take(maxChunks).map { chunks[it].text }
     }
 
     private fun tokenize(s: String): List<String> {
