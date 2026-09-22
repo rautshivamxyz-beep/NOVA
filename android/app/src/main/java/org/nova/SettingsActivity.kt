@@ -2,6 +2,7 @@ package org.nova
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -14,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Locale
 
 /**
  * Full settings screen: voice, memory, personality, appearance and data.
@@ -222,6 +224,47 @@ class SettingsActivity : Activity() {
         })
         col.addView(data)
 
+        // Backup
+        val backup = card("BACKUP")
+        backup.addView(Button(this).apply {
+            text = "Backup to file"
+            isAllCaps = false
+            textSize = 15f
+            setTextColor(NovaTheme.text)
+            background = null
+            setPadding(0, dp(10), 0, dp(4))
+            setOnClickListener {
+                val name = "nova-backup-" + java.text.SimpleDateFormat(
+                    "yyyyMMdd-HHmm", Locale.US).format(java.util.Date()) + ".json"
+                try {
+                    val pick = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_TITLE, name)
+                    }
+                    startActivityForResult(pick, 9001)
+                } catch (e: Exception) { toast("No file picker available") }
+            }
+        })
+        backup.addView(Button(this).apply {
+            text = "Restore from file"
+            isAllCaps = false
+            textSize = 15f
+            setTextColor(NovaTheme.text)
+            background = null
+            setPadding(0, dp(10), 0, dp(4))
+            setOnClickListener {
+                try {
+                    val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    }
+                    startActivityForResult(pick, 9002)
+                } catch (e: Exception) { toast("No file picker available") }
+            }
+        })
+        col.addView(backup)
+
         // About
         val about = card("ABOUT")
         about.addView(TextView(this).apply {
@@ -234,6 +277,47 @@ class SettingsActivity : Activity() {
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         return scroll
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK || data == null) return
+        val uri = data.data ?: return
+        if (requestCode == 9001) {
+            // write the backup where the user chose
+            try {
+                val json = Backup.export(this)
+                contentResolver.openOutputStream(uri)?.use {
+                    it.write(json.toByteArray(Charsets.UTF_8))
+                }
+                toast("Backup saved")
+            } catch (e: Exception) { toast("Backup failed") }
+        } else if (requestCode == 9002) {
+            // restore from a chosen file
+            try {
+                val text = contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                } ?: ""
+                if (!Backup.looksLikeBackup(text)) {
+                    toast("That file is not a NOVA backup")
+                    return
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Restore backup?")
+                    .setMessage("Chats with the same id are replaced, others are kept. " +
+                        "Memory, personality and study deck are replaced.")
+                    .setPositiveButton("Restore") { _, _ ->
+                        val n = Backup.restore(this, text)
+                        if (n >= 0) {
+                            toast("Restored $n chats")
+                            recreate()
+                        } else toast("Restore failed")
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            } catch (e: Exception) { toast("Could not read that file") }
+        }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
