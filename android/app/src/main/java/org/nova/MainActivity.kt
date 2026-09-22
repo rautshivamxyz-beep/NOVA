@@ -303,9 +303,9 @@ class MainActivity : Activity() {
                         input.setSelection(input.text.length)
                     }
                 }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(44)
                 ).apply {
-                    topMargin = dp(10); gravity = Gravity.CENTER_HORIZONTAL
+                    topMargin = dp(10)
                 })
             }
         }
@@ -779,6 +779,10 @@ class MainActivity : Activity() {
                             lastFlush = now
                             flush()
                             scrollToEnd(force = false)
+                            // thinking models (Qwen3 / LFM): hidden reasoning is
+                            // running while nothing is visible yet
+                            status.text = if (stripThinking(replyMsg.text).isEmpty())
+                                "thinking…" else "generating…"
                             speakNewSentences(stripThinking(replyMsg.text), flush = false)
                         }
                     }
