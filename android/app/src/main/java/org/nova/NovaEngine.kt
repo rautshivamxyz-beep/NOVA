@@ -128,15 +128,29 @@ object NovaEngine {
         val engine = get(context)
         ensureReady(engine)
         engine.loadModel(path)
-        if (systemPrompt.isNotBlank()) {
+        val prompt = systemPrompt + thinkingHint(path, label)
+        if (prompt.isNotBlank()) {
             try {
-                engine.setSystemPrompt(systemPrompt)
+                engine.setSystemPrompt(prompt)
             } catch (e: Exception) {
                 // Not fatal: model still works without a system prompt
             }
         }
         activeModelPath = path
         activeModelLabel = label
+    }
+
+    /**
+     * Reasoning models (Qwen3 / LFM Thinking) burn most of their response
+     * time generating hidden thinking chains - often hundreds of tokens on
+     * trivial questions. Tell them to keep it short so answers arrive fast.
+     */
+    private fun thinkingHint(path: String, label: String): String {
+        val n = (label + " " + path.substringAfterLast('/')).lowercase()
+        if ("think" !in n) return ""
+        return "\n\n(You are a reasoning model. Keep your hidden thinking SHORT: " +
+            "one or two brief lines for easy questions, detailed step-by-step " +
+            "reasoning only for genuinely hard problems. Then answer directly.)"
     }
 
     /** Reloads the active model, starting a fresh conversation. */
