@@ -1418,7 +1418,7 @@ private val CODE_BLOCK = Regex("(?s)```[a-zA-Z0-9+#.-]*\\n?(.*?)```")
 /** Markdown stripped to plain text - clean for pasting as a prompt. */
 fun plainText(s: String): String = s
     .replace(CODE_BLOCK, "$1")
-    .replace(Regex("\\[([^\\]]*)\\](\\[^)]*)\\)"), "$1")
+    .replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
     .replace(Regex("[*_`~]+"), "")
     .replace(Regex("(?m)^#{1,6}\\s*"), "")
     .replace(Regex("(?m)^>\\s?"), "")
