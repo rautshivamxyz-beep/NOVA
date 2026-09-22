@@ -778,7 +778,7 @@ class MainActivity : Activity() {
                 val um = Msg(Role.USER, text)
                 currentChat.messages.add(um)
                 adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, "(from $docName)\\n\\n$part")
+                val reply = Msg(Role.ASSISTANT, "(from $docName)\n\n$part")
                 currentChat.messages.add(reply)
                 adapter.add(reply)
                 scrollToEnd()
@@ -800,9 +800,9 @@ class MainActivity : Activity() {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um)
                     adapter.add(um)
-                    var body = hits.joinToString("\\n\\n---\\n\\n") { "**${it.doc}**\\n${it.text}" }
-                    if (body.length > 6000) body = body.substring(0, 6000) + "\\n[...more]"
-                    val reply = Msg(Role.ASSISTANT, "(from your saved notes)\\n\\n$body")
+                    var body = hits.joinToString("\n\n---\n\n") { "**${it.doc}**\n${it.text}" }
+                    if (body.length > 6000) body = body.substring(0, 6000) + "\n[...more]"
+                    val reply = Msg(Role.ASSISTANT, "(from your saved notes)\n\n$body")
                     currentChat.messages.add(reply)
                     adapter.add(reply)
                     scrollToEnd()
@@ -835,7 +835,7 @@ class MainActivity : Activity() {
             when {
                 offDoc -> {
                     docInjected = false
-                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
+                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
                 }
                 overlap == 0 -> {
                     // question has nothing to do with the document: don't
@@ -843,13 +843,13 @@ class MainActivity : Activity() {
                     // general questions ("who is X?") still get answered
                     if (docInjected) {
                         docInjected = false
-                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
+                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
                     } else ""
                 }
                 else -> {
                     docInjected = true
                     docInjectedText = win
-                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\\n-----\\n$win\\n-----\\nEnd of document.)\\n\\n"
+                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
                 }
             }
         } else ""
@@ -858,13 +858,13 @@ class MainActivity : Activity() {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Summary of earlier conversation: $compactSummary)\\n\\n(Recent messages:\\n$recent\\n— end)\\n\\nNew message: $text\\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Earlier conversation for context:\\n$recent\\n— end of earlier conversation)\\n\\nNew message: $text\\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             else -> text
         }
@@ -876,7 +876,7 @@ class MainActivity : Activity() {
         if (mem.isNotEmpty() && (
                     currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
                     )) {
-            prompt = "(Facts about the user, always remember: $mem)\\n\\n$basePrompt"
+            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
             lastInjectedMemory = mem
         }
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
@@ -887,7 +887,7 @@ class MainActivity : Activity() {
         if (!tiny) {
             // exam countdown awareness
             Exams.promptLine(this)?.let { line ->
-                prompt = "(The user's upcoming exams: $line.)\\n\\n$prompt"
+                prompt = "(The user's upcoming exams: $line.)\n\n$prompt"
             }
         }
 
@@ -896,10 +896,10 @@ class MainActivity : Activity() {
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val hits = Knowledge.search(this, text)
             if (hits.isNotEmpty()) {
-                var notes = hits.joinToString("\\n---\\n") { "[${it.doc}] ${it.text}" }
+                var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
                 if (notes.length > (if (tiny) 900 else 2400))
-                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\\n[...more omitted]"
-                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\\n$notes)\\n\\n"
+                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\n[...more omitted]"
+                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\n$notes)\n\n"
             }
         }
         // offline Wikipedia: matching articles as background facts
@@ -907,10 +907,10 @@ class MainActivity : Activity() {
         if (settings.wikiEnabled && WikiCore.isReady(this)) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             if (wikiHits.isNotEmpty()) {
-                var facts = wikiHits.joinToString("\\n---\\n") { "${it.title}: ${it.text}" }
+                var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 val cap = if (tiny) 900 else 2400
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
-                wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\\n$facts)\\n\\n"
+                wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
             }
         }
         // one background source for tiny models, both for bigger ones
@@ -919,7 +919,7 @@ class MainActivity : Activity() {
 
         // general chat: match the user's language, no guessing
         if (docPart.isEmpty()) {
-            prompt += "\\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
+            prompt += "\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
         }
         autoContinueCount = 0
         replyRetried = false
@@ -1025,7 +1025,7 @@ class MainActivity : Activity() {
                         replyMsg.text = ""
                         adapter.setLastText("")
                         startGeneration(
-                            "Question: $userText\\nAnswer the question directly and clearly " +
+                            "Question: $userText\nAnswer the question directly and clearly " +
                                 "in one to three sentences. If you don't know the answer, " +
                                 "say so honestly.",
                             null, newBubble = false)
@@ -1615,7 +1615,7 @@ class MainActivity : Activity() {
         }
         runTool("These are the phone notifications the user received, oldest first, " +
             "newest last:\n$digest\n\nSummarize what they missed: group by app or topic, " +
-            "mention names and what people said, ignore ads and spam. Keep it short and clear.")
+            "mention names and what they said, ignore ads and spam. Keep it short and clear.")
     }
 
     // ---------- write in my style ----------
@@ -2212,10 +2212,10 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
     val out = StringBuilder()
     var last = -2
     for (i in best) {
-        if (out.isNotEmpty() && i != last + 1) out.append("[...]\\n")
+        if (out.isNotEmpty() && i != last + 1) out.append("[...]\n")
         val p = paras[i]
         if (out.length + p.length > maxChars) break
-        out.append(p).append("\\n\\n")
+        out.append(p).append("\n\n")
         last = i
     }
     return out.toString().trim()
