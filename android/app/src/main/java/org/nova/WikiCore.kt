@@ -36,6 +36,10 @@ object WikiCore {
     @Volatile var downloading = false
         private set
 
+    /** Last download failure reason - shown in Knowledge until the next try. */
+    @Volatile var lastError: String? = null
+        private set
+
     private fun dir(ctx: Context): File = File(ctx.filesDir, "wiki").apply { mkdirs() }
     private fun articlesFile(ctx: Context): File = File(dir(ctx), "articles.txt")
     private fun doneFile(ctx: Context): File = File(dir(ctx), "done.txt")
@@ -64,19 +68,34 @@ object WikiCore {
     suspend fun download(ctx: Context) = withContext(Dispatchers.IO) {
         if (downloading) return@withContext
         downloading = true
+        lastError = null
         val d = dir(ctx)
         try {
-            // 1) collect the topic list from the vital-articles pages
+            // 1) collect the topic list from the vital-articles pages.
+            //    (titles need the "Wikipedia:" prefix, and the /Level/N
+            //    forms redirect - links() follows redirects)
             val titles = linkedSetOf<String>()
-            val lists = mutableListOf("Vital articles/Level/2", "Vital articles/Level/3")
-            try { lists += level4Subpages() } catch (e: Exception) { }
+            val lists = mutableListOf(
+                "Wikipedia:Vital articles/Level 2",
+                "Wikipedia:Vital articles/Level 3")
+            try { lists += level4Subpages() } catch (e: Exception) {
+                try { Thread.sleep(3000) } catch (x: Exception) { }
+                try { lists += level4Subpages() } catch (e2: Exception) { }
+            }
             for ((i, page) in lists.withIndex()) {
                 _state.value = Pair((i + 1f) / lists.size * 0.05f,
                     "reading topic list ${i + 1}/${lists.size}")
-                try { titles += links(page) } catch (e: Exception) { }
+                var got: List<String>? = null
+                try { got = links(page) } catch (e: Exception) { }
+                if (got == null || got.isEmpty()) {
+                    try { Thread.sleep(3000) } catch (x: Exception) { }
+                    try { got = links(page) } catch (e2: Exception) { }
+                }
+                titles += (got ?: emptyList())
             }
             if (titles.isEmpty()) {
-                _state.value = Pair(0f, "could not reach Wikipedia")
+                lastError = "couldn't reach Wikipedia - check internet, then try again"
+                _state.value = Pair(0f, lastError ?: "")
                 return@withContext
             }
 
@@ -127,8 +146,10 @@ object WikiCore {
             _state.value = Pair(0f, "done - $total articles saved")
         } finally {
             downloading = false
-            Thread.sleep(3000)
-            _state.value = Pair(0f, "")
+            if (lastError == null) {
+                Thread.sleep(3000)
+                _state.value = Pair(0f, "")
+            }
         }
     }
 
@@ -150,7 +171,7 @@ object WikiCore {
 
     /** Article titles linked from a vital-articles list page. */
     private fun links(page: String): List<String> {
-        val u = "https://en.wikipedia.org/w/api.php?action=parse&prop=links&format=json&page=" +
+        val u = "https://en.wikipedia.org/w/api.php?action=parse&prop=links&redirects=1&format=json&page=" +
             URLEncoder.encode(page, "UTF-8")
         val arr = JSONObject(http(u)).getJSONObject("parse").getJSONArray("links")
         val out = mutableListOf<String>()
