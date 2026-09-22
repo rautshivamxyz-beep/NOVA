@@ -49,6 +49,11 @@ object Study {
 
     fun totalCards(ctx: Context): Int = load(ctx).size
 
+    /** Deletes the whole deck. */
+    fun clear(ctx: Context) {
+        file(ctx).delete()
+    }
+
     fun dueCount(ctx: Context): Int =
         load(ctx).count { it.due <= System.currentTimeMillis() }
 
