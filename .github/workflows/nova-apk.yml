@@ -1,5 +1,4 @@
 name: Build NOVA APK
-
 on:
   workflow_dispatch:
   push:
@@ -31,15 +30,15 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build NOVA APK
+      - name: Build NOVA release APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Show APK
-        run: ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+        run: ls -lh android/app/build/outputs/apk/release/app-release.apk
 
       - name: Upload NOVA APK
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
