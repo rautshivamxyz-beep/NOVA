@@ -836,27 +836,29 @@ class MainActivity : Activity() {
             val followUp = lastNotesDoc != null &&
                 Regex("(?i)\\b(whole|full|complete|entire|detailed)\\s+summar").containsMatchIn(text)
             if (wantsSumm || followUp) {
-                val doc = if (wantsSumm) Knowledge.search(this, text).firstOrNull()?.doc
+                // relaxed match: ANY query term can point at the document -
+                // requiring every word in one chunk made "summarise power
+                // sharing" silently fall through to chat (and hallucinate)
+                val doc = if (wantsSumm) Knowledge.bestDocName(this, text)
                           else lastNotesDoc
                 if (doc != null) {
                     lastNotesDoc = doc
                     summarizeNotes(doc, text, fullDoc = !wantsSumm)
                     return
                 }
-                // nothing matched - list what notes exist so the user can name one
-                if (Regex("(?i)\\bnotes?\\b").containsMatchIn(text)) {
-                    val names = Knowledge.docs(this).joinToString(", ") { it.first }
-                    if (names.isNotEmpty()) {
-                        val um = Msg(Role.USER, text)
-                        currentChat.messages.add(um)
-                        adapter.add(um)
-                        val reply = Msg(Role.ASSISTANT,
-                            "I couldn't find notes on that. You have notes on: $names")
-                        currentChat.messages.add(reply)
-                        adapter.add(reply)
-                        scrollToEnd()
-                        return
-                    }
+                // nothing matched - NEVER fall back to guessing from chat:
+                // list what notes exist so the user can name one
+                val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                if (names.isNotEmpty()) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um)
+                    adapter.add(um)
+                    val reply = Msg(Role.ASSISTANT,
+                        "I couldn't find notes on that. You have notes on: $names")
+                    currentChat.messages.add(reply)
+                    adapter.add(reply)
+                    scrollToEnd()
+                    return
                 }
             }
         }
@@ -1359,7 +1361,7 @@ class MainActivity : Activity() {
         val chunks = if (fullDoc) Knowledge.docChunks(this, doc)
                       else Knowledge.bestChunks(this, userText)
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
-        val totalLen = chunks.joinToString("").length
+        val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
         val key = "notes_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
@@ -1377,26 +1379,10 @@ class MainActivity : Activity() {
         // tiny models show their scratchpad ("Step 1...") - forbid it
         val antiCot = " Reply with ONLY the summary itself - no 'Step 1' plan, " +
             "no questions, no 'final answer' line."
-        val all = chunks.joinToString("\n\n")
-        if (all.length <= 5000) {
-            toast("Summarizing ${chunks.size} parts of $doc")
-            val p = "Summarize these notes in clear sections: a short Overview, then " +
-                "Key points as short bullets, then Important terms with one-line meanings. " +
-                "Keep all names, dates and numbers. Use ONLY what the notes say - " +
-                "do not add outside knowledge.$antiCot\n-----\n$all\n-----"
-            val modelPath = NovaEngine.activeModelPath
-            if (modelPath != null) scope.launch {
-                try {
-                    NovaEngine.load(this@MainActivity, modelPath,
-                        NovaEngine.activeModelLabel, settings.systemPrompt)
-                } catch (e: Exception) { }
-                startGeneration(p, userText)
-            } else startGeneration(p, userText)
-            return
-        }
-        // long chapter: map-reduce with live progress
-        // efficiency: group ~700-char chunks into ~1600-char sections so
-        // a long chapter needs half the generation passes
+        // ALWAYS map-reduce with live progress: a single huge notes prompt can
+        // overflow the model's context window (the notes get cut off and the
+        // model invents the rest), while ~1600-char sections always fit.
+        // The progress lines also show WHICH document is being summarized.
         val sections = ArrayList<String>()
         val sbb = StringBuilder()
         for (c in chunks) {
@@ -1451,11 +1437,11 @@ class MainActivity : Activity() {
                         "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
                         "Use ONLY what the summaries say - copy key terms exactly as they are " +
                         "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
-                        sectionSummaries.toString().take(9000), 500
+                        sectionSummaries.toString().take(6000), 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
-                reply.text = finalText
+                reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
                 if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
