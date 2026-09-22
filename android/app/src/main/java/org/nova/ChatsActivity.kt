@@ -53,10 +53,12 @@ class ChatsActivity : Activity() {
             setPadding(dp(18), dp(6), dp(18), dp(6))
         }
         header.addView(Button(this).apply {
-            text = "←"
-            textSize = 18f
+            isAllCaps = false
             background = null
-            setTextColor(accent)
+            val d = getDrawable(R.drawable.ic_back)!!.mutate()
+            d.colorFilter = android.graphics.PorterDuffColorFilter(
+                NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
+            setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
             setOnClickListener { finish() }
         })
         header.addView(TextView(this).apply {
@@ -66,7 +68,12 @@ class ChatsActivity : Activity() {
             setTextColor(textMain)
             setPadding(dp(8), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(smallButton("＋ New", accent).apply {
+        header.addView(smallButton("New", accent).apply {
+            val d = getDrawable(R.drawable.ic_add)!!.mutate()
+            d.colorFilter = android.graphics.PorterDuffColorFilter(
+                accent, android.graphics.PorterDuff.Mode.SRC_IN)
+            setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
+            compoundDrawablePadding = dp(4)
             setOnClickListener {
                 setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_NEW_CHAT, true))
                 finish()
@@ -177,9 +184,17 @@ class ChatsActivity : Activity() {
                     2 -> AlertDialog.Builder(this)
                         .setMessage("Delete \"${chat.name}\"? This cannot be undone.")
                         .setPositiveButton("Delete") { _, _ ->
+                            val wasCurrent = settings.currentChatId == chat.id
                             ChatStore.delete(this, chat.id)
-                            if (settings.currentChatId == chat.id) settings.currentChatId = ""
-                            refresh()
+                            if (wasCurrent) {
+                                // deleted the open chat - return to a fresh one,
+                                // otherwise it gets re-saved on the next message
+                                settings.currentChatId = ""
+                                setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_NEW_CHAT, true))
+                                finish()
+                            } else {
+                                refresh()
+                            }
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
@@ -222,7 +237,7 @@ class ChatsActivity : Activity() {
                 contentResolver.openOutputStream(uri)?.use { out ->
                     out.write(ChatStore.transcript(chat).toByteArray())
                 }
-                toast("Saved ✓")
+                toast("Saved")
             } catch (e: Exception) {
                 toast("Export failed: ${e.message}")
             }
