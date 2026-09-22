@@ -77,6 +77,9 @@ class MainActivity : Activity() {
     /** Guards runaway auto-continues. */
     private var autoContinueCount = 0
 
+    /** Set while a flashcard-generating reply is running. */
+    private var pendingCards = false
+
     /** Compressed summary of older turns (auto-compact). */
     private var compactSummary: String? = null
     private var compacting = false
@@ -145,6 +148,9 @@ class MainActivity : Activity() {
         settings.currentChatId = currentChat.id
         needsContextCarry = currentChat.messages.isNotEmpty()
 
+        if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
+            WikiCore.warmUp(this@MainActivity)
+        }
         installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
@@ -493,6 +499,7 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
+        drawerPane.addView(drawerRow("Study", R.drawable.ic_edit) { Study.review(this) })
         drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
@@ -730,6 +737,14 @@ class MainActivity : Activity() {
                 prompt = "(Relevant notes from the user's documents — use them if they help:\n$notes)\n\n$prompt"
             }
         }
+        // offline Wikipedia: matching articles as background facts
+        if (WikiCore.isReady(this)) {
+            val wikiHits = WikiCore.search(this, text)
+            if (wikiHits.isNotEmpty()) {
+                val facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
+                prompt = "(Wikipedia background - use if relevant, ignore otherwise:\n$facts)\n\n$prompt"
+            }
+        }
         autoContinueCount = 0
         startGeneration(prompt, text)
     }
@@ -819,6 +834,11 @@ class MainActivity : Activity() {
                             replyMsg.text = stripRepeatStart(replyMsg.text, prev.text)
                         }
                     }
+                    if (pendingCards) {
+                        pendingCards = false
+                        val n = Study.parseAndAdd(this@MainActivity, replyMsg.text)
+                        toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
+                    }
                     adapter.finalizeLast()
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
@@ -903,6 +923,7 @@ class MainActivity : Activity() {
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
+        pendingCards = prompt.startsWith("Create 8 study flashcards")
         startGeneration(prompt, null)
     }
 
@@ -1438,15 +1459,27 @@ fun stripThinking(s: String): String {
 }
 private val CODE_BLOCK = Regex("(?s)```[a-zA-Z0-9+#.-]*\\n?(.*?)```")
 
-/** Markdown stripped to plain text - clean for pasting as a prompt. */
-fun plainText(s: String): String = s
-    .replace(CODE_BLOCK, "$1")
-    .replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
-    .replace(Regex("[*_`~]+"), "")
-    .replace(Regex("(?m)^#{1,6}\\s*"), "")
-    .replace(Regex("(?m)^>\\s?"), "")
-    .replace(Regex("(?m)^[-*+] "), "- ")
-    .trim()
+/** Markdown stripped to plain text - clean for pasting as a prompt.
+ *  Code blocks and inline code are stashed first so their underscores and
+ *  asterisks (like __init__ or x * y) survive the markdown stripping. */
+fun plainText(s: String): String {
+    val stash = mutableListOf<String>()
+    var t = CODE_BLOCK.replace(s) {
+        stash.add(it.groupValues[1]); "\u0000${stash.size - 1}\u0000"
+    }
+    t = Regex("`[^`\\n]+`").replace(t) {
+        stash.add(it.value.substring(1, it.value.length - 1)); "\u0000${stash.size - 1}\u0000"
+    }
+    t = t
+        .replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
+        .replace(Regex("[*_~]+"), "")
+        .replace(Regex("(?m)^#{1,6}\\s*"), "")
+        .replace(Regex("(?m)^>\\s?"), "")
+        .replace(Regex("(?m)^[-*+] "), "- ")
+        .trim()
+    for (i in stash.indices) t = t.replace("\u0000$i\u0000", stash[i])
+    return t
+}
 
 /** If the added text starts by repeating the end of the old text, drop the overlap. */
 private fun stripRepeatJoin(old: String, added: String): String {
@@ -1683,6 +1716,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 "Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\n$msgText\n-----",
                 "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
             ) else linkedMapOf(
+                "Make study cards" to "Create 8 study flashcards from this material. Format each card EXACTLY as:\nQ: <question>\nA: <answer>\nNo numbering, no text before or after.",
                 "Regenerate" to ""
             )
             options += tools.keys
