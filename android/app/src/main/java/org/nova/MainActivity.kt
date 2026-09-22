@@ -907,15 +907,37 @@ class MainActivity : Activity() {
             val text = withContext(Dispatchers.IO) {
                 try {
                     if (isPdf) PdfDoc.extractText(this@MainActivity, uri)
-                    else contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
+                    else readPlainDocument(uri)
                 } catch (e: Exception) { "" }
             }
             if (text.isBlank() || text.trim().length < 40) {
-                toast("Couldn't read that — NOVA reads PDF and text files")
+                toast("NOVA can't read images — it reads PDF and text files")
                 return@launch
             }
             attachDocument(name, text.trim())
         }
+    }
+
+    /**
+     * Reads a plain-text document. Returns "" for images and other binary
+     * files (JPEG/PNG magic bytes, or NUL bytes in the head) so they never
+     * reach the model as garbage. Caps length like PDFs.
+     */
+    private fun readPlainDocument(uri: Uri): String {
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+        } catch (e: Exception) { return "" }
+        if (bytes.size < 4) return ""
+        val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()
+        val isPng = bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+        val head = bytes.copyOfRange(0, minOf(4096, bytes.size))
+        val hasNul = head.contains(0.toByte())
+        if (isJpeg || isPng || hasNul) return ""
+        val text = String(bytes, Charsets.UTF_8)
+        return if (text.length > 60_000)
+            text.substring(0, 60_000) + "\n[...document truncated]"
+        else text
     }
 
     private fun attachDocument(name: String, text: String) {
