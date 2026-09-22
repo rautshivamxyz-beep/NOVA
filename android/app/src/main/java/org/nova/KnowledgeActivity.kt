@@ -238,7 +238,9 @@ class KnowledgeActivity : Activity() {
                 wikiBtn.visibility = View.VISIBLE
             }
             else -> {
-                wikiStatus.text = "Not downloaded (one time, ~25 MB)"
+                wikiStatus.text = WikiCore.lastError
+                    ?.let { "\u2717 $it" }
+                    ?: "Not downloaded (one time, ~25 MB)"
                 wikiBtn.visibility = View.VISIBLE
             }
         }
