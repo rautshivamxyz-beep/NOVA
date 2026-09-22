@@ -80,6 +80,9 @@ class MainActivity : Activity() {
     /** Guards the degenerate-reply retry (one retry per turn). */
     private var replyRetried = false
 
+    /** Notes document the user last summarized - "gimme the whole summary" returns to it. */
+    private var lastNotesDoc: String? = null
+
     /** Set while a flashcard-generating reply is running. */
     private var pendingCards = false
 
@@ -826,40 +829,34 @@ class MainActivity : Activity() {
                 }
             }
         }
-        // "summarise sst notes" / "summarise nationalism" - summarize the
-        // stored notes on a CLEAN engine so earlier topics can't bleed in
-        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this) &&
-            Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)) {
-            val hits = Knowledge.search(this, text)
-            if (hits.isNotEmpty()) {
-                var notes = hits.joinToString("\n\n---\n\n") { it.text }
-                if (notes.length > 6000) notes = notes.substring(0, 6000) + "\n[...more]"
-                val cleanPrompt = "Summarize these notes in clear sections: a short Overview " +
-                    "first, then Key points as short bullets, then Important terms. Use ONLY " +
-                    "the notes below - ignore anything discussed earlier in the conversation. " +
-                    "Keep all names, dates and numbers.\n-----\n$notes\n-----"
-                val modelPath = NovaEngine.activeModelPath
-                if (modelPath != null) scope.launch {
-                    try {
-                        NovaEngine.load(this@MainActivity, modelPath,
-                            NovaEngine.activeModelLabel, settings.systemPrompt)
-                    } catch (e: Exception) { }
-                    startGeneration(cleanPrompt, text)
-                } else startGeneration(cleanPrompt, text)
-                return
-            }
-            if (Regex("(?i)\\bnotes?\\b").containsMatchIn(text)) {
-                val names = Knowledge.docs(this).joinToString(", ") { it.first }
-                if (names.isNotEmpty()) {
-                    val um = Msg(Role.USER, text)
-                    currentChat.messages.add(um)
-                    adapter.add(um)
-                    val reply = Msg(Role.ASSISTANT,
-                        "I couldn't find notes on that. You have notes on: $names")
-                    currentChat.messages.add(reply)
-                    adapter.add(reply)
-                    scrollToEnd()
+        // "summarise sst notes" / "gimme the whole summary" - summarize the
+        // saved notes over the WHOLE chapter (map-reduce), clean engine
+        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+            val wantsSumm = Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)
+            val followUp = lastNotesDoc != null &&
+                Regex("(?i)\\b(whole|full|complete|entire|detailed)\\s+summar").containsMatchIn(text)
+            if (wantsSumm || followUp) {
+                val doc = if (wantsSumm) Knowledge.search(this, text).firstOrNull()?.doc
+                          else lastNotesDoc
+                if (doc != null) {
+                    lastNotesDoc = doc
+                    summarizeNotes(doc, text, fullDoc = !wantsSumm)
                     return
+                }
+                // nothing matched - list what notes exist so the user can name one
+                if (Regex("(?i)\\bnotes?\\b").containsMatchIn(text)) {
+                    val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                    if (names.isNotEmpty()) {
+                        val um = Msg(Role.USER, text)
+                        currentChat.messages.add(um)
+                        adapter.add(um)
+                        val reply = Msg(Role.ASSISTANT,
+                            "I couldn't find notes on that. You have notes on: $names")
+                        currentChat.messages.add(reply)
+                        adapter.add(reply)
+                        scrollToEnd()
+                        return
+                    }
                 }
             }
         }
@@ -1067,8 +1064,8 @@ class MainActivity : Activity() {
                         toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
                     }
                     adapter.finalizeLast()
-                    // blank or one-word answers from tiny models: retry once
-                    // with a firmer instruction instead of showing garbage
+                    // blank, one-word or looping answers from tiny models:
+                    // retry once with a firmer instruction instead of garbage
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
                         isDegenerateReply(stripThinking(replyMsg.text))) {
                         replyRetried = true
@@ -1077,7 +1074,7 @@ class MainActivity : Activity() {
                         startGeneration(
                             "Question: $userText\nAnswer the question directly and clearly " +
                                 "in one to three sentences. If you don't know the answer, " +
-                                "say so honestly.",
+                                "say so honestly. Do not repeat the same point twice.",
                             null, newBubble = false)
                         return@withContext
                     }
@@ -1144,11 +1141,23 @@ class MainActivity : Activity() {
         return dp[b.length]
     }
 
-    /** True when a reply is blank or just one or two words - too short to be useful. */
+    /** True when a reply is blank, one or two words, or stuck repeating
+     *  the same line over and over - too broken to show as-is. */
     private fun isDegenerateReply(t: String): Boolean {
         val s = t.trim().removeSuffix("\u23F9").trim()
         if (s.isEmpty()) return true
-        return s.split(Regex("\\s+")).filter { it.isNotBlank() }.size <= 2
+        if (s.split(Regex("\\s+")).filter { it.isNotBlank() }.size <= 2) return true
+        // the same line (or bullet) 3+ times = the model is in a loop
+        val counts = HashMap<String, Int>()
+        for (raw in s.lines()) {
+            val line = raw.trim().removePrefix("* ").removePrefix("- ").trim()
+            if (line.length >= 15) {
+                val c = (counts[line] ?: 0) + 1
+                counts[line] = c
+                if (c >= 3) return true
+            }
+        }
+        return false
     }
 
     /** True when a reply looks cut off mid-sentence at the token limit. */
@@ -1331,6 +1340,123 @@ class MainActivity : Activity() {
         val n = docName ?: return null
         val d = docContext ?: return null
         return Integer.toHexString(n.hashCode()) + "_" + d.length
+    }
+
+    /**
+     * Summarizes saved notes over the WHOLE chapter: map-reduce with live
+     * progress (like the PDF summarizer), on a CLEAN engine so earlier
+     * topics can't bleed in. fullDoc=true takes every chunk of the
+     * document; otherwise the chunks matching the user's topic. Cached.
+     */
+    private fun summarizeNotes(doc: String, userText: String, fullDoc: Boolean) {
+        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        val chunks = if (fullDoc) Knowledge.docChunks(this, doc)
+                      else Knowledge.bestChunks(this, userText)
+        if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
+        val totalLen = chunks.joinToString("").length
+        // cached from last time? -> instant
+        val key = "notes_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+        if (cf.exists()) {
+            val cached = try { cf.readText() } catch (e: Exception) { "" }
+            if (cached.length > 50) {
+                val um = Msg(Role.USER, userText)
+                currentChat.messages.add(um); adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\n\n$cached")
+                currentChat.messages.add(reply); adapter.add(reply)
+                scrollToEnd()
+                return
+            }
+        }
+        // tiny models show their scratchpad ("Step 1...") - forbid it
+        val antiCot = " Reply with ONLY the summary itself - no 'Step 1' plan, " +
+            "no questions, no 'final answer' line."
+        val all = chunks.joinToString("\n\n")
+        if (all.length <= 5000) {
+            val p = "Summarize these notes in clear sections: a short Overview, then " +
+                "Key points as short bullets, then Important terms with one-line meanings. " +
+                "Keep all names, dates and numbers.$antiCot\n-----\n$all\n-----"
+            val modelPath = NovaEngine.activeModelPath
+            if (modelPath != null) scope.launch {
+                try {
+                    NovaEngine.load(this@MainActivity, modelPath,
+                        NovaEngine.activeModelLabel, settings.systemPrompt)
+                } catch (e: Exception) { }
+                startGeneration(p, userText)
+            } else startGeneration(p, userText)
+            return
+        }
+        // long chapter: map-reduce with live progress
+        val um = Msg(Role.USER, userText)
+        currentChat.messages.add(um)
+        adapter.add(um)
+        val reply = Msg(Role.ASSISTANT, "", done = false)
+        currentChat.messages.add(reply)
+        adapter.add(reply)
+        scrollToEnd()
+        adapter.setLastText("Reading ${chunks.size} sections of $doc\u2026")
+        generating = true
+        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setStatus()
+        scope.launch {
+            try {
+                // clean engine first so old topics can't leak in
+                try {
+                    NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+                        NovaEngine.activeModelLabel, settings.systemPrompt)
+                } catch (e: Exception) { }
+                val sectionSummaries = StringBuilder()
+                for ((i, c) in chunks.withIndex()) {
+                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                        sectionSummaries.toString().takeLast(300))
+                    status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
+                    val sb = StringBuilder()
+                    try {
+                        NovaEngine.send(
+                            "Summarize this part of the notes in 2-3 short sentences. " +
+                                "Keep all names, numbers and facts:$antiCot\n-----\n$c\n-----", 150
+                        ).collect { sb.append(it) }
+                    } catch (e: Exception) { }
+                    val s = stripThinking(sb.toString()).trim()
+                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                }
+                adapter.setLastText("Writing the final summary\u2026")
+                status.text = "writing final summary\u2026"
+                val sb2 = StringBuilder()
+                NovaEngine.send(
+                    "These are section summaries from the notes \"$doc\". Write one clear " +
+                        "final summary with: an Overview (3 sentences), Key points (short " +
+                        "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
+                        "Use only the information given.$antiCot\n\n" +
+                        sectionSummaries.toString().take(9000), 500
+                ).collect { sb2.append(it) }
+                var finalText = stripThinking(sb2.toString()).trim()
+                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                reply.text = finalText
+                adapter.finalizeLast()
+                scrollToEnd()
+                if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
+                needsContextCarry = true
+                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                try {
+                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                } catch (e: Exception) { }
+                toast("Summary ready - long-press it to make study cards")
+            } catch (e: Exception) {
+                try {
+                    reply.text = "Summary failed - try again"
+                    adapter.finalizeLast()
+                } catch (x: Exception) { }
+                toast("Summary failed - try again")
+            } finally {
+                generating = false
+                setStatus()
+                updateSendLook()
+            }
+        }
     }
 
     /** Splits a document into ~size-char chunks, breaking at headings
