@@ -1078,6 +1078,10 @@ class MainActivity : Activity() {
                             null, newBubble = false)
                         return@withContext
                     }
+                    // a reply that still came out completely empty - say so
+                    // instead of showing a blank bubble
+                    if (stripThinking(replyMsg.text).isBlank() && !speechCancelled)
+                        replyMsg.text = "(no reply - tap the regenerate icon to try again)"
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
                     // that could fail (storage, voice) gets a chance to skip it
@@ -1375,6 +1379,7 @@ class MainActivity : Activity() {
             "no questions, no 'final answer' line."
         val all = chunks.joinToString("\n\n")
         if (all.length <= 5000) {
+            toast("Summarizing ${chunks.size} parts of $doc")
             val p = "Summarize these notes in clear sections: a short Overview, then " +
                 "Key points as short bullets, then Important terms with one-line meanings. " +
                 "Keep all names, dates and numbers. Use ONLY what the notes say - " +
