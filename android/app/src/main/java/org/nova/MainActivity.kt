@@ -811,6 +811,56 @@ class MainActivity : Activity() {
                     }
                     return
                 }
+                // nothing matched - list what notes exist so the user can name one
+                val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                if (names.isNotEmpty()) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um)
+                    adapter.add(um)
+                    val reply = Msg(Role.ASSISTANT,
+                        "I couldn't find notes on that. You have notes on: $names")
+                    currentChat.messages.add(reply)
+                    adapter.add(reply)
+                    scrollToEnd()
+                    return
+                }
+            }
+        }
+        // "summarise sst notes" / "summarise nationalism" - summarize the
+        // stored notes on a CLEAN engine so earlier topics can't bleed in
+        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this) &&
+            Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)) {
+            val hits = Knowledge.search(this, text)
+            if (hits.isNotEmpty()) {
+                var notes = hits.joinToString("\n\n---\n\n") { it.text }
+                if (notes.length > 6000) notes = notes.substring(0, 6000) + "\n[...more]"
+                val cleanPrompt = "Summarize these notes in clear sections: a short Overview " +
+                    "first, then Key points as short bullets, then Important terms. Use ONLY " +
+                    "the notes below - ignore anything discussed earlier in the conversation. " +
+                    "Keep all names, dates and numbers.\n-----\n$notes\n-----"
+                val modelPath = NovaEngine.activeModelPath
+                if (modelPath != null) scope.launch {
+                    try {
+                        NovaEngine.load(this@MainActivity, modelPath,
+                            NovaEngine.activeModelLabel, settings.systemPrompt)
+                    } catch (e: Exception) { }
+                    startGeneration(cleanPrompt, text)
+                } else startGeneration(cleanPrompt, text)
+                return
+            }
+            if (Regex("(?i)\\bnotes?\\b").containsMatchIn(text)) {
+                val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                if (names.isNotEmpty()) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um)
+                    adapter.add(um)
+                    val reply = Msg(Role.ASSISTANT,
+                        "I couldn't find notes on that. You have notes on: $names")
+                    currentChat.messages.add(reply)
+                    adapter.add(reply)
+                    scrollToEnd()
+                    return
+                }
             }
         }
         maybeAutoRemember(text)
@@ -1439,7 +1489,7 @@ class MainActivity : Activity() {
         val netWord = (near("wifi") || near("network") || near("internet") ||
             near("bluetooth") || near("hotspot") || toks.any { it == "data" }) &&
             (hasOn || hasOff) && toks.size <= 5
-        val saySend = Regex("(?i)\\b(?:send|say|sending)\\s+(.+?)\\s+to\\s+([a-z]+)(?:\\s+(?:in|on|via)\\s+whatsapp)?\\s*$").find(t2)
+        val saySend = Regex("(?i)\\b(?:send|say|sending|write|type)\\s+(.+?)\\s+to\\s+([a-z]+)(?:\\s+(?:in|on|via)\\s+whatsapp)?\\s*$").find(t2)
             ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
         val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
@@ -1476,7 +1526,7 @@ class MainActivity : Activity() {
                 var who = saySend.groupValues[2].trim()
                 val msg = saySend.groupValues[1].trim()
                 val viaWhatsapp = Regex("(?i)whatsapp").containsMatchIn(t2)
-                if (who in listOf("her", "him", "them", "it", "me")) {
+                if (who in listOf("her", "him", "them", "it", "me", "my", "you", "us")) {
                     toast("Who is \"$who\"? Try: whatsapp Tannu $msg")
                     return true
                 }
