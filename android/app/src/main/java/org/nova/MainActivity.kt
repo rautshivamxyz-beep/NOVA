@@ -905,13 +905,13 @@ class MainActivity : Activity() {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
             else -> text
         }
@@ -1377,7 +1377,8 @@ class MainActivity : Activity() {
         if (all.length <= 5000) {
             val p = "Summarize these notes in clear sections: a short Overview, then " +
                 "Key points as short bullets, then Important terms with one-line meanings. " +
-                "Keep all names, dates and numbers.$antiCot\n-----\n$all\n-----"
+                "Keep all names, dates and numbers. Use ONLY what the notes say - " +
+                "do not add outside knowledge.$antiCot\n-----\n$all\n-----"
             val modelPath = NovaEngine.activeModelPath
             if (modelPath != null) scope.launch {
                 try {
@@ -1389,6 +1390,18 @@ class MainActivity : Activity() {
             return
         }
         // long chapter: map-reduce with live progress
+        // efficiency: group ~700-char chunks into ~1600-char sections so
+        // a long chapter needs half the generation passes
+        val sections = ArrayList<String>()
+        val sbb = StringBuilder()
+        for (c in chunks) {
+            if (sbb.isNotEmpty() && sbb.length + c.length > 1600) {
+                sections.add(sbb.toString()); sbb.setLength(0)
+            }
+            if (sbb.isNotEmpty()) sbb.append("\n\n")
+            sbb.append(c)
+        }
+        if (sbb.isNotEmpty()) sections.add(sbb.toString())
         val um = Msg(Role.USER, userText)
         currentChat.messages.add(um)
         adapter.add(um)
@@ -1396,7 +1409,7 @@ class MainActivity : Activity() {
         currentChat.messages.add(reply)
         adapter.add(reply)
         scrollToEnd()
-        adapter.setLastText("Reading ${chunks.size} sections of $doc\u2026")
+        adapter.setLastText("Reading ${sections.size} sections of $doc\u2026")
         generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
@@ -1409,15 +1422,16 @@ class MainActivity : Activity() {
                         NovaEngine.activeModelLabel, settings.systemPrompt)
                 } catch (e: Exception) { }
                 val sectionSummaries = StringBuilder()
-                for ((i, c) in chunks.withIndex()) {
-                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                for ((i, c) in sections.withIndex()) {
+                    adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
                         sectionSummaries.toString().takeLast(300))
-                    status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
+                    status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
                             "Summarize this part of the notes in 2-3 short sentences. " +
-                                "Keep all names, numbers and facts:$antiCot\n-----\n$c\n-----", 150
+                                "Use ONLY facts written in this text, and keep names, numbers " +
+                                "and facts exactly as stated:$antiCot\n-----\n$c\n-----", 150
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1430,7 +1444,8 @@ class MainActivity : Activity() {
                     "These are section summaries from the notes \"$doc\". Write one clear " +
                         "final summary with: an Overview (3 sentences), Key points (short " +
                         "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
-                        "Use only the information given.$antiCot\n\n" +
+                        "Use ONLY what the summaries say - copy key terms exactly as they are " +
+                        "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
                         sectionSummaries.toString().take(9000), 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
