@@ -178,25 +178,18 @@ object Knowledge {
         val bestDoc = docScores.maxByOrNull { it.value }?.key ?: return emptyList()
         val nameHit = terms.any { bestDoc.lowercase().contains(it) }
         val idxs = chunks.indices.filter { chunks[it].doc == bestDoc && chunkScores[it] > 0 }
+        val docIdx = chunks.indices.filter { chunks[it].doc == bestDoc }
         // 2a) the query names this chapter -> summarize the whole document
         if (nameHit || idxs.isEmpty())
-            return chunks.filter { it.doc == bestDoc }.map { it.text }.take(maxChunks)
-        // 2b) topic inside a bigger document -> only well-matching chunks
-        val top = idxs.maxOf { chunkScores[it] }
-        val min = if (terms.size >= 2) top - 1 else top
-        val chosen = idxs.filter { chunkScores[it] >= min }
-        // chapters sit together: if too few chunks matched the topic words
-        // exactly, take a contiguous window around the best match so the
-        // WHOLE topic comes along instead of fragments
-        if (chosen.size < 6) {
-            val docIdx = chunks.indices.filter { chunks[it].doc == bestDoc }
-            val center = chosen.maxByOrNull { chunkScores[it] } ?: docIdx.first()
-            val pos = docIdx.indexOf(center).coerceAtLeast(0)
-            val from = maxOf(0, pos - 2)
-            val to = minOf(docIdx.size, from + maxChunks)
-            return docIdx.subList(from, to).map { chunks[it].text }
-        }
-        return chosen.take(maxChunks).map { chunks[it].text }
+            return docIdx.take(maxChunks).map { chunks[it].text }
+        // 2b) topic inside a bigger document -> a CONTIGUOUS window around
+        // the best match: the whole topic/chapter comes along, never a mix
+        // of matching fragments from different chapters
+        val center = idxs.maxByOrNull { chunkScores[it] } ?: docIdx.first()
+        val pos = docIdx.indexOf(center).coerceAtLeast(0)
+        val from = maxOf(0, pos - 2)
+        val to = minOf(docIdx.size, from + maxChunks)
+        return docIdx.subList(from, to).map { chunks[it].text }
     }
 
     private fun tokenize(s: String): List<String> {
