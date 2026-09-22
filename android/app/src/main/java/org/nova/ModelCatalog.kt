@@ -1,9 +1,7 @@
 package org.nova
 
-/**
- * Curated catalog of known-good GGUF models (Q4_K_M). 100% offline.
- * Refreshed with the current model generation (Qwen3, Gemma 3, Phi-4-mini),
- * which substantially outperform the previous one at the same sizes.
+/** Curated catalog of known-good GGUF models (Q4_K_M). 100% offline.
+ * Smallest-first: fast models for budget phones at the top.
  * Sizes verified against Hugging Face.
  */
 object ModelCatalog {
@@ -25,9 +23,15 @@ object ModelCatalog {
 
     val entries = listOf(
         Entry(
+            "qwen3-0.6b", "Qwen 3 0.6B", "Alibaba", "0.6B", "Q4_K_M",
+            396705472L /* ~0.38 GB */, 2,
+            "Fastest chat model — roughly 3x faster than 1.7B. Best for quick everyday questions.",
+            "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf"
+        ),
+        Entry(
             "gemma3-1b", "Gemma 3 1B IT", "Google", "1B", "Q4_K_M",
             0x30000000L /* ~0.75 GB */, 2,
-            "Newest ultra-light model. Best pick for budget phones.",
+            "Ultra-light model. Good balance of speed and quality.",
             "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
         ),
         Entry(
@@ -39,7 +43,7 @@ object ModelCatalog {
         Entry(
             "qwen3-1.7b", "Qwen 3 1.7B", "Alibaba", "1.7B", "Q4_K_M",
             0x42000000L /* ~1.03 GB */, 3,
-            "Current generation — beats older 3B models at 1.7B size.",
+            "Your quality pick — best for study, documents and quizzes. Slower but smarter.",
             "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
         ),
         Entry(
