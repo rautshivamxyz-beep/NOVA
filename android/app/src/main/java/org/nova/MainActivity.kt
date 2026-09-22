@@ -142,10 +142,12 @@ class MainActivity : Activity() {
         settings.currentChatId = currentChat.id
         needsContextCarry = currentChat.messages.isNotEmpty()
 
+        installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
         observeEngine()
         handleSharedText()
+        maybeShowCrashReport()
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -308,10 +310,12 @@ class MainActivity : Activity() {
             }
         }
         root.addView(FrameLayout(this).apply {
+            addView(messagesRv)
+            // emptyView ON TOP: an empty RecyclerView still eats touches,
+            // which made the welcome cards impossible to tap
             addView(emptyView, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT))
-            addView(messagesRv)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ---- Attached document banner (PDF / text loaded for questions)
@@ -1340,9 +1344,50 @@ class MainActivity : Activity() {
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
+    /** Saves any crash to a file so it can be shared and diagnosed. */
+    private fun installCrashReporter() {
+        if (crashHandlerInstalled) return
+        crashHandlerInstalled = true
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                File(filesDir, "last_crash.txt").writeText(
+                    "time: " + java.text.SimpleDateFormat(
+                        "yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                        .format(java.util.Date()) +
+                        "\nthread: " + t.name + "\n\n" +
+                        android.util.Log.getStackTraceString(e))
+            } catch (x: Exception) { }
+            previous?.uncaughtException(t, e)
+        }
+    }
+
+    /** If the last session crashed, offer to share the stack trace. */
+    private fun maybeShowCrashReport() {
+        try {
+            val f = File(filesDir, "last_crash.txt")
+            if (!f.exists()) return
+            val txt = f.readText()
+            f.delete()
+            AlertDialog.Builder(this)
+                .setTitle("NOVA crashed last time")
+                .setMessage(txt.take(1200))
+                .setPositiveButton("Share") { _, _ ->
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, txt.take(8000))
+                    }
+                    startActivity(Intent.createChooser(send, "Share crash report"))
+                }
+                .setNegativeButton("Dismiss", null)
+                .show()
+        } catch (e: Exception) { }
+    }
+
     companion object {
         private const val REQ_SPEECH = 4251
         private const val REQ_CHATS = 4252
+        private var crashHandlerInstalled = false
     }
 }
 
@@ -1377,9 +1422,19 @@ fun plainText(s: String): String = s
     .trim()
 
 private fun copyToClipboard(ctx: Context, text: String) {
-    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("NOVA", text))
-    Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+    try {
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("NOVA", text))
+        Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        // some devices (e.g. MIUI) block clipboard access - never crash,
+        // let the user copy manually from a dialog instead
+        AlertDialog.Builder(ctx)
+            .setTitle("Copy manually")
+            .setMessage(if (text.length > 4000) text.take(4000) + "\n…" else text)
+            .setPositiveButton("Close", null)
+            .show()
+    }
 }
 
 
