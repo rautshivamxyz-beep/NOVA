@@ -26,14 +26,29 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 2
-        versionName '2.0'
+        versionCode 3
+        versionName '2.2'
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file('nova-release.keystore')
+            storePassword 'NOVA2026release'
+            keyAlias 'nova'
+            keyPassword 'NOVA2026release'
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
         }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 
     compileOptions {
@@ -52,8 +67,8 @@ dependencies {
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'io.noties.markwon:core:4.6.2'
-    implementation 'io.noties.markwon:syntax-highlight:4.6.2'
+    implementation 'io.noties:markwon:core:4.6.2'
+    implementation 'io.noties:markwon:syntax-highlight:4.6.2'
     implementation 'io.noties:prism4j:2.0.0'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
 }
