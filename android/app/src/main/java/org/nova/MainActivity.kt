@@ -734,42 +734,11 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Picks the most question-relevant window of the attached document
-     * instead of always reading from the top - on long PDFs this means
-     * NOVA reads the right part, not just the first few thousand characters.
+     * Finds the best parts of the attached document for a question -
+     * see docSearchIn for how the scoring works.
      */
-    private fun docWindow(query: String, maxChars: Int = 4000): String {
-        val doc = docContext ?: return ""
-        if (doc.length <= maxChars) return doc
-        val qw = query.lowercase().split(Regex("[^a-z0-9]+"))
-            .filter { it.length > 2 }.toSet()
-        val paras = doc.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
-        if (paras.size < 2) return doc.take(maxChars)
-        var bestIdx = -1
-        var bestScore = 0
-        for ((i, p) in paras.withIndex()) {
-            val pl = p.lowercase()
-            val sc = qw.count { pl.contains(it) }
-            if (sc > bestScore) { bestScore = sc; bestIdx = i }
-        }
-        if (bestIdx < 0) return doc.take(maxChars)
-        // grow a contiguous window around the best-matching paragraph
-        var start = bestIdx
-        var end = bestIdx + 1
-        var len = paras[bestIdx].length
-        while (len < maxChars) {
-            val before = start > 0
-            val after = end < paras.size
-            when {
-                before && (!after || paras[start - 1].length <= paras[end].length) -> {
-                    start--; len += paras[start].length + 2
-                }
-                after -> { len += paras[end].length + 2; end++ }
-                else -> break
-            }
-        }
-        return paras.subList(start, end).joinToString("\n\n")
-    }
+    private fun docSearch(query: String, maxChars: Int = 4000): String =
+        docSearchIn(docContext ?: "", query, maxChars)
 
     private fun send() {
         if (generationJob?.isActive == true) {
@@ -798,14 +767,14 @@ class MainActivity : Activity() {
         maybeSetReminder(text)
 
         val docPart = if (docContext != null) {
-            val win = docWindow(text)
+            val win = docSearch(text)
             val qWords = text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
             val overlap = qWords.count { it in docInjectedText.lowercase() }
             val needFresh = docContext!!.length > 6000 && overlap == 0 && win != docInjectedText
             if (!docInjected || needFresh) {
                 docInjected = true
                 docInjectedText = win
-                "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n$win\n-----\nEnd of document.)\n\n"
+                "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
             } else ""
         } else ""
         val basePrompt: String = docPart + when {
@@ -1050,45 +1019,81 @@ class MainActivity : Activity() {
         pendingCards = prompt.startsWith("Create 8 study flashcards") ||
             prompt.startsWith("Create a quiz")
         val docPart = if (docContext != null && docName != null) {
-            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docWindow(prompt, 8000)}\n-----\nEnd of document.)\n\n"
+            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docSearch(prompt, 8000)}\n-----\nEnd of document.)\n\n"
         } else ""
         startGeneration(docPart + prompt, null)
     }
 
     /**
-     * Smart document summary for long PDFs: splits the document into
-     * sections, summarizes each, then writes one final summary from the
-     * section summaries (map-reduce) - far better than one shot on
-     * small models, and it covers the WHOLE document.
+     * Smart document summary for long PDFs: splits into sections, skips
+     * table-of-contents / references / index pages, summarizes each
+     * section with LIVE progress in the chat, then writes one final
+     * summary from the section summaries (map-reduce). Finished summaries
+     * are cached per document, so asking again for the same file is
+     * instant.
      */
     private fun summarizeDoc() {
-        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
         val doc = docContext ?: return
+        // cached summary from last time? -> instant
+        val key = summaryCacheKey()
+        if (key != null) {
+            val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+            if (cf.exists()) {
+                val cached = try { cf.readText() } catch (e: Exception) { "" }
+                if (cached.length > 50) {
+                    val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
+                    currentChat.messages.add(um); adapter.add(um)
+                    val reply = Msg(Role.ASSISTANT, cached)
+                    currentChat.messages.add(reply); adapter.add(reply)
+                    scrollToEnd()
+                    toast("Summary (cached from last time)")
+                    return
+                }
+            }
+        }
         if (doc.length <= 5000) {
             runTool("Summarize this document in clear sections: a short Overview first, then Key points as bullets, then Important terms with one-line meanings.")
             return
         }
-        var chunks = docChunks(doc, 4500)
+        var chunks = docChunks(doc, 5000)
+        // skip table-of-contents / references / index pages: faster, cleaner
+        val real = chunks.filter { !isJunkChunkText(it) }
+        var skipped = 0
+        if (real.size >= 3 && real.size < chunks.size) {
+            skipped = chunks.size - real.size
+            chunks = real
+        }
         var strided = false
         if (chunks.size > 12) {
             val step = chunks.size / 12
             chunks = chunks.filterIndexed { i, _ -> i % step == 0 }.take(12)
             strided = true
         }
-        toast(if (strided) "Long document - summarizing ${chunks.size} main sections…"
-             else "Summarizing ${chunks.size} sections…")
+        // live progress bubble: sections land one by one instead of a dead wait
+        val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
+        currentChat.messages.add(um)
+        adapter.add(um)
+        val reply = Msg(Role.ASSISTANT, "", done = false)
+        currentChat.messages.add(reply)
+        adapter.add(reply)
+        scrollToEnd()
+        adapter.setLastText(if (skipped > 0)
+            "Reading ${chunks.size} sections ($skipped index/reference pages skipped)\u2026"
+        else "Reading ${chunks.size} sections\u2026")
         generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
         setStatus()
-        scrollToEnd()
         scope.launch {
             try {
                 val sectionSummaries = StringBuilder()
                 for ((i, c) in chunks.withIndex()) {
-                    status.text = "summarizing section ${i + 1}/${chunks.size}…"
+                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                        sectionSummaries.toString().takeLast(300))
+                    status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
@@ -1099,7 +1104,8 @@ class MainActivity : Activity() {
                     val s = stripThinking(sb.toString()).trim()
                     if (s.length > 10) sectionSummaries.append(s).append("\n\n")
                 }
-                status.text = "writing final summary…"
+                adapter.setLastText("Writing the final summary\u2026")
+                status.text = "writing final summary\u2026"
                 val sb2 = StringBuilder()
                 NovaEngine.send(
                     "These are summaries of " +
@@ -1110,14 +1116,14 @@ class MainActivity : Activity() {
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
-                // show it as a proper conversation turn
-                val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
-                currentChat.messages.add(um)
-                adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, finalText)
-                currentChat.messages.add(reply)
-                adapter.add(reply)
+                reply.text = finalText
+                adapter.finalizeLast()
                 scrollToEnd()
+                // cache it for next time
+                if (key != null && finalText.length > 50) try {
+                    File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+                        .writeText(finalText)
+                } catch (e: Exception) { }
                 // the engine context now holds every section prompt - reset it
                 needsContextCarry = true
                 NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
@@ -1126,6 +1132,10 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { }
                 toast("Summary ready - long-press it to make study cards")
             } catch (e: Exception) {
+                try {
+                    reply.text = "Summary failed - try again"
+                    adapter.finalizeLast()
+                } catch (x: Exception) { }
                 toast("Summary failed - try again")
             } finally {
                 generating = false
@@ -1135,8 +1145,18 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Splits a document into ~size-char chunks, breaking at paragraphs. */
-    private fun docChunks(doc: String, size: Int = 4500): List<String> {
+    /** Cache key for this document's summary (name + length = same file). */
+    private fun summaryCacheKey(): String? {
+        val n = docName ?: return null
+        val d = docContext ?: return null
+        return Integer.toHexString(n.hashCode()) + "_" + d.length
+    }
+
+    /** Splits a document into ~size-char chunks, breaking at headings
+     *  (short standalone lines) and paragraphs, so each chunk is one
+     *  topic - section summaries come out matching the document's real
+     *  structure instead of arbitrary character cuts. */
+    private fun docChunks(doc: String, size: Int = 5000): List<String> {
         val paras = doc.split(Regex("\\n\\s*\\n")).map { it.trim() }.filter { it.isNotEmpty() }
         val out = mutableListOf<String>()
         val sb = StringBuilder()
@@ -1144,6 +1164,9 @@ class MainActivity : Activity() {
             if (sb.isNotBlank()) { out.add(sb.toString()); sb.setLength(0) }
         }
         for (p in paras) {
+            val heading = p.length < 80 && p.lines().size == 1 &&
+                !p.endsWith(".") && !p.endsWith("?") && !p.endsWith("!") &&
+                !p.startsWith("\u2014 page")
             if (p.length > size) {
                 flush()
                 var i = 0
@@ -1153,7 +1176,9 @@ class MainActivity : Activity() {
                 }
                 continue
             }
-            if (sb.isNotEmpty() && sb.length + p.length > size) flush()
+            // start a fresh chunk at a heading once the current one is big enough
+            if (sb.isNotEmpty() && (sb.length + p.length > size ||
+                    (heading && sb.length > size / 2))) flush()
             sb.append(p).append("\n\n")
         }
         flush()
@@ -1219,8 +1244,8 @@ class MainActivity : Activity() {
         val hasNul = head.contains(0.toByte())
         if (isJpeg || isPng || hasNul) return ""
         val text = String(bytes, Charsets.UTF_8)
-        return if (text.length > 60_000)
-            text.substring(0, 60_000) + "\n[...document truncated]"
+        return if (text.length > 150_000)
+            text.substring(0, 150_000) + "\n[...document truncated]"
         else text
     }
 
@@ -1903,6 +1928,113 @@ class MainActivity : Activity() {
     }
 }
 
+// ------------------------------------------------------ document search
+
+private val docStop = setOf("what", "who", "when", "where", "why", "how", "the", "and",
+    "for", "are", "was", "were", "is", "does", "did", "do", "with", "about",
+    "tell", "explain", "describe", "which", "that", "this", "from", "many",
+    "much", "some", "give", "list", "name", "then", "than", "into", "also",
+    "page", "please", "according", "document", "pdf")
+
+/**
+ * Finds the best parts of a document for a question. Scores EVERY
+ * paragraph over the whole document (so matches near the end are found
+ * too), weights rare words higher than common ones, matches word
+ * beginnings ("photosynth" finds "photosynthesis") and boosts paragraphs
+ * with dates / names / numbers for when / who / how-many questions. A
+ * question naming a page returns exactly that page.
+ */
+fun docSearchIn(doc: String, query: String, maxChars: Int): String {
+    if (doc.length <= maxChars) return doc
+    // "page 12" question - answer from exactly that page
+    Regex("(?i)\\bpage\\s+(\\d{1,4})\\b").find(query)?.let { m ->
+        val markers = Regex("\u2014 page (\\d+) \u2014").findAll(doc).toList()
+        val mi = markers.indexOfFirst { it.groupValues[1] == m.groupValues[1] }
+        if (mi >= 0) {
+            // a page marker sits AFTER that page's text
+            val start = if (mi == 0) 0 else markers[mi - 1].range.last + 1
+            var pageText = doc.substring(start, markers[mi].range.first).trim()
+            if (pageText.length > maxChars) pageText = pageText.substring(0, maxChars)
+            return "(page ${m.groupValues[1]} of the document)\n$pageText"
+        }
+    }
+    val ql = query.lowercase()
+    val qw = ql.split(Regex("[^a-z0-9]+"))
+        .filter { it.length > 2 && it !in docStop }.toSet()
+    if (qw.isEmpty()) return doc.take(maxChars)
+    val paras = doc.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
+    val lower = paras.map { it.lowercase() }
+    // rarity weights: a word that appears in few paragraphs counts more
+    val weights = HashMap<String, Double>()
+    val prefixes = HashMap<String, Regex>()
+    for (w in qw) {
+        var c = 0
+        for (pl in lower) if (w in pl) c++
+        if (c > 0) { weights[w] = 1.0 / c + 0.05; continue }
+        if (w.length >= 6) {   // no full hit - match the word beginning instead
+            val pre = Regex(Regex.escape(w.substring(0, 5)))
+            var pc = 0
+            for (pl in lower) if (pre.containsMatchIn(pl)) pc++
+            if (pc > 0) { weights[w] = 0.6 / pc + 0.05; prefixes[w] = pre }
+        }
+    }
+    if (weights.isEmpty()) return doc.take(maxChars)
+    // question-type routing
+    val wantDates = Regex("\\bwhen\\b|\\byear\\b|\\bdate\\b").containsMatchIn(ql)
+    val wantNames = Regex("\\bwho\\b|\\bwhom\\b").containsMatchIn(ql)
+    val wantNums = Regex("\\bhow many\\b|\\bhow much\\b").containsMatchIn(ql)
+    val dateRe = Regex("\\b\\d{1,2}/\\d{1,2}/\\d{2,4}\\b|\\b(18|19|20)\\d{2}\\b")
+    val nameRe = Regex("\\b[A-Z][a-z]{2,}\\b")
+    val scored = mutableListOf<Pair<Double, Int>>()
+    for ((i, p) in paras.withIndex()) {
+        val pl = lower[i]
+        var sc = 0.0
+        for ((w, wt) in weights) {
+            val pre = prefixes[w]
+            if (pre != null) { if (pre.containsMatchIn(pl)) sc += wt }
+            else if (w in pl) sc += wt
+        }
+        if (sc <= 0.0) continue
+        if (p.length < 80) sc *= 1.5            // headings weigh more
+        if (wantDates && dateRe.containsMatchIn(p)) sc += 0.5
+        if (wantNames && nameRe.findAll(p).take(3).count() >= 2) sc += 0.4
+        if (wantNums && p.any { it.isDigit() }) sc += 0.4
+        scored.add(sc to i)
+    }
+    if (scored.isEmpty()) return doc.take(maxChars)
+    val best = scored.sortedByDescending { it.first }.take(12).map { it.second }.sorted()
+    val out = StringBuilder()
+    var last = -2
+    for (i in best) {
+        if (out.isNotEmpty() && i != last + 1) out.append("[...]\n")
+        val p = paras[i]
+        if (out.length + p.length > maxChars) break
+        out.append(p).append("\n\n")
+        last = i
+    }
+    return out.toString().trim()
+}
+
+/**
+ * True for table-of-contents / references / index chunks - mostly page
+ * references instead of real content. Skipping them makes summaries
+ * faster and keeps them on-topic.
+ */
+fun isJunkChunkText(c: String): Boolean {
+    val lines = c.lines().filter { it.isNotBlank() }
+    if (lines.isEmpty()) return true
+    if (Regex("(?im)^(table of )?contents$|^references$|^bibliography$|^index$")
+            .containsMatchIn(c)) return true
+    var refs = 0
+    for (l in lines) {
+        val t = l.trim()
+        if (Regex("\\.{2,}\\s*\\d{1,4}$").containsMatchIn(t) ||       // "Topic .... 12"
+            Regex("^\\d{1,4}$").matches(t) ||                             // bare page number
+            Regex("^[ivxlcdm]{1,7}$", RegexOption.IGNORE_CASE).matches(t)) refs++
+    }
+    return refs * 2 > lines.size
+}
+
 // ---------------------------------------------------------------- adapter
 
 /**
@@ -2009,6 +2141,13 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     fun appendToLast(token: String) {
         if (items.isEmpty()) return
         items[items.size - 1].text += token
+        notifyItemChanged(items.size - 1)
+    }
+
+    /** Replaces the text of the last bubble (live progress updates). */
+    fun setLastText(t: String) {
+        if (items.isEmpty()) return
+        items[items.size - 1].text = t
         notifyItemChanged(items.size - 1)
     }
 
