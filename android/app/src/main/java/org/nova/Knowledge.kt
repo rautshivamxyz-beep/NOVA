@@ -127,9 +127,9 @@ object Knowledge {
 
     /** Chunks for a summary request: picks the ONE best document for the
      *  query, then either the whole document (when the query names it, e.g.
-     *  "sst") or only its chunks that match the topic well - so a
-     *  "power sharing" summary never drags in federalism paragraphs that
-     *  merely mention "power". Returned in document order. */
+     *  "sst") or the chunks around the user's topic - so a "power sharing"
+     *  summary gets the whole chapter, not fragments, and never drags in
+     *  unrelated chapters. Returned in document order. */
     fun bestChunks(ctx: Context, query: String, maxChunks: Int = 18): List<String> {
         val terms = tokenize(query)
         if (terms.isEmpty()) return emptyList()
@@ -161,7 +161,19 @@ object Knowledge {
         // 2b) topic inside a bigger document -> only well-matching chunks
         val top = idxs.maxOf { chunkScores[it] }
         val min = if (terms.size >= 2) top - 1 else top
-        return idxs.filter { chunkScores[it] >= min }.take(maxChunks).map { chunks[it].text }
+        val chosen = idxs.filter { chunkScores[it] >= min }
+        // chapters sit together: if too few chunks matched the topic words
+        // exactly, take a contiguous window around the best match so the
+        // WHOLE topic comes along instead of fragments
+        if (chosen.size < 6) {
+            val docIdx = chunks.indices.filter { chunks[it].doc == bestDoc }
+            val center = chosen.maxByOrNull { chunkScores[it] } ?: docIdx.first()
+            val pos = docIdx.indexOf(center).coerceAtLeast(0)
+            val from = maxOf(0, pos - 2)
+            val to = minOf(docIdx.size, from + maxChunks)
+            return docIdx.subList(from, to).map { chunks[it].text }
+        }
+        return chosen.take(maxChunks).map { chunks[it].text }
     }
 
     private fun tokenize(s: String): List<String> {
