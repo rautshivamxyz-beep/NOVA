@@ -1,6 +1,7 @@
 package org.nova
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -21,6 +22,8 @@ class KnowledgeActivity : Activity() {
 
     private lateinit var settings: Settings
     private lateinit var list: LinearLayout
+    private lateinit var wikiStatus: TextView
+    private lateinit var wikiBtn: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,9 +117,57 @@ class KnowledgeActivity : Activity() {
             }
         })
 
+        // ---- offline Wikipedia card
+        col.addView(TextView(this).apply {
+            text = "Offline Wikipedia"
+            textSize = 16f; setTextColor(NovaTheme.text)
+            setPadding(dp(4), dp(26), 0, dp(4))
+        })
+        val wikiRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(10), dp(12))
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        wikiStatus = TextView(this).apply {
+            textSize = 13f; setTextColor(NovaTheme.dim)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        wikiRow.addView(wikiStatus)
+        wikiBtn = Button(this).apply {
+            isAllCaps = false
+            setCompoundDrawablesWithIntrinsicBounds(
+                tinted(R.drawable.ic_globe, NovaTheme.dim), null, null, null)
+            background = null
+            setOnClickListener { startWiki() }
+            setOnLongClickListener {
+                if (!WikiCore.isReady(this@KnowledgeActivity)) return@setOnLongClickListener true
+                AlertDialog.Builder(this@KnowledgeActivity)
+                    .setTitle("Remove Wikipedia?")
+                    .setMessage("Deletes the downloaded articles. NOVA will answer without them.")
+                    .setPositiveButton("Remove") { _, _ ->
+                        WikiCore.remove(this@KnowledgeActivity)
+                        refreshWiki()
+                        toast("Wikipedia removed")
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                true
+            }
+        }
+        wikiRow.addView(wikiBtn)
+        col.addView(wikiRow)
+
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(list)
         rebuildList()
+        refreshWiki()
 
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -174,6 +225,38 @@ class KnowledgeActivity : Activity() {
                 setPadding(dp(30), 0, 0, 0)
             })
         }
+    }
+
+    private fun refreshWiki() {
+        when {
+            WikiCore.downloading -> {
+                wikiStatus.text = WikiCore.state.value.second.ifBlank { "downloading…" }
+                wikiBtn.visibility = View.GONE
+            }
+            WikiCore.isReady(this) -> {
+                wikiStatus.text = "${WikiCore.articleCount(this)} articles ready - NOVA answers with real facts"
+                wikiBtn.visibility = View.VISIBLE
+            }
+            else -> {
+                wikiStatus.text = "Not downloaded (one time, ~25 MB)"
+                wikiBtn.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun startWiki() {
+        if (WikiCore.downloading) return
+        toast("Downloading Wikipedia - keep NOVA open, Wi-Fi recommended")
+        Thread {
+            kotlinx.coroutines.runBlocking { WikiCore.download(this@KnowledgeActivity) }
+        }.start()
+        Thread {
+            while (WikiCore.downloading) {
+                runOnUiThread { refreshWiki() }
+                Thread.sleep(800)
+            }
+            runOnUiThread { refreshWiki() }
+        }.start()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
