@@ -81,6 +81,9 @@ class MainActivity : Activity() {
     private var compactSummary: String? = null
     private var compacting = false
 
+    /** Message count at the last auto-compact - throttles re-compaction. */
+    private var compactedAtCount = 0
+
     /** Attached document (PDF / text file) the user can ask about. */
     private var docName: String? = null
     private var docContext: String? = null
@@ -530,7 +533,7 @@ class MainActivity : Activity() {
         settings.currentChatId = currentChat.id
         adapter.clear()
         docName = null; docContext = null; docInjected = false
-        compactSummary = null
+        compactSummary = null; compactedAtCount = 0
         updateDocBanner()
         toast("New conversation")
     }
@@ -585,6 +588,7 @@ class MainActivity : Activity() {
         settings.currentChatId = chat.id
         if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
         needsContextCarry = chat.messages.isNotEmpty()
+        compactSummary = null; compactedAtCount = 0
         displayChatMessages()
     }
 
@@ -750,6 +754,7 @@ class MainActivity : Activity() {
             replyMsg = currentChat.messages.last()
             replyMsg.done = false
         }
+        val junction = replyMsg.text.length   // where a continuation begins
         tts?.stop()
         speechCancelled = false
         spokenLength = replyMsg.text.length   // speak only the new part
@@ -798,6 +803,22 @@ class MainActivity : Activity() {
                     generating = false
                     updateSendLook()
                     setStatus()
+                    // drop the duplicated tail the model often repeats when a
+                    // cut-off reply is auto-continued
+                    if (!newBubble && junction < replyMsg.text.length) {
+                        replyMsg.text = stripRepeatJoin(
+                            replyMsg.text.substring(0, junction),
+                            replyMsg.text.substring(junction))
+                    }
+                    // after a stopped reply, the next answer often starts by
+                    // repeating the stopped line - drop that echo
+                    if (newBubble) {
+                        val prev = currentChat.messages.getOrNull(currentChat.messages.size - 2)
+                        if (prev != null && prev.role == Role.ASSISTANT &&
+                            prev.text.trimEnd().endsWith("⏹")) {
+                            replyMsg.text = stripRepeatStart(replyMsg.text, prev.text)
+                        }
+                    }
                     adapter.finalizeLast()
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
@@ -833,7 +854,8 @@ class MainActivity : Activity() {
                     } else {
                         // auto-compact: compress old turns once the chat grows
                         if (!speechCancelled && !compacting &&
-                            currentChat.messages.size > 20
+                            currentChat.messages.size > 20 &&
+                            currentChat.messages.size - compactedAtCount >= 8
                         ) {
                             compactOldTurns()
                         }
@@ -1051,7 +1073,7 @@ class MainActivity : Activity() {
         currentChat = chat
         settings.currentChatId = chat.id
         needsContextCarry = chat.messages.isNotEmpty()
-        compactSummary = null
+        compactSummary = null; compactedAtCount = 0
         docName = null; docContext = null; docInjected = false
         if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
         displayChatMessages()
@@ -1228,6 +1250,7 @@ class MainActivity : Activity() {
                 val summary = stripThinking(sb.toString()).trim()
                 if (summary.length > 40) {
                     compactSummary = summary
+                    compactedAtCount = currentChat.messages.size
                     needsContextCarry = true
                     docInjected = false
                     NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
@@ -1424,6 +1447,36 @@ fun plainText(s: String): String = s
     .replace(Regex("(?m)^>\\s?"), "")
     .replace(Regex("(?m)^[-*+] "), "- ")
     .trim()
+
+/** If the added text starts by repeating the end of the old text, drop the overlap. */
+private fun stripRepeatJoin(old: String, added: String): String {
+    val a = old.trimEnd()
+    val b = added.trimStart()
+    val max = minOf(400, b.length)
+    for (k in max downTo 10) {
+        val head = b.take(k).trim()
+        if (head.length >= 10 && a.endsWith(head)) {
+            var rest = b.substring(k).trimStart()
+            if (rest.startsWith(".")) rest = rest.substring(1).trimStart()
+            return a + (if (rest.isNotEmpty()) " " + rest else "")
+        }
+    }
+    return old + added
+}
+
+/** Drops the first line of a new reply when it just repeats the last
+ *  line of a previous, stopped reply. */
+private fun stripRepeatStart(newText: String, prevText: String): String {
+    var last = prevText.lines().map { it.trim() }.lastOrNull { it.isNotBlank() }
+        ?: return newText
+    last = last.removeSuffix("⏹").trim()
+    if (last.length < 12) return newText
+    val t = newText.trimStart()
+    if (!t.startsWith(last)) return newText
+    var rest = t.substring(last.length).trimStart()
+    if (rest.startsWith(".")) rest = rest.substring(1).trimStart()
+    return rest.ifEmpty { newText }
+}
 
 private fun copyToClipboard(ctx: Context, text: String) {
     try {
