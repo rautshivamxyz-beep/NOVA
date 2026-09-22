@@ -62,8 +62,8 @@ object WikiCore {
 
     /**
      * Downloads/updates the article set. Batches 20 titles per request,
-     * paces itself to be gentle on mobile data and Wikipedia, and resumes
-     * from where a previous (interrupted) run stopped.
+     * keeps a light pause between batches, and resumes from where a
+     * previous (interrupted) run stopped.
      */
     suspend fun download(ctx: Context) = withContext(Dispatchers.IO) {
         if (downloading) return@withContext
@@ -77,7 +77,8 @@ object WikiCore {
             val titles = linkedSetOf<String>()
             val lists = mutableListOf(
                 "Wikipedia:Vital articles/Level 2",
-                "Wikipedia:Vital articles/Level 3")
+                "Wikipedia:Vital articles/Level 3"
+            )
             try { lists += level4Subpages() } catch (e: Exception) {
                 try { Thread.sleep(3000) } catch (x: Exception) { }
                 try { lists += level4Subpages() } catch (e2: Exception) { }
@@ -133,13 +134,13 @@ object WikiCore {
                     store(batch)
                 } catch (e: Exception) {
                     // one retry after a pause - Wikipedia rate-limits bursts
-                    try { Thread.sleep(5000) } catch (x: Exception) { }
+                    try { Thread.sleep(2500) } catch (x: Exception) { }
                     try { store(batch) } catch (e2: Exception) { }
                 }
                 fetched += batch.size
                 _state.value = Pair(0.05f + 0.95f * fetched / nTotal,
                     "$fetched/$nTotal articles")
-                Thread.sleep(1200)
+                Thread.sleep(350)
             }
             bw.close(); dw.close()
             index = null
@@ -196,10 +197,15 @@ object WikiCore {
     private fun http(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 15000
-        conn.readTimeout = 20000
+        conn.readTimeout = 30000
         conn.setRequestProperty("User-Agent", "NOVA-local-assistant/1.0 (offline study)")
+        // gzip cuts the transfer to ~1/4 - the vital-articles set is ~40 MB
+        // uncompressed, this matters a lot on mobile data
+        conn.setRequestProperty("Accept-Encoding", "gzip")
         try {
-            return conn.inputStream.bufferedReader().readText()
+            val stream = if (conn.contentEncoding?.equals("gzip", true) == true)
+                java.util.zip.GZIPInputStream(conn.inputStream) else conn.inputStream
+            return stream.bufferedReader().readText()
         } finally {
             conn.disconnect()
         }
