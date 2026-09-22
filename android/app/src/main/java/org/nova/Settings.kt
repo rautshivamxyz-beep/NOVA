@@ -53,6 +53,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_KNOWLEDGE, false)
         set(value) = prefs.edit().putBoolean(KEY_KNOWLEDGE, value).apply()
 
+    /** Offline Wikipedia: attach matching articles as background facts. */
+    var wikiEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WIKI, true)
+        set(value) = prefs.edit().putBoolean(KEY_WIKI, value).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -64,6 +69,7 @@ class Settings(context: Context) {
         private const val KEY_AUTO_LISTEN = "auto_listen"
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
+        private const val KEY_WIKI = "wiki_enabled"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a helpful AI assistant running fully offline on this phone.\n" +
@@ -73,7 +79,7 @@ class Settings(context: Context) {
                 "3. For maths, science or reasoning problems, work through it step by step before the final answer.\n" +
                 "4. Keep answers clear and concise; use markdown when it helps.\n" +
                 "5. Reply in the language the user writes in.\n" +
-                "6. When notes from the user's documents are provided, prefer them over your own memory."
+                "6. When notes from the user's documents are provided, prefer them over your own memory.\n"
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }
