@@ -763,19 +763,59 @@ class MainActivity : Activity() {
                 "with an example if helpful:\n\"${readSents[readIdx - 1]}\"")
             return
         }
+        // "show/gimme the notes" - paste the raw document text, no model needed
+        if (docContext != null) {
+            val wantsRaw = Regex("(?i)\\b(show|gimme|give|send|paste|display|want)\\b[^.]*\\b(notes?|document|text|pdf)\\b")
+                .containsMatchIn(text)
+            val asksSummary = Regex("(?i)\\bsummar").containsMatchIn(text) &&
+                !Regex("(?i)\\b(don'?t|do not|stop|no)\\b[^.]*\\bsummar").containsMatchIn(text)
+            if (wantsRaw && !asksSummary &&
+                !Regex("(?i)simpl|explain|quiz|points").containsMatchIn(text)) {
+                val part = docSearch(text, 6000)
+                val um = Msg(Role.USER, text)
+                currentChat.messages.add(um)
+                adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, "(from $docName)\n\n$part")
+                currentChat.messages.add(reply)
+                adapter.add(reply)
+                scrollToEnd()
+                scope.launch(Dispatchers.IO) {
+                    try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+                }
+                return
+            }
+        }
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
         val docPart = if (docContext != null) {
             val win = docSearch(text)
-            val qWords = text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
-            val overlap = qWords.count { it in docInjectedText.lowercase() }
-            val needFresh = docContext!!.length > 6000 && overlap == 0 && win != docInjectedText
-            if (!docInjected || needFresh) {
-                docInjected = true
-                docInjectedText = win
-                "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
-            } else ""
+            val qWords = text.lowercase().split(Regex("[^a-z0-9]+"))
+                .filter { it.length > 2 && it !in docStop }
+            val overlap = qWords.count { it in win.lowercase() }
+            // user explicitly off the document ("don't search the notes")
+            val offDoc = Regex("(?i)\\b(?:don'?t|do not|stop)\\b[^.]*\\b(?:use|search|look)\\b[^.]*\\b(?:notes?|document|pdf|it)\\b|\\bfrom your own knowledge\\b|\\bwithout the (?:notes?|document)\\b")
+                .containsMatchIn(text)
+            when {
+                offDoc -> {
+                    docInjected = false
+                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                }
+                overlap == 0 -> {
+                    // question has nothing to do with the document: don't
+                    // re-inject it, and lift any earlier restriction so
+                    // general questions ("who is X?") still get answered
+                    if (docInjected) {
+                        docInjected = false
+                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                    } else ""
+                }
+                else -> {
+                    docInjected = true
+                    docInjectedText = win
+                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
+                }
+            }
         } else ""
         val basePrompt: String = docPart + when {
             needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
@@ -1934,7 +1974,8 @@ private val docStop = setOf("what", "who", "when", "where", "why", "how", "the",
     "for", "are", "was", "were", "is", "does", "did", "do", "with", "about",
     "tell", "explain", "describe", "which", "that", "this", "from", "many",
     "much", "some", "give", "list", "name", "then", "than", "into", "also",
-    "page", "please", "according", "document", "pdf")
+    "page", "please", "according", "document", "pdf", "notes", "show", "gimme",
+    "send", "paste", "display", "want", "full", "whole", "actual", "instead")
 
 /**
  * Finds the best parts of a document for a question. Scores EVERY
