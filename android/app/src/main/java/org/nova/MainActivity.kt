@@ -77,6 +77,9 @@ class MainActivity : Activity() {
     /** Guards runaway auto-continues. */
     private var autoContinueCount = 0
 
+    /** Guards the degenerate-reply retry (one retry per turn). */
+    private var replyRetried = false
+
     /** Set while a flashcard-generating reply is running. */
     private var pendingCards = false
 
@@ -775,7 +778,7 @@ class MainActivity : Activity() {
                 val um = Msg(Role.USER, text)
                 currentChat.messages.add(um)
                 adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, "(from $docName)\n\n$part")
+                val reply = Msg(Role.ASSISTANT, "(from $docName)\\n\\n$part")
                 currentChat.messages.add(reply)
                 adapter.add(reply)
                 scrollToEnd()
@@ -783,6 +786,31 @@ class MainActivity : Activity() {
                     try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
                 }
                 return
+            }
+        }
+        // "gimme the notes of federalism" - paste stored Knowledge notes,
+        // even when no document is attached in this chat
+        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+            val wantsNotes = Regex("(?i)\\b(show|gimme|give|send|paste|display|want|read)\\b[^.]*\\b(notes?|material|answers?)\\b")
+                .containsMatchIn(text) &&
+                !Regex("(?i)\\bsummar|explain|simpl|quiz|points").containsMatchIn(text)
+            if (wantsNotes) {
+                val hits = Knowledge.search(this, text)
+                if (hits.isNotEmpty()) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um)
+                    adapter.add(um)
+                    var body = hits.joinToString("\\n\\n---\\n\\n") { "**${it.doc}**\\n${it.text}" }
+                    if (body.length > 6000) body = body.substring(0, 6000) + "\\n[...more]"
+                    val reply = Msg(Role.ASSISTANT, "(from your saved notes)\\n\\n$body")
+                    currentChat.messages.add(reply)
+                    adapter.add(reply)
+                    scrollToEnd()
+                    scope.launch(Dispatchers.IO) {
+                        try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+                    }
+                    return
+                }
             }
         }
         maybeAutoRemember(text)
@@ -807,7 +835,7 @@ class MainActivity : Activity() {
             when {
                 offDoc -> {
                     docInjected = false
-                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
                 }
                 overlap == 0 -> {
                     // question has nothing to do with the document: don't
@@ -815,13 +843,13 @@ class MainActivity : Activity() {
                     // general questions ("who is X?") still get answered
                     if (docInjected) {
                         docInjected = false
-                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
                     } else ""
                 }
                 else -> {
                     docInjected = true
                     docInjectedText = win
-                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
+                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\\n-----\\n$win\\n-----\\nEnd of document.)\\n\\n"
                 }
             }
         } else ""
@@ -830,13 +858,13 @@ class MainActivity : Activity() {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Summary of earlier conversation: $compactSummary)\\n\\n(Recent messages:\\n$recent\\n— end)\\n\\nNew message: $text\\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
+                "(Earlier conversation for context:\\n$recent\\n— end of earlier conversation)\\n\\nNew message: $text\\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             else -> text
         }
@@ -848,37 +876,53 @@ class MainActivity : Activity() {
         if (mem.isNotEmpty() && (
                     currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
                     )) {
-            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
+            prompt = "(Facts about the user, always remember: $mem)\\n\\n$basePrompt"
             lastInjectedMemory = mem
         }
-        // exam countdown awareness
-        Exams.promptLine(this)?.let { line ->
-            prompt = "(The user's upcoming exams: $line.)\n\n$prompt"
+        // tiny models (Llama 3.2 1B) drown in stacked instructions - they
+        // get ONE background source, no exam line, and short injections
+        val mlabel = NovaEngine.activeModelLabel.lowercase()
+        val tiny = "1b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
+
+        if (!tiny) {
+            // exam countdown awareness
+            Exams.promptLine(this)?.let { line ->
+                prompt = "(The user's upcoming exams: $line.)\\n\\n$prompt"
+            }
         }
 
         // knowledge base (offline RAG): relevant notes from the user's documents
+        var knowledgePart = ""
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val hits = Knowledge.search(this, text)
             if (hits.isNotEmpty()) {
-                var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
-                if (notes.length > 2400) notes = notes.substring(0, 2400) + "\n[...more omitted]"
-                prompt = "(Relevant notes from the user's documents — use them if they help:\n$notes)\n\n$prompt"
+                var notes = hits.joinToString("\\n---\\n") { "[${it.doc}] ${it.text}" }
+                if (notes.length > (if (tiny) 900 else 2400))
+                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\\n[...more omitted]"
+                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\\n$notes)\\n\\n"
             }
         }
-        // offline Wikipedia: matching articles as background facts.
-        // Small models choke on long injections, so they get one short
-        // article; bigger models get two.
+        // offline Wikipedia: matching articles as background facts
+        var wikiPart = ""
         if (settings.wikiEnabled && WikiCore.isReady(this)) {
-            val label = NovaEngine.activeModelLabel.lowercase()
-            val small = "0.6b" in label || "1b" in label
-            val wikiHits = WikiCore.search(this, text, if (small) 1 else 2)
+            val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             if (wikiHits.isNotEmpty()) {
-                var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
-                if (small && facts.length > 900) facts = facts.substring(0, 900) + "…"
-                prompt = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n$prompt"
+                var facts = wikiHits.joinToString("\\n---\\n") { "${it.title}: ${it.text}" }
+                val cap = if (tiny) 900 else 2400
+                if (facts.length > cap) facts = facts.substring(0, cap) + "…"
+                wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\\n$facts)\\n\\n"
             }
+        }
+        // one background source for tiny models, both for bigger ones
+        prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
+                  else knowledgePart + wikiPart) + prompt
+
+        // general chat: match the user's language, no guessing
+        if (docPart.isEmpty()) {
+            prompt += "\\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
         }
         autoContinueCount = 0
+        replyRetried = false
         startGeneration(prompt, text)
     }
 
@@ -973,6 +1017,20 @@ class MainActivity : Activity() {
                         toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
                     }
                     adapter.finalizeLast()
+                    // blank or one-word answers from tiny models: retry once
+                    // with a firmer instruction instead of showing garbage
+                    if (!speechCancelled && newBubble && userText != null && !replyRetried &&
+                        isDegenerateReply(stripThinking(replyMsg.text))) {
+                        replyRetried = true
+                        replyMsg.text = ""
+                        adapter.setLastText("")
+                        startGeneration(
+                            "Question: $userText\\nAnswer the question directly and clearly " +
+                                "in one to three sentences. If you don't know the answer, " +
+                                "say so honestly.",
+                            null, newBubble = false)
+                        return@withContext
+                    }
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
                     // that could fail (storage, voice) gets a chance to skip it
@@ -1016,6 +1074,31 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    /** Word edit distance (capped at 3) - fuzzy matching for typed/spoken commands. */
+    private fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (Math.abs(a.length - b.length) > 2) return 3
+        val dp = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..b.length) {
+                val tmp = dp[j]
+                dp[j] = minOf(dp[j] + 1, dp[j - 1] + 1,
+                    prev + if (a[i - 1] == b[j - 1]) 0 else 1)
+                prev = tmp
+            }
+        }
+        return dp[b.length]
+    }
+
+    /** True when a reply is blank or just one or two words - too short to be useful. */
+    private fun isDegenerateReply(t: String): Boolean {
+        val s = t.trim().removeSuffix("\u23F9").trim()
+        if (s.isEmpty()) return true
+        return s.split(Regex("\\s+")).filter { it.isNotBlank() }.size <= 2
     }
 
     /** True when a reply looks cut off mid-sentence at the token limit. */
@@ -1346,16 +1429,25 @@ class MainActivity : Activity() {
         val t = text.trim()
         // users often prefix commands with filler ("no open...", "hey open...")
         val t2 = t.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|please)[,!?\\s]+"), "").trim()
-        val torchOn = Regex("(?i)^(?:turn\\s+on|switch\\s+on)\\s+(?:the\\s+)?(?:torch|flashlight|flash)$|^(?:torch|flashlight|flash)\\s+on$|^on\\s+(?:torch|flashlight|flash)$|^(?:torch|flashlight)$").find(t2)
-        val torchOff = Regex("(?i)^(?:turn\\s+off|switch\\s+off|off)\\s+(?:the\\s+)?(?:torch|flashlight|flash)$|^(?:torch|flashlight|flash)\\s+off$").find(t2)
-        val saySend = Regex("(?i)(?:open\\s+)?whatsapp.*?\\bsay(?:ing)?\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
+        // fuzzy token matching: one typo ("torch of", "flah") still works
+        val toks = t2.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+        fun near(want: String): Boolean = toks.any { editDistance(it, want) <= 1 }
+        val hasOn = near("on")
+        val hasOff = near("off")
+        val torchWord = (near("torch") || near("flashlight") || near("flash") ||
+            (near("light") && (hasOn || hasOff))) && (hasOn || hasOff || toks.size <= 2)
+        val netWord = (near("wifi") || near("network") || near("internet") ||
+            near("bluetooth") || near("hotspot") || toks.any { it == "data" }) &&
+            (hasOn || hasOff) && toks.size <= 5
+        val saySend = Regex("(?i)\\b(?:send|say|sending)\\s+(.+?)\\s+to\\s+([a-z]+)(?:\\s+(?:in|on|via)\\s+whatsapp)?\\s*$").find(t2)
+            ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
         val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
         val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t2)
         val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
         when {
-            torchOn != null || torchOff != null -> {
-                val on = torchOn != null
+            torchWord -> {
+                val on = !hasOff
                 try {
                     val cm = getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
                     val id = cm.cameraIdList.firstOrNull {
@@ -1370,10 +1462,21 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { toast("Couldn't control the torch") }
                 return true
             }
+            netWord -> {
+                // Android doesn't let apps switch wifi/data - open the panel
+                toast("Apps can't switch that from here - opening settings")
+                try {
+                    startActivity(android.content.Intent(
+                        if (near("bluetooth")) android.provider.Settings.ACTION_BLUETOOTH_SETTINGS
+                        else android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY))
+                } catch (e: Exception) { toast("Couldn't open settings") }
+                return true
+            }
             saySend != null -> {
                 var who = saySend.groupValues[2].trim()
                 val msg = saySend.groupValues[1].trim()
-                if (who in listOf("her", "him", "them", "it")) {
+                val viaWhatsapp = Regex("(?i)whatsapp").containsMatchIn(t2)
+                if (who in listOf("her", "him", "them", "it", "me")) {
                     toast("Who is \"$who\"? Try: whatsapp Tannu $msg")
                     return true
                 }
@@ -1386,7 +1489,7 @@ class MainActivity : Activity() {
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else {
                     val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
-                        setPackage("com.whatsapp")
+                        if (viaWhatsapp) setPackage("com.whatsapp")
                         putExtra("sms_body", msg)
                     }
                     try {
@@ -2109,10 +2212,10 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
     val out = StringBuilder()
     var last = -2
     for (i in best) {
-        if (out.isNotEmpty() && i != last + 1) out.append("[...]\n")
+        if (out.isNotEmpty() && i != last + 1) out.append("[...]\\n")
         val p = paras[i]
         if (out.length + p.length > maxChars) break
-        out.append(p).append("\n\n")
+        out.append(p).append("\\n\\n")
         last = i
     }
     return out.toString().trim()
