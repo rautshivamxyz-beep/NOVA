@@ -38,7 +38,7 @@ def subpages(prefix="Vital articles/Level/4/"):
         params = {"action": "query", "list": "allpages", "apprefix": prefix,
                   "apnamespace": 4, "aplimit": 500, "format": "json"}
         if cont:
-            params["apfrom"] = cont
+            params["apcontinue"] = cont
         data = api(params)
         titles += [p["title"] for p in data["query"]["allpages"]]
         cont = data.get("query-continue", {}).get("allpages", {}).get("apfrom") \
@@ -95,6 +95,9 @@ def main(path, levels):
                     if t not in seen:
                         seen.add(t)
                         l4.append(t)
+                # pace the topic-list calls too - bursting them triggers
+                # Wikipedia's rate limiter and the job crawls through backoffs
+                time.sleep(1.2)
             print("level 4 titles: %d" % len(l4), flush=True)
             short = batch_extract(l4, sentences=3)
             print("level 4 extracted: %d" % len(short), flush=True)
