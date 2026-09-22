@@ -91,6 +91,7 @@ class MainActivity : Activity() {
     private var docName: String? = null
     private var docContext: String? = null
     private var docInjected = false
+    private var docInjectedText: String = ""
     private lateinit var docBanner: LinearLayout
     private lateinit var docLabel: TextView
     private lateinit var docBtn: Button
@@ -278,6 +279,20 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, dp(20))
             })
+            val wikiReady = WikiCore.isReady(this@MainActivity)
+            val cardsDue = Study.dueCount(this@MainActivity)
+            if (wikiReady || cardsDue > 0) {
+                val parts = mutableListOf<String>()
+                if (wikiReady) parts += "Wikipedia ready"
+                if (cardsDue > 0) parts += "$cardsDue study cards due"
+                addView(TextView(this@MainActivity).apply {
+                    text = parts.joinToString("  •  ")
+                    textSize = 11f
+                    setTextColor(NovaTheme.dim)
+                    gravity = Gravity.CENTER
+                    setPadding(0, 0, 0, dp(6))
+                })
+            }
             val suggestions = listOf(
                 "Explain something to me" to R.drawable.ic_lightbulb,
                 "Translate to Hindi" to R.drawable.ic_globe,
@@ -351,6 +366,7 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener {
                 docName = null; docContext = null; docInjected = false
+                docInjectedText = ""
                 updateDocBanner()
                 toast("Document removed")
             }
@@ -499,7 +515,31 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
-        drawerPane.addView(drawerRow("Study", R.drawable.ic_edit) { Study.review(this) })
+        val dueCount = Study.dueCount(this)
+        val studyRow = drawerRow(
+            if (dueCount > 0) "Study ($dueCount due)" else "Study",
+            R.drawable.ic_edit) { Study.review(this) }
+        studyRow.setOnLongClickListener {
+            val total = Study.totalCards(this)
+            val d = Study.dueCount(this)
+            AlertDialog.Builder(this)
+                .setTitle("Study deck")
+                .setMessage("$total cards, $d due for review.")
+                .setPositiveButton("Review") { _, _ -> Study.review(this) }
+                .setNegativeButton("Clear deck") { _, _ ->
+                    AlertDialog.Builder(this)
+                        .setTitle("Delete all cards?")
+                        .setPositiveButton("Delete") { _, _ ->
+                            Study.clear(this); toast("Study deck cleared")
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+                .show()
+            true
+        }
+        drawerPane.addView(studyRow)
+        drawerPane.addView(drawerRow("Share chat", R.drawable.ic_send) { shareChat() })
         drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
@@ -682,6 +722,44 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Picks the most question-relevant window of the attached document
+     * instead of always reading from the top - on long PDFs this means
+     * NOVA reads the right part, not just the first few thousand characters.
+     */
+    private fun docWindow(query: String, maxChars: Int = 4000): String {
+        val doc = docContext ?: return ""
+        if (doc.length <= maxChars) return doc
+        val qw = query.lowercase().split(Regex("[^a-z0-9]+"))
+            .filter { it.length > 2 }.toSet()
+        val paras = doc.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
+        if (paras.size < 2) return doc.take(maxChars)
+        var bestIdx = -1
+        var bestScore = 0
+        for ((i, p) in paras.withIndex()) {
+            val pl = p.lowercase()
+            val sc = qw.count { pl.contains(it) }
+            if (sc > bestScore) { bestScore = sc; bestIdx = i }
+        }
+        if (bestIdx < 0) return doc.take(maxChars)
+        // grow a contiguous window around the best-matching paragraph
+        var start = bestIdx
+        var end = bestIdx + 1
+        var len = paras[bestIdx].length
+        while (len < maxChars) {
+            val before = start > 0
+            val after = end < paras.size
+            when {
+                before && (!after || paras[start - 1].length <= paras[end].length) -> {
+                    start--; len += paras[start].length + 2
+                }
+                after -> { len += paras[end].length + 2; end++ }
+                else -> break
+            }
+        }
+        return paras.subList(start, end).joinToString("\n\n")
+    }
+
     private fun send() {
         if (generationJob?.isActive == true) {
             generationJob?.cancel()
@@ -698,9 +776,16 @@ class MainActivity : Activity() {
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
-        val docPart = if (docContext != null && !docInjected) {
-            docInjected = true
-            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docContext!!.take(6000)}\n-----\nEnd of document.)\n\n"
+        val docPart = if (docContext != null) {
+            val win = docWindow(text)
+            val qWords = text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
+            val overlap = qWords.count { it in docInjectedText.lowercase() }
+            val needFresh = docContext!!.length > 6000 && overlap == 0 && win != docInjectedText
+            if (!docInjected || needFresh) {
+                docInjected = true
+                docInjectedText = win
+                "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n$win\n-----\nEnd of document.)\n\n"
+            } else ""
         } else ""
         val basePrompt: String = docPart + when {
             needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
@@ -737,12 +822,17 @@ class MainActivity : Activity() {
                 prompt = "(Relevant notes from the user's documents — use them if they help:\n$notes)\n\n$prompt"
             }
         }
-        // offline Wikipedia: matching articles as background facts
-        if (WikiCore.isReady(this)) {
-            val wikiHits = WikiCore.search(this, text)
+        // offline Wikipedia: matching articles as background facts.
+        // Small models choke on long injections, so they get one short
+        // article; bigger models get two.
+        if (settings.wikiEnabled && WikiCore.isReady(this)) {
+            val label = NovaEngine.activeModelLabel.lowercase()
+            val small = "0.6b" in label || "1b" in label
+            val wikiHits = WikiCore.search(this, text, if (small) 1 else 2)
             if (wikiHits.isNotEmpty()) {
-                val facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
-                prompt = "(Wikipedia background - use if relevant, ignore otherwise:\n$facts)\n\n$prompt"
+                var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
+                if (small && facts.length > 900) facts = facts.substring(0, 900) + "…"
+                prompt = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n$prompt"
             }
         }
         autoContinueCount = 0
@@ -995,6 +1085,7 @@ class MainActivity : Activity() {
         docName = name
         docContext = text
         docInjected = false
+        docInjectedText = ""
         updateDocBanner()
         val opts = arrayOf("Summarize it", "Key points", "Quiz me", "I'll ask questions")
         AlertDialog.Builder(this)
@@ -1026,6 +1117,20 @@ class MainActivity : Activity() {
     }
 
     // ---------- side drawer ----------
+
+    /** Exports the whole current conversation as text. */
+    private fun shareChat() {
+        if (currentChat.messages.isEmpty()) { toast("Nothing to share yet"); return }
+        val sb = StringBuilder("NOVA conversation\n\n")
+        for (msg in currentChat.messages) {
+            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ").append(msg.text).append("\n\n")
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, sb.toString())
+        }
+        startActivity(Intent.createChooser(send, "Share chat"))
+    }
 
     private fun drawerRow(label: String, iconRes: Int, onClick: () -> Unit): View =
         Button(this).apply {
@@ -1096,6 +1201,7 @@ class MainActivity : Activity() {
         needsContextCarry = chat.messages.isNotEmpty()
         compactSummary = null; compactedAtCount = 0
         docName = null; docContext = null; docInjected = false
+        docInjectedText = ""
         if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
         displayChatMessages()
     }
