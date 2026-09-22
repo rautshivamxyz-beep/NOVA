@@ -18,7 +18,9 @@ object Knowledge {
         "will", "would", "there", "these", "those", "been", "being", "does",
         "each", "just", "also", "some", "such", "only", "very", "can", "did",
         "its", "his", "her", "him", "them", "our", "out", "get", "got", "any",
-        "all", "not", "but", "she", "then", "than"
+        "all", "not", "but", "she", "then", "than",
+        "notes", "note", "summarise", "summarize", "summary", "material",
+        "give", "show", "tell", "read", "topic", "chapter", "gimme"
     )
 
     private var cache: ArrayList<Chunk>? = null
@@ -95,7 +97,8 @@ object Knowledge {
         return out.filter { it.length > 40 }      // skip headers/fragments
     }
 
-    /** Keyword search over all chunks; returns the best matches. */
+    /** Keyword search over all chunks; returns the best matches.
+     *  The document NAME counts double, so "sst" finds "SST notes". */
     fun search(ctx: Context, query: String, maxResults: Int = 4): List<Chunk> {
         val terms = tokenize(query)
         if (terms.isEmpty()) return emptyList()
@@ -105,7 +108,12 @@ object Knowledge {
         val scored = ArrayList<Pair<Int, Chunk>>()
         for (c in chunks) {
             var score = 0
-            for (t in terms) if (c.low.contains(t)) score++
+            val dl = c.doc.lowercase()
+            for (t in terms) {
+                if (c.low.contains(t)) score++
+                // the document NAME matters too: "sst" must find "SST notes"
+                if (dl.contains(t)) score += 2
+            }
             if (score >= need) scored.add(score to c)
         }
         scored.sortByDescending { it.first }
