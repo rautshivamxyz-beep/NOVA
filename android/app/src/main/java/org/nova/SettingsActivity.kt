@@ -158,6 +158,38 @@ class SettingsActivity : Activity() {
         person.addView(editField(settings.systemPrompt, "") { settings.systemPrompt = it })
         col.addView(person)
 
+        // Answers
+        val answers = card("ANSWERS")
+        answers.addView(switchRow("Use offline Wikipedia", settings.wikiEnabled) {
+            settings.wikiEnabled = it
+        })
+        answers.addView(Button(this).apply {
+            isAllCaps = false
+            background = null
+            setPadding(0, dp(10), 0, dp(4))
+            fun refreshLen() {
+                text = "Response length: ${settings.predictLength} tokens"
+                setTextColor(NovaTheme.text)
+                textSize = 15f
+            }
+            refreshLen()
+            setOnClickListener {
+                val opts = Settings.LENGTH_OPTIONS.map { "$it tokens" }.toTypedArray()
+                val cur = Settings.LENGTH_OPTIONS.indexOf(settings.predictLength)
+                    .coerceAtLeast(0)
+                AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("Response length")
+                    .setSingleChoiceItems(opts, cur) { d, which ->
+                        settings.predictLength = Settings.LENGTH_OPTIONS[which]
+                        refreshLen()
+                        d.dismiss()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        })
+        col.addView(answers)
+
         // Appearance
         val looks = card("APPEARANCE")
         looks.addView(switchRow("Light theme", settings.theme == "light") {
