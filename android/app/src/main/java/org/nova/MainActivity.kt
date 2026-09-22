@@ -1156,7 +1156,7 @@ class MainActivity : Activity() {
 
     /** Detects "remember that ..." and offers to save it to Memory. */
     private fun maybeAutoRemember(text: String) {
-        val m = Regex("(?i)\\bremember\\b[\\s:,]+(.{4,400})").find(text) ?: return
+        val m = Regex("(?i)^\\s*(?:please\\s+)?remember\\b[\\s:,]+(.{4,400})").find(text) ?: return
         var fact = m.groupValues[1].trim().trimEnd('.', '!', '?')
         fact = fact.removePrefix("that ").removePrefix("That ")
         if (fact.isEmpty()) return
@@ -1235,7 +1235,7 @@ class MainActivity : Activity() {
     private fun maybeSetReminder(text: String) {
         val m = Regex("(?i)\\bremind me\\b(?:\\s+to)?\\s+(.+)").find(text) ?: return
         val rest = m.groupValues[1].trim()
-        val task: String
+        var task: String
         val timeStr: String
         val rel = Regex("(?i)^in\\s+(\\d+\\s*\\w+)$").find(rest)
         if (rel != null) {
@@ -1250,6 +1250,13 @@ class MainActivity : Activity() {
             if (idx <= 0) return
             task = rest.substring(0, idx).trim()
             timeStr = rest.substring(idx + 1).trim()
+            // "remind me tomorrow at 5pm to take medicine": the real task
+            // landed after the time - take it back from behind " to "
+            if (task in listOf("tomorrow", "today", "tonight")) {
+                val tIdx = rest.lastIndexOf(" to ")
+                if (tIdx > idx) task = rest.substring(tIdx + 4).trim()
+            }
+            task = task.removePrefix("to ").trim()
             if (task.isEmpty()) return
         }
         val whenMs = parseReminderTime(timeStr) ?: return
@@ -1346,9 +1353,14 @@ class MainActivity : Activity() {
  * answer is shown, spoken and saved. While a block is still open (streaming),
  * everything from the opening tag on is hidden.
  */
+private val THINK_OPEN = "<" + "think" + ">"
+private val THINK_CLOSE = "<" + "/" + "think" + ">"
+
 fun stripThinking(s: String): String {
-    var out = s.replace(Regex("(?s)<think>.*?</think>"), "")
-    val open = out.indexOf("<think>")
+    var out = s.replace(
+        Regex("(?s)" + java.util.regex.Pattern.quote(THINK_OPEN) +
+            ".*?" + java.util.regex.Pattern.quote(THINK_CLOSE)), "")
+    val open = out.indexOf(THINK_OPEN)
     if (open >= 0) out = out.substring(0, open)
     return out
 }
