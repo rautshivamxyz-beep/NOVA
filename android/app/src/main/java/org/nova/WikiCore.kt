@@ -88,39 +88,41 @@ object WikiCore {
             var fetched = 0
             val bw = BufferedWriter(FileWriter(articlesFile(ctx), true))
             val dw = BufferedWriter(FileWriter(doneFile(ctx), true))
-            try {
-                var i = 0
-                while (i < queue.size) {
-                    val batch = queue.subList(i, minOf(i + 20, queue.size))
-                    i += 20
-                    try {
-                        val pages = fetchBatch(batch)
-                        for ((t, text) in pages) {
-                            if (text.length > 200) {
-                                bw.write(t.replace('\n', ' '))
-                                bw.write("\u241F")
-                                bw.write(text.trim().replace('\n', '\u241F'))
-                                bw.write("\n")
-                                dw.write(t.replace('\n', ' ')); dw.write("\n")
-                                total++
-                            }
-                        }
-                        // mark the whole requested batch as handled either way,
-                        // so redirects and misses are not retried forever
-                        for (t in batch) { dw.write(t.replace('\n', ' ')); dw.write("\n") }
-                        File(d, "count").writeText(total.toString())
-                        bw.flush(); dw.flush()
-                    } catch (e: Exception) {
-                        // batch failed - skip it, it will be retried next update
+            fun store(batch: List<String>) {
+                val pages = fetchBatch(batch)
+                for ((t, text) in pages) {
+                    if (text.length > 200) {
+                        bw.write(t.replace('\n', ' '))
+                        bw.write("\u241F")
+                        bw.write(text.trim().replace('\n', '\u241F'))
+                        bw.write("\n")
+                        dw.write(t.replace('\n', ' ')); dw.write("\n")
+                        total++
                     }
-                    fetched += batch.size
-                    _state.value = Pair(0.05f + 0.95f * fetched / nTotal,
-                        "$fetched/$nTotal articles")
-                    Thread.sleep(1200)
                 }
-            } finally {
-                bw.close(); dw.close()
+                // mark the whole requested batch as handled either way,
+                // so redirects and misses are not retried forever
+                for (t in batch) { dw.write(t.replace('\n', ' ')); dw.write("\n") }
+                File(d, "count").writeText(total.toString())
+                bw.flush(); dw.flush()
             }
+            var i = 0
+            while (i < queue.size) {
+                val batch = queue.subList(i, minOf(i + 20, queue.size))
+                i += 20
+                try {
+                    store(batch)
+                } catch (e: Exception) {
+                    // one retry after a pause - Wikipedia rate-limits bursts
+                    try { Thread.sleep(5000) } catch (x: Exception) { }
+                    try { store(batch) } catch (e2: Exception) { }
+                }
+                fetched += batch.size
+                _state.value = Pair(0.05f + 0.95f * fetched / nTotal,
+                    "$fetched/$nTotal articles")
+                Thread.sleep(1200)
+            }
+            bw.close(); dw.close()
             index = null
             _state.value = Pair(0f, "done - $total articles saved")
         } finally {
