@@ -788,6 +788,14 @@ class MainActivity : Activity() {
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
+        // recover from transcript-echo poisoning: if NOVA's last reply came
+        // out as a transcript ("NOVA: ..."), reset the engine so it answers fresh
+        val lastReply = currentChat.messages.lastOrNull { it.role == Role.ASSISTANT }
+        if (lastReply != null && Regex("(?m)^\\s*(?:NOVA|You)\\s*:").containsMatchIn(lastReply.text)) {
+            needsContextCarry = true
+            if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+        }
+
         val docPart = if (docContext != null) {
             val win = docSearch(text)
             val qWords = text.lowercase().split(Regex("[^a-z0-9]+"))
@@ -822,13 +830,13 @@ class MainActivity : Activity() {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text"
+                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text"
+                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly. Do not repeat the transcript.)"
             }
             else -> text
         }
@@ -1142,7 +1150,7 @@ class MainActivity : Activity() {
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
-                    if (s.length > 10) sectionSummaries.append(s).append("\n\n")
+                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
                 }
                 adapter.setLastText("Writing the final summary\u2026")
                 status.text = "writing final summary\u2026"
@@ -1329,17 +1337,71 @@ class MainActivity : Activity() {
     // ---------- phone commands (no model needed) ----------
 
     /**
-     * Understands "call X", "text X a message", "set alarm 6:30am" and
-     * "open YouTube". Runs them with Android itself and returns true when
-     * handled - the model never sees these.
+     * Understands "call X", "text X a message", "set alarm 6:30am",
+     * "open YouTube", "on/off torch" and "open whatsapp and say hi to X".
+     * Runs them with Android itself and returns true when handled -
+     * the model never sees these.
      */
     private fun tryPhoneCommand(text: String): Boolean {
         val t = text.trim()
-        val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t)
-        val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t)
-        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t)
-        val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t)
+        // users often prefix commands with filler ("no open...", "hey open...")
+        val t2 = t.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|please)[,!?\\s]+"), "").trim()
+        val torchOn = Regex("(?i)^(?:turn\\s+on|switch\\s+on)\\s+(?:the\\s+)?(?:torch|flashlight|flash)$|^(?:torch|flashlight|flash)\\s+on$|^on\\s+(?:torch|flashlight|flash)$|^(?:torch|flashlight)$").find(t2)
+        val torchOff = Regex("(?i)^(?:turn\\s+off|switch\\s+off|off)\\s+(?:the\\s+)?(?:torch|flashlight|flash)$|^(?:torch|flashlight|flash)\\s+off$").find(t2)
+        val saySend = Regex("(?i)(?:open\\s+)?whatsapp.*?\\bsay(?:ing)?\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
+        val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
+        val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
+        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t2)
+        val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
         when {
+            torchOn != null || torchOff != null -> {
+                val on = torchOn != null
+                try {
+                    val cm = getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                    val id = cm.cameraIdList.firstOrNull {
+                        cm.getCameraCharacteristics(it).get(
+                            android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                    } ?: cm.cameraIdList.firstOrNull()
+                    if (id == null) toast("No flash on this phone")
+                    else {
+                        cm.setTorchMode(id, on)
+                        toast(if (on) "Torch on" else "Torch off")
+                    }
+                } catch (e: Exception) { toast("Couldn't control the torch") }
+                return true
+            }
+            saySend != null -> {
+                var who = saySend.groupValues[2].trim()
+                val msg = saySend.groupValues[1].trim()
+                if (who in listOf("her", "him", "them", "it")) {
+                    toast("Who is \"$who\"? Try: whatsapp Tannu $msg")
+                    return true
+                }
+                if (!hasContacts()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.READ_CONTACTS), 4254)
+                    toast("Grant contacts access, then say it again")
+                    return true
+                }
+                val number = lookupContact(who)
+                if (number == null) toast("Couldn't find '$who' in contacts")
+                else {
+                    val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
+                        setPackage("com.whatsapp")
+                        putExtra("sms_body", msg)
+                    }
+                    try {
+                        startActivity(send)
+                    } catch (e: Exception) {
+                        // no WhatsApp - fall back to the normal messaging app
+                        try {
+                            startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))
+                                .apply { putExtra("sms_body", msg) })
+                        } catch (x: Exception) { toast("No messaging app") }
+                    }
+                    toast("Message ready for $who - press send")
+                }
+                return true
+            }
             call != null -> {
                 val who = call.groupValues[1].trim()
                 if (!hasContacts()) {
@@ -2198,7 +2260,8 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         last.done = true
         // permanently remove hidden thinking text - this is what gets
         // shown, copied, spoken and saved to the chat transcript
-        last.text = stripThinking(last.text).trim()
+        last.text = Regex("(?s)^\\s*(?:NOVA|You)\\s*:\\s*")
+            .replace(stripThinking(last.text).trim(), "")
         notifyItemChanged(items.size - 1)
     }
 
