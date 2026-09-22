@@ -92,6 +92,10 @@ class MainActivity : Activity() {
     private var docContext: String? = null
     private var docInjected = false
     private var docInjectedText: String = ""
+
+    /** Document read-aloud state. */
+    private var readSents: List<String> = emptyList()
+    private var readIdx = 0
     private lateinit var docBanner: LinearLayout
     private lateinit var docLabel: TextView
     private lateinit var docBtn: Button
@@ -281,10 +285,12 @@ class MainActivity : Activity() {
             })
             val wikiReady = WikiCore.isReady(this@MainActivity)
             val cardsDue = Study.dueCount(this@MainActivity)
-            if (wikiReady || cardsDue > 0) {
+            val examLine = Exams.promptLine(this@MainActivity)
+            if (wikiReady || cardsDue > 0 || examLine != null) {
                 val parts = mutableListOf<String>()
                 if (wikiReady) parts += "Wikipedia ready"
                 if (cardsDue > 0) parts += "$cardsDue study cards due"
+                examLine?.let { parts += it }
                 addView(TextView(this@MainActivity).apply {
                     text = parts.joinToString("  •  ")
                     textSize = 11f
@@ -540,6 +546,11 @@ class MainActivity : Activity() {
         }
         drawerPane.addView(studyRow)
         drawerPane.addView(drawerRow("Share chat", R.drawable.ic_send) { shareChat() })
+        drawerPane.addView(drawerRow("Exams", R.drawable.ic_doc) {
+            startActivity(Intent(this, ExamsActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("What did I miss?", R.drawable.ic_chat) { missedNotifications() })
+        drawerPane.addView(drawerRow("Write in my style", R.drawable.ic_edit) { writeInMyStyle() })
         drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
@@ -773,6 +784,16 @@ class MainActivity : Activity() {
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         input.setText("")
+        // phone commands: call / text / alarm / open app - no model needed
+        if (tryPhoneCommand(text)) return
+        // while reading aloud: "explain that sentence" asks about the last spoken one
+        if (readIdx > 0 && Regex("(?i)explain (that|this|the last) (sentence|part|line)")
+                .containsMatchIn(text)) {
+            tts?.stop()
+            runTool("Explain this sentence from the document in simple words, " +
+                "with an example if helpful:\n\"${readSents[readIdx - 1]}\"")
+            return
+        }
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
@@ -813,6 +834,11 @@ class MainActivity : Activity() {
             prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
             lastInjectedMemory = mem
         }
+        // exam countdown awareness
+        Exams.promptLine(this)?.let { line ->
+            prompt = "(The user's upcoming exams: $line.)\n\n$prompt"
+        }
+
         // knowledge base (offline RAG): relevant notes from the user's documents
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val hits = Knowledge.search(this, text)
@@ -1008,13 +1034,130 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Runs a hidden-prompt tool action (no duplicate user bubble). */
+    /** Runs a hidden-prompt tool action (no duplicate user bubble).
+     *  The document text is injected so "summarize this document"
+     *  actually has the document to work on. */
     private fun runTool(prompt: String) {
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
-        pendingCards = prompt.startsWith("Create 8 study flashcards")
-        startGeneration(prompt, null)
+        if (prompt.startsWith("__STYLE__")) {
+            val sp = stylePrompt("Rewrite this text in the same personal style as the examples, keeping the meaning:\n-----\n${prompt.substring(9)}\n-----")
+            if (sp == null) toast("Chat a bit more first so I can learn your style")
+            else startGeneration(sp, null)
+            return
+        }
+        pendingCards = prompt.startsWith("Create 8 study flashcards") ||
+            prompt.startsWith("Create a quiz")
+        val docPart = if (docContext != null && docName != null) {
+            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docWindow(prompt, 8000)}\n-----\nEnd of document.)\n\n"
+        } else ""
+        startGeneration(docPart + prompt, null)
+    }
+
+    /**
+     * Smart document summary for long PDFs: splits the document into
+     * sections, summarizes each, then writes one final summary from the
+     * section summaries (map-reduce) - far better than one shot on
+     * small models, and it covers the WHOLE document.
+     */
+    private fun summarizeDoc() {
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        val doc = docContext ?: return
+        if (doc.length <= 5000) {
+            runTool("Summarize this document in clear sections: a short Overview first, then Key points as bullets, then Important terms with one-line meanings.")
+            return
+        }
+        var chunks = docChunks(doc, 4500)
+        var strided = false
+        if (chunks.size > 12) {
+            val step = chunks.size / 12
+            chunks = chunks.filterIndexed { i, _ -> i % step == 0 }.take(12)
+            strided = true
+        }
+        toast(if (strided) "Long document - summarizing ${chunks.size} main sections…"
+             else "Summarizing ${chunks.size} sections…")
+        generating = true
+        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setStatus()
+        scrollToEnd()
+        scope.launch {
+            try {
+                val sectionSummaries = StringBuilder()
+                for ((i, c) in chunks.withIndex()) {
+                    status.text = "summarizing section ${i + 1}/${chunks.size}…"
+                    val sb = StringBuilder()
+                    try {
+                        NovaEngine.send(
+                            "Summarize this part of a document in 3 short sentences. " +
+                                "Keep all names, numbers and facts:\n-----\n$c\n-----", 150
+                        ).collect { sb.append(it) }
+                    } catch (e: Exception) { }
+                    val s = stripThinking(sb.toString()).trim()
+                    if (s.length > 10) sectionSummaries.append(s).append("\n\n")
+                }
+                status.text = "writing final summary…"
+                val sb2 = StringBuilder()
+                NovaEngine.send(
+                    "These are summaries of " +
+                        (if (strided) "the main sections of a long document" else "the sections of a document") +
+                        ". Write one clear final summary with: an Overview (3 sentences), " +
+                        "Key points (short bullets) and Important terms (word - meaning). " +
+                        "Use only the information given:\n\n${sectionSummaries.toString().take(6000)}", 400
+                ).collect { sb2.append(it) }
+                var finalText = stripThinking(sb2.toString()).trim()
+                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                // show it as a proper conversation turn
+                val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
+                currentChat.messages.add(um)
+                adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, finalText)
+                currentChat.messages.add(reply)
+                adapter.add(reply)
+                scrollToEnd()
+                // the engine context now holds every section prompt - reset it
+                needsContextCarry = true
+                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                try {
+                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                } catch (e: Exception) { }
+                toast("Summary ready - long-press it to make study cards")
+            } catch (e: Exception) {
+                toast("Summary failed - try again")
+            } finally {
+                generating = false
+                setStatus()
+                updateSendLook()
+            }
+        }
+    }
+
+    /** Splits a document into ~size-char chunks, breaking at paragraphs. */
+    private fun docChunks(doc: String, size: Int = 4500): List<String> {
+        val paras = doc.split(Regex("\\n\\s*\\n")).map { it.trim() }.filter { it.isNotEmpty() }
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        fun flush() {
+            if (sb.isNotBlank()) { out.add(sb.toString()); sb.setLength(0) }
+        }
+        for (p in paras) {
+            if (p.length > size) {
+                flush()
+                var i = 0
+                while (i < p.length) {
+                    out.add(p.substring(i, minOf(i + size, p.length)))
+                    i += size
+                }
+                continue
+            }
+            if (sb.isNotEmpty() && sb.length + p.length > size) flush()
+            sb.append(p).append("\n\n")
+        }
+        flush()
+        return out
     }
 
     /** Long-press a reply -> answer the last question again. */
@@ -1087,16 +1230,18 @@ class MainActivity : Activity() {
         docInjected = false
         docInjectedText = ""
         updateDocBanner()
-        val opts = arrayOf("Summarize it", "Key points", "Quiz me", "I'll ask questions")
+        val opts = arrayOf("Summarize it", "Key points", "Explain simply", "Quiz me", "Read aloud", "I'll ask questions")
         AlertDialog.Builder(this)
             .setTitle(name)
             .setMessage("${text.length} characters loaded. What should NOVA do with it?")
             .setItems(opts) { _, which ->
                 when (which) {
-                    0 -> runTool("Summarize this document in a few short paragraphs.")
-                    1 -> runTool("List the key points of this document as short bullet points.")
-                    2 -> runTool("Create a quiz of 10 short questions from this material. Number them 1-10, cover the whole material, and write the correct answer in brackets right after each question.")
-                    3 -> toast("Ask anything about $name — then tap ↑")
+                    0 -> summarizeDoc()
+                    1 -> runTool("List the key points of this document as short bullets. Group them under 2-4 short headings. Keep all important numbers, names and dates.")
+                    2 -> runTool("Explain this document in very simple words, like teaching a beginner. Use short sentences and everyday examples.")
+                    3 -> runTool("Create a quiz of 10 questions from this material. Format each EXACTLY as:\nQ: the question\nA: the answer\nNo numbering, no other text before or after.")
+                    4 -> readDocAloud()
+                    5 -> toast("Ask anything about $name — then tap ↑")
                 }
             }
             .setNegativeButton("Close", null)
@@ -1114,6 +1259,219 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             toast("No file picker available")
         }
+    }
+
+    // ---------- phone commands (no model needed) ----------
+
+    /**
+     * Understands "call X", "text X a message", "set alarm 6:30am" and
+     * "open YouTube". Runs them with Android itself and returns true when
+     * handled - the model never sees these.
+     */
+    private fun tryPhoneCommand(text: String): Boolean {
+        val t = text.trim()
+        val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t)
+        val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t)
+        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t)
+        val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t)
+        when {
+            call != null -> {
+                val who = call.groupValues[1].trim()
+                if (!hasContacts()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.READ_CONTACTS), 4254)
+                    toast("Grant contacts access, then say it again")
+                    return true
+                }
+                val number = lookupContact(who)
+                if (number == null) toast("Couldn't find '$who' in contacts")
+                else {
+                    startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+                    toast("Calling $who…")
+                }
+                return true
+            }
+            textCmd != null -> {
+                val who = textCmd.groupValues[1].trim()
+                val msg = textCmd.groupValues[2].trim()
+                if (!hasContacts()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.READ_CONTACTS), 4254)
+                    toast("Grant contacts access, then say it again")
+                    return true
+                }
+                val number = lookupContact(who)
+                if (number == null) toast("Couldn't find '$who' in contacts")
+                else {
+                    val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
+                        putExtra("sms_body", msg)
+                    }
+                    try { startActivity(send) } catch (e: Exception) {
+                        toast("No messaging app")
+                    }
+                    toast("Message ready for $who - press send")
+                }
+                return true
+            }
+            alarm != null -> {
+                val ms = parseReminderTime(alarm.groupValues[1])
+                if (ms == null) { toast("Try: set alarm 6:30am"); return true }
+                val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+                try {
+                    startActivity(android.content.Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
+                        putExtra(android.provider.AlarmClock.EXTRA_HOUR, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                        putExtra(android.provider.AlarmClock.EXTRA_MINUTES, cal.get(java.util.Calendar.MINUTE))
+                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOVA")
+                    })
+                } catch (e: Exception) { toast("No clock app found") }
+                return true
+            }
+            open != null -> {
+                val want = open.groupValues[1].trim().lowercase()
+                try {
+                    val pm = packageManager
+                    val apps = pm.queryIntentActivities(
+                        android.content.Intent(android.content.Intent.ACTION_MAIN)
+                            .addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0)
+                    val match = apps.firstOrNull {
+                        it.loadLabel(pm).toString().lowercase().contains(want)
+                    }
+                    if (match == null) toast("No app called '$want'")
+                    else pm.getLaunchIntentForPackage(match.activityInfo.packageName)?.let {
+                        startActivity(it)
+                    }
+                } catch (e: Exception) { toast("Couldn't open that") }
+                return true
+            }
+            else -> return false
+        }
+    }
+
+    private fun hasContacts(): Boolean =
+        checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun lookupContact(name: String): String? = try {
+        val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI
+            .buildUpon().appendPath(name).build()
+        contentResolver.query(uri, arrayOf(
+            android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
+            null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    } catch (e: Exception) { null }
+
+    // ---------- notification digest ----------
+
+    /** "What did I miss?" - summarizes recent notifications privately. */
+    private fun missedNotifications() {
+        if (!NotifBrain.isEnabled(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Read your notifications?")
+                .setMessage("NOVA needs notification access to tell you what you missed. " +
+                    "Everything is summarized on this phone and never leaves it.")
+                .setPositiveButton("Allow") { _, _ ->
+                    try {
+                        startActivity(android.content.Intent(
+                            android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (e: Exception) { }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+        val digest = NotifBrain.digest(this)
+        if (digest.isBlank()) {
+            toast("No notifications collected yet - try again in a while")
+            return
+        }
+        runTool("These are the phone notifications the user received, oldest first, " +
+            "newest last:\n$digest\n\nSummarize what they missed: group by app or topic, " +
+            "mention names and what people said, ignore ads and spam. Keep it short and clear.")
+    }
+
+    // ---------- write in my style ----------
+
+    /**
+     * Builds a prompt that writes like the user: real examples of their own
+     * messages are shown to the model as style references.
+     */
+    private fun stylePrompt(request: String): String? {
+        val mine = StringBuilder()
+        for (chat in ChatStore.list(this)) {
+            for (m in chat.messages) {
+                if (m.role == Role.USER && m.text.length in 10..220) {
+                    mine.append(m.text).append("\n")
+                    if (mine.length > 1400) break
+                }
+            }
+            if (mine.length > 1400) break
+        }
+        if (mine.length < 300) return null
+        return "The user writes like this (real examples of their messages):\n-----\n" +
+            "$mine\n-----\nNow write the following IN THE SAME STYLE - same tone, same " +
+            "language mix, same habits, first person. Reply with only the text:\n$request"
+    }
+
+    /** Dialog: tell NOVA what to write, it writes it like you. */
+    private fun writeInMyStyle() {
+        if (!NovaEngine.isModelLoaded) { toast("Load a model first"); return }
+        val edit = EditText(this).apply {
+            hint = "What should NOVA write? (e.g. a reply to my teacher)"
+            setHintTextColor(NovaTheme.dim)
+            setTextColor(NovaTheme.text)
+            textSize = 14f
+            setSingleLine(false)
+            minLines = 2
+            maxLines = 5
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Write in my style")
+            .setMessage("NOVA learns how you write from your own past messages.")
+            .setView(edit)
+            .setPositiveButton("Write") { _, _ ->
+                val req = edit.text.toString().trim()
+                if (req.isEmpty()) return@setPositiveButton
+                val sp = stylePrompt(req)
+                if (sp == null) {
+                    toast("Chat with NOVA a bit more first, so it can learn how you write")
+                    return@setPositiveButton
+                }
+                startGeneration(sp, req)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------- document read-aloud ----------
+
+    /** Reads the attached document aloud, sentence by sentence. */
+    private fun readDocAloud() {
+        val doc = docContext ?: return
+        if (!ttsReady || tts == null) { toast("Voice not ready yet - wait a moment"); return }
+        readSents = doc.replace(Regex("\\s+"), " ")
+            .split(Regex("(?<=[.!?])\\s+"))
+            .filter { it.isNotBlank() }
+        if (readSents.isEmpty()) { toast("Nothing to read"); return }
+        readIdx = 0
+        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(id: String?) { }
+            override fun onError(id: String?) { }
+            override fun onDone(id: String?) {
+                if (id?.startsWith("doc") == true) speakNext()
+            }
+        })
+        speakNext()
+        toast("Reading aloud - say \"explain that sentence\" anytime")
+    }
+
+    /** Queues the next document sentence (called when the last one ends). */
+    private fun speakNext() {
+        if (readIdx >= readSents.size) {
+            readIdx = 0
+            return
+        }
+        tts?.speak(readSents[readIdx], TextToSpeech.QUEUE_ADD, null, "doc$readIdx")
+        readIdx++
     }
 
     // ---------- side drawer ----------
@@ -1823,6 +2181,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
             ) else linkedMapOf(
                 "Make study cards" to "Create 8 study flashcards from this material. Format each card EXACTLY as:\nQ: <question>\nA: <answer>\nNo numbering, no text before or after.",
+                "Make it sound like me" to "",
                 "Regenerate" to ""
             )
             options += tools.keys
@@ -1840,6 +2199,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                             ctx.startActivity(Intent.createChooser(send, "Share message"))
                         }
                         "Regenerate" -> onRegenerate?.invoke()
+                        "Make it sound like me" -> onTool?.invoke("__STYLE__" + msgText)
                         else -> tools[chosen]?.let { onTool?.invoke(it) }
                     }
                 }
