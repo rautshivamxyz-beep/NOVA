@@ -1,4 +1,4 @@
-name: Restore MainActivity v3.4
+name: Restore MainActivity v3.5
 on:
   workflow_dispatch:
 
@@ -15,12 +15,12 @@ jobs:
       - name: Apply patch and verify
         run: |
           set -e
-          git show 07757f291d0a1c231938e7d5f63e66f398f1ba1d:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
-          git apply tmp/main34.patch
-          echo "322f6de602d9cbfb590138138c883be8  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          git show 94257a14668cd306d566adec333dc330b70f953e:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          git apply tmp/main35.patch
+          echo "08a7017dc62a7427e034b75799364208  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
           git rm -rqf tmp
           git add android/app/src/main/java/org/nova/MainActivity.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "MainActivity.kt v3.4: live section dedupe + word-boundary progress tail"
+          git commit -m "MainActivity.kt v3.5: detailed section + final summaries, longer outputs"
           git push
