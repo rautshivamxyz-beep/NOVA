@@ -850,22 +850,27 @@ class MainActivity : Activity() {
         // saved notes over the WHOLE chapter (map-reduce), clean engine
         if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val wantsSumm = Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)
+            val summNoun = text.lowercase().contains("summary")
+            // v5.4.1: "teach me whole power sharing chapter" - the user wants
+            // the WHOLE chapter as a study summary, not a 2400-char answer
+            val wholeTeach = text.lowercase().contains("whole") &&
+                (text.lowercase().contains("chapter") || text.lowercase().contains("notes"))
             val followUp = lastNotesDoc != null &&
                 Regex("(?i)\\b(whole|full|complete|entire|detailed)\\s+summar").containsMatchIn(text)
-            if (wantsSumm || followUp) {
+            if (wantsSumm || followUp || summNoun || wholeTeach) {
                 // relaxed match: ANY query term can point at the document -
                 // requiring every word in one chunk made "summarise power
                 // sharing" silently fall through to chat (and hallucinate)
                 // "summarise it notes" - "it" means the IT notes here,
                 // not the pronoun the tokenizer throws away
                 val qtext = text.replace(" it notes", " IT Revision notes", ignoreCase = true)
-                val doc = if (wantsSumm) Knowledge.bestDocName(this, qtext)
+                val doc = if (wantsSumm || summNoun || wholeTeach) Knowledge.bestDocName(this, qtext)
                           else lastNotesDoc
                 if (doc != null) {
                     lastNotesDoc = doc
                     // "summarise sst notes" NAMES the document -> the user
                     // wants the whole doc, not just the first 18 chunks
-                    val whole = !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
+                    val whole = wholeTeach || !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
                     summarizeNotes(doc, text, fullDoc = whole)
                     return
                 }
