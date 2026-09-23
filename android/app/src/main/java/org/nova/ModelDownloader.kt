@@ -71,6 +71,10 @@ object ModelDownloader {
                 _state.value = doDownload(url, dir)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 _state.value = State.Idle
+            } catch (e: java.io.IOException) {
+                // a clean stop is not a failure
+                _state.value = if (cancelled) State.Idle
+                    else State.Failed(fileNameFromUrl(url), e.message ?: "download failed")
             } catch (e: Exception) {
                 _state.value = State.Failed(fileNameFromUrl(url), e.message ?: "download failed")
             }

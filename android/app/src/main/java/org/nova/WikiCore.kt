@@ -162,7 +162,8 @@ object WikiCore {
         if (ix.isEmpty()) return emptyList()
         val ql = query.lowercase()
         val scored = ix.mapNotNull { (title, off) ->
-            val score = qw.count { it in words(title) } +
+            val tw = words(title)
+            val score = qw.count { it in tw } +
                 (if (title.lowercase() in ql) 2 else 0)
             if (score > 0) Triple(score, title, off) else null
         }.sortedWith(compareByDescending<Triple<Int, String, Long>> { it.first }

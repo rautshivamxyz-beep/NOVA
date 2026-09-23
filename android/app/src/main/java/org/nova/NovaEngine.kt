@@ -198,4 +198,8 @@ object NovaEngine {
                 s is InferenceEngine.State.ProcessingUserPrompt ||
                 s is InferenceEngine.State.Benchmarking
         }
+
+    /** True while a generation is running on the engine. */
+    val isGenerating: Boolean
+        get() = engineRef?.state?.value is InferenceEngine.State.Generating
 }
