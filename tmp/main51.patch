@@ -1,0 +1,138 @@
+--- pa2/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 18:38:16.576628791 +0000
++++ pb2/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 18:38:16.606629205 +0000
+@@ -1269,7 +1269,7 @@
+             runTool("Summarize this document in clear sections: a short Overview first, then Key points as bullets, then Important terms with one-line meanings.")
+             return
+         }
+-        var chunks = docChunks(doc, 5000)
++        var chunks = docChunks(doc, 6500)
+         // skip table-of-contents / references / index pages: faster, cleaner
+         val real = chunks.filter { !isJunkChunkText(it) }
+         var skipped = 0
+@@ -1303,15 +1303,22 @@
+                 var sectionSummaries = StringBuilder()
+                 var emptyStreak = 0
+                 for ((i, c) in chunks.withIndex()) {
++                    // fresh engine every few chunks: once the context fills
++                    // the engine silently drops the oldest tokens, which
++                    // quietly degrades later sections - reload in batches
++                    if (i in 1 until chunks.size && i % 3 == 0 && NovaEngine.contextDirty) {
++                        try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
++                            NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                    }
+                     adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                         tail300(sectionSummaries.toString()))
+                     status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
+                     val sb = StringBuilder()
+                     try {
+                         NovaEngine.send(
+-                            "Summarize this part of a document in 4-6 detailed sentences. " +
++                            "Summarize this part of a document in 5-8 detailed sentences. " +
+                                 "Keep all names, numbers, dates and facts:" +
+-                                "\n-----\n$c\n-----", 300
++                                "\n-----\n$c\n-----", 400
+                         ).collect { sb.append(it) }
+                     } catch (e: Exception) { }
+                     val s = stripThinking(sb.toString()).trim()
+@@ -1343,10 +1350,11 @@
+                 NovaEngine.send(
+                     "These are summaries of " +
+                         (if (strided) "the main sections of a long document" else "the sections of a document") +
+-                        ". Write a DETAILED final summary organized topic by topic - for " +
+-                        "every topic give 3-5 sentences with its names, dates, numbers and " +
+-                        "terms. Do not skip any topic. Use only the information given:" +
+-                        "\n\n${dedupeLines(sectionSummaries.toString()).take(5000)}", 500
++                        ". Write a DETAILED final summary organized topic by topic: for each topic " +
++                        "start with a short bold heading line, then 2-4 bullet points (lines " +
++                        "starting with \"- \") in full sentences with its names, dates, numbers " +
++                        "and terms. Do not skip any topic. Use only the information given:" +
++                        "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 800
+                 ).collect { sb2.append(it) }
+                 var finalText = stripThinking(sb2.toString()).trim()
+                 // if the model derailed (scratchpad / off-topic drivel) fall
+@@ -1387,7 +1395,7 @@
+     private fun summaryCacheKey(): String? {
+         val n = docName ?: return null
+         val d = docContext ?: return null
+-        return "doc3_" + Integer.toHexString(n.hashCode()) + "_" + d.length
++        return "doc4_" + Integer.toHexString(n.hashCode()) + "_" + d.length
+     }
+ 
+     /**
+@@ -1405,7 +1413,7 @@
+         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
+         val totalLen = chunks.sumOf { it.length }
+         // cached from last time? -> instant
+-        val key = "notes4_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
++        val key = "notes5_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+         if (cf.exists()) {
+             val cached = try { cf.readText() } catch (e: Exception) { "" }
+@@ -1428,7 +1436,7 @@
+         val sections = ArrayList<String>()
+         val sbb = StringBuilder()
+         for (c in chunks) {
+-            if (sbb.isNotEmpty() && sbb.length + c.length > 1600) {
++            if (sbb.isNotEmpty() && sbb.length + c.length > 2600) {
+                 sections.add(sbb.toString()); sbb.setLength(0)
+             }
+             if (sbb.isNotEmpty()) sbb.append("\n\n")
+@@ -1438,10 +1446,10 @@
+         val allSections = ArrayList(sections)
+         // a very large document would mean a 30+ minute run - sample
+         // evenly over the whole doc instead of only the first sections
+-        if (sections.size > 40) {
+-            val step = sections.size / 40
++        if (sections.size > 26) {
++            val step = sections.size / 26
+             sections.clear()
+-            allSections.filterIndexed { i, _ -> i % step == 0 }.take(40).forEach { sections.add(it) }
++            allSections.filterIndexed { i, _ -> i % step == 0 }.take(26).forEach { sections.add(it) }
+         }
+         val um = Msg(Role.USER, userText)
+         currentChat.messages.add(um)
+@@ -1479,15 +1487,22 @@
+                 var emptyStreak = 0
+                 for ((i, c) in sections.withIndex()) {
+                     if (i < done.size) continue      // already summarized
++                    // fresh engine every few sections: once the context fills
++                    // the engine silently drops the oldest tokens, which
++                    // quietly degrades later sections - reload in batches
++                    if (i in 1 until sections.size && i % 6 == 0 && NovaEngine.contextDirty) {
++                        try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
++                            NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                    }
+                     adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
+                         tail300(sectionSummaries.toString()))
+                     status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
+                     val sb = StringBuilder()
+                     try {
+                         NovaEngine.send(
+-                            "Summarize this part of the notes in 4-6 detailed sentences. " +
++                            "Summarize this part of the notes in 5-8 detailed sentences. " +
+                                 "Keep every date, name, number, term and fact exactly as " +
+-                                "stated in the text:$antiCot\n-----\n$c\n-----", 300
++                                "stated in the text:$antiCot\n-----\n$c\n-----", 400
+                         ).collect { sb.append(it) }
+                     } catch (e: Exception) { }
+                     val s = stripThinking(sb.toString()).trim()
+@@ -1524,12 +1539,13 @@
+                 val sb2 = StringBuilder()
+                 NovaEngine.send(
+                     "These are section summaries from the notes \"$doc\". Write a DETAILED " +
+-                        "final summary organized topic by topic. For EVERY topic write 3-5 " +
+-                        "sentences including its important dates, names, numbers and terms. " +
+-                        "Do not skip any topic. Use ONLY what the summaries say - copy key " +
+-                        "terms exactly as written, do not add outside knowledge or invent " +
+-                        "terms.$antiCot\n\n" +
+-                        dedupeLines(sectionSummaries.toString()).take(5000), 500
++                        "final study summary. Organize it topic by topic: for each topic " +
++                        "start with a short bold heading line, then 2-4 bullet points " +
++                        "(lines starting with \"- \") in full sentences with that topic's " +
++                        "dates, names, numbers and terms. Cover EVERY topic. Use ONLY what " +
++                        "the summaries say - copy key terms exactly as written, do not add " +
++                        "outside knowledge or invent terms.$antiCot\n\n" +
++                        dedupeLines(sectionSummaries.toString()).take(11000), 800
+                 ).collect { sb2.append(it) }
+                 var finalText = stripThinking(sb2.toString()).trim()
+                 // if the model derailed (scratchpad / off-topic drivel) fall
