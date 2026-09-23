@@ -1626,13 +1626,18 @@ class MainActivity : Activity() {
                 contentResolver.getType(uri)?.contains("pdf", true) == true
             val text = withContext(Dispatchers.IO) {
                 try {
-                    if (isPdf) PdfDoc.extractText(this@MainActivity, uri)
+                    if (isPdf) PdfDoc.extractText(this@MainActivity, uri,
+                        onProgress = { p, n ->
+                            runOnUiThread {
+                                status.text = "reading with OCR \u2014 page $p/$n\u2026"
+                            }
+                        })
                     else readPlainDocument(uri)
                 } catch (e: Exception) { "" }
             }
             if (text.isBlank() || text.trim().length < 40) {
                 toast(if (isPdf)
-                    "This PDF looks scanned \u2014 image-only, no readable text in it"
+                    "Couldn\u2019t read this PDF \u2014 even OCR found no text in it"
                 else "NOVA can't read images \u2014 it reads PDF and text files")
                 return@launch
             }
@@ -2259,43 +2264,97 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Detects "remind me to X at/in TIME" and schedules a local notification. */
+    /**
+     * Detects "remind me to X at/in TIME" - plus "every day" / "daily" /
+     * "every monday" for repeating reminders - and schedules a local
+     * notification. Repeating reminders re-arm after each fire.
+     */
     private fun maybeSetReminder(text: String) {
         val m = Regex("(?i)\\bremind me\\b(?:\\s+to)?\\s+(.+)").find(text) ?: return
-        val rest = m.groupValues[1].trim()
-        var task: String
-        val timeStr: String
-        val rel = Regex("(?i)^in\\s+(\\d+\\s*\\w+)$").find(rest)
-        if (rel != null) {
-            task = "Reminder"
-            timeStr = rel.groupValues[1]
-        } else {
-            var idx = -1
-            for (k in listOf(" at ", " in ", " on ")) {
-                val j = rest.lastIndexOf(k)
-                if (j > idx) idx = j
-            }
-            if (idx <= 0) return
-            task = rest.substring(0, idx).trim()
-            timeStr = rest.substring(idx + 1).trim()
-            // "remind me tomorrow at 5pm to take medicine": the real task
-            // landed after the time - take it back from behind " to "
-            if (task in listOf("tomorrow", "today", "tonight")) {
-                val tIdx = rest.lastIndexOf(" to ")
-                if (tIdx > idx) task = rest.substring(tIdx + 4).trim()
-            }
-            task = task.removePrefix("to ").trim()
-            if (task.isEmpty()) return
+        var s = m.groupValues[1].trim()
+
+        // repeating? "every day", "daily", "every monday"...
+        var repeatMs = 0L
+        var repeatLabel = ""
+        val daily = Regex("(?i)\\b(every\\s*day|everyday|daily)\\b").find(s)
+        val weekly = Regex("(?i)\\bevery\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\\b").find(s)
+        val daypart = Regex("(?i)\\bevery\\s+(morning|evening|night)\\b").find(s)
+        if (daily != null) {
+            repeatMs = 24 * 3_600_000L; repeatLabel = "daily"
+            s = s.replace(daily.value, " ")
+        } else if (weekly != null) {
+            repeatMs = 7 * 24 * 3_600_000L; repeatLabel = "every " + weekly.groupValues[1].lowercase()
+            s = s.replace(weekly.value, " ")
+        } else if (daypart != null) {
+            repeatMs = 24 * 3_600_000L; repeatLabel = "every " + daypart.groupValues[1].lowercase()
+            s = s.replace(daypart.value, " ")
         }
-        val whenMs = parseReminderTime(timeStr) ?: return
+
+        // find the time anywhere in the sentence
+        var timeStr: String? = null
+        val rel = Regex("(?i)\\bin\\s+(\\d+\\s*\\w+)\\b").find(s)
+        val clock = Regex("(?i)\\b(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)\\b|\\b(\\d{1,2}):(\\d{2})\\b|(?<=\\bat\\s)(\\d{1,2})\\b").find(s)
+        if (rel != null) timeStr = rel.groupValues[1]
+        else if (clock != null) {
+            // "tonight at 9" means 9 pm, not 9 am
+            val pm = if (Regex("(?i)am|pm|:").containsMatchIn(clock.value)) ""
+                else if (s.contains("tonight")) " pm" else ""
+            timeStr = clock.value + pm + (if (s.contains("tomorrow")) " tomorrow" else "")
+            s = s.replace(clock.value, " ")
+        }
+        // "every evening" / "every morning" without a clock time
+        if (timeStr == null && repeatMs > 0) {
+            timeStr = if (daypart != null)
+                when (daypart.groupValues[1].lowercase()) {
+                    "morning" -> "8am"
+                    "evening" -> "7pm"
+                    else -> "9pm"
+                }
+            else "9am"
+        } else if (timeStr == null) {
+            return
+        }
+
+        // whatever is left is the task
+        var task = s
+        if (rel != null) task = task.replace(rel.value, " ")
+        task = task
+            .replace(Regex("(?i)\\b(tomorrow|today|tonight)\\b"), " ")
+            .replace(Regex("(?i)\\bevery\\s+(morning|evening|night)\\b"), " ")
+            .replace(Regex("(?i)\\s+\\bat\\s*$"), "")
+            .trim().trim(',', '.', ' ')
+            .replace(Regex("(?i)^(at|to)\\s+"), "")
+            .trim()
+        // strip a leading "to "/"at " repeatedly ("at 6pm to revise sst")
+        while (task.length >= 3 &&
+            (task.startsWith("to ", true) || task.startsWith("at ", true)))
+            task = task.substring(3).trim()
+        if (task.isEmpty()) task = "Reminder"
+        if (repeatMs > 0) task = task + " (repeats " + repeatLabel + ")"
+
+        var whenMs = parseReminderTime(timeStr) ?: return
+        // weekly: move to the next wanted weekday
+        if (weekly != null) {
+            val want = listOf("sunday", "monday", "tuesday", "wednesday",
+                "thursday", "friday", "saturday").indexOf(weekly.groupValues[1].lowercase()) + 1
+            if (want >= 0) {
+                val cal = java.util.Calendar.getInstance()
+                cal.timeInMillis = whenMs
+                var diff = (want - cal.get(java.util.Calendar.DAY_OF_WEEK) + 7) % 7
+                if (diff == 0 && cal.timeInMillis <= System.currentTimeMillis()) diff = 7
+                cal.add(java.util.Calendar.DAY_OF_YEAR, diff)
+                whenMs = cal.timeInMillis
+            }
+        }
         val human = java.text.SimpleDateFormat("EEE, d MMM h:mm a", Locale.getDefault())
             .format(java.util.Date(whenMs))
         AlertDialog.Builder(this)
             .setTitle("Set reminder?")
             .setMessage(task + "\n\n" + human)
             .setPositiveButton("Set") { _, _ ->
-                Reminder.schedule(this, whenMs, task)
-                toast("Reminder set: $human")
+                Reminder.schedule(this, whenMs, task, repeatMs)
+                toast(if (repeatMs > 0) "Reminder set ($repeatLabel): $human"
+                else "Reminder set: $human")
             }
             .setNegativeButton("Cancel", null)
             .show()
