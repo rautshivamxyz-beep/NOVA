@@ -1299,10 +1299,10 @@ class MainActivity : Activity() {
         setStatus()
         scope.launch {
             try {
-                val sectionSummaries = StringBuilder()
+                var sectionSummaries = StringBuilder()
                 for ((i, c) in chunks.withIndex()) {
                     adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
-                        sectionSummaries.toString().takeLast(300))
+                        tail300(sectionSummaries.toString()))
                     status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
                     val sb = StringBuilder()
                     try {
@@ -1312,7 +1312,13 @@ class MainActivity : Activity() {
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
-                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                    if (s.length > 10) {
+                        sectionSummaries.append(s).append("\n\n")
+                        // tiny models echo the same sentence for similar
+                        // sections - re-dedupe so the progress display and
+                        // the final combine see each point only once
+                        sectionSummaries = StringBuilder(dedupeLines(sectionSummaries.toString()))
+                    }
                 }
                 adapter.setLastText("Writing the final summary\u2026")
                 status.text = "writing final summary\u2026"
@@ -1435,10 +1441,10 @@ class MainActivity : Activity() {
                     NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
                         NovaEngine.activeModelLabel, settings.systemPrompt)
                 } catch (e: Exception) { }
-                val sectionSummaries = StringBuilder()
+                var sectionSummaries = StringBuilder()
                 for ((i, c) in sections.withIndex()) {
                     adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
-                        sectionSummaries.toString().takeLast(300))
+                        tail300(sectionSummaries.toString()))
                     status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
                     val sb = StringBuilder()
                     try {
@@ -1449,7 +1455,13 @@ class MainActivity : Activity() {
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
-                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                    if (s.length > 10) {
+                        sectionSummaries.append(s).append("\n\n")
+                        // tiny models echo the same sentence for similar
+                        // sections - re-dedupe so the progress display and
+                        // the final combine see each point only once
+                        sectionSummaries = StringBuilder(dedupeLines(sectionSummaries.toString()))
+                    }
                 }
                 adapter.setLastText("Writing the final summary\u2026")
                 status.text = "writing final summary\u2026"
@@ -2533,6 +2545,15 @@ private fun cutPartialLine(old: String, added: String): String {
         (firstNew.startsWith(last) || last.startsWith(firstNew.take(40))))
         lines.removeAt(lines.size - 1)
     return lines.joinToString("\n")
+}
+
+/** Last ~300 chars of a progress text, starting at a word boundary
+ *  so the first word is not cut in half ("chieving independence"). */
+private fun tail300(t: String): String {
+    val tail = t.takeLast(300)
+    if (t.length <= 300) return tail
+    val i = tail.indexOfFirst { it == ' ' || it == '\n' }
+    return if (i >= 0) tail.substring(i + 1) else tail
 }
 
 /**
