@@ -80,6 +80,10 @@ class MainActivity : Activity() {
 
     /** Guards the degenerate-reply retry (one retry per turn). */
     private var replyRetried = false
+    // v5.4 grounded answers: escape-free newline, source citation, Q&A cache
+    private val NL = 10.toChar().toString()
+    private var pendingCitation: String? = null
+    private var pendingQaKey: String? = null
 
     /** Notes document the user last summarized - "gimme the whole summary" returns to it. */
     private var lastNotesDoc: String? = null
@@ -748,6 +752,8 @@ class MainActivity : Activity() {
         docSearchIn(docContext ?: "", query, maxChars)
 
     private fun send() {
+        pendingCitation = null
+        pendingQaKey = null
         if (generationJob?.isActive == true) {
             generationJob?.cancel()
             return
@@ -959,7 +965,33 @@ class MainActivity : Activity() {
 
         // knowledge base (offline RAG): relevant notes from the user's documents
         var knowledgePart = ""
+        // v5.4: study questions get STRICT grounding + citation + cache
+        val qLow = text.lowercase()
+        val studyQ = qLow.startsWith("explain ") || qLow.startsWith("teach me ") ||
+            qLow.startsWith("what is ") || qLow.startsWith("what are ") ||
+            qLow.startsWith("who is ") || qLow.startsWith("who was ") ||
+            qLow.startsWith("define ") || qLow.startsWith("describe ") ||
+            qLow.startsWith("tell me about ") || qLow.contains(" explain ") ||
+            qLow.contains(" teach me ") || qLow.contains(" what is ")
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+            // v5.4: cached answer from last time? -> instant, no model run
+            if (studyQ && docPart.isEmpty()) {
+                val qaKey = "qa_" + Integer.toHexString(qLow.hashCode())
+                val qaFile = File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey)
+                val qaCached = if (qaFile.exists())
+                    try { qaFile.readText() } catch (e: Exception) { "" } else ""
+                if (qaCached.length > 30) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um); adapter.add(um)
+                    val cachedReply = Msg(Role.ASSISTANT, qaCached)
+                    currentChat.messages.add(cachedReply); adapter.add(cachedReply)
+                    scrollToEnd()
+                    toast("Answer (cached from last time)")
+                    try { ChatStore.save(this, currentChat) } catch (e: Exception) { }
+                    return
+                }
+                pendingQaKey = qaKey
+            }
             val hits = Knowledge.search(this, text)
             if (hits.isNotEmpty()) {
                 var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
@@ -978,6 +1010,34 @@ class MainActivity : Activity() {
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
             }
+        }
+        // v5.4: study questions - rewrap the notes as STRICT instructions,
+        // record the source pages, and let the notes be the only background
+        if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {
+            val hits2 = Knowledge.search(this, text)
+            var notes2 = hits2.joinToString(NL + "---" + NL) { "[" + it.doc + "] " + it.text }
+            if (notes2.length > (if (tiny) 900 else 2400))
+                notes2 = notes2.substring(0, if (tiny) 900 else 2400)
+            knowledgePart = "(Study notes from the user's documents follow. " +
+                "Answer ONLY using these notes. If the answer is not in the " +
+                "notes, say plainly that the notes do not cover it. Copy key " +
+                "terms and facts exactly as written." + NL + notes2 + ")" + NL + NL
+            wikiPart = ""
+            var pages = ""
+            for (l in notes2.lines()) {
+                val t2 = l.trim()
+                if (t2 == "---") break
+                if (t2.length < 22 && t2.contains("page ")) {
+                    val d = t2.filter { it.isDigit() }
+                    if (d.isNotEmpty() && !pages.contains(d)) {
+                        if (pages.isNotEmpty()) pages += ", "
+                        pages += d
+                    }
+                }
+            }
+            pendingCitation = if (pages.isEmpty()) "" else
+                "Source: " + hits2.first().doc + ", " +
+                (if (pages.contains(",")) "pages " else "page ") + pages
         }
         // one background source for tiny models, both for bigger ones
         prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
@@ -1087,8 +1147,11 @@ class MainActivity : Activity() {
                     // blank, one-word or looping answers from tiny models:
                     // retry once with a firmer instruction instead of garbage
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
-                        isDegenerateReply(stripThinking(replyMsg.text))) {
+                        (isDegenerateReply(stripThinking(replyMsg.text)) ||
+                            chatDerailed(stripThinking(replyMsg.text), prompt))) {
                         replyRetried = true
+                        pendingCitation = null
+                        pendingQaKey = null
                         replyMsg.text = ""
                         adapter.setLastText("")
                         startGeneration(
@@ -1102,6 +1165,23 @@ class MainActivity : Activity() {
                     // instead of showing a blank bubble
                     if (stripThinking(replyMsg.text).isBlank() && !speechCancelled)
                         replyMsg.text = "(no reply - tap the regenerate icon to try again)"
+                    // v5.4: append the source citation, then cache the answer
+                    if (pendingCitation != null && newBubble && userText != null) {
+                        val cit = pendingCitation!!
+                        pendingCitation = null
+                        if (cit.isNotEmpty() && replyMsg.text.isNotBlank()) {
+                            replyMsg.text = replyMsg.text.trim() + NL + NL + cit
+                            adapter.setLastText(replyMsg.text)
+                        }
+                    }
+                    if (pendingQaKey != null && newBubble && userText != null) {
+                        val qaAns = stripThinking(replyMsg.text).trim()
+                        if (qaAns.length > 30) try {
+                            File(File(filesDir, "summary_cache").apply { mkdirs() },
+                                pendingQaKey!!).writeText(qaAns)
+                        } catch (e: Exception) { }
+                        pendingQaKey = null
+                    }
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
                     // that could fail (storage, voice) gets a chance to skip it
@@ -2720,6 +2800,23 @@ private fun looksDerailed(t: String, source: String): Boolean {
  * always dropped; longer lines that share >= 65% of their words with an
  * earlier line are dropped too.
  */
+/**
+ * v5.4: detects a derailed CHAT answer - scratchpad steps or text with
+ * almost nothing in common with the question and its notes.
+ */
+private fun chatDerailed(t: String, source: String): Boolean {
+    if (t.length < 25) return false
+    if (Regex("(?i)step [0-9]+[.:]").containsMatchIn(t)) return true
+    // overlap only makes sense against a notes-rich (grounded) prompt;
+    // a plain short question shares too few words with any good answer
+    if (source.length < 400) return false
+    val src = source.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }.toHashSet()
+    val out = t.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }
+    if (src.isEmpty() || out.size < 12) return false
+    val hit = out.count { it in src }
+    return hit * 10 < out.size * 2
+}
+
 private fun dedupeLines(t: String): String {
     val seen = ArrayList<Set<String>>()
     val out = ArrayList<String>()

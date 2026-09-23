@@ -9,7 +9,7 @@ import java.io.File
  *  keyword-searched and injected into prompts (offline RAG). */
 object Knowledge {
 
-    class Chunk(val doc: String, val text: String, val low: String)
+    class Chunk(val doc: String, val text: String, val low: String, val norm: String)
 
     private val STOP = setOf(
         "the", "and", "for", "are", "this", "that", "with", "what", "when",
@@ -38,7 +38,7 @@ object Knowledge {
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
                     val t = o.getString("t")
-                    list.add(Chunk(o.getString("d"), t, t.lowercase()))
+                    list.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
                 }
             }
         } catch (e: Exception) { }
@@ -66,7 +66,7 @@ object Knowledge {
 
     fun addDoc(ctx: Context, name: String, text: String) {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
-        for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase()))
+        for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))
         save(ctx, chunks)
     }
 
@@ -111,7 +111,7 @@ object Knowledge {
             var score = 0
             val dl = c.doc.lowercase()
             for (t in terms) {
-                if (c.low.contains(t)) score++
+                if (c.norm.contains(" " + t + " ")) score++
                 // the document NAME matters too: "sst" must find "SST notes"
                 if (dl.contains(t)) score += 2
             }
@@ -150,7 +150,7 @@ object Knowledge {
             val dl = c.doc.lowercase()
             var s = 0
             for (t in terms) {
-                if (c.low.contains(t)) s += 2
+                if (c.norm.contains(" " + t + " ")) s += 2
                 if (dl.contains(t)) s += 3
             }
             if (s > 0) docScores[c.doc] = (docScores[c.doc] ?: 0) + s
@@ -176,7 +176,7 @@ object Knowledge {
             var docHit = 0
             var textHit = 0
             for (t in terms) {
-                if (c.low.contains(t)) {
+                if (c.norm.contains(" " + t + " ")) {
                     textHit += 2
                     docScores[c.doc] = (docScores[c.doc] ?: 0) + 2
                 }
@@ -201,6 +201,12 @@ object Knowledge {
         val to = minOf(docIdx.size, from + maxChunks)
         return docIdx.subList(from, to).map { chunks[it].text }
     }
+
+        /** v5.4: lowercase with non-alphanumeric runs collapsed to single
+     *  spaces, padded at both ends - " term " matching then hits whole
+     *  words only ("art" no longer matches "start"). */
+    private fun normOf(t: String): String =
+        " " + t.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
 
     private fun tokenize(s: String): List<String> {
         val out = LinkedHashSet<String>()
