@@ -29,6 +29,10 @@ jobs:
       - name: Allow Android 11 (minSdk 30)
         run: |
           sed -i 's/minSdk = 33/minSdk = 30/' llama.cpp/examples/llama.android/lib/build.gradle.kts
+      - name: Patch engine threading (v5.3 big-core threads)
+        run: |
+          python3 tmp/patch_engine53.py llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+          grep -n "NOVA v5.3" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
         run: |
@@ -42,5 +46,5 @@ jobs:
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
           git add android/app/libs/llama-release.aar
-          git commit -m "engine: rebuild llama.cpp AAR from upstream ${LLAMA_SHA}"
+          git commit -m "engine: v5.3 big-core thread pinning from llama.cpp ${LLAMA_SHA}"
           git push
