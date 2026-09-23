@@ -1,0 +1,24 @@
+name: Apply v5.4.3 MainActivity patch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+      - name: Apply the patch, remove this workflow, commit and push
+        run: |
+          set -e
+          git apply patches/v5.4.3-mainactivity.patch
+          git rm -q .github/workflows/apply-v543.yml
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m "v5.4.3: MainActivity context fixes (applied by CI)"
+          git push
