@@ -26,8 +26,8 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 22
-        versionName '5.2'
+        versionCode 23
+        versionName '5.3'
     }
 
     signingConfigs {
