@@ -1307,8 +1307,9 @@ class MainActivity : Activity() {
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
-                            "Summarize this part of a document in 3 short sentences. " +
-                                "Keep all names, numbers and facts:\n-----\n$c\n-----", 150
+                            "Summarize this part of a document in 4-6 detailed sentences. " +
+                                "Keep all names, numbers, dates and facts:" +
+                                "\n-----\n$c\n-----", 300
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1326,9 +1327,10 @@ class MainActivity : Activity() {
                 NovaEngine.send(
                     "These are summaries of " +
                         (if (strided) "the main sections of a long document" else "the sections of a document") +
-                        ". Write one clear final summary with: an Overview (3 sentences), " +
-                        "Key points (short bullets) and Important terms (word - meaning). " +
-                        "Use only the information given:\n\n${dedupeLines(sectionSummaries.toString()).take(6000)}", 400
+                        ". Write a DETAILED final summary organized topic by topic - for " +
+                        "every topic give 3-5 sentences with its names, dates, numbers and " +
+                        "terms. Do not skip any topic. Use only the information given:" +
+                        "\n\n${dedupeLines(sectionSummaries.toString()).take(9000)}", 1000
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
@@ -1366,7 +1368,7 @@ class MainActivity : Activity() {
     private fun summaryCacheKey(): String? {
         val n = docName ?: return null
         val d = docContext ?: return null
-        return "doc_" + Integer.toHexString(n.hashCode()) + "_" + d.length
+        return "doc2_" + Integer.toHexString(n.hashCode()) + "_" + d.length
     }
 
     /**
@@ -1384,7 +1386,7 @@ class MainActivity : Activity() {
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
-        val key = "notes2_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val key = "notes3_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
         if (cf.exists()) {
             val cached = try { cf.readText() } catch (e: Exception) { "" }
@@ -1449,9 +1451,9 @@ class MainActivity : Activity() {
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
-                            "Summarize this part of the notes in 2-3 short sentences. " +
-                                "Use ONLY facts written in this text, and keep names, numbers " +
-                                "and facts exactly as stated:$antiCot\n-----\n$c\n-----", 150
+                            "Summarize this part of the notes in 4-6 detailed sentences. " +
+                                "Keep every date, name, number, term and fact exactly as " +
+                                "stated in the text:$antiCot\n-----\n$c\n-----", 300
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1467,12 +1469,13 @@ class MainActivity : Activity() {
                 status.text = "writing final summary\u2026"
                 val sb2 = StringBuilder()
                 NovaEngine.send(
-                    "These are section summaries from the notes \"$doc\". Write one clear " +
-                        "final summary with: an Overview (3 sentences), Key points (short " +
-                        "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
-                        "Use ONLY what the summaries say - copy key terms exactly as they are " +
-                        "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
-                        dedupeLines(sectionSummaries.toString()).take(6000), 500
+                    "These are section summaries from the notes \"$doc\". Write a DETAILED " +
+                        "final summary organized topic by topic. For EVERY topic write 3-5 " +
+                        "sentences including its important dates, names, numbers and terms. " +
+                        "Do not skip any topic. Use ONLY what the summaries say - copy key " +
+                        "terms exactly as written, do not add outside knowledge or invent " +
+                        "terms.$antiCot\n\n" +
+                        dedupeLines(sectionSummaries.toString()).take(9000), 1000
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
