@@ -1,0 +1,17 @@
+--- a/android/app/src/main/java/org/nova/MainActivity.kt
++++ b/android/app/src/main/java/org/nova/MainActivity.kt
+@@ -852,0 +853,5 @@
++            val summNoun = text.lowercase().contains("summary")
++            // v5.4.1: "teach me whole power sharing chapter" - the user wants
++            // the WHOLE chapter as a study summary, not a 2400-char answer
++            val wholeTeach = text.lowercase().contains("whole") &&
++                (text.lowercase().contains("chapter") || text.lowercase().contains("notes"))
+@@ -855 +860 @@
+-            if (wantsSumm || followUp) {
++            if (wantsSumm || followUp || summNoun || wholeTeach) {
+@@ -862 +867 @@
+-                val doc = if (wantsSumm) Knowledge.bestDocName(this, qtext)
++                val doc = if (wantsSumm || summNoun || wholeTeach) Knowledge.bestDocName(this, qtext)
+@@ -868 +873 @@
+-                    val whole = !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
++                    val whole = wholeTeach || !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
