@@ -68,11 +68,22 @@ object Knowledge {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
         for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))
         save(ctx, chunks)
+        clearQaCache(ctx)
     }
 
     fun removeDoc(ctx: Context, name: String) {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
         save(ctx, chunks)
+        clearQaCache(ctx)
+    }
+
+    /** Old cached answers are invalid once the notes change. */
+    fun clearQaCache(ctx: Context) {
+        try {
+            File(File(ctx.filesDir, "summary_cache").apply { mkdirs() })
+                .listFiles { f: File -> f.name.startsWith("qa_") }
+                ?.forEach { it.delete() }
+        } catch (e: Exception) { }
     }
 
     /** Splits text into ~700-char pieces, breaking at paragraphs/sentences. */

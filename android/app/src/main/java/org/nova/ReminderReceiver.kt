@@ -18,11 +18,12 @@ object Reminder {
 
     fun schedule(context: Context, atMillis: Long, text: String, repeatMs: Long = 0L) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val id = (atMillis / 1000L).toInt()
+        val id = (atMillis.toString() + text).hashCode()
         val intent = Intent(context, ReminderReceiver::class.java)
             .putExtra("text", text)
             .putExtra("id", id)
             .putExtra("repeat", repeatMs)
+            .putExtra("at", atMillis)
         val pi = PendingIntent.getBroadcast(
             context, id, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -38,6 +39,10 @@ class ReminderReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra("text") ?: "Reminder"
         val id = intent.getIntExtra("id", 1)
         val repeatMs = intent.getLongExtra("repeat", 0L)
+        val at = intent.getLongExtra("at", 0L)
+
+        // one-shot reminders are gone once fired - drop them from the store
+        if (repeatMs <= 0 && at > 0L) ReminderStore.remove(context, at, text)
 
         // repeating reminder: schedule the next occurrence first
         if (repeatMs > 0) {
