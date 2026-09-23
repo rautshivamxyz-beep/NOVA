@@ -20,7 +20,7 @@ jobs:
           sed -i 's|/\*\* if the added|/** If the added|' tmp/main32.patch
           patch -p1 -l -F 3 < tmp/main32.patch
           echo "87c581be5427d8b2407749a2e261cb1c  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
-          git rm -rq tmp
+          git rm -rqf tmp
           git add android/app/src/main/java/org/nova/MainActivity.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
