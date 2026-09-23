@@ -1,4 +1,4 @@
-name: Restore files v3.6
+name: Restore files v3.6b
 on:
   workflow_dispatch:
 
@@ -12,16 +12,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply patches and verify
+      - name: Apply patch and verify
         run: |
           set -e
-          git apply --ignore-whitespace tmp/main36.patch
-          git apply --ignore-whitespace tmp/pdfdoc.patch
-          echo "09b41d08ffad8ef6540e22de5709b193  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
-          echo "49a756ebe0150fe3dc07ac87df2501ca  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
+          git apply --ignore-whitespace tmp/pdfdoc2.patch
+          echo "7db71bae08de94be707c8a67fee796da  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
           git rm -rqf tmp
-          git add android/app/src/main/java/org/nova/MainActivity.kt android/app/src/main/java/org/nova/PdfDoc.kt
+          git add android/app/src/main/java/org/nova/PdfDoc.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "v3.6: strong PDF reading (header/footer removal, reading order, scanned detection)"
+          git commit -m "PdfDoc: cache-bust so v3.6 extraction replaces old cached text"
           git push
