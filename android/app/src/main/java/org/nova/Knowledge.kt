@@ -80,7 +80,7 @@ object Knowledge {
     /** Old cached answers are invalid once the notes change. */
     fun clearQaCache(ctx: Context) {
         try {
-            File(File(ctx.filesDir, "summary_cache").apply { mkdirs() })
+            File(ctx.filesDir, "summary_cache").apply { mkdirs() }
                 .listFiles { f: File -> f.name.startsWith("qa_") }
                 ?.forEach { it.delete() }
         } catch (e: Exception) { }
