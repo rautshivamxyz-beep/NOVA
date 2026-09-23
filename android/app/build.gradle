@@ -26,8 +26,8 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 19
-        versionName '4.0'
+        versionCode 20
+        versionName '5.0'
     }
 
     signingConfigs {
@@ -71,6 +71,9 @@ dependencies {
     implementation 'io.noties.markwon:syntax-highlight:4.6.2'
     implementation 'io.noties:prism4j:2.0.0'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
+
+    // on-device OCR for scanned PDFs (bundled model - fully offline)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
 
 configurations.all {
