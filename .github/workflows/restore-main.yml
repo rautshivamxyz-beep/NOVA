@@ -1,4 +1,4 @@
-name: Restore files v3.6b
+name: Restore MainActivity v3.7
 on:
   workflow_dispatch:
 
@@ -15,11 +15,12 @@ jobs:
       - name: Apply patch and verify
         run: |
           set -e
-          git apply --ignore-whitespace tmp/pdfdoc2.patch
-          echo "7db71bae08de94be707c8a67fee796da  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
+          git show 58f1391c400cd52406934ee1547f56db2607845b:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          git apply tmp/main37.patch
+          echo "6de9a4c9a669098f056beb31acf1a918  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
           git rm -rqf tmp
-          git add android/app/src/main/java/org/nova/PdfDoc.kt
+          git add android/app/src/main/java/org/nova/MainActivity.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "PdfDoc: cache-bust so v3.6 extraction replaces old cached text"
+          git commit -m "MainActivity.kt v3.7: fresh engine before final combine, context-safe budget, derailment fallback"
           git push
