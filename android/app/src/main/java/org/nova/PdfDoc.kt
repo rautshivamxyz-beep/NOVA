@@ -65,7 +65,9 @@ object PdfDoc {
             context.contentResolver.openInputStream(uri)?.use { it.available().toLong() } ?: -1L
         } catch (e: Exception) { -1L }
         if (size <= 0 && name.isEmpty()) return null
-        Integer.toHexString(name.hashCode() * 31 + size.toInt()) +
+        // "v2" prefix: v3.6 extraction is much cleaner - force a re-read of
+        // PDFs that were cached by an older version
+        "v2_" + Integer.toHexString(name.hashCode() * 31 + size.toInt()) +
             "_" + Integer.toHexString(uri.hashCode())
     } catch (e: Exception) { null }
 
