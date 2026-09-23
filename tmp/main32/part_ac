@@ -1,0 +1,522 @@
+ble = false)
+                    } else {
+                       // auto-compact: compress old turns once the chat grows
+                        if (!speechCancelled && !compacting &&
+                             currentChat.messages.size > 20 &&
+                             currentChat.messages.size - compactedAtCount >= 8
+                        ) {
+                           compactOldTurns()
+                       }
+                    }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Word edit distance (capped at 3) - fuzzy matching for typed/spoken commands. */
+    private fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (Math.abs(a.length - b.length) > 2) return 3
+        val dp = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..b.length) {
+                val tmp = dp[j]
+                dp[j] = minOf(dp[j] + 1, dp[j - 1] + 1,
+                    prev + if (a[i - 1] == b[j - 1]) 0 else 1)
+                prev = tmp
+            }
+        }
+        return dp[b.length]
+    }
+
+    /** True when a reply is blank, one or two words, or stuck repeating
+     *  the same line over and over - too broken to show as-is. */
+    private fun isDegenerateReply(t: String): Boolean {
+        val s = t.trim().removeSuffix("\u23F9").trim()
+        if (s.isEmpty()) return true
+        if (s.split(Regex("\\s+")).filter { it.isNotBlank() }.size <= 2) return true
+        // the same line (or bullet) 3+ times = the model is in a loop
+        val counts = HashMap<String, Int>()
+        for (raw in s.lines()) {
+            val line = raw.trim().removePrefix("* ").removePrefix("- ").trim()
+            if (line.length >= 15) {
+                val c = (counts[line] ?: 0) + 1
+                counts[line] = c
+                if (c >= 3) return true
+            }
+        }
+        return false
+    }
+
+    /** True when a reply looks cut off mid-sentence at the token limit. */
+    private fun shouldAutoContinue(text: String): Boolean {
+        val t = stripThinking(text).trim()
+        if (t.length < settings.predictLength * 3) return false
+        val last = t.lastOrNull() ?: return false
+        return last !in ".!?\u2026\"'`)]}*"
+    }
+
+    /** Quick-action chips under a finished reply. */
+    private fun updateDocBanner() {
+        val has = docContext != null
+        docBanner.visibility = if (has) View.VISIBLE else View.GONE
+        if (has) docLabel.text = "$docName • ${docContext!!.length} chars"
+    }
+
+    /** Send button: dim when there is nothing to type, bright blue when ready. */
+    private fun updateSendLook() {
+        if (generating) return
+        if (input.text.isNotBlank()) {
+            sendBtn.background = GradientDrawable().apply {
+                setColor(accentDeep); cornerRadius = dp(20).toFloat()
+            }
+            sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+                icon(R.drawable.ic_send, Color.WHITE), null, null, null)
+        } else {
+            sendBtn.background = GradientDrawable().apply {
+                setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
+            }
+            sendBtn.setCompoundeDrawablesWithIntrinsicBounds(
+                icon(R.drawable.ic_send, NovaTheme.sendDimText), null, null, null)
+        }
+    }
+
+    /** Runs a hidden-prompt tool action (no duplicate user bubble).
+     *  The document text is injected so "summarize this document"
+     *  actually has the document to work on. */
+    private fun runTool(prompt: String) {
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        if (prompt.startsWith("__STYLE__")) {
+            val sp = stylePrompt("Rewrite this text in the same personal style as the examples, keeping the meaning:\n-----\n${prompt.substring(9)}\n-----")
+            if (sp == null) toast("Chat a bit more first so I can learn your style")
+            else startGeneration(sp, null)
+            return
+        }
+        pendingCards = prompt.startsWith("Create 8 study flashcards") ||
+            prompt.startsWith("Create a quiz")
+        val docPart = if (docContext != null && docName != null) {
+            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docSearch(prompt, 8000)}\n-----\nEnd of document.)\n\n"
+        } else ""
+        startGeneration(docPart + prompt, null)
+    }
+
+    /**
+     * Smart document summary for long PDFs: splits into sections, skips
+     * table-of-contents / references / index pages, summarizes each
+     * section with LIVE progress in the chat, then writes one final
+     * summary from the section summaries (map-reduce). Finished summaries
+     * are cached per document, so asking again for the same file is
+      * instant.
+     */
+    private fun summarizeDoc() {
+        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        val doc = docContext ?: return
+        // cached summary from last time? -> instant
+        val key = summaryCacheKey()
+        if (key != null) {
+            val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+            if (cf.exists()) {
+                val cached = try { cf.readText() } catch (e: Exception) { "" }
+                if (cached.length > 50) {
+                    val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
+                    currentChat.messages.add(um); adapter.add(um)
+                    val reply = Msg(Role.ASSISTANT, cached)
+                    currentChat.messages.add(reply); adapter.add(reply)
+                    scrollToEnd()
+                    toast("Summary (cached from last time)")
+                    return
+                }
+            }
+        }
+        if (doc.length <= 5000) {
+            runTool("Summarize this document in clear sections: a short Overview first, then Key points as bullets, then Important terms with one-line meanings.")
+            return
+        }
+        var chunks = docChunks(doc, 5000)
+        // skip table-of-contents / references / index pages: faster, cleaner
+        val real = chunks.filter { !isJunkChunkText(it) }
+        var skipped = 0
+        if (real.size >= 3 && real.size < chunks.size) {
+            skipped = chunks.size - real.size
+            chunks = real
+        }
+        var strided = false
+        if (chunks.size > 12) {
+            val step = chunks.size / 12
+            chunks = chunks.filterIndexed { i, _ -> i % step == 0 }.take(12)
+            strided = true
+        }
+        // live progress bubble: sections land one by one instead of a dead wait
+        val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
+        currentChat.messages.add(um)
+        adapter.add(um)
+        val reply = Msg(Role.ASSISTANT, "", done = false)
+        currentChat.messages.add(reply)
+        adapter.add(reply)
+        scrollToEnd()
+        adapter.setLastText(if (skipped > 0)
+            "Reading ${chunks.size} sections ($skipped index/reference pages skipped)\u2026"
+        else "Reading ${chunks.size} sections\u2026")
+        generating = true
+        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
+            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setStatus()
+        scope.launch {
+            try {
+                val sectionSummaries = StringBuilder()
+                for ((i, c) in chunks.withIndex()) {
+                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                        sectionSummaries.toString().takeLast(300))
+                    status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
+                    val sb = StringBuilder()
+                    try {
+                        NovaEngine.send(
+                             "Summarize this part of a document in 3 short sentences. " +
+                                "Keep all names, numbers and facts:\n-----\n$c\n-----", 150
+                        ).collect { sb.append(it) }
+                    } catch (e: Exception) { }
+                    val s = stripThinking(sb.toString()).trim()
+                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                }
+                adapter.setLastText("Writing the final summary\u2026")
+                status.text = "writing final summary\u2026"
+                val sb2 = StringBuilder()
+                NovaEngine.send(
+                    "These are summaries of " +
+                        (if (strided) "the main sections of a long document" else "the sections of a document") +
+                        ". Write one clear final summary with: an Overview (3 sentences), " +
+                        "Key points (short bullets) and Important terms (word - meaning). " +
+                        "Use only the information given:\n\n${sectionSummaries.toString().take(6000)}", 400
+                ).collect { sb2.append(it) }
+                var finalText = stripThinking(sb2.toString()).trim()
+                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                reply.text = finalText
+                adapter.finalizeLast()
+                scrollToEnd()
+                // cache it for next time
+                if (key != null && finalText.length > 50) try {
+                    File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+                        .writeText(finalText)
+                } catch (e: Exception) { }
+                // the engine context now holds every section prompt - reset it
+                needsContextCarry = true
+                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                try {
+                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                } catch (e: Exception) { }
+                toast("Summary ready - long-press it to make study cards")
+            } catch (e: Exception) {
+                try {
+                    reply.text = "Summary failed - try again"
+                    adapter.finalizeLast()
+                } catch (x: Exception) { }
+                toast("Summary failed - try again")
+            } finally {
+                generating = false
+                setStatus()
+                updateSendLook()
+            }
+        }
+    }
+
+    /** Cache key for this document's summary (name + length = same file). */
+    private fun summaryCacheKey(): String? {
+        val n = docName ?: return null
+        val d = docContext ?: return null
+        return Integer.toHexString(n.hashCode()) + "_" + d.length
+    }
+
+    /**
+     * Summarizes saved notes over the WHOLE chapter: map-reduce with live
+     * progress (like the PDF summarizer), on a CLEAN engine so earlier
+     * topics can't bleed in. fullDoc=true takes every chunk of the
+     * document; otherwise the chunks matching the user's topic. Cached.
+     */
+    private fun summarizeNotes(doc: String, userText: String, fullDoc: Boolean) {
+        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        val chunks = if (fullDoc) Knowledge.docChunks(this, doc)
+                      else Knowledge.bestChunks(this, userText)
+        if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
+        val totalLen = chunks.sumOf { it.length }
+        // cached from last time? -> instant
+        val key = "notes_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
+        if (cf.exists()) {
+            val cached = try { cf.readText() } catch (e: Exception) { "" }
+            if (cached.length > 50) {
+                val um = Msg(Role.USER, userText)
+                currentChat.messages.add(um); adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\n\n$cached")
+                currentChat.messages.add(reply); adapter.add(reply)
+                scrollToEnd()
+                return
+            }
+        }
+        // tiny models show their scratchpad ("Step 1...") - forbid it
+        val antiCot = " Reply with ONLY the summary itself - no 'Step 1' plan, " +
+            "no questions, no 'final answer' line."
+        // ALWAYS map-reduce with live progress: a single huge notes prompt can
+        // overflow the model's context window (the notes get cut off and the
+        // model invents the rest), while ~1600-char sections always fit.
+        // The progress lines also show WHICH document is being summarized.
+        val sections = ArrayList<String>()
+        val sbb = StringBuilder()
+        for (c in chunks) {
+            if (sbb.isNotEmpty() && sbb.length + c.length > 1600) {
+                sections.add(sbb.toString()); sbb.setLength(0)
+            }
+            if (sbb.isNotEmpty()) sbb.append("\n\n")
+            sbb.append(c)
+        }
+        if (sbb.isNotEmpty()) sections.add(sbb.toString())
+        val um = Msg(Role.USER, userText)
+        currentChat.messages.add(um)
+        adapter.add(um)
+        val reply = Msg(Role.ASSISTANT, "", done = false)
+        currentChat.messages.add(reply)
+        adapter.add(reply)
+        scrollToEnd()
+        adapter.setLastText("Reading ${sections.size} sections of $doc\u2026")
+        generating = true
+        sendBtn.setCompoundeDrawablesWithIntrinsicBounds(
+            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setStatus()
+        scope.launch {
+            try {
+                // clean engine first so old topics can't leak in
+                try {
+                    NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+                        NovaEngine.activeModelLabel, settings.systemPrompt)
+                } catch (e: Exception) { }
+                val sectionSummaries = StringBuilder()
+                for ((i, c) in sections.withIndex()) {
+                    adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
+                        sectionSummaries.toString().takeLast(300))
+                    status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
+                    val sb = StringBuilder()
+                    try {
+                        NovaEngine.send(
+                           "Summarize this part of the notes in 2-3 short sentences. " +
+                                "Use ONLY facts written in this text, and keep names, numbers " +
+                                "and facts exactly as stated:$antiCot\n-----\n$c\n-----", 150
+                        ).collect { sb.append(it) }
+                    } catch (e: Exception) { }
+                    val s = stripThinking(sb.toString()).trim()
+                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                }
+                adapter.setLastText("Writing the final summary\u2026")
+                status.text = "writing final summary\u2026"
+                val sb2 = StringBuilder()
+                NovaEngine.send(
+                    "These are section summaries from the notes \"$doc\". Write one clear " +
+                        "final summary with: an Overview (3 sentences), Key points (short " +
+                        "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
+                        "Use ONLY what the summaries say - copy key terms exactly as they are " +
+                        "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
+                        sectionSummaries.toString().take(6000), 500
+                ).collect { sb2.append(it) }
+                var finalText = stripThinking(sb2.toString()).trim()
+                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                reply.text = "(from $doc)\n\n$finalText"
+                adapter.finalizeLast()
+                scrollToEnd()
+                if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
+                needsContextCarry = true
+                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                try {
+                    withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                } catch (e: Exception) { }
+                toast("Summary ready - long-press it to make study cards")
+            } catch (e: Exception) {
+                try {
+                    reply.text = "Summary failed - try again"
+                    adapter.finalizeLast()
+                } catch (x: Exception) { }
+                toast("Summary failed - try again")
+            } finally {
+                generating = false
+                setStatus()
+                updateSendLook()
+            }
+        }
+    }
+
+    /** Splits a document into ~size-char chunks, breaking at headings
+     * (short standalone lines) and paragraphs, so each chunk is one
+     *  topic - section summaries come out matching the document's real
+     * structure instead of arbitrary character cuts. */
+    private fun docChunks(doc: String, size: Int = 5000): List<String> {
+        val paras = doc.split(Regex("\\n\\s*\\n")).map { it.trim() }.filter { it.isNotEmpty() }
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        fun flush() {
+            if (sb.isNotBlank()) { out.add(sb.toString()); sb.setLength(0) }
+        }
+        for (p in paras) {
+            val heading = p.length < 80 && p.lines().size == 1 &&
+                !p.endsWith(".") &&  !p.endsWith("?") && !p.endsWith("!") &&
+                !p.startsWith("\u2014 page")
+            if (p.length > size) {
+                flush()
+                var i = 0
+                 while (i < p.length) {
+                    out.add(p.substring(i, minOf(i + size, p.length)))
+                    i += size
+                }
+                continue
+            }
+            // start a fresh chunk at a heading once the current one is big enough
+            if (sb.isNotEmpty() && (sb.length + p.length > size ||
+                    (heading && sb.length > size / 2))) flush()
+            sb.append(p).append("\n\n")
+        }
+        flush()
+        return out
+    }
+
+    /** Long-press a reply -> answer the last question again. */
+    private fun regenerateLast() {
+        if (compacting) { toast("Compressing older messages — one moment"); return }
+        if (generating) { toast("Wait for the current reply to finish"); return }
+        if (!ensureModelReady()) return
+        val msgs = currentChat.messages
+        if (msgs.lastOrNull()?.role == Role.ASSISTANT) {
+            currentChat.messages.removeAt(msgs.size - 1)
+            adapter.removeLast()
+        }
+        val lastUser = currentChat.messages.lastOrNull { it.role == Role.USER }
+        if (lastUser == null) { toast("Nothing to regenerate"); return }
+        startGeneration(lastUser.text, null)
+    }
+
+    /** Loads a shared or picked file (PDF / plain text) as document context. */
+    private fun loadSharedDocument(uri: Uri) {
+        val name = try {
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst())
+                    c.getString(c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME))
+                else null
+            }
+        } catch (e: Exception) { null } ?: "document"
+        toast("Reading $name…")
+        scope.launch {
+            val isPdf = name.endsWith(".pdf", true) ||
+                contentResolver.getType(uri)?.contains("pdf", true) == true
+            val text = withContext(Dispatchers.IO) {
+                try {
+                    if (isPdf) PdfDoc.extractText(this@MainActivity, uri)
+                    else readPlainDocument(uri)
+                } catch (e: Exception) { "" }
+            }
+            if (text.isBlank() || text.trim().length < 40) {
+                toast("NOVA can't read images — it reads PDF and text files")
+                return@launch
+            }
+            attachDocument(name, text.trim())
+        }
+    }
+
+    /**
+     * Reads a plain-text document. Returns "" for images and other binary
+     * files (JPEG/PNG magic bytes, or NUL bytes in the head) so they never
+     * reach the model as garbage. Caps length like PDFs.
+     */
+    private fun readPlainDocument(uri: Uri): String {
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+        } catch (e: Exception) { return "" }
+        if (bytes.size < 4) return ""
+        val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()
+        val isPng = bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() &&
+            bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+        val head = bytes.copyOfRange(0, minOf(4096, bytes.size))
+        val hasNul = head.contains(0.toByte())
+        if (isJpeg || isPng || hasNul) return ""
+        val text = String(bytes, Charsets.UTF_8)
+        return if (text.length > 150_000)
+            text.substring(0, 150_000) + "\n[...document truncated]"
+        else text
+    }
+
+    private fun attachDocument(name: String, text: String) {
+        docName = name
+        docContext = text
+        docInjected = false
+        docInjectedText = ""
+        updateDocBanner()
+        val opts = arrayOf("Summarize it", "Key points", "Explain simply", "Quiz me", "Read aloud", "I'll ask questions")
+        AlertDialog.Builder(this)
+            .setTitle(name)
+            .setMessage("${text.length} characters loaded. What should NOVA do with it?")
+            .setItems(opts) { _, which ->
+                when (which) {
+                    0 -> summarizeDoc()
+                    1 -> runTool("List the key points of this document as short bullets. Group them under 2-4 short headings. Keep all important numbers, names and dates.")
+                    2 -> runTool("Explain this document in very simple words, like teaching a beginner. Use short sentences and everyday examples.")
+                    3 -> runTool("Create a quiz of 10 questions from this material. Format each EXACTLY as:\nQ: the question\nA: the answer\nNo numbering, no other text before or after.")
+                    4 -> readDocAloud()
+                    5 -> toast("Ask anything about $name — then tap ↑")
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun openDocPicker() {
+        try {
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain"))
+            }
+            startActivityForResult(pick, 7700)
+        } catch (e: Exception) {
+            toast("No file picker available")
+        }
+    }
+
+    // ---------- phone commands (no model needed) ----------
+
+    /**
+     * Understands "call X", "text X a message", "set alarm 6:30am",
+     * "open YouTube", "on/off torch" and "open whatsapp and say hi to X".
+     * Runs them with Android itself and returns true when handled -
+     * the model never sees these.
+     */
+    private fun tryPhoneCommand(text: String): Boolean {
+        val t = text.trim()
+        // users often prefix commands with filler ("no open...", "hey open...")
+        val t2 = t.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|please)[,!?\\s]+"), "").trim()
+        // fuzzy token matching: one typo ("torch of", "flah") still works
+        val toks = t2.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+        fun near(want: String): Boolean = toks.any { editDistance(it, want) <= 1 }
+        val hasOn = near("on")
+        val hasOff = near("off")
+        val torchWord = (near("torch") || near("flashlight") || near("flash") ||
+            (near("light") && (hasOn || hasOff))) && (hasOn || hasOff || toks.size <= 2)
+        val netWord = (near("wifi") || near("network") || near("internet") ||
+            near("bluetooth") || near("hotspot") || toks.any { it == "data" }) &&
+            (hasOn || hasOff) && toks.size <= 5
+        val saySend = Regex("(?i)\\b(?:send|say|sending|write|type)\\s+(.+?)\\s+to\\s+([a-z]+)(?:\\s+(?:in|on|via)\\s+whatsapp)?\\s*$").find(t2)
+            ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
+        val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
+        val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S))\\s+(.+)$").find(t2)
+        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t2)
+        val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
+        when {
+            torchWord -> {
+                val on = !hasOff
+                try {
+                    val cm = getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                    val id = cm.cameraIdList.firstOrNull {
+                        cm.getCameraCharacteristics(it).get(
+                           
