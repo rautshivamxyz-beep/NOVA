@@ -56,6 +56,13 @@ object NovaEngine {
     var activeModelLabel: String = ""
         private set
 
+    /** True after any send() - the conversation context is no longer clean.
+     *  Cleared by load() (fresh model = fresh context). Callers use it to
+     *  skip a wasteful multi-second reload when the engine is already clean. */
+    @Volatile
+    var contextDirty: Boolean = false
+        private set
+
     suspend fun get(context: Context): InferenceEngine =
         engineRef ?: AiChat.getInferenceEngine(context.applicationContext).also { engineRef = it }
 
@@ -138,6 +145,7 @@ object NovaEngine {
         }
         activeModelPath = path
         activeModelLabel = label
+        contextDirty = false
     }
 
     /**
@@ -176,6 +184,7 @@ object NovaEngine {
 
     fun send(message: String, predictLength: Int): Flow<String> {
         val engine = requireNotNull(engineRef) { "No model loaded" }
+        contextDirty = true   // the conversation context now holds this prompt
         return engine.sendUserPrompt(message, predictLength)
     }
 
