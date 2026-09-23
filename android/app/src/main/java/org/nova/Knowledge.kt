@@ -125,6 +125,16 @@ object Knowledge {
     fun docChunks(ctx: Context, name: String): List<String> =
         load(ctx).filter { it.doc == name }.map { it.text }
 
+    /** True when every query term hits the document NAME (e.g. "summarise
+     *  sst notes" naming "SST_Notes_Detailed.pdf") - the user means the
+     *  whole document, not one topic inside it. */
+    fun nameOnlyQuery(query: String, doc: String): Boolean {
+        val terms = tokenize(query)
+        if (terms.isEmpty()) return false
+        val dl = doc.lowercase()
+        return terms.all { dl.contains(it) }
+    }
+
     /**
      * Best document for a summary request, matching ANY query term - used
      * for routing "summarise power sharing" to the right notes even when
