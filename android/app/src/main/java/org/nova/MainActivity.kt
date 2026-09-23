@@ -1323,6 +1323,11 @@ class MainActivity : Activity() {
                 }
                 adapter.setLastText("Writing the final summary\u2026")
                 status.text = "writing final summary\u2026"
+                // fresh engine: the section prompts filled the context - reload
+                // so the final combine gets a clean window (overflow makes the
+                // model derail into "Step 1..." nonsense mid-generation)
+                try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+                    NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
                 val sb2 = StringBuilder()
                 NovaEngine.send(
                     "These are summaries of " +
@@ -1330,11 +1335,14 @@ class MainActivity : Activity() {
                         ". Write a DETAILED final summary organized topic by topic - for " +
                         "every topic give 3-5 sentences with its names, dates, numbers and " +
                         "terms. Do not skip any topic. Use only the information given:" +
-                        "\n\n${dedupeLines(sectionSummaries.toString()).take(9000)}", 1000
+                        "\n\n${dedupeLines(sectionSummaries.toString()).take(5000)}", 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
-                if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
-                finalText = dedupeLines(finalText)
+                // if the model derailed (scratchpad / off-topic drivel) fall
+                // back to the deduped section summaries - they are detailed
+                if (looksDerailed(finalText, sectionSummaries.toString()))
+                    finalText = dedupeLines(sectionSummaries.toString()).trim()
+                else finalText = dedupeLines(finalText)
                 reply.text = finalText
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -1368,7 +1376,7 @@ class MainActivity : Activity() {
     private fun summaryCacheKey(): String? {
         val n = docName ?: return null
         val d = docContext ?: return null
-        return "doc2_" + Integer.toHexString(n.hashCode()) + "_" + d.length
+        return "doc3_" + Integer.toHexString(n.hashCode()) + "_" + d.length
     }
 
     /**
@@ -1386,7 +1394,7 @@ class MainActivity : Activity() {
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
-        val key = "notes3_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val key = "notes4_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
         if (cf.exists()) {
             val cached = try { cf.readText() } catch (e: Exception) { "" }
@@ -1467,6 +1475,11 @@ class MainActivity : Activity() {
                 }
                 adapter.setLastText("Writing the final summary\u2026")
                 status.text = "writing final summary\u2026"
+                // fresh engine: the section prompts filled the context - reload
+                // so the final combine gets a clean window (overflow makes the
+                // model derail into "Step 1..." nonsense mid-generation)
+                try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+                    NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
                 val sb2 = StringBuilder()
                 NovaEngine.send(
                     "These are section summaries from the notes \"$doc\". Write a DETAILED " +
@@ -1475,11 +1488,14 @@ class MainActivity : Activity() {
                         "Do not skip any topic. Use ONLY what the summaries say - copy key " +
                         "terms exactly as written, do not add outside knowledge or invent " +
                         "terms.$antiCot\n\n" +
-                        dedupeLines(sectionSummaries.toString()).take(9000), 1000
+                        dedupeLines(sectionSummaries.toString()).take(5000), 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
-                if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
-                finalText = dedupeLines(finalText)
+                // if the model derailed (scratchpad / off-topic drivel) fall
+                // back to the deduped section summaries - they are detailed
+                if (looksDerailed(finalText, sectionSummaries.toString()))
+                    finalText = dedupeLines(sectionSummaries.toString()).trim()
+                else finalText = dedupeLines(finalText)
                 reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -2559,6 +2575,19 @@ private fun tail300(t: String): String {
     if (t.length <= 300) return tail
     val i = tail.indexOfFirst { it == ' ' || it == '\n' }
     return if (i >= 0) tail.substring(i + 1) else tail
+}
+
+/** True when a final summary derailed: too short, scratchpad "Step 1:"
+ * style, or almost no keyword overlap with the source summaries (the model
+ * wandered off-topic - typically a context-window overflow). */
+private fun looksDerailed(t: String, source: String): Boolean {
+    if (t.length < 30) return true
+    if (Regex("(?i)step\\s*[0-9]+\\s*[:.]").containsMatchIn(t)) return true
+    val src = source.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }.toHashSet()
+    val out = t.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }
+    if (src.isEmpty() || out.size < 10) return false
+    val hit = out.count { it in src }
+    return hit * 10 < out.size * 3
 }
 
 /**
