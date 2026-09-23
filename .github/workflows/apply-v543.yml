@@ -15,7 +15,10 @@ jobs:
       - name: Apply the patch, remove this workflow, commit and push
         run: |
           set -e
-          git apply patches/v5.4.3-mainactivity.patch
+          # -C0: the patch's context whitespace was slightly corrupted in
+          # upload; with no required context it still applies at the exact
+          # line numbers, and the added lines are intact.
+          git apply -C0 patches/v5.4.3-mainactivity.patch
           git rm -q .github/workflows/apply-v543.yml
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
