@@ -126,18 +126,18 @@
 +                if (diff == 0 && cal.timeInMillis <= System.currentTimeMillis()) diff = 7
 +                cal.add(java.util.Calendar.DAY_OF_YEAR, diff)
 +                whenMs = cal.timeInMillis
-            }
+             }
 -            task = task.removePrefix("to ").trim()
 -            if (task.isEmpty()) return
-        }
+         }
 -        val whenMs = parseReminderTime(timeStr) ?: return
          val human = java.text.SimpleDateFormat("EEE, d MMM h:mm a", Locale.getDefault())
              .format(java.util.Date(whenMs))
-+        val repeatText = if (repeatMs > 0) "\\n\\nRepeats $repeatLabel" else ""
++        val repeatText = if (repeatMs > 0) "\n\nRepeats $repeatLabel" else ""
          AlertDialog.Builder(this)
              .setTitle("Set reminder?")
--            .setMessage(task + "\\n\\n" + human)
-+            .setMessage(task + "\\n\\n" + human + repeatText)
+-            .setMessage(task + "\n\n" + human)
++            .setMessage(task + "\n\n" + human + repeatText)
              .setPositiveButton("Set") { _, _ ->
 -                Reminder.schedule(this, whenMs, task)
 -                toast("Reminder set: $human")
