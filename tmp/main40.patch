@@ -1,0 +1,130 @@
+--- pa/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 16:44:52.732776693 +0000
++++ pb/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 16:44:52.742776831 +0000
+@@ -26,6 +26,7 @@
+ import android.widget.ProgressBar
+ import android.widget.TextView
+ import android.widget.Toast
++import org.json.JSONArray
+ import androidx.recyclerview.widget.LinearLayoutManager
+ import androidx.recyclerview.widget.RecyclerView
+ import io.noties.markwon.Markwon
+@@ -1300,6 +1301,7 @@
+         scope.launch {
+             try {
+                 var sectionSummaries = StringBuilder()
++                var emptyStreak = 0
+                 for ((i, c) in chunks.withIndex()) {
+                     adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                         tail300(sectionSummaries.toString()))
+@@ -1314,11 +1316,18 @@
+                     } catch (e: Exception) { }
+                     val s = stripThinking(sb.toString()).trim()
+                     if (s.length > 10) {
++                        val before = sectionSummaries.length
+                         sectionSummaries.append(s).append("\n\n")
+                         // tiny models echo the same sentence for similar
+                         // sections - re-dedupe so the progress display and
+                         // the final combine see each point only once
+                         sectionSummaries = StringBuilder(dedupeLines(sectionSummaries.toString()))
++                        // stop early when the document just repeats itself
++                        if (sectionSummaries.length - before < 20) emptyStreak++ else emptyStreak = 0
++                        if (emptyStreak >= 6 && i + 1 < chunks.size) {
++                            adapter.setLastText("Remaining sections repeat earlier ones - skipping to the final summary")
++                            break
++                        }
+                     }
+                 }
+                 adapter.setLastText("Writing the final summary\u2026")
+@@ -1326,8 +1335,10 @@
+                 // fresh engine: the section prompts filled the context - reload
+                 // so the final combine gets a clean window (overflow makes the
+                 // model derail into "Step 1..." nonsense mid-generation)
+-                try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+-                    NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                if (NovaEngine.contextDirty) {
++                    try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
++                        NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                }
+                 val sb2 = StringBuilder()
+                 NovaEngine.send(
+                     "These are summaries of " +
+@@ -1446,13 +1457,28 @@
+         setStatus()
+         scope.launch {
+             try {
+-                // clean engine first so old topics can't leak in
++                // clean engine first so old topics can't leak in - but skip
++                // the reload when the context is already clean (saves seconds)
++                if (NovaEngine.contextDirty) {
++                    try {
++                        NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
++                            NovaEngine.activeModelLabel, settings.systemPrompt)
++                    } catch (e: Exception) { }
++                }
++                // checkpoint: sections summarized in an earlier interrupted
++                // run are resumed instead of redone from zero
++                val cpFile = File(File(filesDir, "sum_cp").apply { mkdirs() }, key)
++                val done = ArrayList<String>()
+                 try {
+-                    NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+-                        NovaEngine.activeModelLabel, settings.systemPrompt)
++                    val arr = JSONArray(cpFile.readText())
++                    for (k in 0 until arr.length()) done.add(arr.getString(k))
++                    if (done.size > sections.size) done.clear()   // doc changed
+                 } catch (e: Exception) { }
+-                var sectionSummaries = StringBuilder()
++                var sectionSummaries = StringBuilder(
++                    dedupeLines(done.joinToString("\n\n")))
++                var emptyStreak = 0
+                 for ((i, c) in sections.withIndex()) {
++                    if (i < done.size) continue      // already summarized
+                     adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
+                         tail300(sectionSummaries.toString()))
+                     status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
+@@ -1466,11 +1492,24 @@
+                     } catch (e: Exception) { }
+                     val s = stripThinking(sb.toString()).trim()
+                     if (s.length > 10) {
++                        val before = sectionSummaries.length
+                         sectionSummaries.append(s).append("\n\n")
+                         // tiny models echo the same sentence for similar
+                         // sections - re-dedupe so the progress display and
+                         // the final combine see each point only once
+                         sectionSummaries = StringBuilder(dedupeLines(sectionSummaries.toString()))
++                        done.add(s)
++                        try {
++                            val ja = JSONArray()
++                            for (d in done) ja.put(d)
++                            cpFile.writeText(ja.toString())
++                        } catch (e: Exception) { }
++                        // stop early when the notes just repeat themselves
++                        if (sectionSummaries.length - before < 20) emptyStreak++ else emptyStreak = 0
++                        if (emptyStreak >= 6 && i + 1 < sections.size) {
++                            adapter.setLastText("Remaining sections repeat earlier ones - skipping to the final summary")
++                            break
++                        }
+                     }
+                 }
+                 adapter.setLastText("Writing the final summary\u2026")
+@@ -1478,8 +1517,10 @@
+                 // fresh engine: the section prompts filled the context - reload
+                 // so the final combine gets a clean window (overflow makes the
+                 // model derail into "Step 1..." nonsense mid-generation)
+-                try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
+-                    NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                if (NovaEngine.contextDirty) {
++                    try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
++                        NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
++                }
+                 val sb2 = StringBuilder()
+                 NovaEngine.send(
+                     "These are section summaries from the notes \"$doc\". Write a DETAILED " +
+@@ -1500,6 +1541,8 @@
+                 adapter.finalizeLast()
+                 scrollToEnd()
+                 if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
++                // the summary is cached now - drop the section checkpoint
++                try { cpFile.delete() } catch (e: Exception) { }
+                 needsContextCarry = true
+                 NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                 try {
