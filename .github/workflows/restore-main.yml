@@ -1,4 +1,4 @@
-name: Restore MainActivity v5.1
+name: Restore files v5.2
 on:
   workflow_dispatch:
 
@@ -12,15 +12,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply patch and verify
+      - name: Apply patches and verify
         run: |
           set -e
-          git show 403c8108aabf9f0bb05e76a8d9ce2fdfc0e659aa:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
-          git apply --ignore-whitespace tmp/main51.patch
-          echo "3af26b9473283ac2763cafc1a83121b2  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          git show 2ea9aa5035924c1deb1f3505e53fde24f04e74c3:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          git show 2ea9aa5035924c1deb1f3505e53fde24f04e74c3:android/app/src/main/java/org/nova/PdfDoc.kt > android/app/src/main/java/org/nova/PdfDoc.kt
+          git apply --unidiff-zero --ignore-whitespace tmp/main52.patch
+          git apply --unidiff-zero --ignore-whitespace tmp/pdfdoc52.patch
+          sed -i 's/take(11000)}", 800/take(11000)}", 1500/' android/app/src/main/java/org/nova/MainActivity.kt
+          sed -i 's/take(11000), 800/take(11000), 1500/' android/app/src/main/java/org/nova/MainActivity.kt
+          echo "d0aa67687a80e5b9fe9ea76760b3a1d0  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          echo "2c40be43ded858687d5aafcbe174516d  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
           git rm -rqf tmp
-          git add android/app/src/main/java/org/nova/MainActivity.kt
+          git add android/app/src/main/java/org/nova/MainActivity.kt android/app/src/main/java/org/nova/PdfDoc.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "MainActivity.kt v5.1: bigger sections, batch reloads, structured finals"
+          git commit -m "v5.2: detailed finals, pipeline for all docs, table column repair"
           git push
