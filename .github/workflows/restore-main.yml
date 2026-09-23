@@ -1,4 +1,4 @@
-name: Restore v5.0 sources
+name: Fix v5.0 import
 on:
   workflow_dispatch:
 
@@ -6,23 +6,17 @@ permissions:
   contents: write
 
 jobs:
-  restore:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Build v5.0 sources and verify
+      - name: Fix ML Kit import and verify
         run: |
           set -e
-          git show eb80eccffbf1ba615ee6ec18c3f35cb7b32187a2:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
-          git apply --ignore-whitespace tmp/main50.patch
-          echo "c442152b061d89a18ec52a4994f3b060  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
-          cat tmp/pdfdoc_p1.txt tmp/pdfdoc_p2.txt > android/app/src/main/java/org/nova/PdfDoc.kt
-          echo "7cb264155d5dc97d69bbbd2abc4be91f  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
-          git rm -rqf tmp
-          git add android/app/src/main/java/org/nova/MainActivity.kt android/app/src/main/java/org/nova/PdfDoc.kt
+          sed -i 's#^import com.google.mlkit.vision.text.TextRecognizerOptions$#import com.google.mlkit.vision.text.latin.TextRecognizerOptions#' android/app/src/main/java/org/nova/PdfDoc.kt
+          echo "fa27931e2e23c32a7532c15bb60555d3  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
+          git add android/app/src/main/java/org/nova/PdfDoc.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "v5.0: PdfDoc OCR (scanned PDFs, column order) + smart repeating reminders"
+          git commit -m "v5.0 fix: TextRecognizerOptions lives in the latin subpackage"
           git push
