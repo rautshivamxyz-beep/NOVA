@@ -418,6 +418,10 @@ class ModelsActivity : Activity() {
             .setTitle("Delete model?")
             .setMessage("${f.name} (${f.length() / (1000L * 1000 * 1000)} GB) will be permanently removed.")
             .setPositiveButton("Delete") { _, _ ->
+                if (NovaEngine.isGenerating) {
+                    toast("Wait for the current reply to finish")
+                    return@setPositiveButton
+                }
                 scope.launch {
                     if (NovaEngine.activeModelPath == f.absolutePath) {
                         NovaEngine.unload(this@ModelsActivity)
