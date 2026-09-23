@@ -1,4 +1,4 @@
-name: Restore MainActivity v3.7
+name: Restore MainActivity v4.0
 on:
   workflow_dispatch:
 
@@ -15,12 +15,12 @@ jobs:
       - name: Apply patch and verify
         run: |
           set -e
-          git show 58f1391c400cd52406934ee1547f56db2607845b:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
-          git apply tmp/main37.patch
-          echo "6de9a4c9a669098f056beb31acf1a918  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          git show 54bca561d20d10dcc5b45fb50833300bb7382c8b:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          git apply tmp/main40.patch
+          echo "6bfdebb00e8403317aec0c6ac1325293  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
           git rm -rqf tmp
           git add android/app/src/main/java/org/nova/MainActivity.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "MainActivity.kt v3.7: fresh engine before final combine, context-safe budget, derailment fallback"
+          git commit -m "MainActivity.kt v4.0: skip redundant reloads, checkpoint/resume, early-stop on repeats"
           git push
