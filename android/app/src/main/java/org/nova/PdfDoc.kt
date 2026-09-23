@@ -128,12 +128,12 @@ object PdfDoc {
      * "page X of Y" lines and dot/dash leaders, collapses whitespace.
      */
     private fun clean(page: String): String {
-        var t = page.replace(Regex("([a-z])-\\n([a-z])"), "$1$2")
+        var t = page.replace(Regex("([a-z])-\n([a-z])"), "$1$2")
         t = t.lines().filterNot { l ->
             val s = l.trim()
             (s.length in 1..5 && Regex("^\\D?\\d{1,4}\\D?$").matches(s)) ||
                 Regex("(?i)^(https?://|www\\.)\\S{4,}$").matches(s) ||
-                Regex("^\\S+@\\S+\\\\.\\S{2,}$").matches(s) ||
+                Regex("^\\S+@\\S+\\.\\S{2,}$").matches(s) ||
                 Regex("(?i)^pages?\\s*\\d+(\\s*(of|/)\\s*\\d+)?$").matches(s) ||
                 Regex("^[\\s.\\-\\u2013\\u2014_=*]{3,}$").matches(s)
         }.joinToString("\n")

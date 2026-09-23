@@ -1572,7 +1572,9 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { "" }
             }
             if (text.isBlank() || text.trim().length < 40) {
-                toast("NOVA can't read images — it reads PDF and text files")
+                toast(if (isPdf)
+                    "This PDF looks scanned \u2014 image-only, no readable text in it"
+                else "NOVA can't read images \u2014 it reads PDF and text files")
                 return@launch
             }
             attachDocument(name, text.trim())
