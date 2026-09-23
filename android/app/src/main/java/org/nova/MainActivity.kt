@@ -853,7 +853,10 @@ class MainActivity : Activity() {
                           else lastNotesDoc
                 if (doc != null) {
                     lastNotesDoc = doc
-                    summarizeNotes(doc, text, fullDoc = !wantsSumm)
+                    // "summarise sst notes" NAMES the document -> the user
+                    // wants the whole doc, not just the first 18 chunks
+                    val whole = !wantsSumm || Knowledge.nameOnlyQuery(text, doc)
+                    summarizeNotes(doc, text, fullDoc = whole)
                     return
                 }
                 // nothing matched - NEVER fall back to guessing from chat:
@@ -1319,10 +1322,11 @@ class MainActivity : Activity() {
                         (if (strided) "the main sections of a long document" else "the sections of a document") +
                         ". Write one clear final summary with: an Overview (3 sentences), " +
                         "Key points (short bullets) and Important terms (word - meaning). " +
-                        "Use only the information given:\n\n${sectionSummaries.toString().take(6000)}", 400
+                        "Use only the information given:\n\n${dedupeLines(sectionSummaries.toString()).take(6000)}", 400
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
-                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
+                finalText = dedupeLines(finalText)
                 reply.text = finalText
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -1356,7 +1360,7 @@ class MainActivity : Activity() {
     private fun summaryCacheKey(): String? {
         val n = docName ?: return null
         val d = docContext ?: return null
-        return Integer.toHexString(n.hashCode()) + "_" + d.length
+        return "doc_" + Integer.toHexString(n.hashCode()) + "_" + d.length
     }
 
     /**
@@ -1374,7 +1378,7 @@ class MainActivity : Activity() {
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
-        val key = "notes_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val key = "notes2_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
         if (cf.exists()) {
             val cached = try { cf.readText() } catch (e: Exception) { "" }
@@ -1404,6 +1408,14 @@ class MainActivity : Activity() {
             sbb.append(c)
         }
         if (sbb.isNotEmpty()) sections.add(sbb.toString())
+        val allSections = ArrayList(sections)
+        // a very large document would mean a 30+ minute run - sample
+        // evenly over the whole doc instead of only the first sections
+        if (sections.size > 40) {
+            val step = sections.size / 40
+            sections.clear()
+            allSections.filterIndexed { i, _ -> i % step == 0 }.take(40).forEach { sections.add(it) }
+        }
         val um = Msg(Role.USER, userText)
         currentChat.messages.add(um)
         adapter.add(um)
@@ -1448,10 +1460,11 @@ class MainActivity : Activity() {
                         "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
                         "Use ONLY what the summaries say - copy key terms exactly as they are " +
                         "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
-                        sectionSummaries.toString().take(6000), 500
+                        dedupeLines(sectionSummaries.toString()).take(6000), 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
-                if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
+                if (finalText.length < 30) finalText = dedupeLines(sectionSummaries.toString()).trim()
+                finalText = dedupeLines(finalText)
                 reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -2520,6 +2533,41 @@ private fun cutPartialLine(old: String, added: String): String {
         (firstNew.startsWith(last) || last.startsWith(firstNew.take(40))))
         lines.removeAt(lines.size - 1)
     return lines.joinToString("\n")
+}
+
+/**
+ * Removes repeated lines from a summary - tiny 1B models often restate
+ * the same sentence in several section summaries. Exact repeats are
+ * always dropped; longer lines that share >= 65% of their words with an
+ * earlier line are dropped too.
+ */
+private fun dedupeLines(t: String): String {
+    val seen = ArrayList<Set<String>>()
+    val out = ArrayList<String>()
+    for (raw in t.lines()) {
+        val line = raw.trim()
+        if (line.isEmpty()) { out.add(""); continue }
+        val words = line.lowercase().split(Regex("[^a-z0-9]+"))
+            .filter { it.length > 3 }.toSet()
+        var dup = false
+        if (line.length >= 40 && words.size >= 4) {
+            for (prev in seen) {
+                var inter = 0
+                for (w in words) if (w in prev) inter++
+                val j = inter.toDouble() / (words.size + prev.size - inter)
+                // near-repeat: most of this line's words already appeared
+                val contained = inter.toDouble() / words.size
+                if (j >= 0.65 || (words.size >= 6 && contained >= 0.6)) { dup = true; break }
+            }
+        } else if (out.any { it.trim() == line }) {
+            dup = true
+        }
+        if (!dup) {
+            out.add(raw)
+            if (line.length >= 40 && words.size >= 4) seen.add(words)
+        }
+    }
+    return out.joinToString("\n")
 }
 
 /** If the added text starts by repeating the end of the old text, drop the overlap. */
