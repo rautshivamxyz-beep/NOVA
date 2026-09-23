@@ -773,15 +773,15 @@ class MainActivity : Activity() {
         if (docContext != null) {
             val wantsRaw = Regex("(?i)\\b(show|gimme|give|send|paste|display|want)\\b[^.]*\\b(notes?|document|text|pdf)\\b")
                 .containsMatchIn(text)
-            val asksSummary = Regex("(?i)\\bsummar").containsMatchIn(text) &&
-                !Regex("(?i)\\b(don'?t|do not|stop|no)\\b[^.]*\\bsummar").containsMatchIn(text)
+            val asksSummary = Regex("(?i)\\bsummar\\").containsMatchIn(text) &&
+                !Regex("(?i)\\b(don'?t|do not|stop|no)\\b[^.]*\\bsummar\\").containsMatchIn(text)
             if (wantsRaw && !asksSummary &&
                 !Regex("(?i)simpl|explain|quiz|points").containsMatchIn(text)) {
                 val part = docSearch(text, 6000)
                 val um = Msg(Role.USER, text)
                 currentChat.messages.add(um)
                 adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, "(from $docName)\n\n$part")
+                val reply = Msg(Role.ASSISTANT, "(from $docName)\\n\\n$part")
                 currentChat.messages.add(reply)
                 adapter.add(reply)
                 scrollToEnd()
@@ -790,22 +790,32 @@ class MainActivity : Activity() {
                 }
                 return
             }
+            // "summarise this" -> the full section-by-section summary with
+            // live progress (one-shot only covered the first pages)
+            if (asksSummary) {
+                summarizeDoc()
+                return
+            }
         }
         // "gimme the notes of federalism" - paste stored Knowledge notes,
         // even when no document is attached in this chat
         if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val wantsNotes = Regex("(?i)\\b(show|gimme|give|send|paste|display|want|read)\\b[^.]*\\b(notes?|material|answers?)\\b")
                 .containsMatchIn(text) &&
-                !Regex("(?i)\\bsummar|explain|simpl|quiz|points").containsMatchIn(text)
+                !Regex("(?i)\\bsummar|explain|simpl|quiz|points\\").containsMatchIn(text)
             if (wantsNotes) {
-                val hits = Knowledge.search(this, text)
-                if (hits.isNotEmpty()) {
+                // the chapter window around the best match - scattered
+                // top-4 fragments used to mix chapters ("money and credit"
+                // returned Great Depression text)
+                val ndoc = Knowledge.bestDocName(this, text)
+                val parts = if (ndoc != null) Knowledge.bestChunks(this, text, 10) else emptyList()
+                if (parts.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um)
                     adapter.add(um)
-                    var body = hits.joinToString("\n\n---\n\n") { "**${it.doc}**\n${it.text}" }
-                    if (body.length > 6000) body = body.substring(0, 6000) + "\n[...more]"
-                    val reply = Msg(Role.ASSISTANT, "(from your saved notes)\n\n$body")
+                    var body = parts.joinToString("\\n\\n")
+                    if (body.length > 6000) body = body.substring(0, 6000) + "\\n[...more]"
+                    val reply = Msg(Role.ASSISTANT, "(from $ndoc)\\n\\n$body")
                     currentChat.messages.add(reply)
                     adapter.add(reply)
                     scrollToEnd()
@@ -832,9 +842,9 @@ class MainActivity : Activity() {
         // "summarise sst notes" / "gimme the whole summary" - summarize the
         // saved notes over the WHOLE chapter (map-reduce), clean engine
         if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
-            val wantsSumm = Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)
+            val wantsSumm = Regex("(?i)\\bsummaris|\\bsummariz\\").containsMatchIn(text)
             val followUp = lastNotesDoc != null &&
-                Regex("(?i)\\b(whole|full|complete|entire|detailed)\\s+summar").containsMatchIn(text)
+                Regex("(?i)\\b(whole|full|complete|entire|detailed)\\s+summar\\").containsMatchIn(text)
             if (wantsSumm || followUp) {
                 // relaxed match: ANY query term can point at the document -
                 // requiring every word in one chunk made "summarise power
@@ -884,7 +894,7 @@ class MainActivity : Activity() {
             when {
                 offDoc -> {
                     docInjected = false
-                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                    "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
                 }
                 overlap == 0 -> {
                     // question has nothing to do with the document: don't
@@ -892,28 +902,28 @@ class MainActivity : Activity() {
                     // general questions ("who is X?") still get answered
                     if (docInjected) {
                         docInjected = false
-                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\\n\\n"
                     } else ""
                 }
                 else -> {
                     docInjected = true
                     docInjectedText = win
-                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\n-----\n$win\n-----\nEnd of document.)\n\n"
+                    "(The user shared a document titled \"$docName\". Its content is between the lines. Answer ONLY using this document; if the answer is not in it, say so honestly.\\n-----\\n$win\\n-----\\nEnd of document.)\\n\\n"
                 }
             }
         } else ""
         val basePrompt: String = docPart + when {
             needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
-                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
+                val recent = currentChat.messages.takeLast(6).joinToString("\\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
+                "(Summary of earlier conversation: $compactSummary)\\n\\n(Recent messages:\\n$recent\\n— end)\\n\\nNew message: $text\\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
-                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
+                val recent = currentChat.messages.takeLast(6).joinToString("\\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
-                "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
+                "(Earlier conversation for context:\\n$recent\\n— end of earlier conversation)\\n\\nNew message: $text\\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
             else -> text
         }
@@ -925,7 +935,7 @@ class MainActivity : Activity() {
         if (mem.isNotEmpty() && (
                     currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
                     )) {
-            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
+            prompt = "(Facts about the user, always remember: $mem)\\n\\n$basePrompt"
             lastInjectedMemory = mem
         }
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
@@ -936,7 +946,7 @@ class MainActivity : Activity() {
         if (!tiny) {
             // exam countdown awareness
             Exams.promptLine(this)?.let { line ->
-                prompt = "(The user's upcoming exams: $line.)\n\n$prompt"
+                prompt = "(The user's upcoming exams: $line.)\\n\\n$prompt"
             }
         }
 
@@ -945,10 +955,10 @@ class MainActivity : Activity() {
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             val hits = Knowledge.search(this, text)
             if (hits.isNotEmpty()) {
-                var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
+                var notes = hits.joinToString("\\n---\\n") { "[${it.doc}] ${it.text}" }
                 if (notes.length > (if (tiny) 900 else 2400))
-                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\n[...more omitted]"
-                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\n$notes)\n\n"
+                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\\n[...more omitted]"
+                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\\n$notes)\\n\\n"
             }
         }
         // offline Wikipedia: matching articles as background facts
@@ -956,10 +966,10 @@ class MainActivity : Activity() {
         if (settings.wikiEnabled && WikiCore.isReady(this)) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             if (wikiHits.isNotEmpty()) {
-                var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
+                var facts = wikiHits.joinToString("\\n---\\n") { "${it.title}: ${it.text}" }
                 val cap = if (tiny) 900 else 2400
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
-                wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
+                wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\\n$facts)\\n\\n"
             }
         }
         // one background source for tiny models, both for bigger ones
@@ -968,7 +978,7 @@ class MainActivity : Activity() {
 
         // general chat: match the user's language, no guessing
         if (docPart.isEmpty()) {
-            prompt += "\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
+            prompt += "\\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
         }
         autoContinueCount = 0
         replyRetried = false
@@ -1037,7 +1047,7 @@ class MainActivity : Activity() {
                 adapter.appendToLast(" ⏹")
                 speechCancelled = true
             } catch (e: Exception) {
-                adapter.appendToLast("\n[error: ${e.message}]")
+                adapter.appendToLast("\\n[error: ${e.message}]")
             } finally {
                 flush()
                 withContext(Dispatchers.Main) {
@@ -1047,9 +1057,10 @@ class MainActivity : Activity() {
                     // drop the duplicated tail the model often repeats when a
                     // cut-off reply is auto-continued
                     if (!newBubble && junction < replyMsg.text.length) {
-                        replyMsg.text = stripRepeatJoin(
-                            replyMsg.text.substring(0, junction),
-                            replyMsg.text.substring(junction))
+                        val before = replyMsg.text.substring(0, junction)
+                        val added = replyMsg.text.substring(junction)
+                        val b2 = cutPartialLine(before, added)
+                        replyMsg.text = stripRepeatJoin(b2, dropRepeatedBlocks(b2, added))
                     }
                     // after a stopped reply, the next answer often starts by
                     // repeating the stopped line - drop that echo
@@ -1074,7 +1085,7 @@ class MainActivity : Activity() {
                         replyMsg.text = ""
                         adapter.setLastText("")
                         startGeneration(
-                            "Question: $userText\nAnswer the question directly and clearly " +
+                            "Question: $userText\\nAnswer the question directly and clearly " +
                                 "in one to three sentences. If you don't know the answer, " +
                                 "say so honestly. Do not repeat the same point twice.",
                             null, newBubble = false)
@@ -1150,7 +1161,7 @@ class MainActivity : Activity() {
     /** True when a reply is blank, one or two words, or stuck repeating
      *  the same line over and over - too broken to show as-is. */
     private fun isDegenerateReply(t: String): Boolean {
-        val s = t.trim().removeSuffix("\u23F9").trim()
+        val s = t.trim().removeSuffix("⏹").trim()
         if (s.isEmpty()) return true
         if (s.split(Regex("\\s+")).filter { it.isNotBlank() }.size <= 2) return true
         // the same line (or bullet) 3+ times = the model is in a loop
@@ -1171,7 +1182,7 @@ class MainActivity : Activity() {
         val t = stripThinking(text).trim()
         if (t.length < settings.predictLength * 3) return false
         val last = t.lastOrNull() ?: return false
-        return last !in ".!?\u2026\"'`)]}*"
+        return last !in ".!?…\"'`)]}*"
     }
 
     /** Quick-action chips under a finished reply. */
@@ -1207,7 +1218,7 @@ class MainActivity : Activity() {
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
         if (prompt.startsWith("__STYLE__")) {
-            val sp = stylePrompt("Rewrite this text in the same personal style as the examples, keeping the meaning:\n-----\n${prompt.substring(9)}\n-----")
+            val sp = stylePrompt("Rewrite this text in the same personal style as the examples, keeping the meaning:\n-----\\n${prompt.substring(9)}\\n-----")
             if (sp == null) toast("Chat a bit more first so I can learn your style")
             else startGeneration(sp, null)
             return
@@ -1215,7 +1226,7 @@ class MainActivity : Activity() {
         pendingCards = prompt.startsWith("Create 8 study flashcards") ||
             prompt.startsWith("Create a quiz")
         val docPart = if (docContext != null && docName != null) {
-            "(The user shared a document titled \"$docName\". Its content is between the lines.\n-----\n${docSearch(prompt, 8000)}\n-----\nEnd of document.)\n\n"
+            "(The user shared a document titled \"$docName\". Its content is between the lines.\\n-----\\n${docSearch(prompt, 8000)}\\n-----\\nEnd of document.)\\n\\n"
         } else ""
         startGeneration(docPart + prompt, null)
     }
@@ -1229,7 +1240,7 @@ class MainActivity : Activity() {
      * instant.
      */
     private fun summarizeDoc() {
-        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
+        if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
         val doc = docContext ?: return
@@ -1277,8 +1288,8 @@ class MainActivity : Activity() {
         adapter.add(reply)
         scrollToEnd()
         adapter.setLastText(if (skipped > 0)
-            "Reading ${chunks.size} sections ($skipped index/reference pages skipped)\u2026"
-        else "Reading ${chunks.size} sections\u2026")
+            "Reading ${chunks.size} sections ($skipped index/reference pages skipped)…"
+        else "Reading ${chunks.size} sections…")
         generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
@@ -1287,28 +1298,28 @@ class MainActivity : Activity() {
             try {
                 val sectionSummaries = StringBuilder()
                 for ((i, c) in chunks.withIndex()) {
-                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
+                    adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}…\\n\\n" +
                         sectionSummaries.toString().takeLast(300))
-                    status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
+                    status.text = "summarizing section ${i + 1}/${chunks.size}…"
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
                             "Summarize this part of a document in 3 short sentences. " +
-                                "Keep all names, numbers and facts:\n-----\n$c\n-----", 150
+                                "Keep all names, numbers and facts:\n-----\\n$c\\n-----", 150
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
-                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                    (if (s.length > 10) sectionSummaries.append(s).append("\\n\\n") else Unit)
                 }
-                adapter.setLastText("Writing the final summary\u2026")
-                status.text = "writing final summary\u2026"
+                adapter.setLastText("Writing the final summary…")
+                status.text = "writing final summary…"
                 val sb2 = StringBuilder()
                 NovaEngine.send(
                     "These are summaries of " +
                         (if (strided) "the main sections of a long document" else "the sections of a document") +
                         ". Write one clear final summary with: an Overview (3 sentences), " +
                         "Key points (short bullets) and Important terms (word - meaning). " +
-                        "Use only the information given:\n\n${sectionSummaries.toString().take(6000)}", 400
+                        "Use only the information given:\n\\n${sectionSummaries.toString().take(6000)}", 400
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
@@ -1355,7 +1366,7 @@ class MainActivity : Activity() {
      * document; otherwise the chunks matching the user's topic. Cached.
      */
     private fun summarizeNotes(doc: String, userText: String, fullDoc: Boolean) {
-        if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
+        if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
         val chunks = if (fullDoc) Knowledge.docChunks(this, doc)
@@ -1370,7 +1381,7 @@ class MainActivity : Activity() {
             if (cached.length > 50) {
                 val um = Msg(Role.USER, userText)
                 currentChat.messages.add(um); adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\n\n$cached")
+                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\\n\\n$cached")
                 currentChat.messages.add(reply); adapter.add(reply)
                 scrollToEnd()
                 return
@@ -1389,7 +1400,7 @@ class MainActivity : Activity() {
             if (sbb.isNotEmpty() && sbb.length + c.length > 1600) {
                 sections.add(sbb.toString()); sbb.setLength(0)
             }
-            if (sbb.isNotEmpty()) sbb.append("\n\n")
+            if (sbb.isNotEmpty()) sbb.append("\\n\\n")
             sbb.append(c)
         }
         if (sbb.isNotEmpty()) sections.add(sbb.toString())
@@ -1400,7 +1411,7 @@ class MainActivity : Activity() {
         currentChat.messages.add(reply)
         adapter.add(reply)
         scrollToEnd()
-        adapter.setLastText("Reading ${sections.size} sections of $doc\u2026")
+        adapter.setLastText("Reading ${sections.size} sections of $doc…")
         generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
@@ -1414,34 +1425,34 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { }
                 val sectionSummaries = StringBuilder()
                 for ((i, c) in sections.withIndex()) {
-                    adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
+                    adapter.setLastText("Summarizing section ${i + 1}/${sections.size}…\\n\\n" +
                         sectionSummaries.toString().takeLast(300))
-                    status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
+                    status.text = "summarizing section ${i + 1}/${sections.size}…"
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
                             "Summarize this part of the notes in 2-3 short sentences. " +
                                 "Use ONLY facts written in this text, and keep names, numbers " +
-                                "and facts exactly as stated:$antiCot\n-----\n$c\n-----", 150
+                                "and facts exactly as stated:$antiCot\\n-----\\n$c\\n-----", 150
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
-                    (if (s.length > 10) sectionSummaries.append(s).append("\n\n") else Unit)
+                    (if (s.length > 10) sectionSummaries.append(s).append("\\n\\n") else Unit)
                 }
-                adapter.setLastText("Writing the final summary\u2026")
-                status.text = "writing final summary\u2026"
+                adapter.setLastText("Writing the final summary…")
+                status.text = "writing final summary…"
                 val sb2 = StringBuilder()
                 NovaEngine.send(
                     "These are section summaries from the notes \"$doc\". Write one clear " +
                         "final summary with: an Overview (3 sentences), Key points (short " +
                         "bullets covering the WHOLE chapter) and Important terms (word - meaning). " +
                         "Use ONLY what the summaries say - copy key terms exactly as they are " +
-                        "written, do not add outside knowledge or invent terms.$antiCot\n\n" +
+                        "written, do not add outside knowledge or invent terms.$antiCot\\n\\n" +
                         sectionSummaries.toString().take(6000), 500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 if (finalText.length < 30) finalText = sectionSummaries.toString().trim()
-                reply.text = "(from $doc)\n\n$finalText"
+                reply.text = "(from $doc)\\n\\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
                 if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
@@ -1479,7 +1490,7 @@ class MainActivity : Activity() {
         for (p in paras) {
             val heading = p.length < 80 && p.lines().size == 1 &&
                 !p.endsWith(".") && !p.endsWith("?") && !p.endsWith("!") &&
-                !p.startsWith("\u2014 page")
+                !p.startsWith("— page")
             if (p.length > size) {
                 flush()
                 var i = 0
@@ -1492,7 +1503,7 @@ class MainActivity : Activity() {
             // start a fresh chunk at a heading once the current one is big enough
             if (sb.isNotEmpty() && (sb.length + p.length > size ||
                     (heading && sb.length > size / 2))) flush()
-            sb.append(p).append("\n\n")
+            sb.append(p).append("\\n\\n")
         }
         flush()
         return out
@@ -1558,7 +1569,7 @@ class MainActivity : Activity() {
         if (isJpeg || isPng || hasNul) return ""
         val text = String(bytes, Charsets.UTF_8)
         return if (text.length > 150_000)
-            text.substring(0, 150_000) + "\n[...document truncated]"
+            text.substring(0, 150_000) + "\\n[...document truncated]"
         else text
     }
 
@@ -1577,7 +1588,7 @@ class MainActivity : Activity() {
                     0 -> summarizeDoc()
                     1 -> runTool("List the key points of this document as short bullets. Group them under 2-4 short headings. Keep all important numbers, names and dates.")
                     2 -> runTool("Explain this document in very simple words, like teaching a beginner. Use short sentences and everyday examples.")
-                    3 -> runTool("Create a quiz of 10 questions from this material. Format each EXACTLY as:\nQ: the question\nA: the answer\nNo numbering, no other text before or after.")
+                    3 -> runTool("Create a quiz of 10 questions from this material. Format each EXACTLY as:\nQ: the question\\nA: the answer\\nNo numbering, no other text before or after.")
                     4 -> readDocAloud()
                     5 -> toast("Ask anything about $name — then tap ↑")
                 }
@@ -1778,7 +1789,7 @@ class MainActivity : Activity() {
         if (!NotifBrain.isEnabled(this)) {
             AlertDialog.Builder(this)
                 .setTitle("Read your notifications?")
-                .setMessage("NOVA needs notification access to tell you what you missed. " +
+                .setMessage("NOVA needs notification access to tell you what around what you missed. " +
                     "Everything is summarized on this phone and never leaves it.")
                 .setPositiveButton("Allow") { _, _ ->
                     try {
@@ -1796,7 +1807,7 @@ class MainActivity : Activity() {
             return
         }
         runTool("These are the phone notifications the user received, oldest first, " +
-            "newest last:\n$digest\n\nSummarize what they missed: group by app or topic, " +
+            "newest last:\n$digest\\n\\nSummarize what they missed: group by app or topic, " +
             "mention names and what they said, ignore ads and spam. Keep it short and clear.")
     }
 
@@ -1811,15 +1822,15 @@ class MainActivity : Activity() {
         for (chat in ChatStore.list(this)) {
             for (m in chat.messages) {
                 if (m.role == Role.USER && m.text.length in 10..220) {
-                    mine.append(m.text).append("\n")
+                    mine.append(m.text).append("\\n")
                     if (mine.length > 1400) break
                 }
             }
             if (mine.length > 1400) break
         }
         if (mine.length < 300) return null
-        return "The user writes like this (real examples of their messages):\n-----\n" +
-            "$mine\n-----\nNow write the following IN THE SAME STYLE - same tone, same " +
+        return "The user writes like this (real examples of their messages):\\n-----\\n" +
+            "$mine\\n-----\\nNow write the following IN THE SAME STYLE - same tone, same " +
             "language mix, same habits, first person. Reply with only the text:\n$request"
     }
 
@@ -1891,9 +1902,9 @@ class MainActivity : Activity() {
     /** Exports the whole current conversation as text. */
     private fun shareChat() {
         if (currentChat.messages.isEmpty()) { toast("Nothing to share yet"); return }
-        val sb = StringBuilder("NOVA conversation\n\n")
+        val sb = StringBuilder("NOVA conversation\\n\\n")
         for (msg in currentChat.messages) {
-            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ").append(msg.text).append("\n\n")
+            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ").append(msg.text).append("\\n\\n")
         }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -2057,9 +2068,9 @@ class MainActivity : Activity() {
             .setMessage(preview)
             .setItems(opts) { _, which ->
                 when (which) {
-                    0 -> sendShared("Explain the following text in simple words:\n\n$shared")
-                    1 -> sendShared("Translate the following text to English. Reply with only the translation:\n\n$shared")
-                    2 -> sendShared("Summarize the following text in 3 short bullet points:\n\n$shared")
+                    0 -> sendShared("Explain the following text in simple words:\n\\n$shared")
+                    1 -> sendShared("Translate the following text to English. Reply with only the translation:\n\\n$shared")
+                    2 -> sendShared("Summarize the following text in 3 short bullet points:\n\\n$shared")
                     3 -> { input.setText(shared); input.setSelection(shared.length) }
                 }
             }
@@ -2092,7 +2103,7 @@ class MainActivity : Activity() {
             .setMessage(fact)
             .setPositiveButton("Add") { _, _ ->
                 settings.memory = if (settings.memory.isBlank()) fact
-                else settings.memory.trimEnd() + "\n- " + fact
+                else settings.memory.trimEnd() + "\\n- " + fact
                 toast("Added to memory")
             }
             .setNegativeButton("No", null)
@@ -2134,14 +2145,14 @@ class MainActivity : Activity() {
         toast("Compressing older messages to keep replies fast…")
         scope.launch {
             val old = currentChat.messages.dropLast(6)
-                .joinToString("\n") { m ->
+                .joinToString("\\n") { m ->
                     (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(250)
                 }
             val sb = StringBuilder()
             try {
                 NovaEngine.send(
                     "Summarize this conversation in one short paragraph. " +
-                        "Keep all key facts, decisions, names and numbers:\n\n$old",
+                        "Keep all key facts, decisions, names and numbers:\n\\n$old",
                     256
                 ).collect { sb.append(it) }
                 val summary = stripThinking(sb.toString()).trim()
@@ -2192,7 +2203,7 @@ class MainActivity : Activity() {
             .format(java.util.Date(whenMs))
         AlertDialog.Builder(this)
             .setTitle("Set reminder?")
-            .setMessage(task + "\n\n" + human)
+            .setMessage(task + "\\n\\n" + human)
             .setPositiveButton("Set") { _, _ ->
                 Reminder.schedule(this, whenMs, task)
                 toast("Reminder set: $human")
@@ -2279,7 +2290,7 @@ class MainActivity : Activity() {
                     "time: " + java.text.SimpleDateFormat(
                         "yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                         .format(java.util.Date()) +
-                        "\nthread: " + t.name + "\n\n" +
+                        "\\nthread: " + t.name + "\\n\\n" +
                         android.util.Log.getStackTraceString(e))
             } catch (x: Exception) { }
             previous?.uncaughtException(t, e)
@@ -2336,14 +2347,14 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
     if (doc.length <= maxChars) return doc
     // "page 12" question - answer from exactly that page
     Regex("(?i)\\bpage\\s+(\\d{1,4})\\b").find(query)?.let { m ->
-        val markers = Regex("\u2014 page (\\d+) \u2014").findAll(doc).toList()
+        val markers = Regex("— page (\\d+) —").findAll(doc).toList()
         val mi = markers.indexOfFirst { it.groupValues[1] == m.groupValues[1] }
         if (mi >= 0) {
             // a page marker sits AFTER that page's text
             val start = if (mi == 0) 0 else markers[mi - 1].range.last + 1
             var pageText = doc.substring(start, markers[mi].range.first).trim()
             if (pageText.length > maxChars) pageText = pageText.substring(0, maxChars)
-            return "(page ${m.groupValues[1]} of the document)\n$pageText"
+            return "(page ${m.groupValues[1]} of the document)\\n$pageText"
         }
     }
     val ql = query.lowercase()
@@ -2394,10 +2405,10 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
     val out = StringBuilder()
     var last = -2
     for (i in best) {
-        if (out.isNotEmpty() && i != last + 1) out.append("[...]\n")
+        if (out.isNotEmpty() && i != last + 1) out.append("[...]\\n")
         val p = paras[i]
         if (out.length + p.length > maxChars) break
-        out.append(p).append("\n\n")
+        out.append(p).append("\\n\\n")
         last = i
     }
     return out.toString().trim()
@@ -2449,10 +2460,10 @@ private val CODE_BLOCK = Regex("(?s)```[a-zA-Z0-9+#.-]*\\n?(.*?)```")
 fun plainText(s: String): String {
     val stash = mutableListOf<String>()
     var t = CODE_BLOCK.replace(s) {
-        stash.add(it.groupValues[1]); "\u0000${stash.size - 1}\u0000"
+        stash.add(it.groupValues[1]); "\\u0000${stash.size - 1}\\u0000"
     }
     t = Regex("`[^`\\n]+`").replace(t) {
-        stash.add(it.value.substring(1, it.value.length - 1)); "\u0000${stash.size - 1}\u0000"
+        stash.add(it.value.substring(1, it.value.length - 1)); "\\u0000${stash.size - 1}\\u0000"
     }
     t = t
         .replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
@@ -2461,7 +2472,7 @@ fun plainText(s: String): String {
         .replace(Regex("(?m)^>\\s?"), "")
         .replace(Regex("(?m)^[-*+] "), "- ")
         .trim()
-    for (i in stash.indices) t = t.replace("\u0000$i\u0000", stash[i])
+    for (i in stash.indices) t = t.replace("\\u0000$i\\u0000", stash[i])
     return t
 }
 
@@ -2479,6 +2490,52 @@ private fun stripRepeatJoin(old: String, added: String): String {
         }
     }
     return old + added
+}
+
+/**
+ * Drops blocks from a continuation that merely repeat content already in
+ * the existing reply - the model often restarts a whole section when a
+ * cut-off reply is auto-continued. Runs of 3+ lines (or any 60+ char
+ * line) that already appear in the old text are removed; genuinely new
+ * lines are kept.
+ */
+private fun dropRepeatedBlocks(old: String, added: String): String {
+    val oldSet = HashSet<String>()
+    for (l in old.lines()) oldSet.add(l.trim().replace(Regex("\\s+"), " "))
+    val out = ArrayList<String>()
+    var run = ArrayList<String>()
+    fun close(keep: Boolean) {
+        if (keep) out.addAll(run)
+        run = ArrayList()
+    }
+    for (raw in added.lines()) {
+        val n = raw.trim().replace(Regex("\\s+"), " ")
+        if (n.isEmpty() || oldSet.contains(n)) run.add(raw)
+        else {
+            val big = run.any { it.trim().length >= 60 }
+            close(!(run.size >= 3 || big))
+            out.add(raw)
+        }
+    }
+    val big = run.any { it.trim().length >= 60 }
+    close(!(run.size >= 3 || big))
+    return out.joinToString("\\n")
+}
+
+/**
+ * When a reply was cut mid-sentence and the continuation repeats that
+ * sentence in full, keep only the complete version: the half line at the
+ * end of the old text is dropped.
+ */
+private fun cutPartialLine(old: String, added: String): String {
+    val lines = old.trimEnd().split("\\n").toMutableList()
+    if (lines.size < 2) return old
+    val last = lines.last().trim()
+    val firstNew = added.trim().lines().firstOrNull()?.trim() ?: return old
+    if (last.length >= 40 && (last.lastOrNull() ?: ' ') !in ".!?\"'*" &&
+        (firstNew.startsWith(last) || last.startsWith(firstNew.take(40))))
+        lines.removeAt(lines.size - 1)
+    return lines.joinToString("\\n")
 }
 
 /** Drops the first line of a new reply when it just repeats the last
@@ -2505,7 +2562,7 @@ private fun copyToClipboard(ctx: Context, text: String) {
         // let the user copy manually from a dialog instead
         AlertDialog.Builder(ctx)
             .setTitle("Copy manually")
-            .setMessage(if (text.length > 4000) text.take(4000) + "\n…" else text)
+            .setMessage(if (text.length > 4000) text.take(4000) + "\\n…" else text)
             .setPositiveButton("Close", null)
             .show()
     }
@@ -2695,20 +2752,20 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             if (msgText.isBlank()) return@setOnLongClickListener true
             // code inside fences, without the fence markers
             val code = CODE_BLOCK.findAll(msgText)
-                .joinToString("\n\n") { it.groupValues[1].trim() }
+                .joinToString("\\n\\n") { it.groupValues[1].trim() }
             val options = mutableListOf<String>()
             if (user) options += "Edit & resend"
             if (code.isNotBlank()) options += "Copy code"
             options += "Copy"
             options += "Share"
             val tools = if (user) linkedMapOf(
-                "Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\n$msgText\n-----",
-                "Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\n$msgText\n-----",
-                "Translate to Hindi" to "Translate the text between the lines into Hindi. Reply with ONLY the translation:\n-----\n$msgText\n-----",
-                "Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\n$msgText\n-----",
-                "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
+                "Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\\n$msgText\\n-----",
+                "Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\\n$msgText\\n-----",
+                "Translate to Hindi" to "Translate the text between the lines into Hindi. Reply with ONLY the translation:\n-----\\n$msgText\\n-----",
+                "Make shorter" to "Rewrite the text between the lines much shorter while keeping the key facts. Reply with ONLY the shortened text:\n-----\\n$msgText\\n-----",
+                "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\\n$msgText\\n-----"
             ) else linkedMapOf(
-                "Make study cards" to "Create 8 study flashcards from this material. Format each card EXACTLY as:\nQ: <question>\nA: <answer>\nNo numbering, no text before or after.",
+                "Make study cards" to "Create 8 study flashcards from this material. Format each card EXACTLY as:\nQ: <question>\\nA: <answer>\\nNo numbering, no text before or after.",
                 "Make it sound like me" to "",
                 "Regenerate" to ""
             )
