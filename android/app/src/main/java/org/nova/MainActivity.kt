@@ -850,13 +850,16 @@ class MainActivity : Activity() {
                 // relaxed match: ANY query term can point at the document -
                 // requiring every word in one chunk made "summarise power
                 // sharing" silently fall through to chat (and hallucinate)
-                val doc = if (wantsSumm) Knowledge.bestDocName(this, text)
+                // "summarise it notes" - "it" means the IT notes here,
+                // not the pronoun the tokenizer throws away
+                val qtext = text.replace(" it notes", " IT Revision notes", ignoreCase = true)
+                val doc = if (wantsSumm) Knowledge.bestDocName(this, qtext)
                           else lastNotesDoc
                 if (doc != null) {
                     lastNotesDoc = doc
                     // "summarise sst notes" NAMES the document -> the user
                     // wants the whole doc, not just the first 18 chunks
-                    val whole = !wantsSumm || Knowledge.nameOnlyQuery(text, doc)
+                    val whole = !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
                     summarizeNotes(doc, text, fullDoc = whole)
                     return
                 }
@@ -1265,10 +1268,9 @@ class MainActivity : Activity() {
                 }
             }
         }
-        if (doc.length <= 5000) {
-            runTool("Summarize this document in clear sections: a short Overview first, then Key points as bullets, then Important terms with one-line meanings.")
-            return
-        }
+        // v5.2: small documents used to take a thin one-pass "short
+        // overview" shortcut here - they now go through the full section
+        // pipeline like every other document (1-2 sections, still fast)
         var chunks = docChunks(doc, 6500)
         // skip table-of-contents / references / index pages: faster, cleaner
         val real = chunks.filter { !isJunkChunkText(it) }
@@ -1353,8 +1355,10 @@ class MainActivity : Activity() {
                         ". Write a DETAILED final summary organized topic by topic: for each topic " +
                         "start with a short bold heading line, then 2-4 bullet points (lines " +
                         "starting with \"- \") in full sentences with its names, dates, numbers " +
-                        "and terms. Do not skip any topic. Use only the information given:" +
-                        "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 800
+                        "and terms. Every bullet must be a complete sentence containing " +
+                        "at least one date, name, number or term - never a single word. " +
+                        "Do not skip any topic. Use only the information given:" +
+                        "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 // if the model derailed (scratchpad / off-topic drivel) fall
@@ -1395,7 +1399,7 @@ class MainActivity : Activity() {
     private fun summaryCacheKey(): String? {
         val n = docName ?: return null
         val d = docContext ?: return null
-        return "doc4_" + Integer.toHexString(n.hashCode()) + "_" + d.length
+        return "doc5_" + Integer.toHexString(n.hashCode()) + "_" + d.length
     }
 
     /**
@@ -1413,7 +1417,7 @@ class MainActivity : Activity() {
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
-        val key = "notes5_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        val key = "notes6_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
         if (cf.exists()) {
             val cached = try { cf.readText() } catch (e: Exception) { "" }
@@ -1543,9 +1547,11 @@ class MainActivity : Activity() {
                         "start with a short bold heading line, then 2-4 bullet points " +
                         "(lines starting with \"- \") in full sentences with that topic's " +
                         "dates, names, numbers and terms. Cover EVERY topic. Use ONLY what " +
-                        "the summaries say - copy key terms exactly as written, do not add " +
+                        "the summaries say. Every bullet must be a complete sentence " +
+                        "containing at least one date, name, number or term - never a " +
+                        "single word. Copy key terms exactly as written, do not add " +
                         "outside knowledge or invent terms.$antiCot\n\n" +
-                        dedupeLines(sectionSummaries.toString()).take(11000), 800
+                        dedupeLines(sectionSummaries.toString()).take(11000), 1500
                 ).collect { sb2.append(it) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 // if the model derailed (scratchpad / off-topic drivel) fall

@@ -13,6 +13,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.rendering.PDFRenderer
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import com.tom_roush.pdfbox.text.TextPosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -94,9 +95,9 @@ object PdfDoc {
             context.contentResolver.openInputStream(uri)?.use { it.available().toLong() } ?: -1L
         } catch (e: Exception) { -1L }
         if (size <= 0 && name.isEmpty()) return null
-        // "v3" prefix: v5.0 pipeline can read scanned PDFs via OCR - force
-        // a re-read of PDFs cached by older versions
-        "v3_" + Integer.toHexString(name.hashCode() * 31 + size.toInt()) +
+        // "v4" prefix: v5.2 rebuilds table/two-column reading order on
+        // text PDFs - force a re-read of PDFs cached by older versions
+        "v4_" + Integer.toHexString(name.hashCode() * 31 + size.toInt()) +
             "_" + Integer.toHexString(uri.hashCode())
     } catch (e: Exception) { null }
 
@@ -109,7 +110,7 @@ object PdfDoc {
         try {
             context.contentResolver.openInputStream(uri)?.use { ins ->
                 PDDocument.load(ins).use { doc ->
-                    val stripper = PDFTextStripper()
+                    val stripper = GapStripper()
                     // real reading order for two-column pages, sidebars, slides
                     stripper.setSortByPosition(true)
                     val pages = doc.numberOfPages
@@ -119,7 +120,9 @@ object PdfDoc {
                     for (p in 1..pages) {
                         stripper.setStartPage(p)
                         stripper.setEndPage(p)
-                        val cleaned = clean(stripper.getText(doc))
+                        stripper.words.clear()
+                        stripper.getText(doc)
+                        val cleaned = clean(buildPageText(stripper.words))
                         if (cleaned.isNotBlank()) {
                             pageTexts.add(p to cleaned)
                             total += cleaned.length
@@ -232,6 +235,110 @@ object PdfDoc {
         return if (maxLeftRight <= minRightLeft + pageWidth / 20)
             (left.map { it.first } + right.map { it.first }).joinToString("\n")
         else lines.joinToString("\n")
+    }
+
+    /** A newline string, spelled without escape sequences. */
+    private val NL = 10.toChar().toString()
+
+    /**
+     * One word from the PDF text layer with its position: x range, baseline
+     * and the word's text.
+     */
+    private class WordW(val x0: Float, val x1: Float, val y: Float, val t: String)
+
+    /**
+     * A PDFTextStripper that keeps every word's position while the text is
+     * being read, so pages whose lines carry a wide internal gap (two-column
+     * text or side-by-side table cells) can be rebuilt in true reading order
+     * afterwards (buildPageText) instead of left and right interleaved on
+     * every line ("Flip Flip / Horizontally Vertically").
+     */
+    private class GapStripper : PDFTextStripper() {
+        val words = ArrayList<WordW>()
+        override fun writeString(text: String, positions: List<TextPosition>) {
+            var x0 = 0f; var x1 = 0f; var y = 0f
+            val sb = StringBuilder()
+            for (p in positions) {
+                val u = p.unicode ?: continue
+                val px0 = p.xDirAdj
+                val px1 = px0 + p.widthDirAdj
+                if (sb.isNotEmpty()) {
+                    // a space, a horizontal jump or a baseline change
+                    // all end the current word
+                    if (u == " " || px0 - x1 > 1.5f || Math.abs(p.yDirAdj - y) > 2.5f) {
+                        words.add(WordW(x0, x1, y, sb.toString()))
+                        sb.setLength(0)
+                        if (u == " ") continue
+                    }
+                }
+                if (sb.isEmpty()) { x0 = px0; x1 = px1; y = p.yDirAdj }
+                else if (px1 > x1) x1 = px1
+                sb.append(u)
+            }
+            if (sb.isNotEmpty()) words.add(WordW(x0, x1, y, sb.toString()))
+        }
+    }
+
+    /**
+     * Rebuilds one page's text from the placed words. Words are grouped
+     * into lines by baseline; when most lines contain a wide internal gap
+     * (a two-column layout or a side-by-side table), all left-hand segments
+     * are emitted first, then the right-hand ones - instead of interleaving
+     * left and right text on every single line.
+     */
+    private fun buildPageText(words: List<WordW>): String {
+        if (words.isEmpty()) return ""
+        val sorted = words.sortedWith(compareBy({ it.y }, { it.x0 }))
+        // group words into lines by baseline (3pt tolerance)
+        val lines = ArrayList<List<WordW>>()
+        var cur = ArrayList<WordW>()
+        var curY = 0f
+        for (w in sorted) {
+            if (cur.isEmpty()) { curY = w.y; cur.add(w); continue }
+            if (Math.abs(w.y - curY) <= 3.0f) cur.add(w)
+            else { lines.add(cur); cur = ArrayList(); curY = w.y; cur.add(w) }
+        }
+        if (cur.isNotEmpty()) lines.add(cur)
+        // split every line into segments at gaps wider than 6% of the page
+        val width = words.maxOf { it.x1 }
+        val gapMin = width * 0.06f
+        val segLines = ArrayList<List<List<WordW>>>()
+        var wideLines = 0
+        for (ln in lines) {
+            val segs = ArrayList<List<WordW>>()
+            var seg = ArrayList<WordW>()
+            for (i in ln.indices) {
+                if (i > 0 && ln[i].x0 - ln[i - 1].x1 > gapMin) {
+                    segs.add(seg); seg = ArrayList()
+                }
+                seg.add(ln[i])
+            }
+            if (seg.isNotEmpty()) segs.add(seg)
+            if (segs.size >= 2) wideLines++
+            segLines.add(segs)
+        }
+        // mostly gapless page: plain top-to-bottom text
+        if (wideLines * 10 < lines.size * 6) {
+            return lines.joinToString(NL) { ln -> ln.joinToString(" ") { it.t } }
+        }
+        // find the split line: the median of all wide-gap midpoints
+        val mids = ArrayList<Float>()
+        for (segs in segLines) for (i in 1 until segs.size)
+            mids.add((segs[i - 1].last().x1 + segs[i].first().x0) / 2f)
+        mids.sort()
+        val splitX = mids[mids.size / 2]
+        val left = StringBuilder()
+        val right = StringBuilder()
+        for (segs in segLines) {
+            for (s in segs) {
+                val mid = (s.first().x0 + s.last().x1) / 2f
+                val dst = if (mid < splitX) left else right
+                if (dst.isNotEmpty()) dst.append(NL)
+                dst.append(s.joinToString(" ") { it.t })
+            }
+        }
+        return if (right.isEmpty()) left.toString()
+        else left.toString() + NL + NL + right.toString()
     }
 
     /**
