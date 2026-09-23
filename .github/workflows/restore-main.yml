@@ -1,4 +1,4 @@
-name: Fix v5.0 import
+name: Restore MainActivity v5.1
 on:
   workflow_dispatch:
 
@@ -6,17 +6,21 @@ permissions:
   contents: write
 
 jobs:
-  fix:
+  restore:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fix ML Kit import and verify
+        with:
+          fetch-depth: 0
+      - name: Apply patch and verify
         run: |
           set -e
-          sed -i 's#^import com.google.mlkit.vision.text.TextRecognizerOptions$#import com.google.mlkit.vision.text.latin.TextRecognizerOptions#' android/app/src/main/java/org/nova/PdfDoc.kt
-          echo "fa27931e2e23c32a7532c15bb60555d3  android/app/src/main/java/org/nova/PdfDoc.kt" | md5sum -c -
-          git add android/app/src/main/java/org/nova/PdfDoc.kt
+          git show 403c8108aabf9f0bb05e76a8d9ce2fdfc0e659aa:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          git apply --ignore-whitespace tmp/main51.patch
+          echo "3af26b9473283ac2763cafc1a83121b2  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          git rm -rqf tmp
+          git add android/app/src/main/java/org/nova/MainActivity.kt
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git commit -m "v5.0 fix: TextRecognizerOptions lives in the latin subpackage"
+          git commit -m "MainActivity.kt v5.1: bigger sections, batch reloads, structured finals"
           git push
