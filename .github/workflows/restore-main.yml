@@ -11,6 +11,10 @@ jobs:
     steps:
       - name: Checkout NOVA
         uses: actions/checkout@v4
+      - name: Fetch the pristine v5.3 base commit
+        run: |
+          set -e
+          git fetch --depth=1 origin 5d5da11ff1e26cc4ba3398fbe80a154047684d65
       - name: Restore pristine sources and apply v5.4 patches
         run: |
           set -e
