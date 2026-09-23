@@ -1,0 +1,141 @@
+diff -ruN a/android/app/src/main/java/org/nova/MainActivity.kt b/android/app/src/main/java/org/nova/MainActivity.kt
+--- a/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 22:43:53.995935648 +0000
++++ b/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 22:43:42.145826508 +0000
+@@ -75,6 +75,9 @@
+     /** Last memory text injected into this engine context. */
+     private var lastInjectedMemory: String? = null
+ 
++    /** Last exam line injected into this engine context (null = none). */
++    private var lastInjectedExamKey: String? = null
++
+     /** Guards runaway auto-continues. */
+     private var autoContinueCount = 0
+ 
+@@ -962,14 +965,19 @@
+         val tiny = "1b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
+ 
+         if (!tiny) {
+-            // exam countdown awareness
+-            Exams.promptLine(this)?.let { line ->
+-                prompt = "(The user's upcoming exams: $line.)\n\n$prompt"
++            // exam countdown awareness - injected once per conversation,
++            // re-injected only when the day changes the countdown text
++            val examLine = Exams.promptLine(this)
++            if (examLine != null && (currentChat.messages.isEmpty() || needsContextCarry ||
++                    examLine != lastInjectedExamKey)) {
++                prompt = "(The user's upcoming exams: $examLine.)\n\n$prompt"
++                lastInjectedExamKey = examLine
+             }
+         }
+ 
+         // knowledge base (offline RAG): relevant notes from the user's documents
+         var knowledgePart = ""
++        var hits: List<Knowledge.Chunk> = emptyList()
+         // v5.4: study questions get STRICT grounding + citation + cache
+         val qLow = text.lowercase()
+         val studyQ = qLow.startsWith("explain ") || qLow.startsWith("teach me ") ||
+@@ -981,7 +989,8 @@
+         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+             // v5.4: cached answer from last time? -> instant, no model run
+             if (studyQ && docPart.isEmpty()) {
+-                val qaKey = "qa_" + Integer.toHexString(qLow.hashCode())
++                val qaKey = "qa_" + Integer.toHexString(qLow.hashCode()) + "_" +
++                    Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
+                 val qaFile = File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey)
+                 val qaCached = if (qaFile.exists())
+                     try { qaFile.readText() } catch (e: Exception) { "" } else ""
+@@ -997,7 +1006,7 @@
+                 }
+                 pendingQaKey = qaKey
+             }
+-            val hits = Knowledge.search(this, text)
++            hits = Knowledge.search(this, text)
+             if (hits.isNotEmpty()) {
+                 var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
+                 if (notes.length > (if (tiny) 900 else 2400))
+@@ -1019,8 +1028,7 @@
+         // v5.4: study questions - rewrap the notes as STRICT instructions,
+         // record the source pages, and let the notes be the only background
+         if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {
+-            val hits2 = Knowledge.search(this, text)
+-            var notes2 = hits2.joinToString(NL + "---" + NL) { "[" + it.doc + "] " + it.text }
++            var notes2 = hits.joinToString(NL + "---" + NL) { "[" + it.doc + "] " + it.text }
+             if (notes2.length > (if (tiny) 900 else 2400))
+                 notes2 = notes2.substring(0, if (tiny) 900 else 2400)
+             knowledgePart = "(Study notes from the user's documents follow. " +
+@@ -1041,17 +1049,13 @@
+                 }
+             }
+             pendingCitation = if (pages.isEmpty()) "" else
+-                "Source: " + hits2.first().doc + ", " +
++                "Source: " + hits.first().doc + ", " +
+                 (if (pages.contains(",")) "pages " else "page ") + pages
+         }
+         // one background source for tiny models, both for bigger ones
+         prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
+                   else knowledgePart + wikiPart) + prompt
+ 
+-        // general chat: match the user's language, no guessing
+-        if (docPart.isEmpty()) {
+-            prompt += "\n(Reply in the same language the user writes in. If you don't know something, say so honestly instead of guessing.)"
+-        }
+         autoContinueCount = 0
+         replyRetried = false
+         startGeneration(prompt, text)
+@@ -1089,6 +1093,9 @@
+         setStatus()
+ 
+         generationJob = scope.launch {
++            // v5.4.2: performance timers (time-to-first-token + total)
++            val tStart = android.os.SystemClock.elapsedRealtime()
++            var tFirstToken = 0L
+             // efficiency: batch tokens, redraw + speak ~8x per second
+             val pending = StringBuilder()
+             var lastFlush = 0L
+@@ -1101,9 +1108,10 @@
+             try {
+                 NovaEngine.send(prompt, settings.predictLength)
+                     .collect { token ->
++                        if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
+                         pending.append(token)
+                         val now = android.os.SystemClock.uptimeMillis()
+-                        if (now - lastFlush >= 120 || pending.length > 400) {
++                        if (now - lastFlush >= 250 || pending.length > 400) {
+                             lastFlush = now
+                             flush()
+                             scrollToEnd(force = false)
+@@ -1118,8 +1126,14 @@
+                 flush()
+                 adapter.appendToLast(" ⏹")
+                 speechCancelled = true
++                // stopped replies are truncated - never cache them
++                pendingQaKey = null
++                pendingCitation = null
+             } catch (e: Exception) {
+                 adapter.appendToLast("\n[error: ${e.message}]")
++                // error replies must never be cached as answers
++                pendingQaKey = null
++                pendingCitation = null
+             } finally {
+                 flush()
+                 withContext(Dispatchers.Main) {
+@@ -1149,6 +1163,11 @@
+                         toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
+                     }
+                     adapter.finalizeLast()
++                    // v5.4.2: performance readout
++                    val tEnd = android.os.SystemClock.elapsedRealtime()
++                    if (tFirstToken > 0L) status.text =
++                        "first word " + String.format("%.1f", (tFirstToken - tStart) / 1000.0) +
++                            "s - total " + String.format("%.1f", (tEnd - tStart) / 1000.0) + "s"
+                     // blank, one-word or looping answers from tiny models:
+                     // retry once with a firmer instruction instead of garbage
+                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
+@@ -2460,6 +2479,7 @@
+             .setMessage(task + "\n\n" + human)
+             .setPositiveButton("Set") { _, _ ->
+                 Reminder.schedule(this, whenMs, task, repeatMs)
++                ReminderStore.add(this, whenMs, task, repeatMs)
+                 toast(if (repeatMs > 0) "Reminder set ($repeatLabel): $human"
+                 else "Reminder set: $human")
+             }

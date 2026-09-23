@@ -31,7 +31,7 @@ object ChatStore {
 
     fun newChat(): Chat =
         Chat(
-            id = System.currentTimeMillis().toString(36) + "-" + (0..999).random(),
+            id = java.util.UUID.randomUUID().toString(),
             name = "New chat",
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
@@ -56,7 +56,12 @@ object ChatStore {
                 .put("created", chat.createdAt)
                 .put("updated", chat.updatedAt)
                 .put("messages", arr)
-            File(dir(context), chat.id + ".json").writeText(json.toString())
+            File(dir(context), chat.id + ".json").let { f ->
+                // atomic write: a crash mid-save can't destroy an existing chat
+                val tmp = File(dir(context), chat.id + ".tmp")
+                tmp.writeText(json.toString())
+                if (!tmp.renameTo(f)) { tmp.delete(); f.writeText(json.toString()) }
+            }
         } catch (e: Exception) {
             // best effort — never crash the app for storage
         }
