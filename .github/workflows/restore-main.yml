@@ -1,0 +1,26 @@
+name: Restore MainActivity v3.2
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch and verify
+        run: |
+          set -e
+          git show 47c432d0f1274c1aaf530f3a076874a3179c7b0c^:android/app/src/main/java/org/nova/MainActivity.kt > android/app/src/main/java/org/nova/MainActivity.kt
+          patch -p1 -l -F 3 < tmp/main32.patch
+          echo "87c581be5427d8b2407749a2e261cb1c  android/app/src/main/java/org/nova/MainActivity.kt" | md5sum -c -
+          git rm -rq tmp
+          git add android/app/src/main/java/org/nova/MainActivity.kt
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git commit -m "MainActivity.kt v3.2: notes chapter window, doc summarize, continuation dedup"
+          git push
