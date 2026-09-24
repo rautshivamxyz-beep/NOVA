@@ -67,8 +67,8 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_loadDraft(JNIEnv *env, jobject,
         return 1;
     }
     // the draft must share the target's vocabulary
-    if (llama_vocab_n_vocab(llama_model_get_vocab(model)) !=
-        llama_vocab_n_vocab(llama_model_get_vocab(g_model))) {
+    if (llama_vocab_n_tokens(llama_model_get_vocab(model)) !=
+        llama_vocab_n_tokens(llama_model_get_vocab(g_model))) {
         llama_model_free(model);
         LOGe("%s: draft vocabulary mismatch - refusing", __func__);
         return 2;
@@ -198,7 +198,7 @@ static llama_token argmax_token(const float * logits, const int n_vocab) {
 static void spec_round() {
     constexpr int K = 5;
     const auto * vocab = llama_model_get_vocab(g_model);
-    const int  n_vocab = llama_vocab_n_vocab(vocab);
+    const int  n_vocab = llama_vocab_n_tokens(vocab);
     const llama_pos P = current_position;
 
     // 1. first token sampled from the target model - always correct
