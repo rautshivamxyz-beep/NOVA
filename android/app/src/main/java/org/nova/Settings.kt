@@ -48,9 +48,13 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
 
-    /** Knowledge base: answer using the user's indexed documents. */
+    /** Knowledge base: answer using the user's indexed documents.
+     *  v5.4.4: defaults ON - importing documents means wanting them used.
+     *  The old silent OFF default made NOVA index every PDF and then
+     *  quietly never inject any of them, so all answers came from the
+     *  model's memory alone. */
     var knowledgeEnabled: Boolean
-        get() = prefs.getBoolean(KEY_KNOWLEDGE, false)
+        get() = prefs.getBoolean(KEY_KNOWLEDGE, true)
         set(value) = prefs.edit().putBoolean(KEY_KNOWLEDGE, value).apply()
 
     /** Offline Wikipedia: attach matching articles as background facts. */
