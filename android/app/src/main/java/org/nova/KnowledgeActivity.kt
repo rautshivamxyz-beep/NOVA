@@ -299,7 +299,7 @@ class KnowledgeActivity : Activity() {
         val text = Knowledge.docText(this, name)
         val words = text.split(Regex("\\s+")).count { it.isNotBlank() }
         val tv = TextView(this).apply {
-            text = text.ifBlank { "(nothing was extracted from this document)" }
+            this.text = text.ifBlank { "(nothing was extracted from this document)" }
             textSize = 13f; setTextColor(NovaTheme.text)
             setPadding(dp(18), dp(10), dp(6), dp(10))
         }
