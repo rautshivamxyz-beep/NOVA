@@ -1,0 +1,18 @@
+name: apply-v550
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tmp/apply_v550.py
+      - name: Commit applied patch
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add android/app/src/main/java/org/nova/ModelCatalog.kt android/app/src/main/java/org/nova/NovaEngine.kt android/app/src/main/java/org/nova/Settings.kt android/app/src/main/java/org/nova/SettingsActivity.kt android/app/src/main/java/org/nova/MainActivity.kt
+          git commit -m "v5.5.0: MiniCPM5-2B model + strict answers mode (applied by CI)"
+          git push
