@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 tmp/apply_v548.py
+      - run: python3 tmp/fix_v548b.py
       - name: Commit applied patch
         run: |
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git add android/app/src/main/java/org/nova/KnowledgeActivity.kt android/app/src/main/java/org/nova/ChatsActivity.kt
-          git commit -m "v5.4.8: photo notes (OCR) + chat search (applied by CI)"
+          git add android/app/src/main/java/org/nova/ChatsActivity.kt
+          git commit -m "v5.4.8b: fix singleLine compile error (applied by CI)"
           git push
