@@ -13,6 +13,13 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging true
+            // v5.4.7: smaller APK - drop CPU variants this phone can never
+            // use (v8.6/v9.x are for flagship chips; x86_64 is emulator only
+            // and already excluded by abiFilters below)
+            excludes += ['lib/**/libggml-cpu-android_armv8.6_1.so',
+                         'lib/**/libggml-cpu-android_armv9.0_1.so',
+                         'lib/**/libggml-cpu-android_armv9.2_1.so',
+                         'lib/**/libggml-cpu-android_armv9.2_2.so']
         }
     }
 
@@ -26,8 +33,13 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 30
-        versionName '5.4.6'
+        versionCode 31
+        versionName '5.4.7'
+        // v5.4.7: single-ABI build - arm64 only (x86_64 was ~25MB of
+        // useless emulator code in every APK download)
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     signingConfigs {
