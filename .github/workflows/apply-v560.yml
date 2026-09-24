@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 tmp/apply_v560.py
+      - run: python3 tmp/fix_v560b.py
       - name: Commit applied patch
         run: |
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
           git add android/app/src/main/java/org/nova/MainActivity.kt
-          git commit -m "v5.6.0: math symbols + code tools + JS runner (applied by CI)"
+          git commit -m "v5.6.0b: fix runJs compile errors (applied by CI)"
           git push
