@@ -155,7 +155,7 @@ object NovaEngine {
      */
     private fun thinkingHint(path: String, label: String): String {
         val n = (label + " " + path.substringAfterLast('/')).lowercase()
-        if ("think" !in n) return ""
+        if ("think" !in n && "minicpm" !in n) return ""
         return "\n\n(You are a reasoning model. Keep your hidden thinking SHORT: " +
             "one or two brief lines for easy questions, detailed step-by-step " +
             "reasoning only for genuinely hard problems. Then answer directly.)"

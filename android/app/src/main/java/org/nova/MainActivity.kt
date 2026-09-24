@@ -1140,6 +1140,14 @@ class MainActivity : Activity() {
      * (chips, auto-continue, edit-resend) - no user bubble is shown.
      * newBubble == false keeps appending to the existing last reply.
      */
+    /** v5.5.0: strict mode - grounded answers only, no invented facts. */
+    private fun effectivePrompt(p: String): String =
+        if (settings.strictMode)
+            "STRICT MODE: Answer ONLY from the user's notes and the Wikipedia extracts " +
+                "in this conversation. If they do not contain the answer, say exactly: " +
+                "'My notes don't cover this.' Never invent facts, names, dates or numbers.\n\n" + p
+        else p
+
     private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true) {
         if (userText != null) {
             val userMsg = Msg(Role.USER, userText)
@@ -1180,7 +1188,7 @@ class MainActivity : Activity() {
                 }
             }
             try {
-                NovaEngine.send(prompt, settings.predictLength)
+                NovaEngine.send(effectivePrompt(prompt), settings.predictLength)
                     .collect { token ->
                         if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
                         pending.append(token)

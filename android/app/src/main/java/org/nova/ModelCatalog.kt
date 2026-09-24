@@ -53,6 +53,12 @@ object ModelCatalog {
             "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
         ),
         Entry(
+            "minicpm5-2b", "MiniCPM5 2B", "OpenBMB", "2B", "Q4_K_M",
+            1_620_000_000L /* ~1.62 GB */, 3,
+            "v5.5.0: smartest small model — far fewer made-up answers than any 1B. Reasoning model: thinks before answering, so the first word takes longer. ~25% slower than 1B. English only. Big download — use Wi-Fi.",
+            "https://huggingface.co/bartowski/MiniCPM5-2B-GGUF/resolve/main/MiniCPM5-2B-Q4_K_M.gguf"
+        ),
+        Entry(
             "qwen25-3b", "Qwen 2.5 3B Instruct", "Alibaba", "3B", "Q4_K_M",
             0x74000000L /* ~1.80 GB */, 4,
             "Strong multilingual + coding for 3B.",

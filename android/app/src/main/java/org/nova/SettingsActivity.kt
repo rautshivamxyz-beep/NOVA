@@ -165,6 +165,11 @@ class SettingsActivity : Activity() {
         answers.addView(switchRow("Use offline Wikipedia", settings.wikiEnabled) {
             settings.wikiEnabled = it
         })
+        answers.addView(switchRow("Strict answers (notes & Wikipedia only)", settings.strictMode) {
+            settings.strictMode = it
+            // v5.5.0: answers cached under the other mode must not be served
+            Knowledge.clearQaCache(this)
+        })
         answers.addView(Button(this).apply {
             isAllCaps = false
             background = null

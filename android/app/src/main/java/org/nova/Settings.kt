@@ -62,6 +62,12 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_WIKI, true)
         set(value) = prefs.edit().putBoolean(KEY_WIKI, value).apply()
 
+    /** v5.5.0: strict mode - refuse instead of inventing when the
+     *  answer is not in the user's notes or offline Wikipedia. */
+    var strictMode: Boolean
+        get() = prefs.getBoolean(KEY_STRICT, false)
+        set(value) = prefs.edit().putBoolean(KEY_STRICT, value).apply()
+
     /** v5.4.6: documents excluded from Knowledge search via the Notes
      *  filter drawer row - "English only" during an English exam. */
     var knowledgeExcluded: MutableSet<String>
@@ -80,6 +86,7 @@ class Settings(context: Context) {
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
         private const val KEY_WIKI = "wiki_enabled"
+        private const val KEY_STRICT = "strict_mode"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         const val DEFAULT_SYSTEM_PROMPT =
