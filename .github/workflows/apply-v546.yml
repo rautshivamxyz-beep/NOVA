@@ -1,0 +1,18 @@
+name: apply-v546
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tmp/apply_v546.py
+      - name: Commit applied patch
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add android/app/src/main/java/org/nova/MainActivity.kt android/app/src/main/java/org/nova/Settings.kt android/app/src/main/java/org/nova/Knowledge.kt
+          git commit -m "v5.4.6: notes filter + save-to-knowledge + cache follow-up fix (applied by CI)"
+          git push
