@@ -86,6 +86,10 @@ class MainActivity : Activity() {
     // v5.4 grounded answers: escape-free newline, source citation, Q&A cache
     private val NL = 10.toChar().toString()
     private var pendingCitation: String? = null
+    // v5.4.5: notes that fed the last grounded answer in this chat, so
+    // keyword-less follow-ups ("explain it in more detail") stay grounded
+    private var lastNotesHit: List<Knowledge.Chunk> = emptyList()
+    private var lastNotesChatId: String = ""
     private var pendingQaKey: String? = null
 
     /** Notes document the user last summarized - "gimme the whole summary" returns to it. */
@@ -1019,7 +1023,18 @@ class MainActivity : Activity() {
                 pendingQaKey = qaKey
             }
             hits = Knowledge.search(this, text)
+            // v5.4.5: follow-up questions ("explain it in more detail",
+            // "explain that again") carry no keywords of their own, so the
+            // search comes back empty and the model answered from memory -
+            // mixing subjects (SST facts inside an English answer). Carry
+            // the notes that fed the previous answer in this chat instead.
+            if (hits.isEmpty() && docPart.isEmpty() && lastNotesHit.isNotEmpty() &&
+                lastNotesChatId == currentChat.id && FOLLOW_UP_Q.containsMatchIn(text)) {
+                hits = lastNotesHit
+            }
             if (hits.isNotEmpty()) {
+                lastNotesHit = hits
+                lastNotesChatId = currentChat.id
                 var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
                 if (notes.length > (if (tiny) 900 else 2400))
                     notes = notes.substring(0, if (tiny) 900 else 2400) + "\n[...more omitted]"
@@ -1046,7 +1061,13 @@ class MainActivity : Activity() {
             knowledgePart = "(Study notes from the user's documents follow. " +
                 "Answer ONLY using these notes. If the answer is not in the " +
                 "notes, say plainly that the notes do not cover it. Copy key " +
-                "terms and facts exactly as written." + NL + notes2 + ")" + NL + NL
+                "terms and facts exactly as written. Be direct and complete, " +
+                "never pad: no filler like 'the story is often seen as', no " +
+                "repeating the question, no repeating the same idea twice." +
+                (if (qLow.startsWith("teach me "))
+                    " Teach the topic fully from the notes, definition first."
+                 else " Answer in at most 120 words unless the user asks for detail.") +
+                NL + notes2 + ")" + NL + NL
             wikiPart = ""
             var pages = ""
             for (l in notes2.lines()) {
@@ -2760,6 +2781,10 @@ fun isJunkChunkText(c: String): Boolean {
  * everything from the opening tag on is hidden.
  */
 private val THINK_OPEN = "<" + "think" + ">"
+
+/** v5.4.5: follow-up questions with no keywords of their own - they mean
+ *  "the same notes again", so the last grounded notes are carried forward. */
+private val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")
 private val THINK_CLOSE = "<" + "/" + "think" + ">"
 
 fun stripThinking(s: String): String {
