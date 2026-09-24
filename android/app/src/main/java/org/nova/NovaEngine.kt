@@ -146,6 +146,30 @@ object NovaEngine {
         activeModelPath = path
         activeModelLabel = label
         contextDirty = false
+
+        // v5.7.0: speculative decoding - a small draft model proposes
+        // tokens that the main model verifies in batches. Only Qwen3
+        // targets (the draft must share the vocabulary). The binding
+        // swallows failures, so speculation just stays off if anything
+        // is missing.
+        try {
+            if (Settings(context.applicationContext).specDecoding) {
+                findDraftModel(context.applicationContext)?.let {
+                    engine.loadDraftModel(it.absolutePath)
+                }
+            } else {
+                engine.unloadDraftModel()
+            }
+        } catch (e: Exception) { }
+    }
+
+    /** v5.7.0: the Qwen3 0.6B file, when a Qwen3 target is active. */
+    private fun findDraftModel(ctx: Context): java.io.File? {
+        val target = (activeModelLabel + " " + (activeModelPath ?: "")).lowercase()
+        if (!target.contains("qwen3")) return null
+        return ModelCatalog.modelsDir(ctx).listFiles { f: java.io.File ->
+            f.extension == "gguf" && f.name.lowercase().contains("qwen3-0.6b")
+        }?.firstOrNull()
     }
 
     /**

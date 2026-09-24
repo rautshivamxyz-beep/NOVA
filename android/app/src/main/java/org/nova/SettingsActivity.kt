@@ -170,6 +170,14 @@ class SettingsActivity : Activity() {
             // v5.5.0: answers cached under the other mode must not be served
             Knowledge.clearQaCache(this)
         })
+        answers.addView(switchRow("Speculative decoding (Qwen3 only)", settings.specDecoding) {
+            settings.specDecoding = it
+            // takes effect the next time a model loads
+            android.widget.Toast.makeText(this,
+                if (it) "Needs a Qwen3 model + Qwen3 0.6B downloaded - active on next model load"
+                else "Off after the next model load",
+                android.widget.Toast.LENGTH_LONG).show()
+        })
         answers.addView(Button(this).apply {
             isAllCaps = false
             background = null

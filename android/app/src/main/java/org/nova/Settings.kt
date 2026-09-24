@@ -68,6 +68,13 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_STRICT, false)
         set(value) = prefs.edit().putBoolean(KEY_STRICT, value).apply()
 
+    /** v5.7.0: speculative decoding - Qwen3 0.6B drafts tokens that the
+     *  main model verifies in batches. Off by default: measure with the
+     *  built-in speed timers before trusting it. */
+    var specDecoding: Boolean
+        get() = prefs.getBoolean(KEY_SPEC, false)
+        set(value) = prefs.edit().putBoolean(KEY_SPEC, value).apply()
+
     /** v5.4.6: documents excluded from Knowledge search via the Notes
      *  filter drawer row - "English only" during an English exam. */
     var knowledgeExcluded: MutableSet<String>
@@ -87,6 +94,7 @@ class Settings(context: Context) {
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
         private const val KEY_WIKI = "wiki_enabled"
         private const val KEY_STRICT = "strict_mode"
+        private const val KEY_SPEC = "spec_decoding"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         const val DEFAULT_SYSTEM_PROMPT =
