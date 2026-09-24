@@ -92,7 +92,7 @@ class ChatsActivity : Activity() {
             setTextColor(textMain)
             setHintTextColor(textDim)
             textSize = 14f
-            singleLine = true
+            setSingleLine()
             background = GradientDrawable().apply {
                 setColor(surface)
                 cornerRadius = dp(14).toFloat()
