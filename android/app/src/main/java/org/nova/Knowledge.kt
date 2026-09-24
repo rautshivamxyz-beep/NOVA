@@ -26,6 +26,9 @@ object Knowledge {
 
     private var cache: ArrayList<Chunk>? = null
 
+    /** v5.4.6: documents excluded from search by the user's Notes filter. */
+    private fun excluded(ctx: Context): Set<String> = Settings(ctx).knowledgeExcluded
+
     private fun file(ctx: Context) = File(ctx.filesDir, "knowledge.json")
 
     private fun load(ctx: Context): ArrayList<Chunk> {
@@ -116,9 +119,11 @@ object Knowledge {
         if (terms.isEmpty()) return emptyList()
         val chunks = load(ctx)
         if (chunks.isEmpty()) return emptyList()
+        val skip = excluded(ctx)
         val need = if (terms.size >= 2) 2 else 1
         val scored = ArrayList<Pair<Int, Chunk>>()
         for (c in chunks) {
+            if (c.doc in skip) continue
             var score = 0
             val dl = c.doc.lowercase()
             for (t in terms) {
@@ -156,8 +161,10 @@ object Knowledge {
         if (terms.isEmpty()) return null
         val chunks = load(ctx)
         if (chunks.isEmpty()) return null
+        val skip = excluded(ctx)
         val docScores = HashMap<String, Int>()
         for (c in chunks) {
+            if (c.doc in skip) continue
             val dl = c.doc.lowercase()
             var s = 0
             for (t in terms) {
@@ -179,10 +186,12 @@ object Knowledge {
         if (terms.isEmpty()) return emptyList()
         val chunks = load(ctx)
         if (chunks.isEmpty()) return emptyList()
+        val skip = excluded(ctx)
         // 1) pick the single best document for this query
         val docScores = HashMap<String, Int>()
         val chunkScores = IntArray(chunks.size)
         for ((i, c) in chunks.withIndex()) {
+            if (c.doc in skip) continue
             val dl = c.doc.lowercase()
             var docHit = 0
             var textHit = 0

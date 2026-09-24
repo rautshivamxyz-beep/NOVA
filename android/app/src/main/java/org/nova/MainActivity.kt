@@ -539,6 +539,7 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
+        drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",
@@ -1017,6 +1018,11 @@ class MainActivity : Activity() {
                     // v5.4.3 fix: the engine never saw this exchange - make
                     // the next real question carry the transcript, so
                     // follow-ups ("explain that again") aren't answered cold
+                    // v5.4.6: a cached reply skipped the note search above,
+                    // so a follow-up ("explain it more") had no notes to
+                    // carry. Remember them now, like a fresh answer would.
+                    val h2 = Knowledge.search(this, text)
+                    if (h2.isNotEmpty()) { lastNotesHit = h2; lastNotesChatId = currentChat.id }
                     needsContextCarry = true
                     return
                 }
@@ -2377,6 +2383,27 @@ class MainActivity : Activity() {
     }
 
     /** Detects "remember that ..." and offers to save it to Memory. */
+    /** v5.4.6: pick which documents Knowledge searches - e.g. only the
+     *  English PDFs during an English exam, so SST can never leak in. */
+    private fun showNotesFilter() {
+        val names = Knowledge.docs(this).map { it.first }
+        if (names.isEmpty()) { toast("Import notes first (Knowledge screen)"); return }
+        val excl = settings.knowledgeExcluded.toMutableSet()
+        val checked = names.map { it !in excl }.toBooleanArray()
+        AlertDialog.Builder(this)
+            .setTitle("Search these notes")
+            .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked ->
+                val n = names[which]
+                if (isChecked) excl.remove(n) else excl.add(n)
+            }
+            .setPositiveButton("OK") { _, _ ->
+                settings.knowledgeExcluded = excl
+                toast("Searching ${names.size - excl.size} of ${names.size} document(s)")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun maybeAutoRemember(text: String) {
         val m = Regex("(?i)^\\s*(?:please\\s+)?remember\\b[\\s:,]+(.{4,400})").find(text) ?: return
         var fact = m.groupValues[1].trim().trimEnd('.', '!', '?')
@@ -3183,6 +3210,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 "Make longer" to "Expand the text between the lines with more detail and examples. Reply with ONLY the expanded text:\n-----\n$msgText\n-----"
             ) else linkedMapOf(
                 "Make study cards" to "Create 8 study flashcards from this material. Format each card EXACTLY as:\nQ: <question>\nA: <answer>\nNo numbering, no text before or after.",
+                "Save to Knowledge" to "",
                 "Make it sound like me" to "",
                 "Regenerate" to ""
             )
@@ -3199,6 +3227,11 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                                 putExtra(Intent.EXTRA_TEXT, msgText)
                             }
                             ctx.startActivity(Intent.createChooser(send, "Share message"))
+                        }
+                        "Save to Knowledge" -> {
+                            val nm = "Saved: " + msgText.replace("\n", " ").take(28)
+                            Thread { Knowledge.addDoc(ctx, nm, msgText) }.start()
+                            Toast.makeText(ctx, "Saved to Knowledge: $nm", Toast.LENGTH_SHORT).show()
                         }
                         "Regenerate" -> onRegenerate?.invoke()
                         "Make it sound like me" -> onTool?.invoke("__STYLE__" + msgText)

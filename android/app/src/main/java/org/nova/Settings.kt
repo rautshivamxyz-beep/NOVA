@@ -62,6 +62,12 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_WIKI, true)
         set(value) = prefs.edit().putBoolean(KEY_WIKI, value).apply()
 
+    /** v5.4.6: documents excluded from Knowledge search via the Notes
+     *  filter drawer row - "English only" during an English exam. */
+    var knowledgeExcluded: MutableSet<String>
+        get() = prefs.getStringSet(KEY_KNOWLEDGE_EXCL, emptySet())?.toMutableSet() ?: mutableSetOf()
+        set(value) = prefs.edit().putStringSet(KEY_KNOWLEDGE_EXCL, value.toSet()).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -74,6 +80,7 @@ class Settings(context: Context) {
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
         private const val KEY_WIKI = "wiki_enabled"
+        private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a helpful AI assistant running fully offline on this phone.\n" +
