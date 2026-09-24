@@ -24,11 +24,14 @@ object Backup {
             study.put(JSONObject().put("q", c.q).put("a", c.a)
                 .put("iv", c.interval).put("due", c.due))
         }
+        val kFile = File(ctx.filesDir, "knowledge.json")
+        val kJson = if (kFile.exists()) try { kFile.readText() } catch (e: Exception) { "" } else ""
         JSONObject()
             .put("nova_backup", 1)
             .put("memory", s.memory)
             .put("system_prompt", s.systemPrompt)
             .put("predict_length", s.predictLength)
+            .put("knowledge", kJson)
             .put("wiki", s.wikiEnabled)
             .put("knowledge", s.knowledgeEnabled)
             .put("study", study)
@@ -52,6 +55,9 @@ object Backup {
         if (o.has("predict_length")) s.predictLength = o.optInt("predict_length", 512)
         s.wikiEnabled = o.optBoolean("wiki", true)
         s.knowledgeEnabled = o.optBoolean("knowledge", true)
+        // v5.4.7: restore the whole knowledge base, not just the toggle
+        val kJson = o.optString("knowledge")
+        if (kJson.isNotEmpty()) Knowledge.restoreAll(ctx, kJson)
         val study = o.optJSONArray("study")
         if (study != null && study.length() > 0) {
             val cards = mutableListOf<Study.Card>()

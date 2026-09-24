@@ -906,6 +906,27 @@ class MainActivity : Activity() {
                 }
             }
         }
+        // v5.4.7: "quiz me on power sharing" - study flashcards straight
+        // from the notes, reusing the study-card machinery and its Q:/A:
+        // parser, so a quiz is graded material you already verified
+        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+            val quizMe = Regex("(?i)\\b(?:quiz|test) me on\\b").find(text)
+            if (quizMe != null) {
+                val topic = text.substringAfter(quizMe.value).trim()
+                val parts = Knowledge.bestChunks(this, if (topic.length > 2) topic else text, 10)
+                if (parts.isNotEmpty()) {
+                    val um = Msg(Role.USER, text)
+                    currentChat.messages.add(um); adapter.add(um)
+                    pendingCards = true
+                    val mat = parts.joinToString("\n")
+                    startGeneration("(Create 8 study flashcards from this material. " +
+                        "Format each card EXACTLY as:\nQ: <question>\nA: <answer>\n" +
+                        "No numbering, no text before or after.\n-----\n$mat\n-----)", null)
+                    scrollToEnd()
+                    return
+                }
+            }
+        }
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
@@ -1095,6 +1116,8 @@ class MainActivity : Activity() {
         prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
                   else knowledgePart + wikiPart) + prompt
 
+        // v5.4.7: show when the answer is grounded in the user's notes
+        if (knowledgePart.isNotEmpty()) toast("Using your notes")
         autoContinueCount = 0
         replyRetried = false
         startGeneration(prompt, text)

@@ -74,6 +74,20 @@ object Knowledge {
         clearQaCache(ctx)
     }
 
+    /** v5.4.7: backup restore - replace the whole knowledge base. */
+    fun restoreAll(ctx: Context, json: String) {
+        try {
+            val arr = JSONArray(json)
+            val chunks = ArrayList<Chunk>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val t = o.getString("t")
+                chunks.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
+            }
+            save(ctx, chunks)
+        } catch (e: Exception) { }
+    }
+
     fun removeDoc(ctx: Context, name: String) {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
         save(ctx, chunks)
