@@ -1187,7 +1187,7 @@ class MainActivity : Activity() {
         wv.webChromeClient = object : android.webkit.WebChromeClient() {
             override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
                 out.append(m.message()).append('\n')
-                true
+                return true
             }
         }
         val tv = TextView(this).apply {
@@ -1198,7 +1198,7 @@ class MainActivity : Activity() {
         }
         val dlg = AlertDialog.Builder(this)
             .setTitle("JavaScript output")
-            .setView(ScrollView(this).apply { addView(tv) })
+            .setView(android.widget.ScrollView(this).apply { addView(tv) })
             .setPositiveButton("Close", null)
             .show()
         val html = "<html><body><script>try{\n" + code + "\n}catch(e){console.log('Error: '+e.message)}</script></body></html>"
