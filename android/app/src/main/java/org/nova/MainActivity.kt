@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var sendBtn: Button
     private lateinit var micBtn: Button
+    private lateinit var symRow: android.widget.HorizontalScrollView
     private val adapter = MessageAdapter()
 
     init {
@@ -64,6 +65,7 @@ class MainActivity : Activity() {
         adapter.onEditResend = { showEditResend(it) }
         adapter.onTool = { runTool(it) }
         adapter.onRegenerate = { regenerateLast() }
+        adapter.onRunJs = { runJs(it) }
     }
 
     private lateinit var settings: Settings
@@ -439,6 +441,18 @@ class MainActivity : Activity() {
             setOnClickListener { openDocPicker() }
         }
         pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+        val symBtn = Button(this).apply {
+            text = "√x"; textSize = 12f; isAllCaps = false
+            setTextColor(textDim); background = null
+            minWidth = 0; minimumWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener {
+                symRow.visibility =
+                    if (symRow.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            }
+        }
+        pill.addView(symBtn, LinearLayout.LayoutParams(
+            dp(38), LinearLayout.LayoutParams.WRAP_CONTENT))
         pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
         input = EditText(this).apply {
             hint = "Message NOVA…"
@@ -476,6 +490,29 @@ class MainActivity : Activity() {
         }
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(40), dp(40)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        // v5.6.0: math symbol row - tap a symbol to insert it at the cursor
+        symRow = android.widget.HorizontalScrollView(this).apply {
+            visibility = View.GONE
+            setPadding(dp(8), 0, dp(8), 0)
+        }
+        val symLine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        for (sym in listOf("π", "√", "²", "³", "½", "×", "÷", "±", "≤", "≥", "≠", "≈", "°", "∑", "θ", "→")) {
+            symLine.addView(Button(this).apply {
+                text = sym; textSize = 16f; isAllCaps = false
+                setTextColor(NovaTheme.text); background = null
+                minWidth = 0; minimumWidth = 0
+                setPadding(dp(10), dp(2), dp(10), dp(2))
+                setOnClickListener {
+                    input.text.insert(input.selectionStart, sym)
+                    input.requestFocus()
+                }
+            })
+        }
+        symRow.addView(symLine)
+        root.addView(symRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -1140,6 +1177,45 @@ class MainActivity : Activity() {
      * (chips, auto-continue, edit-resend) - no user bubble is shown.
      * newBubble == false keeps appending to the existing last reply.
      */
+    /** v5.6.0: run a JavaScript snippet offline in a WebView and show its
+     *  console output - the only language Android executes on-device
+     *  without shipping an extra engine. */
+    private fun runJs(code: String) {
+        val out = StringBuilder()
+        val wv = android.webkit.WebView(this)
+        wv.settings.javaScriptEnabled = true
+        wv.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
+                out.append(m.message()).append('\n')
+                true
+            }
+        }
+        val tv = TextView(this).apply {
+            text = "running…"
+            textSize = 13f; setTextColor(NovaTheme.text)
+            typeface = android.graphics.Typeface.MONOSPACE
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        val dlg = AlertDialog.Builder(this)
+            .setTitle("JavaScript output")
+            .setView(ScrollView(this).apply { addView(tv) })
+            .setPositiveButton("Close", null)
+            .show()
+        val html = "<html><body><script>try{\n" + code + "\n}catch(e){console.log('Error: '+e.message)}</script></body></html>"
+        wv.loadData(html, "text/html", "utf-8")
+        // WebView renders asynchronously - poll the captured output briefly
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var ticks = 0
+        val poll = object : Runnable {
+            override fun run() {
+                if (!dlg.isShowing) return
+                tv.text = if (out.isBlank()) "running…" else out.toString()
+                if (ticks++ < 8) h.postDelayed(this, 500)
+            }
+        }
+        h.postDelayed(poll, 400)
+    }
+
     /** v5.5.0: strict mode - grounded answers only, no invented facts. */
     private fun effectivePrompt(p: String): String =
         if (settings.strictMode)
@@ -3063,6 +3139,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     var onContinue: (() -> Unit)? = null
     var onTool: ((String) -> Unit)? = null
     var onRegenerate: (() -> Unit)? = null
+    var onRunJs: ((String) -> Unit)? = null
     var onEditResend: ((Msg) -> Unit)? = null
 
     fun add(m: Msg) {
@@ -3256,13 +3333,21 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 "Save to Knowledge" to "",
                 "Make it sound like me" to "",
                 "Regenerate" to ""
-            )
+            ).apply {
+                // v5.6.0: coding tools when the message contains a code block
+                if (code.isNotBlank()) {
+                    put("Explain code", "Explain this code step by step in simple language for a beginner. Say what each part does and why:\n-----\n$code\n-----")
+                    put("Find bugs", "Check this code for bugs, mistakes or bad practices. Explain each issue and how to fix it. If it is correct, say it is correct:\n-----\n$code\n-----")
+                    put("Run (JavaScript)", "")
+                }
+            }
             options += tools.keys
             AlertDialog.Builder(ctx)
                 .setItems(options.toTypedArray()) { _, which ->
                     when (val chosen = options[which]) {
                         "Edit & resend" -> onEditResend?.invoke(m)
                         "Copy code" -> copyToClipboard(ctx, code)
+                        "Run (JavaScript)" -> onRunJs?.invoke(code)
                         "Copy" -> copyToClipboard(ctx, plainText(msgText))
                         "Share" -> {
                             val send = Intent(Intent.ACTION_SEND).apply {
