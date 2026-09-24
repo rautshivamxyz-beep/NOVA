@@ -51,7 +51,7 @@ object Backup {
         if (sp.isNotEmpty()) s.systemPrompt = sp
         if (o.has("predict_length")) s.predictLength = o.optInt("predict_length", 512)
         s.wikiEnabled = o.optBoolean("wiki", true)
-        s.knowledgeEnabled = o.optBoolean("knowledge", false)
+        s.knowledgeEnabled = o.optBoolean("knowledge", true)
         val study = o.optJSONArray("study")
         if (study != null && study.length() > 0) {
             val cards = mutableListOf<Study.Card>()
