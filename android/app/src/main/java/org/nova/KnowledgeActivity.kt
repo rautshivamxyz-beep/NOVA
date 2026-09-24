@@ -24,6 +24,7 @@ class KnowledgeActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var wikiStatus: TextView
     private lateinit var wikiBtn: Button
+    private var exportName: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -204,6 +205,7 @@ class KnowledgeActivity : Activity() {
                 text = name
                 textSize = 14f; setTextColor(NovaTheme.text)
                 setSingleLine(true)
+                setOnClickListener { docMenu(name) }
                 setCompoundDrawablesWithIntrinsicBounds(
                     tinted(R.drawable.ic_doc, NovaTheme.dim), null, null, null)
                 compoundDrawablePadding = dp(10)
@@ -262,8 +264,80 @@ class KnowledgeActivity : Activity() {
         }.start()
     }
 
+    /** v5.4.9: per-document actions. */
+    private fun docMenu(name: String) {
+        val options = arrayOf("View text", "Summarize in chat", "Export as .txt", "Remove")
+        AlertDialog.Builder(this)
+            .setTitle(name)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> viewDocText(name)
+                    1 -> {
+                        // hand off to the chat - it already has the full
+                        // section-by-section summarize pipeline
+                        startActivity(Intent(this, MainActivity::class.java).apply {
+                            putExtra("nova_autosend", "Summarize $name")
+                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        })
+                    }
+                    2 -> exportDoc(name)
+                    3 -> AlertDialog.Builder(this)
+                        .setMessage("Remove \"$name\" from knowledge?")
+                        .setPositiveButton("Remove") { _, _ ->
+                            Knowledge.removeDoc(this, name)
+                            rebuildList()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }
+            .show()
+    }
+
+    /** v5.4.9: show what was actually extracted (OCR/PDF import check). */
+    private fun viewDocText(name: String) {
+        val text = Knowledge.docText(this, name)
+        val words = text.split(Regex("\\s+")).count { it.isNotBlank() }
+        val tv = TextView(this).apply {
+            text = text.ifBlank { "(nothing was extracted from this document)" }
+            textSize = 13f; setTextColor(NovaTheme.text)
+            setPadding(dp(18), dp(10), dp(6), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("$name  ($words words)")
+            .setView(ScrollView(this).apply { addView(tv) })
+            .setPositiveButton("Close", null)
+            .show()
+    }
+
+    /** v5.4.9: export the extracted text of a document. */
+    private fun exportDoc(name: String) {
+        exportName = name
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE,
+                name.replace(Regex("[^A-Za-z0-9 ._-]"), "_") + ".txt")
+        }
+        startActivityForResult(intent, 7801)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        // v5.4.9: document text export
+        if (requestCode == 7801 && resultCode == RESULT_OK && data != null) {
+            val uri = data.data
+            val nm = exportName
+            if (uri != null && nm != null) {
+                try {
+                    contentResolver.openOutputStream(uri)?.use {
+                        it.write(Knowledge.docText(this, nm).toByteArray())
+                    }
+                    toast("Saved")
+                } catch (e: Exception) { toast("Export failed: ${e.message}") }
+            }
+            exportName = null
+        }
         if (requestCode != 7800 || resultCode != RESULT_OK || data == null) return
         val uris = ArrayList<Uri>()
         data.data?.let { uris.add(it) }

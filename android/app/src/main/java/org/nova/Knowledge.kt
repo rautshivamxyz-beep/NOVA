@@ -67,6 +67,10 @@ object Knowledge {
         return seen.map { it.key to it.value }
     }
 
+    /** v5.4.9: full extracted text of one document (view / export). */
+    fun docText(ctx: Context, name: String): String =
+        load(ctx).filter { it.doc == name }.joinToString("\n\n") { it.text }
+
     fun addDoc(ctx: Context, name: String, text: String) {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
         for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))

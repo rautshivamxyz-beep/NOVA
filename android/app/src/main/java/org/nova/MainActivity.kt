@@ -97,6 +97,7 @@ class MainActivity : Activity() {
 
     /** Set while a flashcard-generating reply is running. */
     private var pendingCards = false
+    private var pendingAutosend: String? = null
 
     /** Compressed summary of older turns (auto-compact). */
     private var compactSummary: String? = null
@@ -663,6 +664,12 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleSharedText()
+        // v5.4.9: Knowledge screen handed us a command (e.g. Summarize X)
+        val auto = intent?.getStringExtra("nova_autosend")
+        if (!auto.isNullOrBlank() && !generating) {
+            if (NovaEngine.isModelLoaded) { input.setText(auto); send() }
+            else pendingAutosend = auto
+        }
     }
 
     private fun openChat(id: String) {
@@ -711,6 +718,11 @@ class MainActivity : Activity() {
             NovaEngine.LoadState.Ready -> {
                 NovaEngine.acknowledgeLoad()
                 setStatus()
+                // v5.4.9: a handed-off command that waited for the model
+                pendingAutosend?.let {
+                    if (!generating) { input.setText(it); send() }
+                    pendingAutosend = null
+                }
             }
             is NovaEngine.LoadState.Failed -> {
                 NovaEngine.acknowledgeLoad()
