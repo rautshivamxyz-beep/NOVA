@@ -36,6 +36,7 @@ class ChatsActivity : Activity() {
     private val textDim = NovaTheme.dim
 
     private var exportChat: Chat? = null
+    private var query: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +86,33 @@ class ChatsActivity : Activity() {
         root.addView(View(this).apply { setBackgroundColor(Color.parseColor("#1A2030")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
+        // v5.4.8: search across all chats - names and message text
+        val search = EditText(this).apply {
+            hint = "Search chats"
+            setTextColor(textMain)
+            setHintTextColor(textDim)
+            textSize = 14f
+            singleLine = true
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) { }
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) { }
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    query = s?.toString() ?: ""
+                    refresh()
+                }
+            })
+        }
+        root.addView(search, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            leftMargin = dp(14); rightMargin = dp(14); topMargin = dp(10)
+        })
+
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -106,12 +134,23 @@ class ChatsActivity : Activity() {
 
     private fun refresh() {
         listInner.removeAllViews()
-        val chats = ChatStore.list(this)
+        var chats = ChatStore.list(this)
         val currentId = settings.currentChatId
+
+        // v5.4.8: filter by chat name OR any message inside it
+        val q = query.trim()
+        if (q.isNotEmpty()) {
+            val ql = q.lowercase()
+            chats = chats.filter {
+                it.name.lowercase().contains(ql) ||
+                    it.messages.any { m -> m.text.lowercase().contains(ql) }
+            }
+        }
 
         if (chats.isEmpty()) {
             listInner.addView(TextView(this).apply {
-                text = "No saved chats yet.\nEverything you talk about is kept on this phone only."
+                text = if (q.isNotEmpty()) "No chats match \"$q\""
+                       else "No saved chats yet.\nEverything you talk about is kept on this phone only."
                 setTextColor(textDim)
                 textSize = 13f
                 setPadding(0, dp(10), 0, dp(10))

@@ -107,7 +107,8 @@ class KnowledgeActivity : Activity() {
                     val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
-                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain"))
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain",
+                            "image/jpeg", "image/png", "image/webp"))
                         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                     }
                     startActivityForResult(pick, 7800)
@@ -296,6 +297,9 @@ class KnowledgeActivity : Activity() {
     } catch (e: Exception) { null }
 
     private fun readText(uri: Uri): String = try {
+        // v5.4.8: photos of handwritten/printed pages -> on-device OCR
+        val mime = try { contentResolver.getType(uri) ?: "" } catch (e: Exception) { "" }
+        if (mime.startsWith("image/")) return ocrImage(uri)
         val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
         val head = String(bytes.copyOfRange(0, minOf(200, bytes.size)))
         var text = if (head.contains("%PDF"))
@@ -305,6 +309,16 @@ class KnowledgeActivity : Activity() {
         else String(bytes)
         if (text.length > 200_000) text = text.substring(0, 200_000)
         text
+    } catch (e: Exception) { "" }
+
+    /** v5.4.8: OCR a photo on-device (ML Kit, fully offline). */
+    private fun ocrImage(uri: Uri): String = try {
+        val img = com.google.mlkit.vision.common.InputImage.fromFilePath(this, uri)
+        val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
+            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+        try {
+            com.google.android.gms.tasks.Tasks.await(rec.process(img)).text
+        } catch (e: Exception) { "" }
     } catch (e: Exception) { "" }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
