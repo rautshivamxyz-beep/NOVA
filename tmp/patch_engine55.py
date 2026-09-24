@@ -375,7 +375,7 @@ rep(IMPL, '''    /**
      * must share the target model's vocabulary. Failures are logged and
      * swallowed - speculation simply stays off.
      */
-    override suspend fun loadDraftModel(pathToModel: String) =
+    override suspend fun loadDraftModel(pathToModel: String) {
         withContext(llamaDispatcher) {
             try {
                 File(pathToModel).let {
@@ -393,6 +393,7 @@ rep(IMPL, '''    /**
                 try { unloadDraft() } catch (e2: Exception) { }
             }
         }
+    }
 
     /**
      * NOVA v5.7.0: drop the draft model, disabling speculative decoding.
