@@ -41,9 +41,15 @@ object ModelCatalog {
             "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
         ),
         Entry(
+            "lfm25-1.2b-instruct", "LFM 2.5 1.2B Instruct", "Liquid AI", "1.2B", "Q4_K_M",
+            730895168L /* ~0.70 GB */, 3,
+            "Recommended daily model — the same smart 1.2B as Thinking, but answers instantly with no hidden reasoning. Best for chat.",
+            "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/main/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+        ),
+        Entry(
             "lfm25-1.2b-thinking", "LFM 2.5 1.2B Thinking", "Liquid AI", "1.2B", "Q4_K_M",
             730895584L /* ~0.70 GB */, 3,
-            "Reasoning model: great at math and logic. Thinks silently before answering, so the first word takes longer.",
+            "For math and logic only — thinks at length before answering, so even a short question can take a minute. Use Instruct for chat.",
             "https://huggingface.co/unsloth/LFM2.5-1.2B-Thinking-GGUF/resolve/main/LFM2.5-1.2B-Thinking-Q4_K_M.gguf"
         ),
         Entry(
