@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
+import io.noties.markwon.latex.LatexPlugin
 import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -1224,6 +1225,10 @@ class MainActivity : Activity() {
                 "'My notes don't cover this.' Never invent facts, names, dates or numbers.\n\n" + p
         else p
 
+    /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
+    private fun mathPrompt(p: String): String =
+        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
+
     private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true) {
         if (userText != null) {
             val userMsg = Msg(Role.USER, userText)
@@ -1264,7 +1269,7 @@ class MainActivity : Activity() {
                 }
             }
             try {
-                NovaEngine.send(effectivePrompt(prompt), settings.predictLength)
+                NovaEngine.send(mathPrompt(effectivePrompt(prompt)), settings.predictLength)
                     .collect { token ->
                         if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
                         pending.append(token)
@@ -1438,8 +1443,11 @@ class MainActivity : Activity() {
         for (raw in s.lines()) {
             val line = raw.trim().removePrefix("* ").removePrefix("- ").trim()
             if (line.length >= 15) {
-                val c = (counts[line] ?: 0) + 1
-                counts[line] = c
+                // v6.1.0: numbers normalized so 'published in 1948 /
+                // 1951 / 1952 ...' counts as one repeated line
+                val key = Regex("\\d+").replace(line, "#")
+                val c = (counts[key] ?: 0) + 1
+                counts[key] = c
                 if (c >= 3) return true
             }
         }
@@ -3198,6 +3206,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val prism4j = Prism4j(NovaGrammarLocator)
             markwon = Markwon.builder(ctx)
                 .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
+                .usePlugin(LatexPlugin.create(ctx))
                 .build()
         }
         val avatar = TextView(ctx).apply {
