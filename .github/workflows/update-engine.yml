@@ -33,26 +33,18 @@ jobs:
         run: |
           python3 tmp/patch_engine53.py llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
           grep -n "NOVA v5.3" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
-      - name: Patch engine v6.2 (flash attention + resettable system prompt)
-        run: |
-          python3 tmp/patch_engine62.py llama.cpp
-          grep -n "NOVA v6.2" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
         run: |
           chmod +x gradlew
           ./gradlew :lib:assembleRelease --no-daemon
-      - name: Apply NOVA v6.2 app patch (instant conversation resets)
-        run: |
-          python3 tmp/patch_app62.py .
-          grep -n "v6.2.0" android/app/src/main/java/org/nova/NovaEngine.kt | head -2
-      - name: Commit new engine and app changes into NOVA
+      - name: Commit new engine into NOVA
         run: |
           set -e
           cp llama.cpp/examples/llama.android/lib/build/outputs/aar/*.aar android/app/libs/llama-release.aar
           LLAMA_SHA=$(git -C llama.cpp rev-parse --short HEAD)
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
-          git add android/app/libs/llama-release.aar android/app/src/main/java/org/nova/ android/app/build.gradle
-          git commit -m "v6.2.0: speed pack - flash attention + instant conversation resets (llama.cpp ${LLAMA_SHA})"
+          git add android/app/libs/llama-release.aar
+          git commit -m "engine: v5.3 big-core thread pinning from llama.cpp ${LLAMA_SHA}"
           git push
