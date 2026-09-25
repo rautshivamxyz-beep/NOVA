@@ -1,0 +1,95 @@
+name: Build NOVA Desktop
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: NOVA-Desktop-Windows
+          - os: ubuntu-22.04
+            artifact: NOVA-Desktop-Linux
+          - os: macos-latest
+            artifact: NOVA-Desktop-macOS
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout NOVA (app files)
+        uses: actions/checkout@v4
+
+      - name: Checkout llama.cpp (pinned - same engine as the phone app)
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 6e60f35608ec6918b44a9839c0c433687165f086
+          path: llama.cpp
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          cmake -S llama.cpp -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          -DLLAMA_CURL=OFF
+          -DGGML_BACKEND_DL=ON
+          -DGGML_CPU_ALL_VARIANTS=ON
+
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: >
+          cmake -S llama.cpp -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DLLAMA_CURL=OFF
+          -DGGML_BACKEND_DL=ON
+          -DGGML_CPU_ALL_VARIANTS=ON
+
+      - name: Configure (macOS, universal arm64 + x86_64)
+        if: runner.os == 'macOS'
+        run: >
+          cmake -S llama.cpp -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DLLAMA_CURL=OFF
+          -DGGML_NATIVE=OFF
+          "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+
+      - name: Build llama-server (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --config Release --target llama-server
+
+      - name: Build llama-server (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: cmake --build build --target llama-server
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path pkg/nova-desktop | Out-Null
+          Copy-Item -Recurse desktop/nova-web pkg/nova-desktop/web
+          Copy-Item desktop/README.md pkg/nova-desktop/
+          Copy-Item desktop/start-nova-windows.bat pkg/nova-desktop/
+          New-Item -ItemType Directory -Force -Path pkg/nova-desktop/models | Out-Null
+          Copy-Item -Recurse build/bin/Release/* pkg/nova-desktop/
+          Set-Content -Path pkg/nova-desktop/models/PUT_MODEL_FILES_HERE.txt -Value "Put .gguf model files in this folder, then run start-nova-windows.bat"
+          Compress-Archive -Path pkg/nova-desktop -DestinationPath nova-desktop.zip
+          Get-Item nova-desktop.zip
+
+      - name: Package (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p pkg/nova-desktop/models
+          cp -r desktop/nova-web pkg/nova-desktop/web
+          cp desktop/README.md desktop/start-nova-linux-mac.sh pkg/nova-desktop/
+          cp -r build/bin/* pkg/nova-desktop/
+          echo "Put .gguf model files in this folder, then run start-nova-linux-mac.sh" > pkg/nova-desktop/models/PUT_MODEL_FILES_HERE.txt
+          cd pkg && zip -r ../nova-desktop.zip nova-desktop
+          cd .. && ls -lh nova-desktop.zip
+
+      - name: Upload NOVA Desktop
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: nova-desktop.zip
