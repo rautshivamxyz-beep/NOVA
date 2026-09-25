@@ -30,15 +30,30 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build NOVA release APK
+      - name: Build NOVA release APK (arm64)
         working-directory: android
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Show APK
-        run: ls -lh android/app/build/outputs/apk/release/app-release.apk
+      - name: Stash arm64 APK
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk-arm64"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
 
-      - name: Upload NOVA APK
+      - name: Build NOVA universal APK (arm64 + x86_64, for emulators/Chromebooks)
+        working-directory: android
+        run: gradle clean assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=arm64-v8a,x86_64
+
+      - name: Show APKs
+        run: ls -lh "$RUNNER_TEMP/apk-arm64/app-release.apk" android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload NOVA APK (arm64)
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-APK
+          path: ${{ runner.temp }}/apk-arm64/app-release.apk
+
+      - name: Upload NOVA universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-APK-Universal
           path: android/app/build/outputs/apk/release/app-release.apk
