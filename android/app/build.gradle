@@ -85,7 +85,7 @@ dependencies {
     implementation 'io.noties.markwon:syntax-highlight:4.6.2'
     implementation 'io.noties:prism4j:2.0.0'
     // v6.1.0: textbook math rendering
-    implementation 'io.noties.markwon:latex:4.6.2'
+    implementation 'io.noties.markwon:ext-latex:4.6.2'
     implementation 'ru.noties:jlatexmath-android:0.2.0'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
 

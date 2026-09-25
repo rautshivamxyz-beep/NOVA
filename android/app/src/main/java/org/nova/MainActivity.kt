@@ -32,7 +32,7 @@ import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
-import io.noties.markwon.latex.LatexPlugin
+import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -3203,10 +3203,11 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
         if (markwon == null) {
+            ru.noties.jlatexmath.JLatexMathAndroid.init(ctx)
             val prism4j = Prism4j(NovaGrammarLocator)
             markwon = Markwon.builder(ctx)
                 .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
-                .usePlugin(LatexPlugin.create(ctx))
+                .usePlugin(JLatexMathPlugin.create(15.5f))
                 .build()
         }
         val avatar = TextView(ctx).apply {
