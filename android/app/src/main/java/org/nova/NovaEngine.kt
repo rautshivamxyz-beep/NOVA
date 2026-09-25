@@ -192,6 +192,55 @@ object NovaEngine {
         loadAsync(context, path, label, systemPrompt)
     }
 
+    /**
+     * v6.2.0: instant conversation reset ("new chat" without a model reload).
+     *
+     * The v6.2 engine allows setSystemPrompt() any time the model is ready,
+     * not just right after load. Re-processing the system prompt clears the
+     * KV cache and chat history inside the engine, so the app no longer has
+     * to unload and reload the whole model file from flash (multi-seconds)
+     * just to start a fresh conversation. The weights stay resident in RAM
+     * and only the short system prompt is re-encoded - the model-in-RAM /
+     * KV-cache / prompt-cache optimizations, with no quality change.
+     *
+     * [resetConversation] suspends until the context is clean and returns
+     * success; [resetConversationAsync] is the fire-and-forget wrapper.
+     * Both fall back to a full model reload on older engines.
+     */
+    @Volatile
+    var resetting: Boolean = false
+        private set
+
+    suspend fun resetConversation(context: Context, systemPrompt: String): Boolean {
+        val engine = engineRef ?: return false
+        if (!isModelLoaded) return false
+        resetting = true
+        try {
+            // never fight an in-flight generation - wait, like reloadAsync
+            val t0 = SystemClock.elapsedRealtime()
+            while (isGenerating && SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
+            engine.setSystemPrompt(systemPrompt.ifBlank { " " })
+            contextDirty = false
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // engine too old or not in ModelReady state - full reload
+            return try {
+                load(context, activeModelPath ?: return false, activeModelLabel, systemPrompt)
+                true
+            } catch (e2: Exception) {
+                false
+            }
+        } finally {
+            resetting = false
+        }
+    }
+
+    fun resetConversationAsync(context: Context, systemPrompt: String) {
+        scope.launch { resetConversation(context, systemPrompt) }
+    }
+
     suspend fun unload(context: Context) {
         activeModelPath = null
         activeModelLabel = ""
