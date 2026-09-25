@@ -35,9 +35,7 @@ jobs:
           grep -n "NOVA v5.3" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
       - name: Patch engine v6.2 (flash attention + resettable system prompt)
         run: |
-          python3 tmp/patch_engine62.py \
-            llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp \
-            llama.cpp/examples/llama.android/lib/src/main/java/com/arm/aichat/internal/InferenceEngineImpl.kt
+          python3 tmp/patch_engine62.py llama.cpp
           grep -n "NOVA v6.2" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
