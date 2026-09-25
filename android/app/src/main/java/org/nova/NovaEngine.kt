@@ -180,9 +180,11 @@ object NovaEngine {
     private fun thinkingHint(path: String, label: String): String {
         val n = (label + " " + path.substringAfterLast('/')).lowercase()
         if ("think" !in n && "minicpm" !in n) return ""
-        return "\n\n(You are a reasoning model. Keep your hidden thinking SHORT: " +
-            "one or two brief lines for easy questions, detailed step-by-step " +
-            "reasoning only for genuinely hard problems. Then answer directly.)"
+        return "\n\n(You are a reasoning model. THINK BRIEFLY: at most ONE short " +
+            "sentence of planning for routine questions; save step-by-step " +
+            "reasoning for genuinely hard math or logic only. Never repeat the " +
+            "question or restate your plan inside the thinking. Start the visible " +
+            "answer immediately after thinking.)"
     }
 
     /** Reloads the active model, starting a fresh conversation. */
@@ -219,7 +221,9 @@ object NovaEngine {
             // never fight an in-flight generation - wait, like reloadAsync
             val t0 = SystemClock.elapsedRealtime()
             while (isGenerating && SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
-            engine.setSystemPrompt(systemPrompt.ifBlank { " " })
+            val prompt = systemPrompt +
+                thinkingHint(activeModelPath ?: "", activeModelLabel)
+            engine.setSystemPrompt(prompt.ifBlank { " " })
             contextDirty = false
             return true
         } catch (e: CancellationException) {
