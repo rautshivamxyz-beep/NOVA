@@ -46,14 +46,13 @@ jobs:
           -DGGML_BACKEND_DL=ON
           -DGGML_CPU_ALL_VARIANTS=ON
 
-      - name: Configure (macOS, universal arm64 + x86_64)
+      - name: Configure (macOS, Apple Silicon + Metal GPU)
         if: runner.os == 'macOS'
         run: >
           cmake -S llama.cpp -B build
           -DCMAKE_BUILD_TYPE=Release
           -DLLAMA_CURL=OFF
           -DGGML_NATIVE=OFF
-          "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
 
       - name: Build llama-server (Windows)
         if: runner.os == 'Windows'
