@@ -655,7 +655,7 @@ class MainActivity : Activity() {
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 while (NovaEngine.isGenerating &&
                     android.os.SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
-                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
             }
         }
         needsContextCarry = false
@@ -716,7 +716,7 @@ class MainActivity : Activity() {
         val chat = ChatStore.load(this, id) ?: return
         currentChat = chat
         settings.currentChatId = chat.id
-        if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+        if (NovaEngine.isModelLoaded) NovaEngine.resetConversationAsync(this, settings.systemPrompt)
         needsContextCarry = chat.messages.isNotEmpty()
         compactSummary = null; compactedAtCount = 0
         displayChatMessages()
@@ -795,10 +795,14 @@ class MainActivity : Activity() {
      * it silently restarts it instead of nagging the user.
      */
     private fun ensureModelReady(): Boolean {
-        if (NovaEngine.isModelLoaded) return true
+        // v6.2.0: also gate on a pending instant reset
+        if (NovaEngine.isModelLoaded && !NovaEngine.resetting) return true
         return when {
             NovaEngine.isLoading -> {
                 toast("Model is still loading — one moment"); false
+            }
+            NovaEngine.resetting -> {
+                toast("Resetting conversation — one moment"); false
             }
             NovaEngine.activeModelPath != null -> {
                 toast("Restarting the model — try again shortly")
@@ -985,7 +989,7 @@ class MainActivity : Activity() {
         val lastReply = currentChat.messages.lastOrNull { it.role == Role.ASSISTANT }
         if (lastReply != null && Regex("(?m)^\\s*(?:NOVA|You)\\s*:").containsMatchIn(lastReply.text)) {
             needsContextCarry = true
-            if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+            if (NovaEngine.isModelLoaded) NovaEngine.resetConversationAsync(this, settings.systemPrompt)
         }
 
         val docPart = if (docContext != null) {
@@ -1646,7 +1650,7 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { }
                 // the engine context now holds every section prompt - reset it
                 needsContextCarry = true
-                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
                 try {
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
                 } catch (e: Exception) { }
@@ -1836,7 +1840,7 @@ class MainActivity : Activity() {
                 // the summary is cached now - drop the section checkpoint
                 try { cpFile.delete() } catch (e: Exception) { }
                 needsContextCarry = true
-                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
                 try {
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
                 } catch (e: Exception) { }
@@ -1907,12 +1911,11 @@ class MainActivity : Activity() {
         // question WITH the earlier transcript attached.
         if (NovaEngine.isModelLoaded && NovaEngine.contextDirty) {
             needsContextCarry = true
-            NovaEngine.reloadAsync(this, settings.systemPrompt)
+            // v6.2.0: instant context reset (no model reload) - suspend
+            // until the engine is clean, then re-send the question.
             scope.launch {
-                val t0 = android.os.SystemClock.elapsedRealtime()
-                while (NovaEngine.isLoading &&
-                    android.os.SystemClock.elapsedRealtime() - t0 < 120_000) delay(200)
-                if (NovaEngine.isModelLoaded) regenerateFrom(lastUser)
+                if (NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt))
+                    regenerateFrom(lastUser)
                 else toast("Reload failed - try again")
             }
         } else {
@@ -2400,7 +2403,7 @@ class MainActivity : Activity() {
         compactSummary = null; compactedAtCount = 0
         docName = null; docContext = null; docInjected = false
         docInjectedText = ""
-        if (NovaEngine.isModelLoaded) NovaEngine.reloadAsync(this, settings.systemPrompt)
+        if (NovaEngine.isModelLoaded) NovaEngine.resetConversationAsync(this, settings.systemPrompt)
         displayChatMessages()
     }
 
@@ -2599,7 +2602,7 @@ class MainActivity : Activity() {
                     compactedAtCount = currentChat.messages.size
                     needsContextCarry = true
                     docInjected = false
-                    NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
+                    NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
                 }
             } catch (e: Exception) {
                 // failed - keep full context, retry next turn
