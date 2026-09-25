@@ -1,4 +1,4 @@
-name: Update llama.cpp engine (v5.7.0 speculative decoding)
+name: Update llama.cpp engine (v6.1.0 anti-repetition + KV cache)
 on:
   workflow_dispatch:
 
@@ -38,6 +38,10 @@ jobs:
         run: |
           python3 tmp/patch_engine55.py llama.cpp/examples/llama.android
           grep -c "NOVA v5.7.0" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+      - name: Patch engine v6.1.0 (anti-repetition + KV cache)
+        run: |
+          python3 tmp/patch_engine56.py llama.cpp/examples/llama.android
+          grep -c "NOVA v6.1.0" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
         run: |
@@ -50,5 +54,5 @@ jobs:
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
           git add android/app/libs/llama-release.aar
-          git commit -m "engine: v5.7.0 speculative decoding (llama.cpp 6e60f35 + draft model)"
+          git commit -m "engine: v6.1.0 anti-repetition + q8_0 K-cache (llama.cpp 6e60f35 + v5.3 + v5.7.0 + v6.1.0 patches)"
           git push
