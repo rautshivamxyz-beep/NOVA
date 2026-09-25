@@ -22,6 +22,10 @@ engine process.
 2. In a terminal: `bash start-nova-linux-mac.sh`
 3. Put a `.gguf` model in the `models` folder first (see below).
 
+Note for macOS: the build needs an Apple Silicon Mac (M1/M2/M3/M4 - any
+Mac from late 2021 onward). On Intel Macs, use the Linux build in a
+terminal or ask for a dedicated build.
+
 ## Getting a model
 
 Any `.gguf` file works. Recommended (same ones the phone app uses):
