@@ -11,14 +11,14 @@ concurrency:
 
 jobs:
   logic:
-    name: Logic tests (patch verification)
+    name: Logic tests (source verification)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Assemble CI files and apply patch chain
-        run: bash <(cat tmp/ci_parts/prep_aa | tr -d '\n' | base64 -d | gunzip)
+      - name: Verify source integrity
+        run: python3 tmp/verify_patches.py .
 
   emulator:
     name: Emulator smoke test (launch + calculator)
@@ -27,8 +27,8 @@ jobs:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Assemble CI files and apply patch chain
-        run: bash <(cat tmp/ci_parts/prep_aa | tr -d '\n' | base64 -d | gunzip)
+      - name: Verify source integrity
+        run: python3 tmp/verify_patches.py .
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
