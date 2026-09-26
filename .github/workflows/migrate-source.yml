@@ -1,0 +1,14 @@
+name: One-time source merge
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Run migration
+        run: bash <(cat tmp/migrate_parts/mig_aa tmp/migrate_parts/mig_ab | tr -d '\n' | base64 -d | gunzip)
