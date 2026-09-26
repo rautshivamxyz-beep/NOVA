@@ -17,8 +17,8 @@ package org.nova.ncie.knowledge
  *
  * What was removed: Android `Context`, `org.json` and `Settings` — the
  * storage layer stays outside the core. Feed documents in with [rebuild] /
- * [addDoc]; in the NOVA app, an adapter parses knowledge.json into
- * (name, text) pairs and calls [rebuild] (see README).
+ * [addDoc] / [rebuildChunks]; in the NOVA app, an adapter parses
+ * knowledge.json and calls in (see README).
  */
 class KnowledgeStore(
     /** Doc names excluded from search (the app's Notes filter). */
@@ -60,6 +60,18 @@ class KnowledgeStore(
         synchronized(this) {
             chunks.clear()
             for ((name, text) in docs) addDocLocked(name, text)
+        }
+    }
+
+    /** Ingest PRE-CHUNKED documents — (docName, chunkText) pairs in the
+     *  exact shape the NOVA app's knowledge.json stores ([{"d": ..., "t": ...}]).
+     *  No re-chunking: chunks are wrapped as-is, so retrieval is
+     *  byte-identical to the app's Knowledge.kt reading the same file. */
+    @Synchronized
+    fun rebuildChunks(chunks: List<Pair<String, String>>) {
+        this.chunks.clear()
+        for ((doc, text) in chunks) {
+            this.chunks.add(Chunk(doc, text, text.lowercase(), normOf(text)))
         }
     }
 

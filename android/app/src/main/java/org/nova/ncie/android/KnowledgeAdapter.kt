@@ -7,19 +7,33 @@ import java.io.File
 /**
  * Loads the NOVA app's existing knowledge.json into the NCIE core's
  * KnowledgeStore. The app stores chunks ([{"d": docName, "t": chunkText},
- * ...]); this adapter groups them back into (docName, fullText) pairs, and
- * the core's identical chunker re-splits them — so the store indexes exactly
- * what the app's Knowledge.kt would have found.
+ * ...]).
  *
- * Usage in the app:
- *
- *     val knowledge = KnowledgeStore().apply {
- *         rebuild(KnowledgeAdapter.loadPairs(context))
- *         setExcluded(Settings(context).knowledgeExcluded)
- *     }
- *     val nova = NovaKernel(..., knowledge = knowledge)
+ * Two loaders:
+ *  - [loadChunks] — the raw (docName, chunkText) pairs exactly as stored.
+ *    Feed to KnowledgeStore.rebuildChunks: no re-chunking, byte-identical
+ *    retrieval to the app's Knowledge.kt. This is what NcieKnowledge uses.
+ *  - [loadPairs] — the chunks grouped back into (docName, fullText) pairs.
+ *    Feed to KnowledgeStore.rebuild, which re-splits them with the same
+ *    chunker the app used at import time.
  */
 object KnowledgeAdapter {
+
+    fun loadChunks(ctx: Context): List<Pair<String, String>> {
+        val f = File(ctx.filesDir, "knowledge.json")
+        if (!f.exists()) return emptyList()
+        return try {
+            val arr = JSONArray(f.readText())
+            (0 until arr.length()).mapNotNull { i ->
+                try {
+                    val o = arr.getJSONObject(i)
+                    o.getString("d") to o.getString("t")
+                } catch (e: Exception) { null }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     fun loadPairs(ctx: Context): List<Pair<String, String>> {
         val f = File(ctx.filesDir, "knowledge.json")

@@ -41,12 +41,21 @@ class RuleBasedAnalyzer : Analyzer {
 
         val lower = t.lowercase()
         val words = lower.split(Regex("\\W+")).filter { it.length > 2 }
-        // Questions about the user's notes/documents deserve a real context
-        // budget — the same signal the NOVA app routes its notes features on.
+        // Knowledge-seeking questions — the port of the NOVA app's v5.4
+        // "study question" gate — plus notes/document questions and short
+        // keyword pulls ("bose") deserve a real context budget: the
+        // offline-RAG path runs for them.
+        val studyQ = lower.startsWith("explain ") || lower.startsWith("teach me ") ||
+            lower.startsWith("what is ") || lower.startsWith("what are ") ||
+            lower.startsWith("who is ") || lower.startsWith("who was ") ||
+            lower.startsWith("define ") || lower.startsWith("describe ") ||
+            lower.startsWith("tell me about ") || lower.contains(" explain ") ||
+            lower.contains(" teach me ") || lower.contains(" what is ")
+        val keywordPull = words.isNotEmpty() && words.size <= 2 && t.length < 40
         val knowledgey = listOf("notes", "document", "pdf", "material").any { it in lower }
         val complexity = when {
             intent == Intent.CALCULATION -> 0.2
-            knowledgey -> 0.6
+            knowledgey || studyQ || keywordPull -> 0.6
             t.length > 400 || words.size > 80 -> 0.9
             t.length > 120 -> 0.6
             else -> 0.3
