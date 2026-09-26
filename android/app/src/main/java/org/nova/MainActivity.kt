@@ -2746,29 +2746,24 @@ class MainActivity : Activity() {
 
     // ---- v7.6.3: in-app update ----
 
-    /** Latest GitHub release as (version, apkUrl), or null if none found. */
+    /** Latest published version from the public download repo, as (version, apkUrl). */
     private fun fetchLatestRelease(): Pair<String, String>? {
         val conn = java.net.URL(
-            "https://api.github.com/repos/rautshivamxyz-beep/NOVA/releases/latest"
+            "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/version.txt"
         ).openConnection() as java.net.HttpURLConnection
         conn.connectTimeout = 10000
         conn.readTimeout = 15000
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
         try {
             if (conn.responseCode != 200) throw RuntimeException("HTTP " + conn.responseCode)
-            val obj = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
-            val tag = obj.optString("tag_name", "").removePrefix("v")
-            val assets = obj.optJSONArray("assets") ?: return null
-            for (i in 0 until assets.length()) {
-                val a = assets.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk")) {
-                    return Pair(tag, a.optString("browser_download_url"))
-                }
-            }
+            val tag = conn.inputStream.bufferedReader().readText().trim().removePrefix("v")
+            if (tag.isEmpty()) return null
+            return Pair(
+                tag,
+                "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/NOVA-latest.apk"
+            )
         } finally {
             conn.disconnect()
         }
-        return null
     }
 
     /** Compares dotted versions: negative if a < b, 0 if equal. */
@@ -2844,7 +2839,7 @@ class MainActivity : Activity() {
                             .setTitle("Update available")
                             .setMessage(
                                 "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
-                                    "Download and install now? The download is about 24 MB."
+                                    "Download and install now? The download is about 35 MB."
                             )
                             .setPositiveButton("Download") { _, _ -> downloadUpdate(latest.second) }
                             .setNegativeButton("Later", null)
