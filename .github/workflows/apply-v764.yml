@@ -10,7 +10,7 @@ jobs:
       - name: Check out NOVA
         uses: actions/checkout@v4
 
-      - name: Apply the patch and push
+    - name: Apply the patch and push
         run: |
-          cat tmp/patch_parts/v764_aa tmp/patch_parts/v764_ab tmp/patch_parts/v764_ac tmp/patch_parts/v764_ad | tr -d '\n' | base64 -d | gunzip > /tmp/patch.py
+          cat tmp/patch_parts/v764_aa tmp/patch_parts/v764_ab tmp/patch_parts/v764_ac tmp/patch_parts/v764_ad tmp/patch_parts/v764_ae tmp/patch_parts/v764_af | tr -d '\n' | base64 -d | gunzip > /tmp/patch.py
           python3 /tmp/patch.py
