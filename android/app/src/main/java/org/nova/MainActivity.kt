@@ -29,6 +29,7 @@ import android.widget.Toast
 import org.json.JSONArray
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import org.nova.ncie.android.NcieArithmetic
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
@@ -2322,92 +2323,28 @@ class MainActivity : Activity() {
         (line.parent as? View)?.visibility = View.VISIBLE
     }
 
-    /** v7.0.0: pure arithmetic gets an EXACT instant answer - no model
-     *  needed, no wrong results. Anything with words (word problems,
-     *  algebra) still goes to the AI. Trig is in degrees, log is base 10. */
+    /** v7.0.0 (NCIE Stage 2 of #1): pure arithmetic still gets an EXACT
+     *  instant answer — but the go/no-go decision now routes through the
+     *  NCIE DecisionKernel (org.nova.ncie.android.NcieArithmetic), the
+     *  app's first live kernel route. The expression language is byte-for-
+     *  byte the one shipped since v7.0.0 (trig in degrees, log base 10,
+     *  sqrt, pi/e, unicode operators, comma separators); it moved into
+     *  ArithmeticTool, and canHandle only claims text it fully evaluated,
+     *  so a TOOL route guarantees a real answer. Word problems still go
+     *  to the AI. */
     private fun solveArithmetic(text: String): Boolean {
         val t = text.trim()
-        if (t.length < 3 || t.length > 150 || t.contains('\n')) return false
-        val s = t.lowercase()
-            .replace("\u00d7", "*").replace("\u00f7", "/")
-            .replace("\u2212", "-").replace("\u2013", "-")
-            .replace(",", "").replace(" ", "")
-            .replace("sqrt", "q").replace("sin", "s").replace("cos", "c")
-            .replace("tan", "t").replace("log", "g").replace("ln", "n")
-            .replace("pi", "p")
-        if (!Regex("^[0-9+\\-*/^%().qsctgnpe]+").matches(s)) return false
-        // a word made only of function letters ("ten") is not arithmetic
-        if (!Regex("[0-9]").containsMatchIn(s)) return false
-        if (!Regex("[+\\-*/^%]").containsMatchIn(s) && !Regex("[qsctgnp]").containsMatchIn(s)) return false
-        return try {
-            val p = object {
-                var i = 0
-                fun peek(): Char = if (i < s.length) s[i] else ' '
-                fun expr(): Double {
-                    var r = term()
-                    while (peek() == '+' || peek() == '-') {
-                        val op = s[i++]; val b = term()
-                        r = if (op == '+') r + b else r - b
-                    }
-                    return r
-                }
-                fun term(): Double {
-                    var r = pw()
-                    while (peek() == '*' || peek() == '/' || peek() == '%') {
-                        val op = s[i++]; val b = pw()
-                        r = when (op) { '*' -> r * b; '/' -> r / b; else -> r % b }
-                    }
-                    return r
-                }
-                fun pw(): Double {
-                    val r = unary()
-                    if (peek() == '^') { i++; return Math.pow(r, pw()) }
-                    return r
-                }
-                fun unary(): Double {
-                    if (peek() == '-') { i++; return -unary() }
-                    if (peek() == '+') { i++ }
-                    return atom()
-                }
-                fun atom(): Double {
-                    val ch = peek()
-                    if (ch == '(') { i++; val r = expr(); if (peek() == ')') i++; return r }
-                    if (ch == 'q') { i++; return Math.sqrt(inner()) }
-                    if (ch == 's') { i++; return Math.sin(Math.toRadians(inner())) }
-                    if (ch == 'c') { i++; return Math.cos(Math.toRadians(inner())) }
-                    if (ch == 't') { i++; return Math.tan(Math.toRadians(inner())) }
-                    if (ch == 'g') { i++; return Math.log10(inner()) }
-                    if (ch == 'n') { i++; return Math.log(inner()) }
-                    if (ch == 'p') { i++; return Math.PI }
-                    if (ch == 'e') { i++; return Math.E }
-                    val start = i
-                    while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
-                    if (i == start) throw ArithmeticException("bad token")
-                    return s.substring(start, i).toDouble()
-                }
-                fun inner(): Double {
-                    if (peek() == '(') { i++; val r = expr(); if (peek() == ')') i++; return r }
-                    return atom()
-                }
-            }
-            val v = p.expr()
-            // the whole input must be part of the math - no leftovers
-            if (p.i != s.length) return false
-            if (!v.isFinite()) return false
-            val shown = if (Math.abs(v - Math.round(v)) < 1e-9)
-                Math.round(v).toString()
-            else String.format(java.util.Locale.US, "%.6g", v)
-            val um = Msg(Role.USER, t)
-            currentChat.messages.add(um); adapter.add(um)
-            val reply = Msg(Role.ASSISTANT,
-                "**= $shown**\n\n(Exact calculation - instant and never wrong. Word problems still go to the AI.)")
-            currentChat.messages.add(reply); adapter.add(reply)
-            scrollToEnd()
-            scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
-            }
-            true
-        } catch (e: Exception) { false }
+        val shown = NcieArithmetic.solve(t) ?: return false
+        val um = Msg(Role.USER, t)
+        currentChat.messages.add(um); adapter.add(um)
+        val reply = Msg(Role.ASSISTANT,
+            "**= $shown**\n\n(Exact calculation - instant and never wrong. Word problems still go to the AI.)")
+        currentChat.messages.add(reply); adapter.add(reply)
+        scrollToEnd()
+        scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+        }
+        return true
     }
 
     /** v7.1: welcome a brand-new user and point at the model download. */
