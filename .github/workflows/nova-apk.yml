@@ -28,6 +28,9 @@ jobs:
       - name: Apply v7.1.0 patches
         run: python3 tmp/patch_v710.py .
 
+      - name: Apply v7.2.1 patches
+        run: python3 tmp/patch_v721.py .
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
