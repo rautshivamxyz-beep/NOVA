@@ -130,26 +130,74 @@ object Knowledge {
         return out.filter { it.length > 40 }      // skip headers/fragments
     }
 
+    /** v6.2.3: rarity (IDF) weight of each query term - a word in a handful
+     *  of chunks ("baker") identifies the right document far better than a
+     *  word appearing in half the knowledge base ("india" all over the SST
+     *  notes). log-scaled so common words still count, just less. */
+    private fun termWeights(ctx: Context, terms: List<String>): Map<String, Double> {
+        val chunks = load(ctx)
+        val w = HashMap<String, Double>()
+        for (t in terms) {
+            var n = 0
+            for (c in chunks) if (c.norm.contains(" " + t + " ")) ++n
+            w[t] = if (n == 0) 1.0 else Math.log(1.0 + chunks.size.toDouble() / n)
+        }
+        return w
+    }
+
+    /** v6.2.3: best document for a query - a term COUNTS once per document
+     *  (not once per chunk: that let a frequent word like "india" beat the
+     *  rare word "baker" by piling up hundreds of chunk hits), weighted by
+     *  term rarity, with a x2 bonus when the term is in the document NAME. */
+    private fun bestDocFor(ctx: Context, terms: List<String>): String? {
+        if (terms.isEmpty()) return null
+        val chunks = load(ctx)
+        if (chunks.isEmpty()) return null
+        val skip = excluded(ctx)
+        val nameDocs = HashMap<String, MutableSet<String>>()   // term -> docs named after it
+        val textDocs = HashMap<String, MutableSet<String>>()   // term -> docs containing it
+        for (c in chunks) {
+            if (c.doc in skip) continue
+            val dl = c.doc.lowercase()
+            for (t in terms) {
+                if (dl.contains(t)) nameDocs.getOrPut(t) { HashSet() }.add(c.doc)
+                if (c.norm.contains(" " + t + " ")) textDocs.getOrPut(t) { HashSet() }.add(c.doc)
+            }
+        }
+        val weights = termWeights(ctx, terms)
+        val docScores = HashMap<String, Double>()
+        for (t in terms) {
+            val w = weights[t] ?: 1.0
+            nameDocs[t]?.forEach { docScores[it] = (docScores[it] ?: 0.0) + 2.0 * w }
+            textDocs[t]?.forEach { docScores[it] = (docScores[it] ?: 0.0) + w }
+        }
+        return docScores.maxByOrNull { it.value }?.key
+    }
+
     /** Keyword search over all chunks; returns the best matches.
-     *  The document NAME counts double, so "sst" finds "SST notes". */
+     *  v6.2.3: matches are rarity-weighted - hitting the rare word
+     *  ("baker") counts far more than hitting a common one ("india").
+     *  A chunk qualifies when it captures at least 55% of the query's
+     *  total weight: a single rare-word hit now works, while "power
+     *  sharing" style queries still need both words. */
     fun search(ctx: Context, query: String, maxResults: Int = 4): List<Chunk> {
         val terms = tokenize(query)
         if (terms.isEmpty()) return emptyList()
         val chunks = load(ctx)
         if (chunks.isEmpty()) return emptyList()
         val skip = excluded(ctx)
-        val need = if (terms.size >= 2) 2 else 1
-        val scored = ArrayList<Pair<Int, Chunk>>()
+        val weights = termWeights(ctx, terms)
+        val total = weights.values.sum()
+        val scored = ArrayList<Pair<Double, Chunk>>()
         for (c in chunks) {
             if (c.doc in skip) continue
-            var score = 0
             val dl = c.doc.lowercase()
+            var s = 0.0
             for (t in terms) {
-                if (c.norm.contains(" " + t + " ")) score++
-                // the document NAME matters too: "sst" must find "SST notes"
-                if (dl.contains(t)) score += 2
+                if (c.norm.contains(" " + t + " ")) s += weights[t] ?: 1.0
+                if (dl.contains(t)) s += 2.0 * (weights[t] ?: 1.0)
             }
-            if (score >= need) scored.add(score to c)
+            if (s > 0.0 && s >= 0.55 * total) scored.add(s to c)
         }
         scored.sortByDescending { it.first }
         return scored.take(maxResults).map { it.second }
@@ -173,64 +221,43 @@ object Knowledge {
      * Best document for a summary request, matching ANY query term - used
      * for routing "summarise power sharing" to the right notes even when
      * no single chunk contains every word. null when nothing matches.
+     * v6.2.3: rarity-weighted, one hit per document, so the rare word
+     * ("baker" in the English notes) decides instead of the most frequent
+     * word ("india" across the whole SST notes).
      */
-    fun bestDocName(ctx: Context, query: String): String? {
-        val terms = tokenize(query)
-        if (terms.isEmpty()) return null
-        val chunks = load(ctx)
-        if (chunks.isEmpty()) return null
-        val skip = excluded(ctx)
-        val docScores = HashMap<String, Int>()
-        for (c in chunks) {
-            if (c.doc in skip) continue
-            val dl = c.doc.lowercase()
-            var s = 0
-            for (t in terms) {
-                if (c.norm.contains(" " + t + " ")) s += 2
-                if (dl.contains(t)) s += 3
-            }
-            if (s > 0) docScores[c.doc] = (docScores[c.doc] ?: 0) + s
-        }
-        return docScores.maxByOrNull { it.value }?.key
-    }
+    fun bestDocName(ctx: Context, query: String): String? =
+        bestDocFor(ctx, tokenize(query))
 
     /** Chunks for a summary request: picks the ONE best document for the
-     *  query, then either the whole document (when the query names it, e.g.
-     *  "sst") or the chunks around the user's topic - so a "power sharing"
-     *  summary gets the whole chapter, not fragments, and never drags in
-     *  unrelated chapters. Returned in document order. */
+     *  query (v6.2.3: rarity-weighted, see [bestDocFor]), then either the
+     *  whole document (when the query names it, e.g. "sst") or the chunks
+     *  around the user's topic - so a "power sharing" summary gets the
+     *  whole chapter, not fragments, and never drags in unrelated
+     *  chapters. Returned in document order. */
     fun bestChunks(ctx: Context, query: String, maxChunks: Int = 18): List<String> {
         val terms = tokenize(query)
         if (terms.isEmpty()) return emptyList()
         val chunks = load(ctx)
         if (chunks.isEmpty()) return emptyList()
-        val skip = excluded(ctx)
-        // 1) pick the single best document for this query
-        val docScores = HashMap<String, Int>()
+        val bestDoc = bestDocFor(ctx, terms) ?: return emptyList()
+        val bestDl = bestDoc.lowercase()
         val chunkScores = IntArray(chunks.size)
         for ((i, c) in chunks.withIndex()) {
-            if (c.doc in skip) continue
-            val dl = c.doc.lowercase()
-            var docHit = 0
-            var textHit = 0
+            if (c.doc != bestDoc) continue
+            var s = 0
             for (t in terms) {
-                if (c.norm.contains(" " + t + " ")) {
-                    textHit += 2
-                    docScores[c.doc] = (docScores[c.doc] ?: 0) + 2
-                }
-                if (dl.contains(t)) docHit += 3
+                if (c.norm.contains(" " + t + " ")) s += 2
+                if (bestDl.contains(t)) s += 3
             }
-            docScores[c.doc] = (docScores[c.doc] ?: 0) + docHit
-            chunkScores[i] = textHit + docHit
+            chunkScores[i] = s
         }
-        val bestDoc = docScores.maxByOrNull { it.value }?.key ?: return emptyList()
-        val nameHit = terms.any { bestDoc.lowercase().contains(it) }
+        val nameHit = terms.any { bestDl.contains(it) }
         val idxs = chunks.indices.filter { chunks[it].doc == bestDoc && chunkScores[it] > 0 }
         val docIdx = chunks.indices.filter { chunks[it].doc == bestDoc }
-        // 2a) the query names this chapter -> summarize the whole document
+        // the query names this chapter -> summarize the whole document
         if (nameHit || idxs.isEmpty())
             return docIdx.take(maxChunks).map { chunks[it].text }
-        // 2b) topic inside a bigger document -> a CONTIGUOUS window around
+        // topic inside a bigger document -> a CONTIGUOUS window around
         // the best match: the whole topic/chapter comes along, never a mix
         // of matching fragments from different chapters
         val center = idxs.maxByOrNull { chunkScores[it] } ?: docIdx.first()
@@ -240,7 +267,7 @@ object Knowledge {
         return docIdx.subList(from, to).map { chunks[it].text }
     }
 
-        /** v5.4: lowercase with non-alphanumeric runs collapsed to single
+    /** v5.4: lowercase with non-alphanumeric runs collapsed to single
      *  spaces, padded at both ends - " term " matching then hits whole
      *  words only ("art" no longer matches "start"). */
     private fun normOf(t: String): String =
