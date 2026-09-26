@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: nova-apk
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -42,6 +46,12 @@ jobs:
 
       - name: Apply v7.5.1 patches
         run: python3 tmp/patch_v751.py .
+
+      - name: Apply v7.6.0 patches (MainActivity)
+        run: python3 tmp/patch_v760.py .
+
+      - name: Apply v7.6.0 support patches (all other files)
+        run: python3 tmp/patch_v760_support.py .
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
