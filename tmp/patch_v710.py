@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""NOVA v7.1.0 app patch: launch polish - onboarding, chat export, speed readout.
+"""NOVA v7.1.0 app patch: launch polish - onboarding, chat export fix, speed readout.
 
 1. First-run onboarding: a brand-new user (no model, never loaded one) gets
    a welcome dialog pointing at the model download, then Help & Tips.
-2. Share this chat: a drawer item that exports the current conversation as
-   plain text through Android's share sheet (WhatsApp, email, notes...).
-3. Approximate generation speed (~tok/s) added to the reply status line,
-   so performance is visible without a debug console.
+2. Chat export (the existing "Share chat" drawer item) now strips hidden
+   thinking-block text from thinking models, so exports stay clean.
+3. Approximate generation speed (~tok/s) added to the reply status line.
 
 No app lock - deliberately left out on the user's request.
 
@@ -34,10 +33,17 @@ A1_NEW = '''        setContentView(buildUi())
         maybeOnboard()
 '''
 
-# ---- 2) drawer: Share this chat ----
-A2_OLD = '        drawerPane.addView(drawerRow("Help & Tips", R.drawable.ic_lightbulb) { showHelpTips() })\n'
-A2_NEW = '''        drawerPane.addView(drawerRow("Help & Tips", R.drawable.ic_lightbulb) { showHelpTips() })
-        drawerPane.addView(drawerRow("Share this chat", R.drawable.ic_send) { shareChat() })
+# ---- 2) chat export: strip hidden thinking text (the Share chat item
+#         already existed - this just cleans what it exports) ----
+A2_OLD = '''        for (msg in currentChat.messages) {
+            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ").append(msg.text).append("\\n\\n")
+        }
+'''
+A2_NEW = '''        for (msg in currentChat.messages) {
+            // v7.1: never export hidden thinking-block text
+            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ")
+                .append(stripThinking(msg.text).trim()).append("\\n\\n")
+        }
 '''
 
 # ---- 3) ~tok/s in the status line ----
@@ -59,7 +65,7 @@ A3_NEW = '''                    if (tFirstToken > 0L) {
                     }
 '''
 
-# ---- 4) the new functions, after solveArithmetic ----
+# ---- 4) the onboarding function, after solveArithmetic ----
 A4_OLD = '''        } catch (e: Exception) { false }
     }
 '''
@@ -86,23 +92,6 @@ A4_NEW = '''        } catch (e: Exception) { false }
                 .show()
         } catch (e: Exception) { }
     }
-
-    /** v7.1: share the current conversation as plain text. */
-    private fun shareChat() {
-        try {
-            if (currentChat.messages.isEmpty()) { toast("Nothing to share yet"); return }
-            val sb = StringBuilder("NOVA - " + currentChat.name + "\\n\\n")
-            for (m in currentChat.messages) {
-                val who = if (m.role == Role.USER) "You" else "NOVA"
-                sb.append(who).append(": ").append(stripThinking(m.text).trim()).append("\\n\\n")
-            }
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, sb.toString().trim())
-            }
-            startActivity(Intent.createChooser(send, "Share chat"))
-        } catch (e: Exception) { toast("Couldn't share the chat") }
-    }
 '''
 
 src = open(MA, encoding="utf-8").read()
@@ -110,8 +99,8 @@ if "v7.1" in src:
     print("MainActivity.kt: v7.1.0 patch already applied")
 else:
     src = rep(src, A1_OLD, A1_NEW, "onboarding hook")
-    src = rep(src, A2_OLD, A2_NEW, "share drawer row")
+    src = rep(src, A2_OLD, A2_NEW, "share strip-thinking")
     src = rep(src, A3_OLD, A3_NEW, "tok/s status")
-    src = rep(src, A4_OLD, A4_NEW, "new functions")
+    src = rep(src, A4_OLD, A4_NEW, "onboarding function")
     open(MA, "w", encoding="utf-8").write(src)
-    print("MainActivity.kt: v7.1.0 launch polish applied (onboarding + share + tok/s)")
+    print("MainActivity.kt: v7.1.0 launch polish applied (onboarding + clean share + tok/s)")
