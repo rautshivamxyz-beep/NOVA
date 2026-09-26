@@ -22,7 +22,7 @@ jobs:
 
   emulator:
     name: Emulator smoke test (launch + calculator)
-    runs-on: ubuntu-24.04
+    runs-on: macos-latest
     steps:
       - name: Checkout NOVA
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
 
       - name: Install Android SDK packages
         run: |
-          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" > /dev/null
 
@@ -47,15 +47,15 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build x86_64 APK for the emulator
+      - name: Build arm64 APK for the emulator
         working-directory: android
-        run: gradle assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=x86_64
+        run: gradle assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=arm64-v8a
 
       - name: Run smoke test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
-          arch: x86_64
+          arch: arm64-v8a
           target: google_apis
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
