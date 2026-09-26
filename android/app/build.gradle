@@ -25,7 +25,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs += ['src/main/jniLibs']
+            jniLibs.srdDirs += ['src/main/jniLibs']
         }
     }
 
@@ -33,8 +33,8 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 52
-        versionName '7.5.1'
+        versionCode 54
+        versionName '7.6.1'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -44,19 +44,27 @@ android {
         }
     }
 
+    // v7.6.1: the old keystore + password were committed in plain text, so the
+    // signing key is rotated. The new password lives ONLY in the GitHub Actions
+    // secret NOVA_KEYSTORE_PASSWORD. Local release builds must export it first:
+    //   NOVA_KEYSTORE_PASSWORD=... gradle assembleRelease
+    // Without it, release builds fall back to the debug key (used by the CI
+    // emulator smoke test, which does not need the real key).
     signingConfigs {
         release {
-            storeFile rootProject.file('nova-release.keystore')
-            storePassword 'NOVA2026release'
-            keyAlias 'nova'
-            keyPassword 'NOVA2026release'
+            if (System.getenv('NOVA_KEYSTORE_PASSWORD')) {
+                storeFile rootProject.file('nova-release-v2.keystore')
+                storePassword System.getenv('NOVA_KEYSTORE_PASSWORD')
+                keyAlias 'nova'
+                keyPassword System.getenv('NOVA_KEYSTORE_PASSWORD')
+            }
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            signingConfig System.getenv('NOVA_KEYSTORE_PASSWORD') ? signingConfigs.release : signingConfigs.debug
         }
     }
 

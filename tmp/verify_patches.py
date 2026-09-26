@@ -2,7 +2,7 @@
 """NOVA post-patch verification (automatic test, level 1).
 
 Runs in CI right after the patch chain. Checks that every feature marker
-from v6.2.3 .. v7.5.1 is present in the generated code exactly as many
+from v6.2.3 .. v7.6.0 is present in the generated code exactly as many
 times as expected, that no old code survived where a patch should have
 replaced it, that the send-order fix is in the right order, and that all
 four patched Kotlin files still balance with no invalid escapes.
@@ -52,11 +52,16 @@ MA_MARKERS = [
     ("v7.5 section extraction prompt", "Extract the key facts", 2),
     ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
     ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
-    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
-    ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
+    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),$    ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
     ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
     ("v7.5.1 anti-invent guardrails", "never invent", 2),
-    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
+    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 7),
+    ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
+    ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
+    ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
+    ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
+    ("v7.6 notes cache warm-up", "Knowledge.warmUp(this@MainActivity)", 1),
+    ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
 ]
 for name, marker, n in MA_MARKERS:
     check("%s (x%d)" % (name, n), ma.count(marker) == n)
@@ -64,10 +69,16 @@ for name, marker, n in MA_MARKERS:
 check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
 check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
+knn = load("Knowledge.kt")
+wc = load("WikiCore.kt")
+check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
+check("v7.6 notes warm-up for send gate (Knowledge.kt)", knn.count("warm the cache from a background thread") == 1)
+check("v7.6 wiki done marker written last (WikiCore.kt)", wc.count("done.tmp") == 1)
+check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exams and reminders too") == 1)
 
 # ---- build.gradle: guard against the srdDirs corruption seen on 2026-09-26 ----
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
-check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
+check("build.gradle: jniLibs srdDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
 
 # ---- old code that must be GONE (a skipped patch leaves these behind) ----
@@ -75,9 +86,9 @@ check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sent
 check("old flash reloads in summarizers removed", ma.count("NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath") == 0)
 
 # ---- the send-order fix: no-model tools BEFORE ensureModelReady ----
-i_tools = ma.find("if (solveArithmetic(text)) return")
+i_tools = ma.find('if (solveArithmetic(text)) { input.setText("")')
 i_model = ma.find("if (!ensureModelReady()) return")
-check("v7.4 order: calculator/phone commands before model check",
+check("v7.4/v7.6 order: calculator/phone commands before model check",
       i_tools != -1 and i_model != -1 and i_tools < i_model)
 
 # ---- structural sanity: braces/parens balance + no invalid escapes ----
@@ -100,14 +111,14 @@ def structural(f, text):
                 if text[i] == "\\":
                     i += 1
                 i += 1
-            i += 1
+          i += 1
         elif c == "'":
             i += 1
             while i < n and text[i] != "'":
                 if text[i] == "\\":
                     i += 1
-                i += 1
-            i += 1
+               i += 1
+          i += 1
         else:
             if c == "{":
                 braces += 1
@@ -117,7 +128,7 @@ def structural(f, text):
                 parens += 1
             elif c == ")":
                 parens -= 1
-            i += 1
+           i += 1
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
