@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout NOVA
+      - name: Check out NOVA
         uses: actions/checkout@v4
 
       - name: Verify source integrity
@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-           java-version: '17'
+          java-version: "17"
 
       - name: Install Android SDK packages
         run: |
@@ -40,18 +40,18 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build NOVA release APK (arm64)
+      - name: Build the NOVA release APK for arm64
         working-directory: android
         env:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Stach arm64 APK aside for verification
+      - name: Copy the arm64 APK to runner temp
         run: |
           mkdir -p "$RUNNER_TEMP/apk-arm64"
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
 
-      - name: Verify APK is signed with the v2 release key
+      - name: Check the APK signature against the v2 release key
         run: |
           BT="$(ls /usr/local/lib/android/sdk/build-tools/*/apksigner | sort -V | tail -1)"
           "$BT" verify --print-certs "$RUNNER_TEMP/apk-arm64/app-release.apk" | tee apk-certs.txt
@@ -60,18 +60,18 @@ jobs:
           if [ "$ACTUAL" != "$EXPECTED" ]; then
             echo "FATAL: APK is NOT signed with the v2 release key"
             echo "  expected: $EXPECTED"
-            echo "  actual:    $ACTUAL"
+            echo "  actual:   $ACTUAL"
             exit 1
           fi
           echo "APK signature OK (v2 release key)"
 
-      - name: Build NOVA universal APK (arm64 + x86_64, for emulators/Chromebooks)
+      - name: Build the NOVA universal APK (arm64 and x86_64)
         working-directory: android
         env:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle clean assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=arm64-v8a,x86_64
 
-      - name: Show APKs
+      - name: List the built APKs
         run: ls -lh "$RUNNER_TEMP/apk-arm64/app-release.apk" android/app/build/outputs/apk/release/app-release.apk
 
       - name: Upload NOVA APK (arm64)
@@ -90,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER="$(sed -n "s/.*versionName '\([^']]*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          VER="$(sed -n "s/.*versionName '\([^']*\) ®*/\1/p" android/app/build.gradle | head -1)"
           if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
           cp "$RUNNER_TEMP/apk-arm64/app-release.apk" "NOVA-v${VER}.apk"
           gh release create "v${VER}" "NOVA-v${VER}.apk" \
