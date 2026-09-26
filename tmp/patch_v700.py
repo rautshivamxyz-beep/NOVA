@@ -154,10 +154,10 @@ V_NEW = '''        } catch (e: Exception) {
             .replace("sqrt", "q").replace("sin", "s").replace("cos", "c")
             .replace("tan", "t").replace("log", "g").replace("ln", "n")
             .replace("pi", "p")
-        if (!Regex("^[0-9+\\-*/^%().qsctgnpe]+$").matches(s)) return false
+        if (!Regex("^[0-9+\\\\-*/^%().qsctgnpe]+").matches(s)) return false
         // a word made only of function letters ("ten") is not arithmetic
         if (!Regex("[0-9]").containsMatchIn(s)) return false
-        if (!Regex("[+\\-*/^%]").containsMatchIn(s) && !Regex("[qsctgnp]").containsMatchIn(s)) return false
+        if (!Regex("[+\\\\-*/^%]").containsMatchIn(s) && !Regex("[qsctgnp]").containsMatchIn(s)) return false
         return try {
             val p = object {
                 var i = 0
