@@ -4,53 +4,42 @@ on:
   push:
     branches:
       - main
-
 concurrency:
   group: nova-apk
   cancel-in-progress: true
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-24.04
-
     steps:
       - name: Check out NOVA
         uses: actions/checkout@v4
-
       - name: Verify source integrity
         run: python3 tmp/verify_patches.py .
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
       - name: Install Android SDK packages
         run: |
           SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" > /dev/null
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-
       - name: Build the NOVA release APK for arm64
         working-directory: android
         env:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
-
       - name: Copy the arm64 APK to runner temp
         run: |
           mkdir -p "$RUNNER_TEMP/apk-arm64"
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
-
       - name: Check the APK signature against the v2 release key
         run: |
           BT="$(ls /usr/local/lib/android/sdk/build-tools/*/apksigner | sort -V | tail -1)"
@@ -64,33 +53,28 @@ jobs:
             exit 1
           fi
           echo "APK signature OK (v2 release key)"
-
       - name: Build the NOVA universal APK (arm64 and x86_64)
         working-directory: android
         env:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle clean assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=arm64-v8a,x86_64
-
       - name: List the built APKs
         run: ls -lh "$RUNNER_TEMP/apk-arm64/app-release.apk" android/app/build/outputs/apk/release/app-release.apk
-
       - name: Upload NOVA APK (arm64)
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-APK
           path: ${{ runner.temp }}/apk-arm64/app-release.apk
-
       - name: Upload NOVA universal APK
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-APK-Universal
           path: android/app/build/outputs/apk/release/app-release.apk
-
-      - name: Publish release (source for the in-app update button)
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER="$(sed -n "s/.*versionName '\([^']*\) ®*/\1/p" android/app/build.gradle | head -1)"
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
           if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
           cp "$RUNNER_TEMP/apk-arm64/app-release.apk" "NOVA-v${VER}.apk"
           gh release create "v${VER}" "NOVA-v${VER}.apk" \
