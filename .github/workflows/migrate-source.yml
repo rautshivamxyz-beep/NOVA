@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  workflows: write
 jobs:
   migrate:
     runs-on: ubuntu-24.04
