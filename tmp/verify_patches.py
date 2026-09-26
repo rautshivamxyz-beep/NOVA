@@ -9,7 +9,8 @@ four patched Kotlin files still balance with no invalid escapes.
 
 This is the guard against the #1 build risk from the code review: a patch
 silently skipping (stale anchor, stray comment) and shipping the APK
-minus a feature with no error anywhere.
+minus a feature with no error anywhere. Also checks build.gradle against
+the srdDirs typo corruption seen on 2026-09-26.
 
 Usage: verify_patches.py <NOVA repo root>
 Exits 1 (fails CI) if anything is missing.
@@ -63,6 +64,11 @@ for name, marker, n in MA_MARKERS:
 check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
 check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
+
+# ---- build.gradle: guard against the srdDirs corruption seen on 2026-09-26 ----
+bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
+check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
+      bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
 
 # ---- old code that must be GONE (a skipped patch leaves these behind) ----
 check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sentences") == 0)
