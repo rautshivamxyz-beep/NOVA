@@ -56,6 +56,13 @@ jobs:
         working-directory: android
         run: gradle assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=x86_64
 
+      - name: Enable KVM access (fixes slow software-emulated boot)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
       - name: Run smoke test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
