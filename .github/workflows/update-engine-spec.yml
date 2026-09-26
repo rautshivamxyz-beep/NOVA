@@ -55,10 +55,6 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :lib:assembleRelease --no-daemon
-      - name: Apply NOVA v6.2 app patch (instant conversation resets)
-        run: |
-          python3 tmp/patch_app62.py .
-          grep -n "v6.2.0" android/app/src/main/java/org/nova/NovaEngine.kt | head -2
       - name: Commit new engine into NOVA
         run: |
           set -e
