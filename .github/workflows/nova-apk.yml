@@ -9,6 +9,9 @@ concurrency:
   group: nova-apk
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -24,7 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+           java-version: '17'
 
       - name: Install Android SDK packages
         run: |
@@ -43,7 +46,7 @@ jobs:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Stash arm64 APK aside for verification
+      - name: Stach arm64 APK aside for verification
         run: |
           mkdir -p "$RUNNER_TEMP/apk-arm64"
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
@@ -57,7 +60,7 @@ jobs:
           if [ "$ACTUAL" != "$EXPECTED" ]; then
             echo "FATAL: APK is NOT signed with the v2 release key"
             echo "  expected: $EXPECTED"
-            echo "  actual:   $ACTUAL"
+            echo "  actual:    $ACTUAL"
             exit 1
           fi
           echo "APK signature OK (v2 release key)"
@@ -82,3 +85,16 @@ jobs:
         with:
           name: NOVA-APK-Universal
           path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Publish release (source for the in-app update button)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="$(sed -n "s/.*versionName '\([^']]*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
+          cp "$RUNNER_TEMP/apk-arm64/app-release.apk" "NOVA-v${VER}.apk"
+          gh release create "v${VER}" "NOVA-v${VER}.apk" \
+            --title "NOVA v${VER}" \
+            --notes "Automatic release build of NOVA v${VER} (arm64). This is what the in-app 'Check for updates' button installs." \
+            --latest \
+            || gh release upload "v${VER}" "NOVA-v${VER}.apk" --clobber
