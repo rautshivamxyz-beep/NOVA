@@ -130,7 +130,7 @@ E_NEW = '''            } finally {
 # ---- 2e) persist the right chat ----
 F_OLD = '''                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
 '''
-F_NEW = '''                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) } }
+F_NEW = '''                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
 '''
 
 # ---- 3) chips: skip QA cache + notes summarizer ----
@@ -244,6 +244,11 @@ if "v7.4: this callback" not in s:
             "\n"
             "    companion object {\n",
             "notif thread close")
+    # a bare `return` is illegal inside a non-inline Thread lambda
+    s = rep(s,
+            "            if (title.isBlank() && body.isBlank()) return\n",
+            "            if (title.isBlank() && body.isBlank()) return@Thread\n",
+            "notif return label")
     open(NB, "w", encoding="utf-8").write(s)
     print("NotifBrain.kt: notification I/O moved to a worker thread")
 else:
