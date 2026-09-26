@@ -11,12 +11,15 @@ instead of chatting.
    no strict wrapper, no LaTeX instruction. NOVA just says hi back.
 2. The LaTeX ('write formulas in dollar signs') instruction is only added
    when the message actually contains numbers or maths words - jokes no
-   longer come out in \boxed{} notation.
+   longer come out in boxed notation.
 3. Non-study note injection now says: use ONLY if clearly relevant to this
-   exact request, otherwise ignore and answer normally - so 'tell me a
-   joke' stops summarising the user's poem notes.
+   exact request, otherwise ignore and answer normally.
 4. Strict mode: the 'From general knowledge' marker is said once at the
    start only, never repeatedly mid-reply.
+
+Note: every backslash that must appear in the Kotlin source is built with
+the @-marker below, so this file itself contains NO backslash literals
+and survives any JSON/transport layering unchanged.
 
 Idempotent - safe to run on every CI build.
 Usage: patch_v730.py <NOVA repo root>
@@ -26,6 +29,11 @@ import sys
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 MA = os.path.join(ROOT, "android/app/src/main/java/org/nova/MainActivity.kt")
+
+# '@@' in the strings below becomes a real backslash in the patched file
+BS = chr(92)
+def k(s):
+    return s.replace("@@", BS)
 
 def rep(src, old, new, what):
     n = src.count(old)
@@ -66,48 +74,48 @@ C_NEW = '''                // v7.3: strict wrapper (and the LaTeX instruction in
 '''
 
 # ---- 3) non-study notes: clearly-relevant-only instruction ----
-D_OLD = '''                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\n$notes)\n\n"
-'''
-D_NEW = '''                knowledgePart = "(Relevant notes from the user's documents - use them ONLY if they clearly help answer this exact request; if they do not, ignore them completely and answer normally:\n$notes)\n\n"
-'''
+D_OLD = k('''                knowledgePart = "(Relevant notes from the user's documents - use them if they help:@@n$notes)@@n@@n"
+''')
+D_NEW = k('''                knowledgePart = "(Relevant notes from the user's documents - use them ONLY if they clearly help answer this exact request; if they do not, ignore them completely and answer normally:@@n$notes)@@n@@n"
+''')
 
 # ---- 4) strict-mode marker: once, at the start only ----
-E_OLD = '''                "reply with 'From general knowledge (not in your notes):' and answer from your " +
-                "own knowledge. Never invent facts, names, dates or numbers.\n\n" + p
-'''
-E_NEW = '''                "reply with 'From general knowledge (not in your notes):' and answer from your " +
+E_OLD = k('''                "reply with 'From general knowledge (not in your notes):' and answer from your " +
+                "own knowledge. Never invent facts, names, dates or numbers.@@n@@n" + p
+''')
+E_NEW = k('''                "reply with 'From general knowledge (not in your notes):' and answer from your " +
                 "own knowledge. Say that phrase once at the start only - never again inside " +
-                "the reply. Never invent facts, names, dates or numbers.\n\n" + p
-'''
+                "the reply. Never invent facts, names, dates or numbers.@@n@@n" + p
+''')
 
 # ---- 5) the helpers, next to their kin ----
-F_OLD = '''    /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
+F_OLD = k('''    /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
     private fun mathPrompt(p: String): String =
-        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
-'''
-F_NEW = '''    /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
+        p + "@@n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
+''')
+F_NEW = k('''    /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
     private fun mathPrompt(p: String): String =
-        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
+        p + "@@n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
 
     /** v7.3: does this message actually involve maths? If not, the LaTeX
      *  instruction is skipped - jokes and greetings stop coming out in
-     *  \boxed{} notation. */
+     *  boxed notation. */
     private fun looksMathy(p: String): Boolean =
         p.any { it.isDigit() } ||
-            Regex("(?i)\\b(calc|math|solve|equation|formula|sqrt|prime|percentage|integral|derivative|algebra|geometry)\\b")
+            Regex("(?i)@@@@b(calc|math|solve|equation|formula|sqrt|prime|percentage|integral|derivative|algebra|geometry)@@@@b")
                 .containsMatchIn(p)
-'''
+''')
 
-G_OLD = '''private val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")
-'''
-G_NEW = '''private val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")
+G_OLD = k('''private val FOLLOW_UP_Q = Regex("(?i)@@@@b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)@@@@b")
+''')
+G_NEW = k('''private val FOLLOW_UP_Q = Regex("(?i)@@@@b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)@@@@b")
 
 // v7.3: bare greetings / smalltalk - matched on the WHOLE message
 private val SMALLTALK_REGEX = Regex(
-    "(?i)^[\\s'\"]*(hi+|hey+|hello+|yo|sup|namaste|hola|good (morning|afternoon|evening|night)" +
-        "|how are (you|u)|how r (you|u)|what'?s up|how'?s it going)[\\s.!~?]*$"
+    "(?i)^[@@@@s']*(hi+|hey+|hello+|yo|sup|namaste|hola|good (morning|afternoon|evening|night)" +
+        "|how are (you|u)|how r (you|u)|what'?s up|how'?s it going)[@@@@s.!~?]*$"
 )
-'''
+''')
 
 src = open(MA, encoding="utf-8").read()
 if "v7.3" in src:
