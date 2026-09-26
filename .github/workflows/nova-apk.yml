@@ -43,7 +43,7 @@ jobs:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Stach arm64 APK
+      - name: Stash arm64 APK aside for verification
         run: |
           mkdir -p "$RUNNER_TEMP/apk-arm64"
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
