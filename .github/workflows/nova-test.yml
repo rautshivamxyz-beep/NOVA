@@ -1,0 +1,76 @@
+name: NOVA Tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  logic:
+    name: Logic tests (patch verification)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Apply all app patches
+        run: |
+          for p in v623 v630 v631 v700 v710 v721 v730 v740 v750 v751; do
+            python3 tmp/patch_$p.py .
+          done
+
+      - name: Verify patched code
+        run: python3 tmp/verify_patches.py .
+
+  emulator:
+    name: Emulator smoke test (launch + calculator)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Apply all app patches
+        run: |
+          for p in v623 v630 v631 v700 v710 v721 v730 v740 v750 v751; do
+            python3 tmp/patch_$p.py .
+          done
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build x86_64 APK for the emulator
+        working-directory: android
+        run: gradle assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=x86_64
+
+      - name: Run smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            python3 tmp/smoke_test.py android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload screenshot (always, for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-screenshots
+          path: |
+            *.png
+          if-no-files-found: ignore
