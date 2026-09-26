@@ -11,4 +11,4 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run migration
-        run: bash <(cat tmp/migrate_parts/mig_aa tmp/migrate_parts/mig_ab | tr -d '\n' | base64 -d | gunzip)
+        run: bash <(cat tmp/migrate_parts/mig_aa tmp/migrate_parts/mig_ab tmp/migrate_parts/mig_ac tmp/migrate_parts/mig_ad | tr -d '\n' | base64 -d | gunzip)
