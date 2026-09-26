@@ -30,6 +30,7 @@ import org.json.JSONArray
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
+import org.nova.ncie.android.NcieKnowledge
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
@@ -184,7 +185,7 @@ class MainActivity : Activity() {
         }
         // v7.6: warm the notes cache too - the first message of every
         // session otherwise parsed knowledge.json on the main thread
-        scope.launch(Dispatchers.IO) { Knowledge.warmUp(this@MainActivity) }
+        scope.launch(Dispatchers.IO) { Knowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity) }
         installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
@@ -1157,26 +1158,19 @@ class MainActivity : Activity() {
                     // v5.4.6: a cached reply skipped the note search above,
                     // so a follow-up ("explain it more") had no notes to
                     // carry. Remember them now, like a fresh answer would.
-                    val h2 = Knowledge.search(this, text)
+                    val h2 = NcieKnowledge.search(this, text)
                     if (h2.isNotEmpty()) { lastNotesHit = h2; lastNotesChatId = currentChat.id }
                     needsContextCarry = true
                     return
                 }
                 pendingQaKey = qaKey
             }
-            hits = Knowledge.search(this, text)
+            hits = NcieKnowledge.search(this, text)
             // v7.6: relevance gate - one shared word (e.g. just "bose")
             // matched junk notes and the model answered from them with a
-            // confident-looking citation. Require the significant query
-            // terms to actually appear in the matched chunks.
-            if (hits.isNotEmpty()) {
-                val sigTerms = Knowledge.tokenize(text).filter { it.length > 3 }.distinct()
-                val hitText = hits.joinToString(" ") { h -> h.text }.lowercase()
-                val matched = sigTerms.count { hitText.contains(it) }
-                if (matched == 0 || (sigTerms.size >= 2 && matched < 2)) {
-                    hits = emptyList()
-                }
-            }
+            // confident-looking citation. The gate (significant query
+            // terms must appear in the matched chunks) now runs inside
+            // the kernel - see NcieKnowledge.search.
             // v5.4.5: follow-up questions ("explain it in more detail",
             // "explain that again") carry no keywords of their own, so the
             // search comes back empty and the model answered from memory -
