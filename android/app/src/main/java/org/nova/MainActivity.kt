@@ -632,6 +632,7 @@ class MainActivity : Activity() {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
         drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
+        drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_globe) { checkForUpdates() })
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         drawerPane.addView(TextView(this).apply {
@@ -2740,6 +2741,125 @@ class MainActivity : Activity() {
             putExtra(Intent.EXTRA_TEXT, sb.toString())
         }
         startActivity(Intent.createChooser(send, "Share chat"))
+    }
+
+
+    // ---- v7.6.3: in-app update ----
+
+    /** Latest GitHub release as (version, apkUrl), or null if none found. */
+    private fun fetchLatestRelease(): Pair<String, String>? {
+        val conn = java.net.URL(
+            "https://api.github.com/repos/rautshivamxyz-beep/NOVA/releases/latest"
+        ).openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 10000
+        conn.readTimeout = 15000
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        try {
+            if (conn.responseCode != 200) throw RuntimeException("HTTP " + conn.responseCode)
+            val obj = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+            val tag = obj.optString("tag_name", "").removePrefix("v")
+            val assets = obj.optJSONArray("assets") ?: return null
+            for (i in 0 until assets.length()) {
+                val a = assets.getJSONObject(i)
+                if (a.optString("name").endsWith(".apk")) {
+                    return Pair(tag, a.optString("browser_download_url"))
+                }
+            }
+        } finally {
+            conn.disconnect()
+        }
+        return null
+    }
+
+    /** Compares dotted versions: negative if a < b, 0 if equal. */
+    private fun compareVersions(a: String, b: String): Int {
+        val pa = a.split('.').map { it.toIntOrNull() ?: 0 }
+        val pb = b.split('.').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(pa.size, pb.size)) {
+            val d = (pa.getOrElse(i) { 0 }) - (pb.getOrElse(i) { 0 })
+            if (d != 0) return d
+        }
+        return 0
+    }
+
+    /** Downloads the APK to the cache dir, then launches the system installer. */
+    private fun downloadUpdate(apkUrl: String) {
+        Toast.makeText(this, "Downloading update...", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = java.io.File(cacheDir, "updates")
+                    dir.mkdirs()
+                    val part = java.io.File(dir, "nova-update.apk.part")
+                    val done = java.io.File(dir, "nova-update.apk")
+                    java.net.URL(apkUrl).openStream().use { input ->
+                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                    }
+                    if (done.exists()) done.delete()
+                    if (!part.renameTo(done)) {
+                        part.delete()
+                        throw RuntimeException("could not save download")
+                    }
+                    done
+                }
+            }
+            result.fold(
+                { apk ->
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "org.nova.fileprovider", apk
+                    )
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                },
+                { e ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Download failed: " + (e.message ?: "error"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
+    }
+
+    /** Drawer action: check GitHub for a newer release and offer to install it. */
+    private fun checkForUpdates() {
+        Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val fetched = withContext(Dispatchers.IO) { runCatching { fetchLatestRelease() } }
+            fetched.fold(
+                { latest ->
+                    val current = packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+                    if (latest == null || compareVersions(latest.first, current) <= 0) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "NOVA is up to date (v" + current + ")",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Update available")
+                            .setMessage(
+                                "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
+                                    "Download and install now? The download is about 24 MB."
+                            )
+                            .setPositiveButton("Download") { _, _ -> downloadUpdate(latest.second) }
+                            .setNegativeButton("Later", null)
+                            .show()
+                    }
+                },
+                { e ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Update check failed: " + (e.message ?: "network error"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
     }
 
     private fun drawerRow(label: String, iconRes: Int, onClick: () -> Unit): View =
