@@ -1,4 +1,4 @@
-name: Update llama.cpp engine (v6.1.0 anti-repetition + KV cache)
+name: Update llama.cpp engine (v7.2 speed pack)
 on:
   workflow_dispatch:
 
@@ -46,6 +46,10 @@ jobs:
         run: |
           python3 tmp/patch_engine62.py llama.cpp
           grep -n "NOVA v6.2" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+      - name: Patch engine v7.2 (G85 thread tuning + generation-stop fix)
+        run: |
+          python3 tmp/patch_engine70.py llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+          grep -n "NOVA v7.2" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp | head -3
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
         run: |
@@ -62,5 +66,5 @@ jobs:
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
           git add android/app/libs/llama-release.aar android/app/src/main/java/org/nova/ android/app/build.gradle
-          git commit -m "engine: v6.2.0 flash attention + resettable context (llama.cpp 6e60f35 + v5.3 + v5.7.0 + v6.1.0 + v6.2.0 patches)"
+          git commit -m "engine: v7.2.0 speed pack - 6-thread big-core tuning + honest n_predict stop (llama.cpp 6e60f35 + v5.3..v7.2 patches)"
           git push
