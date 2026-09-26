@@ -289,7 +289,7 @@ class ModelsActivity : Activity() {
             textSize = 13f
         })
         val meta = TextView(this).apply {
-            text = "${entry.org} · ${entry.quant} · ${entry.sizeBytes / (1000L * 1000 * 1000)} GB · " +
+            text = "${entry.org} · ${entry.quant} · ${String.format(java.util.Locale.US, "%.1f", entry.sizeBytes / 1e9)} GB · " +
                 "needs ~${entry.minRamGb} GB RAM\n${entry.notes}"
             setTextColor(textDim)
             textSize = 12f
@@ -318,7 +318,7 @@ class ModelsActivity : Activity() {
         }
         deviceText.text =
             "This device\n" +
-            "RAM: %.1f GB total · %.1f GB free\n".format(totalRam, freeRam) +
+            String.format(java.util.Locale.US, "RAM: %.1f GB total · %.1f GB free\n", totalRam, freeRam) +
             "CPU: ${DeviceCapabilities.cpuDescription()}\n\n" +
             "Recommended: $recommended"
     }
@@ -353,7 +353,7 @@ class ModelsActivity : Activity() {
                 typeface = Typeface.DEFAULT_BOLD
             })
             localInner.addView(TextView(this).apply {
-                text = "${m.name} · ${m.length() / (1000L * 1000 * 1000)} GB"
+                text = "${m.name} · ${String.format(java.util.Locale.US, "%.1f", m.length() / 1e9)} GB"
                 setTextColor(textDim)
                 textSize = 11f
             })
@@ -381,8 +381,8 @@ class ModelsActivity : Activity() {
                 .setTitle("Large model")
                 .setMessage(
                     "This model may be too large for this device " +
-                        "(${f.length() / (1000L * 1000 * 1000)} GB file, " +
-                        "${"%.1f".format(DeviceCapabilities.totalRamGb(this))} GB RAM). " +
+                        "(${String.format(java.util.Locale.US, "%.1f", f.length() / 1e9)} GB file, " +
+                        "${String.format(java.util.Locale.US, "%.1f", DeviceCapabilities.totalRamGb(this))} GB RAM). " +
                         "It may fail to load or be killed by the system. Try anyway?"
                 )
                 .setPositiveButton("Try") { _, _ -> loadModel(f) }
@@ -416,7 +416,7 @@ class ModelsActivity : Activity() {
     private fun confirmAndDelete(f: File) {
         AlertDialog.Builder(this)
             .setTitle("Delete model?")
-            .setMessage("${f.name} (${f.length() / (1000L * 1000 * 1000)} GB) will be permanently removed.")
+            .setMessage("${f.name} (${String.format(java.util.Locale.US, "%.1f", f.length() / 1e9)} GB) will be permanently removed.")
             .setPositiveButton("Delete") { _, _ ->
                 if (NovaEngine.isGenerating) {
                     toast("Wait for the current reply to finish")
@@ -553,7 +553,7 @@ class ModelsActivity : Activity() {
     }
 
     private fun gb(bytes: Long): String =
-        if (bytes >= 1000L * 1000 * 1000) "%.2f GB".format(bytes / 1e9)
+        if (bytes >= 1000L * 1000 * 1000) String.format(java.util.Locale.US, "%.2f GB", bytes / 1e9)
         else "%.0f MB".format(bytes / 1e6)
 
     // -------------------------------------------------------------- utils

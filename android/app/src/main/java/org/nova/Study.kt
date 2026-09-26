@@ -43,7 +43,11 @@ object Study {
                 arr.put(JSONObject().put("q", c.q).put("a", c.a)
                     .put("iv", c.interval).put("due", c.due))
             }
-            file(ctx).writeText(arr.toString())
+            // v7.6: atomic write - a crash mid-write no longer wipes the file
+            val f = file(ctx)
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { }
     }
 

@@ -215,6 +215,9 @@ object NovaEngine {
 
     suspend fun resetConversation(context: Context, systemPrompt: String): Boolean {
         val engine = engineRef ?: return false
+        // v7.6: never fight an in-flight model load - "new chat" during a
+        // model switch could double-drive the engine
+        if (loading) return false
         if (!isModelLoaded) return false
         resetting = true
         try {

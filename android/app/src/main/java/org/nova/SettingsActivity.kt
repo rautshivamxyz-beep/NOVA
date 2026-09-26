@@ -298,14 +298,23 @@ class SettingsActivity : Activity() {
         if (resultCode != RESULT_OK || data == null) return
         val uri = data.data ?: return
         if (requestCode == 9001) {
-            // write the backup where the user chose
-            try {
-                val json = Backup.export(this)
-                contentResolver.openOutputStream(uri)?.use {
-                    it.write(json.toByteArray(Charsets.UTF_8))
+            // v7.6: run off the main thread - a big history froze the UI,
+            // and an empty export still said "Backup saved"
+            Thread {
+                val json = try { Backup.export(this) } catch (e: Exception) { "" }
+                if (json.isEmpty()) {
+                    runOnUiThread { toast("Backup failed - nothing was written") }
+                    return@Thread
                 }
-                toast("Backup saved")
-            } catch (e: Exception) { toast("Backup failed") }
+                try {
+                    contentResolver.openOutputStream(uri)?.use {
+                        it.write(json.toByteArray(Charsets.UTF_8))
+                    }
+                    runOnUiThread { toast("Backup saved") }
+                } catch (e: Exception) {
+                    runOnUiThread { toast("Backup failed") }
+                }
+            }.start()
         } else if (requestCode == 9002) {
             // restore from a chosen file
             try {
@@ -321,11 +330,16 @@ class SettingsActivity : Activity() {
                     .setMessage("Chats with the same id are replaced, others are kept. " +
                         "Memory, personality and study deck are replaced.")
                     .setPositiveButton("Restore") { _, _ ->
-                        val n = Backup.restore(this, text)
-                        if (n >= 0) {
-                            toast("Restored $n chats")
-                            recreate()
-                        } else toast("Restore failed")
+                        // v7.6: restore off the main thread too
+                        Thread {
+                            val n = Backup.restore(this, text)
+                            runOnUiThread {
+                                if (n >= 0) {
+                                    toast("Restored $n chats")
+                                    recreate()
+                                } else toast("Restore failed")
+                            }
+                        }.start()
                     }
                     .setNegativeButton("Cancel", null)
                     .show()

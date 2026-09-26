@@ -15,13 +15,16 @@ import java.io.File
 class NotifBrain : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // v7.4: this callback arrives on the MAIN thread - file I/O there
+        // janks the whole phone while chatting; run it on a worker thread
+        Thread {
         try {
             val ex = sbn.notification.extras
             val title = ex.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
             val text = ex.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
             val big = ex.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString() ?: text
             val body = if (big.length >= text.length) big else text
-            if (title.isBlank() && body.isBlank()) return
+            if (title.isBlank() && body.isBlank()) return@Thread
             val f = File(filesDir, "notifs.txt")
             val line = listOf(
                 (sbn.postTime / 1000L).toString(),
@@ -37,6 +40,7 @@ class NotifBrain : NotificationListenerService() {
                 }
             }
         } catch (e: Exception) { }
+        }.start()
     }
 
     companion object {
@@ -44,9 +48,14 @@ class NotifBrain : NotificationListenerService() {
 
         /** True when NOVA has been granted notification access. */
         fun isEnabled(ctx: Context): Boolean = try {
+            // v7.6: compare component-by-component - a substring check
+            // matched unrelated packages containing "org.nova"
             android.provider.Settings.Secure.getString(
                 ctx.contentResolver, "enabled_notification_listeners")
-                ?.contains(ctx.packageName) == true
+                ?.split(':')?.any {
+                    android.content.ComponentName.unflattenFromString(it)
+                        ?.packageName == ctx.packageName
+                } == true
         } catch (e: Exception) { false }
 
         /**

@@ -53,12 +53,21 @@ object Knowledge {
         try {
             val arr = JSONArray()
             for (c in chunks) arr.put(JSONObject().put("d", c.doc).put("t", c.text))
-            file(ctx).writeText(arr.toString())
+            // v7.6: atomic write - a crash mid-write no longer wipes the file
+            val f = file(ctx)
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
             cache = chunks
         } catch (e: Exception) { }
     }
 
     fun hasDocs(ctx: Context): Boolean = load(ctx).isNotEmpty()
+
+    /** v7.6: warm the cache from a background thread at app start so the
+     *  first message of a session never parses knowledge.json on the UI
+     *  thread (Wikipedia got warmUp long ago - this is the notes twin). */
+    fun warmUp(ctx: Context) { load(ctx) }
 
     /** Doc name -> chunk count, in insertion order. */
     fun docs(ctx: Context): List<Pair<String, Int>> {
@@ -71,6 +80,7 @@ object Knowledge {
     fun docText(ctx: Context, name: String): String =
         load(ctx).filter { it.doc == name }.joinToString("\n\n") { it.text }
 
+    @Synchronized
     fun addDoc(ctx: Context, name: String, text: String) {
         val chunks = ArrayList(load(ctx).filter { it.doc != name })
         for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))
@@ -273,7 +283,8 @@ object Knowledge {
     private fun normOf(t: String): String =
         " " + t.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
 
-    private fun tokenize(s: String): List<String> {
+    /** v7.6: public for the send()-side relevance gate. */
+    fun tokenize(s: String): List<String> {
         val out = LinkedHashSet<String>()
         for (w in s.lowercase().split(Regex("[^a-z0-9]+"))) {
             if (w.length >= 3 && w !in STOP) out.add(w)

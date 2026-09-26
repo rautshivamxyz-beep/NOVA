@@ -374,7 +374,22 @@ class KnowledgeActivity : Activity() {
         // v5.4.8: photos of handwritten/printed pages -> on-device OCR
         val mime = try { contentResolver.getType(uri) ?: "" } catch (e: Exception) { "" }
         if (mime.startsWith("image/")) return ocrImage(uri)
-        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+        // v7.4: bound the read - an unbounded readBytes() on a huge file
+        // OOM-kills the app (and the loaded model with it)
+        val bytes = contentResolver.openInputStream(uri)?.use { s ->
+            val cap = 30 shl 20
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(1 shl 16)
+            var total = 0
+            while (true) {
+                val n = s.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > cap) throw IllegalStateException("File too large (over 30 MB)")
+                out.write(buf, 0, n)
+            }
+            out.toByteArray()
+        } ?: return ""
         val head = String(bytes.copyOfRange(0, minOf(200, bytes.size)))
         var text = if (head.contains("%PDF"))
             kotlinx.coroutines.runBlocking {
@@ -391,7 +406,12 @@ class KnowledgeActivity : Activity() {
         val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
             com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
         try {
-            com.google.android.gms.tasks.Tasks.await(rec.process(img)).text
+            try {
+                com.google.android.gms.tasks.Tasks.await(rec.process(img)).text
+            } finally {
+                // v7.6: the recognizer leaked on every photo import
+                try { rec.close() } catch (e: Exception) { }
+            }
         } catch (e: Exception) { "" }
     } catch (e: Exception) { "" }
 

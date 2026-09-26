@@ -175,7 +175,9 @@ class ExamsActivity : Activity() {
             .setView(box)
             .setPositiveButton("Add") { _, _ ->
                 val n = name.text.toString().trim()
-                val ms = SimpleDateFormat("d/M/yyyy", Locale.US)
+                // v7.6: reject impossible dates - lenient parsing silently
+                // accepted "14/13/2026" and rolled it into the next month
+                val ms = SimpleDateFormat("d/M/yyyy", Locale.US).apply { isLenient = false }
                     .parse(date.text.toString().trim())?.time ?: 0L
                 if (n.isEmpty() || ms <= 0L) {
                     toast("Fill both fields (date like 14/5/2026)")

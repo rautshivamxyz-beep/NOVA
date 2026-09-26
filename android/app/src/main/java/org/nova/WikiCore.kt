@@ -81,8 +81,13 @@ object WikiCore {
                 _state.value = Pair(0f, lastError ?: "")
                 return@withContext
             }
+            // v7.6: drop the old "ready" flag first and create done.txt
+            // ONLY after the articles are complete - an interrupted
+            // download used to leave a half dataset permanently "ready"
+            doneFile(ctx).delete()
+            val doneTmp = File(d, "done.tmp")
             val bw = BufferedWriter(FileWriter(articlesFile(ctx), false))
-            val dw = BufferedWriter(FileWriter(doneFile(ctx), false))
+            val dw = BufferedWriter(FileWriter(doneTmp, false))
             var n = 0
             for (line in lines) {
                 val title = line.substringBefore('\u241F').trim()
@@ -99,6 +104,7 @@ object WikiCore {
                 }
             }
             bw.close(); dw.close()
+            doneTmp.renameTo(doneFile(ctx))
             File(d, "count").writeText(n.toString())
             index = null
             _state.value = Pair(0f, "done - $n articles saved")
@@ -108,7 +114,7 @@ object WikiCore {
         } finally {
             downloading = false
             if (lastError == null) {
-                Thread.sleep(3000)
+                kotlinx.coroutines.delay(3000)
                 _state.value = Pair(0f, "")
             }
         }

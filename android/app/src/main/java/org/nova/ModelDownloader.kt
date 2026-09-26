@@ -89,9 +89,11 @@ object ModelDownloader {
         if (isBusy) return
         cancelled = false
         job = scope.launch {
+            var partFile: File? = null
             try {
                 val dest = uniqueFile(File(dir, sanitize(name)))
                 val part = File(dest.absolutePath + ".part")
+                partFile = part
                 var copied = 0L
                 val buf = ByteArray(64 * 1024)
                 input()?.use { ins ->
@@ -110,7 +112,10 @@ object ModelDownloader {
                 if (!part.renameTo(dest)) throw IOException("rename failed")
                 _state.value = State.Done(dest)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                File(dir, sanitize(name) + ".part").delete()
+                // v7.6: delete the REAL partial file - with a uniquified
+                // name (model-1.gguf) the old cleanup deleted a non-existent
+                // path and stranded the multi-GB .part
+                partFile?.delete()
                 _state.value = State.Idle
             } catch (e: Exception) {
                 _state.value = State.Failed(name, e.message ?: "import failed")
@@ -147,6 +152,10 @@ object ModelDownloader {
                 (if (resume) existing + newBytes else newBytes)
             } else -1L
 
+            // v7.6: refuse to start into a full disk - the old failure was
+            // ENOSPC deep into a multi-GB download
+            if (total > 0 && android.os.StatFs(dir.absolutePath).availableBytes < total)
+                throw IOException("not enough free space for this model")
             var done = if (resume) existing else 0L
             val buf = ByteArray(64 * 1024)
             conn.inputStream.use { ins ->

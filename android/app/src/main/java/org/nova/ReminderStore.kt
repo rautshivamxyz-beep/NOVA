@@ -53,8 +53,21 @@ object ReminderStore {
                 if (rep <= 0L && at < now - 60_000L) continue
                 arr.put(JSONObject().put("at", at).put("t", t).put("rep", rep))
             }
-            file(ctx).writeText(arr.toString())
+            val f = file(ctx)
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { }
+    }
+
+    /** v7.6: stable unique reminder IDs - the old hashCode() ids could
+     *  collide, silently overwriting an alarm with another. */
+    fun nextId(ctx: Context): Int {
+        val f = File(ctx.filesDir, "reminder_id")
+        var n = 1
+        try { if (f.exists()) n = f.readText().trim().toInt() + 1 } catch (e: Exception) { }
+        try { f.writeText(n.toString()) } catch (e: Exception) { }
+        return n
     }
 }
 

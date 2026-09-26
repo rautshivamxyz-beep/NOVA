@@ -92,6 +92,9 @@ class MainActivity : Activity() {
     // v5.4.5: notes that fed the last grounded answer in this chat, so
     // keyword-less follow-ups ("explain it in more detail") stay grounded
     private var lastNotesHit: List<Knowledge.Chunk> = emptyList()
+
+    /** v7.0.0: quick follow-up buttons shown after each answer. */
+    private var chipsRow: LinearLayout? = null
     private var lastNotesChatId: String = ""
     private var pendingQaKey: String? = null
 
@@ -178,9 +181,14 @@ class MainActivity : Activity() {
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
             WikiCore.warmUp(this@MainActivity)
         }
+        // v7.6: warm the notes cache too - the first message of every
+        // session otherwise parsed knowledge.json on the main thread
+        scope.launch(Dispatchers.IO) { Knowledge.warmUp(this@MainActivity) }
         installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
+        // v7.1: welcome brand-new users and point at the model download
+        maybeOnboard()
         observeEngine()
         handleSharedText()
         maybeShowCrashReport()
@@ -515,6 +523,16 @@ class MainActivity : Activity() {
         symRow.addView(symLine)
         root.addView(symRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        // v7.0.0: quick follow-up chips, shown above the input pill
+        val chipsScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(dp(12), 0, dp(12), dp(2))
+            visibility = View.GONE
+        }
+        chipsRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chipsScroll.addView(chipsRow)
+        root.addView(chipsScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(inputRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         updateSendLook()
@@ -574,6 +592,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        drawerPane.addView(drawerRow("Help & Tips", R.drawable.ic_lightbulb) { showHelpTips() })
         drawerPane.addView(drawerRow("New chat", R.drawable.ic_add) { newConversation() })
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
@@ -666,7 +685,12 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 7700 && resultCode == RESULT_OK) {
-            data?.data?.let { loadSharedDocument(it) }
+            // v6.3.0: a photo goes to on-device OCR and lands in the chat
+            // box; documents keep the old knowledge-base path
+            data?.data?.let { uri ->
+                val isImage = (contentResolver.getType(uri) ?: "").startsWith("image/")
+                if (isImage) ocrImage(uri) else loadSharedDocument(uri)
+            }
             return
         }
         if (requestCode == REQ_CHATS && resultCode == Activity.RESULT_OK && data != null) {
@@ -716,6 +740,8 @@ class MainActivity : Activity() {
         val chat = ChatStore.load(this, id) ?: return
         currentChat = chat
         settings.currentChatId = chat.id
+        // v7.6: the previously attached document leaked into the opened chat
+        docName = null; docContext = null; docInjected = false
         if (NovaEngine.isModelLoaded) NovaEngine.resetConversationAsync(this, settings.systemPrompt)
         needsContextCarry = chat.messages.isNotEmpty()
         compactSummary = null; compactedAtCount = 0
@@ -784,8 +810,12 @@ class MainActivity : Activity() {
             else -> label
         }
         val ready = NovaEngine.isModelLoaded && !NovaEngine.isLoading
-        input.isEnabled = ready
-        input.hint = if (ready) "Message NOVA…" else "Tap ≡ to load a model"
+        // v7.4: keep the input usable without a model - the calculator and
+        // phone commands run before any model is needed
+        input.isEnabled = !NovaEngine.isLoading
+        input.hint = if (ready) "Message NOVA…"
+            else if (NovaEngine.isLoading) "Loading model..."
+            else "No model - tap the menu (calculator and phone commands work anyway)"
     }
 
     // -------------------------------------------------------------- chat
@@ -828,16 +858,43 @@ class MainActivity : Activity() {
             generationJob?.cancel()
             return
         }
+        val text = input.text.toString().trim()
+        if (text.isEmpty()) return
+        val isChip = CHIP_PROMPTS.contains(text)
+        // v7.4: no-model tools FIRST - calculator and phone commands work
+        // even before any model is downloaded
+        if (solveArithmetic(text)) { input.setText(""); return }
+        if (tryPhoneCommand(text)) { input.setText(""); return }
+        // v7.6: keep the typed text when we are NOT proceeding - it was
+        // cleared here before, losing messages during compaction or when
+        // no model is loaded yet
         if (!ensureModelReady()) return
         if (compacting) {
             toast("Compressing older messages — one moment")
             return
         }
-        val text = input.text.toString().trim()
-        if (text.isEmpty()) return
         input.setText("")
-        // phone commands: call / text / alarm / open app - no model needed
-        if (tryPhoneCommand(text)) return
+        // v7.3: greetings get a clean tiny prompt - no notes/wiki/maths
+        // wrapper, so the model chats instead of summarizing
+        if (SMALLTALK_REGEX.containsMatchIn(text)) {
+            val greetPrompt =
+                "(The user said: '" + text + "' - greet them warmly in one or two " +
+                    "short sentences and offer to help. Do not mention notes, documents, " +
+                    "Wikipedia or summaries.)"
+            // v7.6: a greeting sent into a dirty/stale context made the model
+            // echo old strict-mode boilerplate ("From general knowledge...")
+            // instead of saying hi. Reset first, then greet on a clean engine.
+            if (NovaEngine.contextDirty || needsContextCarry) {
+                needsContextCarry = false
+                scope.launch {
+                    NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
+                    startGeneration(greetPrompt, text, plain = true)
+                }
+            } else {
+                startGeneration(greetPrompt, text, plain = true)
+            }
+            return
+        }
         // while reading aloud: "explain that sentence" asks about the last spoken one
         if (readIdx > 0 && Regex("(?i)explain (that|this|the last) (sentence|part|line)")
                 .containsMatchIn(text)) {
@@ -869,7 +926,7 @@ class MainActivity : Activity() {
             }
             // "summarise this" -> the full section-by-section summary with
             // live progress (one-shot only covered the first pages)
-            if (asksSummary) {
+            if (asksSummary && !isChip) {
                 summarizeDoc()
                 return
             }
@@ -1050,7 +1107,9 @@ class MainActivity : Activity() {
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
         // get ONE background source, no exam line, and short injections
         val mlabel = NovaEngine.activeModelLabel.lowercase()
-        val tiny = "1b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
+        // v7.5.1: "1b" missed "1.2b", so LFM 2.5 1.2B got the fat
+        // two-source prefill meant for big models - lean now, like 1B
+        val tiny = "1b" in mlabel || "1.2b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
 
         if (!tiny) {
             // exam countdown awareness - injected once per conversation,
@@ -1076,7 +1135,7 @@ class MainActivity : Activity() {
             qLow.contains(" teach me ") || qLow.contains(" what is ")
         if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
             // v5.4: cached answer from last time? -> instant, no model run
-            if (studyQ && docPart.isEmpty()) {
+            if (studyQ && !isChip && docPart.isEmpty()) {
                 val qaKey = "qa_" + Integer.toHexString(qLow.hashCode()) + "_" +
                     Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
                 val qaFile = File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey)
@@ -1104,6 +1163,18 @@ class MainActivity : Activity() {
                 pendingQaKey = qaKey
             }
             hits = Knowledge.search(this, text)
+            // v7.6: relevance gate - one shared word (e.g. just "bose")
+            // matched junk notes and the model answered from them with a
+            // confident-looking citation. Require the significant query
+            // terms to actually appear in the matched chunks.
+            if (hits.isNotEmpty()) {
+                val sigTerms = Knowledge.tokenize(text).filter { it.length > 3 }.distinct()
+                val hitText = hits.joinToString(" ") { h -> h.text }.lowercase()
+                val matched = sigTerms.count { hitText.contains(it) }
+                if (matched == 0 || (sigTerms.size >= 2 && matched < 2)) {
+                    hits = emptyList()
+                }
+            }
             // v5.4.5: follow-up questions ("explain it in more detail",
             // "explain that again") carry no keywords of their own, so the
             // search comes back empty and the model answered from memory -
@@ -1117,9 +1188,9 @@ class MainActivity : Activity() {
                 lastNotesHit = hits
                 lastNotesChatId = currentChat.id
                 var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
-                if (notes.length > (if (tiny) 900 else 2400))
-                    notes = notes.substring(0, if (tiny) 900 else 2400) + "\n[...more omitted]"
-                knowledgePart = "(Relevant notes from the user's documents - use them if they help:\n$notes)\n\n"
+                if (notes.length > (if (tiny) 1200 else 2400))
+                    notes = notes.substring(0, if (tiny) 1200 else 2400) + "\n[...more omitted]"
+                knowledgePart = "(Relevant notes from the user's documents - use them ONLY if they clearly help answer this exact request; if they do not, ignore them completely and answer normally:\n$notes)\n\n"
             }
         }
         // offline Wikipedia: matching articles as background facts
@@ -1128,7 +1199,9 @@ class MainActivity : Activity() {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             if (wikiHits.isNotEmpty()) {
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
-                val cap = if (tiny) 900 else 2400
+                // v7.5: wiki is background only - halve it so the model reads
+                // less before the first word; notes (the quality driver) stay
+                val cap = if (tiny) 900 else 1200
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
             }
@@ -1137,8 +1210,8 @@ class MainActivity : Activity() {
         // record the source pages, and let the notes be the only background
         if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {
             var notes2 = hits.joinToString(NL + "---" + NL) { "[" + it.doc + "] " + it.text }
-            if (notes2.length > (if (tiny) 900 else 2400))
-                notes2 = notes2.substring(0, if (tiny) 900 else 2400)
+            if (notes2.length > (if (tiny) 1200 else 2400))
+                notes2 = notes2.substring(0, if (tiny) 1200 else 2400)
             knowledgePart = "(Study notes from the user's documents follow. " +
                 "Answer ONLY using these notes. If the answer is not in the " +
                 "notes, say plainly that the notes do not cover it. Copy key " +
@@ -1206,6 +1279,8 @@ class MainActivity : Activity() {
             .setView(android.widget.ScrollView(this).apply { addView(tv) })
             .setPositiveButton("Close", null)
             .show()
+        // v7.6: the WebView leaked on every run - destroy it with the dialog
+        dlg.setOnDismissListener { try { wv.destroy() } catch (e: Exception) { } }
         val html = "<html><body><script>try{\n" + code + "\n}catch(e){console.log('Error: '+e.message)}</script></body></html>"
         wv.loadData(html, "text/html", "utf-8")
         // WebView renders asynchronously - poll the captured output briefly
@@ -1224,16 +1299,59 @@ class MainActivity : Activity() {
     /** v5.5.0: strict mode - grounded answers only, no invented facts. */
     private fun effectivePrompt(p: String): String =
         if (settings.strictMode)
-            "STRICT MODE: Answer ONLY from the user's notes and the Wikipedia extracts " +
-                "in this conversation. If they do not contain the answer, say exactly: " +
-                "'My notes don't cover this.' Never invent facts, names, dates or numbers.\n\n" + p
+            "STRICT MODE: Answer from the user's notes and the Wikipedia extracts in this " +
+                "conversation WHEN they cover the question. If they do not cover it, begin the " +
+                "reply with 'From general knowledge (not in your notes):' and answer from your " +
+                "own knowledge. Say that phrase once at the start only - never again inside " +
+                "the reply. Never invent facts, names, dates or numbers.\n\n" + p
         else p
 
     /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
     private fun mathPrompt(p: String): String =
         p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
 
-    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true) {
+    /** v7.6: strips model-echoed boilerplate - repeated strict-mode
+     *  markers (keep only the first) and "The final answer is:" lines. */
+    private fun cleanReplyText(s: String): String {
+        val out = ArrayList<String>()
+        var seenMarker = false
+        for (raw in s.lines()) {
+            var line = raw
+            val lt = line.trim()
+            if (Regex("(?i)^the final answer ").containsMatchIn(lt)) {
+                val ci = lt.indexOf(':')
+                if (ci >= 0) {
+                    // "The final answer is: X..." -> keep only the content
+                    line = line.substring(line.indexOf(':') + 1).trimStart()
+                } else if (lt.length < 90) {
+                    continue   // pure announcement line - drop it
+                }
+            }
+            val marker = Regex("(?i)^\\s*From general knowledge \\(not in your notes?\\)\\s*[:：]?\\s*")
+            if (marker.containsMatchIn(line)) {
+                if (seenMarker) {
+                    line = marker.replace(line, "")
+                } else {
+                    seenMarker = true
+                }
+            }
+            out.add(line)
+        }
+        return out.joinToString("\n").trim()
+    }
+
+    /** v7.3: does this message actually involve maths? If not, the LaTeX
+     *  instruction is skipped - jokes and greetings stop coming out in
+     *  boxed notation. */
+    private fun looksMathy(p: String): Boolean =
+        p.any { it.isDigit() } ||
+            Regex("(?i)\\b(calc|math|solve|equation|formula|sqrt|prime|percentage|integral|derivative|algebra|geometry)\\b")
+                .containsMatchIn(p)
+
+    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true, plain: Boolean = false) {
+        // v7.4: if the user switches chats mid-reply, this generation must
+        // never touch the newly opened chat - remember whose reply this is
+        val genChat = currentChat
         if (userText != null) {
             val userMsg = Msg(Role.USER, userText)
             currentChat.messages.add(userMsg)
@@ -1268,12 +1386,21 @@ class MainActivity : Activity() {
             var lastFlush = 0L
             fun flush() {
                 if (pending.isNotEmpty()) {
-                    adapter.appendToLast(pending.toString())
+                    if (currentChat === genChat) adapter.appendToLast(pending.toString())
                     pending.setLength(0)
                 }
             }
             try {
-                NovaEngine.send(mathPrompt(effectivePrompt(prompt)), settings.predictLength)
+                // v7.3: strict wrapper (and the LaTeX instruction inside
+                // mathPrompt) only when relevant - greetings/chit-chat get
+                // none of it
+                val p2 = if (plain) prompt else effectivePrompt(prompt)
+                // v7.6: LaTeX only for real user questions - internal prompts
+                // (chips/continue/retry) contain digits and injected notes are
+                // full of dates, which made every one of them "mathy"
+                val wantMath = !plain && userText != null && looksMathy(userText!!)
+                NovaEngine.send(if (wantMath) mathPrompt(p2) else p2,
+                    settings.predictLength)
                     .collect { token ->
                         if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
                         pending.append(token)
@@ -1291,7 +1418,7 @@ class MainActivity : Activity() {
                     }
             } catch (e: CancellationException) {
                 flush()
-                adapter.appendToLast(" ⏹")
+                if (currentChat === genChat) adapter.appendToLast(" ⏹")
                 speechCancelled = true
                 // stopped replies are truncated - never cache them
                 pendingQaKey = null
@@ -1304,6 +1431,18 @@ class MainActivity : Activity() {
             } finally {
                 flush()
                 withContext(Dispatchers.Main) {
+                    if (currentChat !== genChat) {
+                        // v7.4: a different chat is open now - do not touch
+                        // its UI or state; save the partial turn into ITS
+                        // chat and stop here
+                        generating = false
+                        updateSendLook()
+                        setStatus()
+                        try {
+                            withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
+                        } catch (e: Exception) { }
+                        return@withContext
+                    }
                     generating = false
                     updateSendLook()
                     setStatus()
@@ -1332,9 +1471,25 @@ class MainActivity : Activity() {
                     adapter.finalizeLast()
                     // v5.4.2: performance readout (v5.4.3: fixed locale)
                     val tEnd = android.os.SystemClock.elapsedRealtime()
-                    if (tFirstToken > 0L) status.text =
-                        "first word " + String.format(java.util.Locale.US, "%.1f", (tFirstToken - tStart) / 1000.0) +
-                            "s - total " + String.format(java.util.Locale.US, "%.1f", (tEnd - tStart) / 1000.0) + "s"
+                    if (tFirstToken > 0L) {
+                        status.text =
+                            "first word " + String.format(java.util.Locale.US, "%.1f", (tFirstToken - tStart) / 1000.0) +
+                                "s - total " + String.format(java.util.Locale.US, "%.1f", (tEnd - tStart) / 1000.0) + "s"
+                        // v7.2.1: pure WRITING speed - measured after the first
+                        // word, so slow question/notes reading (prefill) no longer
+                        // drags the tok/s down (tokens ~= chars/4)
+                        // v7.6: count only what THIS segment wrote -
+                        // continuations used the whole bubble and read ~2x
+                        val segStart = if (newBubble) 0 else junction.coerceAtMost(replyMsg.text.length)
+                        val genChars = stripThinking(replyMsg.text.substring(segStart)).length
+                        if (tEnd > tFirstToken && genChars > 60) {
+                            val tps = genChars / 4.0 / ((tEnd - tFirstToken) / 1000.0)
+                            status.text = status.text.toString() + "  -  ~" +
+                                String.format(java.util.Locale.US, "%.1f", tps) + " tok/s"
+                        }
+                    }
+                    // v7.0.0: quick follow-up chips after each completed answer
+                    if (newBubble) showFollowUps()
                     // blank, one-word or looping answers from tiny models:
                     // retry once with a firmer instruction instead of garbage
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
@@ -1356,6 +1511,14 @@ class MainActivity : Activity() {
                     // instead of showing a blank bubble
                     if (stripThinking(replyMsg.text).isBlank() && !speechCancelled)
                         replyMsg.text = "(no reply - tap the regenerate icon to try again)"
+                    // v7.6: small models copy the strict-mode marker into
+                    // reply after reply and announce "The final answer is:" -
+                    // keep the first marker, drop the rest and the announcements
+                    val cleaned = cleanReplyText(replyMsg.text)
+                    if (cleaned != replyMsg.text) {
+                        replyMsg.text = cleaned
+                        adapter.setLastText(cleaned)
+                    }
                     // v5.4: append the source citation, then cache the answer
                     if (pendingCitation != null && newBubble && userText != null) {
                         val cit = pendingCitation!!
@@ -1381,8 +1544,13 @@ class MainActivity : Activity() {
                         shouldAutoContinue(replyMsg.text)
                     // persist the conversation
                     try {
-                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
+                        withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
                     } catch (e: Exception) { }
+                    // v7.6: the save above SUSPENDS the Main thread - the
+                    // user can switch chats during it. Re-check before
+                    // continuing/compacting, or the continuation lands in
+                    // (or crashes on) the wrong chat
+                    if (currentChat !== genChat) return@withContext
                     // speak whatever is left of the reply
                     if (!speechCancelled) {
                         try { speakNewSentences(stripThinking(replyMsg.text), flush = true) }
@@ -1579,12 +1747,16 @@ class MainActivity : Activity() {
                 var sectionSummaries = StringBuilder()
                 var emptyStreak = 0
                 for ((i, c) in chunks.withIndex()) {
+                    // v7.5.1: 10% overlap with the previous chunk - a fact
+                    // sitting on a chunk boundary stays whole somewhere
+                    val c2 = if (i > 0) chunks[i - 1].takeLast(650) + NL + c else c
                     // fresh engine every few chunks: once the context fills
                     // the engine silently drops the oldest tokens, which
                     // quietly degrades later sections - reload in batches
                     if (i in 1 until chunks.size && i % 3 == 0 && NovaEngine.contextDirty) {
-                        try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
-                            NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
+                        // v7.5.1: instant KV reset instead of a full model
+                        // reload from flash - same clean context, sub-second
+                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                     }
                     adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
                         tail300(sectionSummaries.toString()))
@@ -1592,9 +1764,15 @@ class MainActivity : Activity() {
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
-                            "Summarize this part of a document in 5-8 detailed sentences. " +
-                                "Keep all names, numbers, dates and facts:" +
-                                "\n-----\n$c\n-----", 400
+                            // v7.5: dense fact bullets instead of long sentences - half the
+                            // writing time, MORE facts for the final combine to organize
+                            "Extract the key facts from this part of a " +
+                                "document as a bullet list. One fact per " +
+                                "line, short lines. Keep every name, number, " +
+                                "date and term exactly as written. No full " +
+                                "sentences, no commentary. Only use facts " +
+                                "present in the text - never invent:" +
+                                "\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1619,8 +1797,8 @@ class MainActivity : Activity() {
                 // so the final combine gets a clean window (overflow makes the
                 // model derail into "Step 1..." nonsense mid-generation)
                 if (NovaEngine.contextDirty) {
-                    try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
-                        NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
+                    // v7.5.1: instant KV reset, not a full flash reload
+                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                 }
                 val sb2 = StringBuilder()
                 NovaEngine.send(
@@ -1747,8 +1925,7 @@ class MainActivity : Activity() {
                 // the reload when the context is already clean (saves seconds)
                 if (NovaEngine.contextDirty) {
                     try {
-                        NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
-                            NovaEngine.activeModelLabel, settings.systemPrompt)
+                        NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
                     } catch (e: Exception) { }
                 }
                 // checkpoint: sections summarized in an earlier interrupted
@@ -1764,13 +1941,16 @@ class MainActivity : Activity() {
                     dedupeLines(done.joinToString("\n\n")))
                 var emptyStreak = 0
                 for ((i, c) in sections.withIndex()) {
+                    // v7.5.1: overlap with the previous section - boundary
+                    // facts survive whole in at least one section
+                    val c2 = if (i > 0) sections[i - 1].takeLast(260) + NL + c else c
                     if (i < done.size) continue      // already summarized
                     // fresh engine every few sections: once the context fills
                     // the engine silently drops the oldest tokens, which
                     // quietly degrades later sections - reload in batches
                     if (i in 1 until sections.size && i % 6 == 0 && NovaEngine.contextDirty) {
-                        try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
-                            NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
+                        // v7.5.1: instant KV reset instead of a full reload
+                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                     }
                     adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
                         tail300(sectionSummaries.toString()))
@@ -1778,9 +1958,11 @@ class MainActivity : Activity() {
                     val sb = StringBuilder()
                     try {
                         NovaEngine.send(
-                            "Summarize this part of the notes in 5-8 detailed sentences. " +
-                                "Keep every date, name, number, term and fact exactly as " +
-                                "stated in the text:$antiCot\n-----\n$c\n-----", 400
+                            // v7.5: dense fact bullets - see summarizeDoc
+                            "Extract the key facts from this part of the notes " +
+                                "as a bullet list. One fact per line, short lines. " +
+                                "Keep every date, name, number, term and fact " +
+                                "stated in the text. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1811,8 +1993,8 @@ class MainActivity : Activity() {
                 // so the final combine gets a clean window (overflow makes the
                 // model derail into "Step 1..." nonsense mid-generation)
                 if (NovaEngine.contextDirty) {
-                    try { NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath!!,
-                        NovaEngine.activeModelLabel, settings.systemPrompt) } catch (e: Exception) { }
+                    // v7.5.1: instant KV reset, not a full flash reload
+                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                 }
                 val sb2 = StringBuilder()
                 NovaEngine.send(
@@ -1977,8 +2159,21 @@ class MainActivity : Activity() {
      * reach the model as garbage. Caps length like PDFs.
      */
     private fun readPlainDocument(uri: Uri): String {
+        // v7.6: cap the read at 2 MB - readBytes() on a huge shared
+        // text file loaded it all into RAM before any limit applied
         val bytes = try {
-            contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+            contentResolver.openInputStream(uri)?.use { ins ->
+                val cap = 2 * 1024 * 1024
+                val buf = java.io.ByteArrayOutputStream(64 * 1024)
+                val chunk = ByteArray(64 * 1024)
+                while (true) {
+                    val n = ins.read(chunk)
+                    if (n < 0) break
+                    buf.write(chunk, 0, n)
+                    if (buf.size() >= cap) break
+                }
+                buf.toByteArray()
+            } ?: return ""
         } catch (e: Exception) { return "" }
         if (bytes.size < 4) return ""
         val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()
@@ -2022,12 +2217,217 @@ class MainActivity : Activity() {
             val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
-                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain"))
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "text/plain", "image/jpeg", "image/png"))
             }
             startActivityForResult(pick, 7700)
         } catch (e: Exception) {
             toast("No file picker available")
         }
+    }
+
+    /** v6.3.0: photo of a question -> on-device OCR -> editable text in the
+     *  input box. Printed textbook questions read well; the user can fix
+     *  any garbled math symbols in the box before sending. */
+    private fun ocrImage(uri: android.net.Uri) {
+        try {
+            val img = com.google.mlkit.vision.common.InputImage.fromFilePath(this, uri)
+            val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
+                com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+            rec.process(img)
+                .addOnSuccessListener { t ->
+                    rec.close()
+                    val txt = t.text.trim().replace(Regex("\n{3,}"), "\n\n")
+                    if (txt.isEmpty()) {
+                        toast("No readable text in that image")
+                        return@addOnSuccessListener
+                    }
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Text from image")
+                        .setMessage(if (txt.length > 400) txt.take(400) + "\n\u2026" else txt)
+                        .setPositiveButton("Solve it") { _, _ ->
+                            // v6.3.1: send straight away - the preview above
+                            // already showed the OCR text
+                            input.setText("Solve this step by step:\n\n$txt")
+                            send()
+                        }
+                        .setNegativeButton("Add text") { _, _ ->
+                            input.setText(txt)
+                            input.setSelection(input.text.length)
+                            input.requestFocus()
+                        }
+                        .show()
+                }
+                .addOnFailureListener {
+                    try { rec.close() } catch (e: Exception) { }
+                    toast("Couldn't read image: " + (it.message ?: "error"))
+                }
+        } catch (e: Exception) {
+            toast("Couldn't open image")
+        }
+    }
+
+    /** v7.0.0: every NOVA feature explained in one place. */
+    private fun showHelpTips() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("How to use NOVA")
+            .setMessage(("HOW TO CHAT\n" +
+                "\u2022 LFM 1.2B Instruct = fast everyday chat. Qwen3 1.7B or LFM Thinking = smarter for study and maths (slower).\n" +
+                "\u2022 Tap \u221ax for math symbols, the mic for voice, and NOVA can read answers aloud.\n\n" +
+                "PHOTO TO ANSWER\n" +
+                "\u2022 Take a photo of a printed question, tap the attach button and pick it. NOVA reads the text on-device and offers Solve it.\n\n" +
+                "YOUR NOTES\n" +
+                "\u2022 Add PDFs in the Knowledge screen, then ask things like: summarise federalism, or quiz me on power sharing.\n" +
+                "\u2022 Strict mode answers from your notes when they cover the topic; otherwise it answers from general knowledge and says so.\n\n" +
+                "MATHS\n" +
+                "\u2022 Pure calculations like 12*(3+4)/2 or sqrt(144) are computed exactly, instantly.\n" +
+                "\u2022 For hard problems switch to Qwen3 1.7B or LFM Thinking first.\n\n" +
+                "PHONE COMMANDS (short messages only)\n" +
+                "\u2022 torch on / torch off\n" +
+                "\u2022 call <name>\n\u2022 text <name> <message>\n\u2022 open whatsapp and say hi to <name>\n" +
+                "\u2022 set alarm 6:30am\n\u2022 open youtube / chrome / camera\n" +
+                "\u2022 wifi / bluetooth / hotspot (opens settings)").trim())
+            .setPositiveButton("Close", null)
+            .show()
+    }
+
+    /** v7.0.0: tappable follow-ups after each answer - rule-based, so they
+     *  appear instantly with no model call. */
+    private fun showFollowUps() {
+        val line = chipsRow ?: return
+        line.removeAllViews()
+        val picks = listOf(
+            "Explain simply" to "Explain that more simply, like I am 12 years old.",
+            "Give an example" to "Give me one clear real-life example of that.",
+            "Quiz me" to "Quiz me on this topic with 3 questions, one at a time.",
+            "3-point summary" to "Summarize that in exactly 3 short bullet points."
+        )
+        for ((label, prompt) in picks) {
+            line.addView(Button(this).apply {
+                text = label; textSize = 12f; isAllCaps = false
+                setTextColor(NovaTheme.text)
+                minWidth = 0; minimumWidth = 0
+                setPadding(dp(12), dp(6), dp(12), dp(6))
+                background = GradientDrawable().apply {
+                    setColor(NovaTheme.pill); cornerRadius = dp(16).toFloat()
+                    setStroke(dp(1), NovaTheme.border)
+                }
+                setOnClickListener {
+                    (line.parent as? View)?.visibility = View.GONE
+                    input.setText(prompt)
+                    send()
+                }
+            })
+        }
+        (line.parent as? View)?.visibility = View.VISIBLE
+    }
+
+    /** v7.0.0: pure arithmetic gets an EXACT instant answer - no model
+     *  needed, no wrong results. Anything with words (word problems,
+     *  algebra) still goes to the AI. Trig is in degrees, log is base 10. */
+    private fun solveArithmetic(text: String): Boolean {
+        val t = text.trim()
+        if (t.length < 3 || t.length > 150 || t.contains('\n')) return false
+        val s = t.lowercase()
+            .replace("\u00d7", "*").replace("\u00f7", "/")
+            .replace("\u2212", "-").replace("\u2013", "-")
+            .replace(",", "").replace(" ", "")
+            .replace("sqrt", "q").replace("sin", "s").replace("cos", "c")
+            .replace("tan", "t").replace("log", "g").replace("ln", "n")
+            .replace("pi", "p")
+        if (!Regex("^[0-9+\\-*/^%().qsctgnpe]+").matches(s)) return false
+        // a word made only of function letters ("ten") is not arithmetic
+        if (!Regex("[0-9]").containsMatchIn(s)) return false
+        if (!Regex("[+\\-*/^%]").containsMatchIn(s) && !Regex("[qsctgnp]").containsMatchIn(s)) return false
+        return try {
+            val p = object {
+                var i = 0
+                fun peek(): Char = if (i < s.length) s[i] else ' '
+                fun expr(): Double {
+                    var r = term()
+                    while (peek() == '+' || peek() == '-') {
+                        val op = s[i++]; val b = term()
+                        r = if (op == '+') r + b else r - b
+                    }
+                    return r
+                }
+                fun term(): Double {
+                    var r = pw()
+                    while (peek() == '*' || peek() == '/' || peek() == '%') {
+                        val op = s[i++]; val b = pw()
+                        r = when (op) { '*' -> r * b; '/' -> r / b; else -> r % b }
+                    }
+                    return r
+                }
+                fun pw(): Double {
+                    val r = unary()
+                    if (peek() == '^') { i++; return Math.pow(r, pw()) }
+                    return r
+                }
+                fun unary(): Double {
+                    if (peek() == '-') { i++; return -unary() }
+                    if (peek() == '+') { i++ }
+                    return atom()
+                }
+                fun atom(): Double {
+                    val ch = peek()
+                    if (ch == '(') { i++; val r = expr(); if (peek() == ')') i++; return r }
+                    if (ch == 'q') { i++; return Math.sqrt(inner()) }
+                    if (ch == 's') { i++; return Math.sin(Math.toRadians(inner())) }
+                    if (ch == 'c') { i++; return Math.cos(Math.toRadians(inner())) }
+                    if (ch == 't') { i++; return Math.tan(Math.toRadians(inner())) }
+                    if (ch == 'g') { i++; return Math.log10(inner()) }
+                    if (ch == 'n') { i++; return Math.log(inner()) }
+                    if (ch == 'p') { i++; return Math.PI }
+                    if (ch == 'e') { i++; return Math.E }
+                    val start = i
+                    while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
+                    if (i == start) throw ArithmeticException("bad token")
+                    return s.substring(start, i).toDouble()
+                }
+                fun inner(): Double {
+                    if (peek() == '(') { i++; val r = expr(); if (peek() == ')') i++; return r }
+                    return atom()
+                }
+            }
+            val v = p.expr()
+            // the whole input must be part of the math - no leftovers
+            if (p.i != s.length) return false
+            if (!v.isFinite()) return false
+            val shown = if (Math.abs(v - Math.round(v)) < 1e-9)
+                Math.round(v).toString()
+            else String.format(java.util.Locale.US, "%.6g", v)
+            val um = Msg(Role.USER, t)
+            currentChat.messages.add(um); adapter.add(um)
+            val reply = Msg(Role.ASSISTANT,
+                "**= $shown**\n\n(Exact calculation - instant and never wrong. Word problems still go to the AI.)")
+            currentChat.messages.add(reply); adapter.add(reply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+            }
+            true
+        } catch (e: Exception) { false }
+    }
+
+    /** v7.1: welcome a brand-new user and point at the model download. */
+    private fun maybeOnboard() {
+        try {
+            val ggufs = ModelCatalog.modelsDir(this)
+                .listFiles { f: java.io.File -> f.extension == "gguf" }
+            if ((ggufs?.isNotEmpty() == true) || settings.lastModelPath != null) return
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Welcome to NOVA")
+                .setMessage(("NOVA is your private AI. It runs fully offline on this phone - " +
+                    "nothing you type ever leaves the device.\n\n" +
+                    "First, download a model (about 0.4-0.7 GB - use Wi-Fi):\n\n" +
+                    "1. Open the menu (top-left)\n" +
+                    "2. Tap Models\n" +
+                    "3. Pick LFM 2.5 1.2B Instruct - the fast, smart everyday model\n\n" +
+                    "Then just chat. For everything NOVA can do, tap Help & Tips in the menu.").trim())
+                .setPositiveButton("Got it") { _, _ -> showHelpTips() }
+                .setNegativeButton("Later", null)
+                .show()
+        } catch (e: Exception) { }
     }
 
     // ---------- phone commands (no model needed) ----------
@@ -2040,10 +2440,14 @@ class MainActivity : Activity() {
      */
     private fun tryPhoneCommand(text: String): Boolean {
         val t = text.trim()
+        // v6.3.1: OCR'd question text ("...the torch is switched off...")
+        // must reach the model - phone commands are short typed requests,
+        // never long multi-line question text
+        if (t.length > 60 || t.contains('\n')) return false
         // users often prefix commands with filler ("no open...", "hey open...")
         val t2 = t.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|please)[,!?\\s]+"), "").trim()
         // fuzzy token matching: one typo ("torch of", "flah") still works
-        val toks = t2.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+        val toks = t2.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
         fun near(want: String): Boolean = toks.any { editDistance(it, want) <= 1 }
         val hasOn = near("on")
         val hasOff = near("off")
@@ -2298,7 +2702,10 @@ class MainActivity : Activity() {
         readIdx = 0
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(id: String?) { }
-            override fun onError(id: String?) { }
+            // v7.6: one failed utterance used to stall the whole read
+            override fun onError(id: String?) {
+                if (id?.startsWith("doc") == true) speakNext()
+            }
             override fun onDone(id: String?) {
                 if (id?.startsWith("doc") == true) speakNext()
             }
@@ -2324,7 +2731,9 @@ class MainActivity : Activity() {
         if (currentChat.messages.isEmpty()) { toast("Nothing to share yet"); return }
         val sb = StringBuilder("NOVA conversation\n\n")
         for (msg in currentChat.messages) {
-            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ").append(msg.text).append("\n\n")
+            // v7.1: never export hidden thinking-block text
+            sb.append(if (msg.role == Role.USER) "You: " else "NOVA: ")
+                .append(stripThinking(msg.text).trim()).append("\n\n")
         }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -2475,7 +2884,8 @@ class MainActivity : Activity() {
             if (stream != null) loadSharedDocument(stream)
             return
         }
-        if (generating) return
+        // v7.6: tell the user instead of silently dropping the share
+        if (generating) { toast("A reply is still running - share again when it ends"); return }
         val preview = if (shared.length > 280) shared.take(280) + "…" else shared
         val opts = arrayOf(
             "Explain this",
@@ -2585,6 +2995,8 @@ class MainActivity : Activity() {
         compacting = true
         toast("Compressing older messages to keep replies fast…")
         scope.launch {
+            // v7.6: remember which chat this compaction belongs to
+            val chatAtStart = currentChat
             val old = currentChat.messages.dropLast(6)
                 .joinToString("\n") { m ->
                     (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(250)
@@ -2597,7 +3009,9 @@ class MainActivity : Activity() {
                     256
                 ).collect { sb.append(it) }
                 val summary = stripThinking(sb.toString()).trim()
-                if (summary.length > 40) {
+                // v7.6: user switched chats while the summary was generating -
+                // never write the old chat's summary into the new one
+                if (summary.length > 40 && currentChat === chatAtStart) {
                     compactSummary = summary
                     compactedAtCount = currentChat.messages.size
                     needsContextCarry = true
@@ -2644,7 +3058,7 @@ class MainActivity : Activity() {
         if (rel != null) timeStr = rel.groupValues[1]
         else if (clock != null) {
             // "tonight at 9" means 9 pm, not 9 am
-            val pm = if (Regex("(?i)am|pm|:").containsMatchIn(clock.value)) ""
+            val pm = if (Regex("(?i)am|pm").containsMatchIn(clock.value)) ""
                 else if (s.contains("tonight")) " pm" else ""
             timeStr = clock.value + pm + (if (s.contains("tomorrow")) " tomorrow" else "")
             s = s.replace(clock.value, " ")
@@ -2942,6 +3356,21 @@ private val THINK_OPEN = "<" + "think" + ">"
 /** v5.4.5: follow-up questions with no keywords of their own - they mean
  *  "the same notes again", so the last grounded notes are carried forward. */
 private val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")
+
+// v7.3: bare greetings / smalltalk - matched on the WHOLE message
+private val SMALLTALK_REGEX = Regex(
+    "(?i)^[\\s']*(hi+|hey+|hello+|yo|sup|namaste|hola|good (morning|afternoon|evening|night)" +
+        "|how are (you|u)|how r (you|u)|what'?s up|how'?s it going)[\\s.!~?]*$"
+)
+
+// v7.4: the four follow-up chip prompts - recognized so they never hit
+// the QA cache (stale-answer replay) or the notes summarizer
+private val CHIP_PROMPTS = setOf(
+    "Explain that more simply, like I am 12 years old.",
+    "Give me one clear real-life example of that.",
+    "Quiz me on this topic with 3 questions, one at a time.",
+    "Summarize that in exactly 3 short bullet points."
+)
 private val THINK_CLOSE = "<" + "/" + "think" + ">"
 
 fun stripThinking(s: String): String {

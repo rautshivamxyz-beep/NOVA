@@ -38,6 +38,9 @@ class ChatsActivity : Activity() {
     private var exportChat: Chat? = null
     private var query: String = ""
 
+    // v7.6: in-memory chat list for searching
+    private var allChats: List<Chat> = emptyList()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
@@ -134,7 +137,10 @@ class ChatsActivity : Activity() {
 
     private fun refresh() {
         listInner.removeAllViews()
-        var chats = ChatStore.list(this)
+        // v7.6: while a search is active, filter the in-memory list - this
+        // re-read and re-parsed every chat file from flash per keystroke
+        var chats = if (query.isBlank() || allChats.isEmpty())
+            ChatStore.list(this).also { allChats = it } else allChats
         val currentId = settings.currentChatId
 
         // v5.4.8: filter by chat name OR any message inside it

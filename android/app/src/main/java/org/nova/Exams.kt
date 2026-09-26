@@ -36,7 +36,11 @@ object Exams {
         try {
             val arr = JSONArray()
             for (e in exams) arr.put(JSONObject().put("name", e.name).put("date", e.dateMs))
-            file(ctx).writeText(arr.toString())
+            // v7.6: atomic write - a crash mid-write no longer wipes the file
+            val f = file(ctx)
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { }
     }
 
@@ -46,8 +50,13 @@ object Exams {
         save(ctx, all)
     }
 
-    fun daysLeft(dateMs: Long): Int =
-        ((dateMs - System.currentTimeMillis()) / 86_400_000L).toInt() + 1
+    fun daysLeft(dateMs: Long): Int {
+        // v7.6: calendar-day difference in the local zone - the old
+        // millisecond math showed "TODAY" for an exam held yesterday
+        val zone = java.util.TimeZone.getDefault()
+        fun day(ms: Long) = (ms + zone.getOffset(ms)) / 86_400_000L
+        return (day(dateMs) - day(System.currentTimeMillis())).toInt()
+    }
 
     /** "Physics in 12 days (14 May)" - nearest first, or null. */
     fun promptLine(ctx: Context): String? {
@@ -56,7 +65,8 @@ object Exams {
             .sortedBy { it.dateMs }
         if (upcoming.isEmpty()) return null
         return upcoming.joinToString("; ") { e ->
-            "${e.name} in ${daysLeft(e.dateMs)} days " +
+            val d = daysLeft(e.dateMs)
+            (if (d <= 0) "${e.name} TODAY " else "${e.name} in $d days ") +
                 "(${SimpleDateFormat("d MMM", Locale.US).format(Date(e.dateMs))})"
         }
     }

@@ -18,7 +18,9 @@ object Reminder {
 
     fun schedule(context: Context, atMillis: Long, text: String, repeatMs: Long = 0L) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val id = (atMillis.toString() + text).hashCode()
+        // v7.6: unique ID from the store - hash collisions silently
+        // overwrote alarms
+        val id = ReminderStore.nextId(context)
         val intent = Intent(context, ReminderReceiver::class.java)
             .putExtra("text", text)
             .putExtra("id", id)
