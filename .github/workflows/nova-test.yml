@@ -1,9 +1,6 @@
 name: NOVA Tests
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 concurrency:
   group: nova-test

@@ -79,6 +79,32 @@ jobs:
           cp "$RUNNER_TEMP/apk-arm64/app-release.apk" "NOVA-v${VER}.apk"
           gh release create "v${VER}" "NOVA-v${VER}.apk" \
             --title "NOVA v${VER}" \
-            --notes "Automatic release build of NOVA v${VER} (arm64). This is what the in-app 'Check for updates' button installs." \
+            --notes "Automatic release build of NOVA v${VER} (arm64)." \
             --latest \
             || gh release upload "v${VER}" "NOVA-v${VER}.apk" --clobber
+      - name: Publish to the public download repo
+        env:
+          DEPLOY_KEY: ${{ secrets.NOVA_APK_DEPLOY_KEY }}
+        run: |
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          rm -rf /tmp/pub && mkdir /tmp/pub && cd /tmp/pub
+          git init -q
+          git remote add origin git@github.com:rautshivamxyz-beep/NOVA-APK.git
+          cp "$RUNNER_TEMP/apk-arm64/app-release.apk" NOVA-latest.apk
+          printf '%s' "$VER" > version.txt
+          echo "# NOVA" > README.md
+          echo "" >> README.md
+          echo "A fully offline AI assistant app for Android. This repo hosts only the downloadable APK - the source code is private." >> README.md
+          echo "" >> README.md
+          echo "Install: download NOVA-latest.apk (in the file list above) and open it on your phone. Requires Android 6.0+." >> README.md
+          echo "" >> README.md
+          echo "Current version: v${VER}" >> README.md
+          git add NOVA-latest.apk version.txt README.md
+          git -c user.name="rautshivamxyz-beep" -c user.email="rautshivamxyz@gmail.com" commit -qm "NOVA v${VER}"
+          git push -qf origin HEAD:main
+          echo "Public download repo updated to v${VER}"
