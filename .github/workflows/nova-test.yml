@@ -17,24 +17,8 @@ jobs:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Assemble v7.6.0 patch scripts from chunks
-        run: |
-          cat tmp/patch_parts/v760_aa tmp/patch_parts/v760_ab tmp/patch_parts/v760_ac tmp/patch_parts/v760_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760.py
-          cat tmp/patch_parts/v760s_aa tmp/patch_parts/v760s_ab tmp/patch_parts/v760s_ac tmp/patch_parts/v760s_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760_support.py
-          python3 -c "import ast; ast.parse(open('tmp/patch_v760.py').read()); ast.parse(open('tmp/patch_v760_support.py').read())"
-
-      - name: Apply all app patches
-        run: |
-          for p in v623 v630 v631 v700 v710 v721 v730 v740 v750 v751; do
-            python3 tmp/patch_$p.py .
-          done
-          python3 tmp/patch_v760.py .
-          python3 tmp/patch_v760_support.py .
-
-      - name: Verify patched code
-        run: python3 tmp/verify_patches.py .
+      - name: Assemble CI files and apply patch chain
+        run: bash <(cat tmp/ci_parts/prep_aa | tr -d '\n' | base64 -d | gunzip)
 
   emulator:
     name: Emulator smoke test (launch + calculator)
@@ -43,21 +27,8 @@ jobs:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Assemble v7.6.0 patch scripts from chunks
-        run: |
-          cat tmp/patch_parts/v760_aa tmp/patch_parts/v760_ab tmp/patch_parts/v760_ac tmp/patch_parts/v760_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760.py
-          cat tmp/patch_parts/v760s_aa tmp/patch_parts/v760s_ab tmp/patch_parts/v760s_ac tmp/patch_parts/v760s_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760_support.py
-          python3 -c "import ast; ast.parse(open('tmp/patch_v760.py').read()); ast.parse(open('tmp/patch_v760_support.py').read())"
-
-      - name: Apply all app patches
-        run: |
-          for p in v623 v630 v631 v700 v710 v721 v730 v740 v750 v751; do
-            python3 tmp/patch_$p.py .
-          done
-          python3 tmp/patch_v760.py .
-          python3 tmp/patch_v760_support.py .
+      - name: Assemble CI files and apply patch chain
+        run: bash <(cat tmp/ci_parts/prep_aa | tr -d '\n' | base64 -d | gunzip)
 
       - name: Set up Java 17
         uses: actions/setup-java@v4

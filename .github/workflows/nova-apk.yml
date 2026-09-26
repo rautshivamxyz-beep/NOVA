@@ -17,52 +17,8 @@ jobs:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Assemble v7.6.0 patch scripts from chunks
-        run: |
-          cat tmp/patch_parts/v760_aa tmp/patch_parts/v760_ab tmp/patch_parts/v760_ac tmp/patch_parts/v760_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760.py
-          cat tmp/patch_parts/v760s_aa tmp/patch_parts/v760s_ab tmp/patch_parts/v760s_ac tmp/patch_parts/v760s_ad \
-            | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760_support.py
-          python3 -c "import ast; ast.parse(open('tmp/patch_v760.py').read()); ast.parse(open('tmp/patch_v760_support.py').read())"
-          test -s android/nova-release-v2.keystore || { echo "FATAL: release keystore missing"; exit 1; }
-
-      - name: Apply v6.2.3 patches
-        run: python3 tmp/patch_v623.py .
-
-      - name: Apply v6.3.0 patches
-        run: python3 tmp/patch_v630.py .
-
-      - name: Apply v6.3.1 patches
-        run: python3 tmp/patch_v631.py .
-
-      - name: Apply v7.0.0 patches
-        run: python3 tmp/patch_v700.py .
-
-      - name: Apply v7.1.0 patches
-        run: python3 tmp/patch_v710.py .
-
-      - name: Apply v7.2.1 patches
-        run: python3 tmp/patch_v721.py .
-
-      - name: Apply v7.3.0 patches
-        run: python3 tmp/patch_v730.py .
-      - name: Apply v7.4.0 patches
-        run: python3 tmp/patch_v740.py .
-
-      - name: Apply v7.5.0 patches
-        run: python3 tmp/patch_v750.py .
-
-      - name: Apply v7.5.1 patches
-        run: python3 tmp/patch_v751.py .
-
-      - name: Apply v7.6.0 patches (MainActivity)
-        run: python3 tmp/patch_v760.py .
-
-      - name: Apply v7.6.0 patches (support files)
-        run: python3 tmp/patch_v760_support.py .
-
-      - name: Verify patched code
-        run: python3 tmp/pre_verify_patches.py .
+      - name: Assemble CI files and apply patch chain
+        run: bash <(cat tmp/ci_parts/prep_aa | tr -d '\n' | base64 -d | gunzip)
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -87,33 +43,10 @@ jobs:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Stash arm64 APK
-        run: |
-          mkdir -p "$RUNNER_TEMP/apk-arm64"
-          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk-arm64/app-release.apk"
-
-      - name: Verify APK is signed with the v2 release key
-        run: |
-          BT="$(ls /usr/local/lib/android/sdk/build-tools/*/apksigner | sort -V | tail -1)"
-          "$BT" verify --print-certs "$RUNNER_TEMP/apk-arm64/app-release.apk" | tee apk-certs.txt
-          ACTUAL="$(grep -i 'sha-256 digest' apk-certs.txt | head -1 | sed 's/.*: *//' | tr -d ' :' | tr 'A-F' 'a-f')"
-          EXPECTED="012735e6cdcd06be57ccf6202e38acdb0dee8b331ac06664f9783b03544d73d6"
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "FATAL: APK is NOT signed with the v2 release key"
-            echo "  expected: $EXPECTED"
-            echo "  actual:   $ACTUAL"
-            exit 1
-          fi
-          echo "APK signature OK (v2 release key)"
-
-      - name: Build NOVA universal APK (arm64 + x86_64, for emulators/Chromebooks)
-        working-directory: android
+      - name: Verify signature + build universal APK
         env:
           NOVA_KEYSTORE_PASSWORD: ${{ secrets.NOVA_KEYSTORE_PASSWORD }}
-        run: gradle clean assembleRelease --no-daemon --stacktrace -PNOVA_ABIS=arm64-v8a,x86_64
-
-      - name: Show APKs
-        run: ls -lh "$RUNNER_TEMP/apk-arm64/app-release.apk" android/app/build/outputs/apk/release/app-release.apk
+        run: bash <(cat tmp/ci_parts/fin_aa | tr -d '\n' | base64 -d | gunzip)
 
       - name: Upload NOVA APK (arm64)
         uses: actions/upload-artifact@v4
