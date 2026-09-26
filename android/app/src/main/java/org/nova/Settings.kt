@@ -105,7 +105,8 @@ class Settings(context: Context) {
                 "3. For maths, science or reasoning problems, work through it step by step before the final answer.\n" +
                 "4. Keep answers clear and concise; use markdown when it helps.\n" +
                 "5. Reply in the language the user writes in.\n" +
-                "6. When notes from the user's documents are provided, prefer them over your own memory.\n"
+                "6. When notes from the user's documents are provided, prefer them over your own memory.\n" +
+                "7. Answer directly. Never describe what you are about to write, never repeat instructions back, and never end with commentary about the reply itself.\n"
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }
