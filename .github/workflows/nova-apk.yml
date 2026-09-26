@@ -17,6 +17,13 @@ jobs:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
+      - name: Assemble v7.6.0 patch files (chunk-verified transport)
+        run: |
+          cat tmp/patch_parts/v760_* | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760.py
+          cat tmp/patch_parts/v760s_* | tr -d '\n' | base64 -d | gunzip > tmp/patch_v760_support.py
+          cat tmp/patch_parts/gradle_* | tr -d '\n' | base64 -d | gunzip > android/app/build.gradle
+          python3 -c "import ast; ast.parse(open('tmp/patch_v760.py').read()); ast.parse(open('tmp/patch_v760_support.py').read()); print('v7.6.0 patch scripts assembled + parse OK')"
+
       - name: Apply v6.2.3 patches
         run: python3 tmp/patch_v623.py .
 
