@@ -2,7 +2,6 @@ package org.nova.ncie.plan
 
 import org.nova.ncie.execute.ToolRegistry
 import org.nova.ncie.model.Analysis
-import org.nova.ncie.model.Intent
 import org.nova.ncie.model.Plan
 import org.nova.ncie.model.Route
 
@@ -25,18 +24,20 @@ class DecisionKernel(private val tools: ToolRegistry) : Planner {
             return Plan(Route.CACHE, null, 0, 0, "exact request seen before — serve from cache")
         }
 
-        // A deterministic tool can fully answer it → never wake the model.
-        if (analysis.intent == Intent.CALCULATION) {
-            val tool = tools.bestToolFor(analysis)
-            if (tool != null) {
-                return Plan(
-                    route = Route.TOOL,
-                    toolName = tool.name(),
-                    thinkingBudgetTokens = 0,
-                    contextBudgetChars = 0,
-                    rationale = "deterministic answer available from '${tool.name()}' — LLM skipped",
-                )
-            }
+        // A registered tool that CLAIMS the request answers it
+        // deterministically → never wake the model. Tools define their own
+        // domain: the NCIE calculator requires a CALCULATION intent and a
+        // parseable expression; the NOVA app's arithmetic tool validates
+        // its own expression language (sqrt, trig in degrees, pi, ×÷, …).
+        val tool = tools.bestToolFor(analysis)
+        if (tool != null) {
+            return Plan(
+                route = Route.TOOL,
+                toolName = tool.name(),
+                thinkingBudgetTokens = 0,
+                contextBudgetChars = 0,
+                rationale = "deterministic answer available from '${tool.name()}' — LLM skipped",
+            )
         }
 
         // Otherwise the LLM answers; budget scales with complexity.

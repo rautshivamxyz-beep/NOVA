@@ -105,6 +105,65 @@ class NovaKernel(
         return response
     }
 
+    /**
+     * Tool-only gate for callers that check BEFORE the model runs:
+     * ① ANALYZE → ② PLAN, and only when the plan routes to a deterministic
+     * tool does it ③ EXECUTE (+ ④ VERIFY + ⑤ LEARN).
+     *
+     * Returns null when no tool claims the request — the caller then
+     * continues down its normal (LLM) path. The LLM engine is never
+     * touched, so the kernel can be wired to an engine that is not even
+     * loaded yet: the NOVA app runs this gate for calculator requests
+     * before any model is downloaded.
+     *
+     * A cached repeat is served straight from Learn.
+     */
+    fun tryTool(request: String): NovaResponse? {
+        val trace = ArrayList<PhaseTrace>()
+
+        // ① ANALYZE ---------------------------------------------------------
+        val analysis = timed(trace, "ANALYZE") { analyzer.analyze(request) }
+
+        // ⑤ LEARN consulted as a gate (same as ask) ---------------------------
+        learner.recall(request)?.let { return it }
+
+        // ② PLAN --------------------------------------------------------------
+        val plan = timed(trace, "PLAN") { planner.plan(analysis, cacheHit = false) }
+        if (plan.route != Route.TOOL) return null
+
+        // ③ EXECUTE -----------------------------------------------------------
+        var t = System.nanoTime()
+        val tool = plan.toolName?.let { tools.byName(it) } ?: return null
+        val answer = try {
+            tool.execute(analysis)
+        } catch (_: Exception) {
+            return null // claimed but failed — let the caller's path take it
+        }
+        if (answer.isBlank()) return null
+        trace.add(PhaseTrace("EXECUTE", (System.nanoTime() - t) / 1_000_000, "tool=${plan.toolName}"))
+
+        // ④ VERIFY ------------------------------------------------------------
+        t = System.nanoTime()
+        val verdict = verifier.verify(analysis, plan, answer)
+        trace.add(PhaseTrace("VERIFY", (System.nanoTime() - t) / 1_000_000, verdict.notes))
+
+        // ⑤ LEARN -------------------------------------------------------------
+        t = System.nanoTime()
+        val response = NovaResponse(
+            answer = answer,
+            plan = plan,
+            verify = verdict,
+            repaired = false,
+            cacheHit = false,
+            llmUsed = false,
+            trace = trace,
+        )
+        learner.record(request, response)
+        trace.add(PhaseTrace("LEARN", (System.nanoTime() - t) / 1_000_000, "cached for next time"))
+
+        return response
+    }
+
     private fun <T> timed(trace: ArrayList<PhaseTrace>, phase: String, block: () -> T): T {
         val start = System.nanoTime()
         val result = block()

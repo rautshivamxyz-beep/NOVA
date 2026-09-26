@@ -1,0 +1,22 @@
+name: Apply NCIE Stage 2
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+      - name: Patch MainActivity (solveArithmetic -> NcieArithmetic)
+        run: python3 tmp/ncie_stage2_patch.py
+      - name: Verify the source-integrity guard still passes
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add android/app/src/main/java/org/nova/MainActivity.kt
+          git commit -qm "Stage 2 of #1: calculator gate now routes through the NCIE DecisionKernel"
+          git push
