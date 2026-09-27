@@ -86,6 +86,30 @@ fun MainActivity.ncieSend() {
             }
             return
         }
+        // v7.8.1: short self-introductions are chat, not study questions.
+        // "im shivam" / "my name is shivam" used to fall through to the
+        // notes + wiki RAG path, which dragged in junk background (an
+        // article title could even match inside a word: "hiv" inside
+        // "shivam") and the model answered with "From general knowledge..."
+        // boilerplate instead of just saying hello.
+        val intro = SELF_INTRO_REGEX.find(text)
+        if (intro != null) {
+            maybeRememberName(intro.groupValues[1].trim())
+            val introPrompt =
+                "(The user is introducing themselves: '" + text + "' - acknowledge it naturally " +
+                    "in one or two short sentences, use their name, and offer to help. Do not " +
+                    "mention notes, documents, Wikipedia or summaries.)"
+            if (NovaEngine.contextDirty || needsContextCarry) {
+                needsContextCarry = false
+                scope.launch {
+                    NovaEngine.resetConversation(act, settings.systemPrompt)
+                    startGeneration(introPrompt, text, plain = true)
+                }
+            } else {
+                startGeneration(introPrompt, text, plain = true)
+            }
+            return
+        }
         // while reading aloud: "explain that sentence" asks about the last spoken one
         if (readIdx > 0 && Regex("(?i)explain (that|this|the last) (sentence|part|line)")
                 .containsMatchIn(text)) {
@@ -445,3 +469,34 @@ fun MainActivity.ncieSend() {
         replyRetried = false
         startGeneration(prompt, text)
     }
+
+// v7.8.1: short self-introductions - "im Shivam", "hi i'm Shivam",
+// "my name is Shivam Raut", "call me Shiv". Longer first-person
+// statements ("i am confused about photosynthesis") do NOT match and
+// keep taking the normal answer path.
+internal val SELF_INTRO_REGEX = Regex(
+    "(?i)^[\\s']*(?:(?:hi+|hello+|hey+|yo|namaste)[,!.\\s']+)*" +
+        "(?:i'?m|i am|my name'?s|my name is|call me)\\s+" +
+        "([a-z][a-z'-]*(?:\\s+[a-z][a-z'-]*){0,1})\\s*[.!?" + "\\s]*$"
+)
+
+/** v7.8.1: an introduction is worth keeping - offer to store the user's
+ *  name in the persistent memory, like "remember that ..." but without
+ *  needing the keyword. */
+private fun MainActivity.maybeRememberName(name: String) {
+    if (name.length < 2 || name.split(" ").size > 2) return
+    val first = name.substringBefore(" ")
+    if (first.lowercase() in setOf("not", "no", "never", "just", "still", "also",
+            "always", "already", "so", "too", "very", "really", "feeling", "trying")) return
+    if (name.lowercase() in settings.memory.lowercase()) return
+    android.app.AlertDialog.Builder(this)
+        .setTitle("Add to NOVA's memory?")
+        .setMessage("The user's name is $name")
+        .setPositiveButton("Add") { _, _ ->
+            settings.memory = if (settings.memory.isBlank()) "The user's name is $name"
+            else settings.memory.trimEnd() + "\n- The user's name is $name"
+            toast("Added to memory")
+        }
+        .setNegativeButton("No", null)
+        .show()
+}
