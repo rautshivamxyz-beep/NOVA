@@ -12,6 +12,7 @@ import java.io.FileWriter
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
+import org.nova.ncie.knowledge.WikiStore
 
 /**
  * Offline Wikipedia: downloads a pre-built "vital articles" dataset
@@ -166,27 +167,13 @@ object WikiCore {
         // until it's ready, this one question just runs without Wikipedia.
         val ix = index ?: return emptyList()
         if (ix.isEmpty()) return emptyList()
-        val ql = query.lowercase()
-        val scored = ix.mapNotNull { (title, off) ->
-            val tw = words(title)
-            val score = qw.count { it in tw } +
-                (if (title.lowercase() in ql) 2 else 0)
-            if (score > 0) Triple(score, title, off) else null
-        }.sortedWith(compareByDescending<Triple<Int, String, Long>> { it.first }
-            .thenBy { it.second })
-        if (scored.isEmpty()) return emptyList()
-        val out = mutableListOf<Hit>()
-        for ((_, title, off) in scored.take(maxResults)) {
-            val line = readLineAt(ctx, off) ?: continue
-            val parts = line.split('\u241F')
-            val paras = parts.drop(1).filter { it.isNotBlank() }
-            if (paras.isEmpty()) continue
-            val best = paras.sortedByDescending { p -> qw.count { p.lowercase().contains(it) } }
-                .take(3).joinToString(" ")
-            val text = if (best.length > 1100) best.substring(0, 1100) + "…" else best
-            out.add(Hit(title, text))
-        }
-        return out
+        // v0.7.0 (#1): the scoring/selection half now lives kernel-side —
+        // org.nova.ncie.knowledge.WikiStore, ported verbatim from the code
+        // that was here and verified query-identical (20-query battery,
+        // exact output match) before this swap. This wrapper keeps the
+        // file I/O: the byte-offset index and the reads at offsets.
+        return WikiStore().search(ix, query, maxResults) { off -> readLineAt(ctx, off) }
+            .map { Hit(it.title, it.text) }
     }
 
     private fun buildIndex(ctx: Context): List<Pair<String, Long>> {
