@@ -15,10 +15,19 @@ import org.nova.ncie.model.VerifyResult
  * serialized through a [LearningStore] so a restart serves repeats
  * without paying for them again (the Smart Skip the app's summary_cache
  * does for study questions, generalized kernel-side).
+ *
+ * v0.8.0: [recallFuzzy] — the same question, asked differently. A hit
+ * requires the cached question's significant tokens to cover every
+ * significant token of the asking one (question words never count), so
+ * the served answer is always for a same-or-more-specific question.
  */
 interface Learner {
     /** Return a cached answer for this exact request, if any. */
     fun recall(text: String): NovaResponse?
+    /** Return (matched question, cached answer) when a covering entry
+     *  exists for a differently-worded ask, or null. Hosts that do not
+     *  implement it simply never fuzzy-hit. */
+    fun recallFuzzy(query: String): Pair<String, NovaResponse>? = null
     /** Record a completed exchange. */
     fun record(text: String, response: NovaResponse)
     /** Human-readable stats for the Learn dashboard. */
@@ -89,6 +98,7 @@ class PersistentLearner(
     private val routeCounts = HashMap<Route, Int>()
     private var hits = 0
     private var misses = 0
+    private var fuzzyHits = 0
 
     init {
         restore()
@@ -98,6 +108,36 @@ class PersistentLearner(
         val r = cache[text.trim()]
         if (r != null) hits++ else misses++
         return r
+    }
+
+    /**
+     * v0.8.0: the same question, asked differently. A hit requires the
+     * cached question's significant tokens to cover EVERY significant
+     * token of the query — question words ("what", "explain", "the")
+     * never count — and the tightest covering entry (fewest extra
+     * tokens) wins. The direction is deliberate: a cached question
+     * that covers at least as much as the asking one has a
+     * same-or-more-specific answer, which is always safe to serve.
+     * "explain federalism in india" therefore stays a miss until a
+     * question that actually covers india was answered. A fuzzy hit
+     * refreshes the LRU like an exact one and is counted separately
+     * in [stats].
+     */
+    override fun recallFuzzy(query: String): Pair<String, NovaResponse>? {
+        val q = sigTokens(query)
+        if (q.isEmpty()) return null
+        var bestKey: String? = null
+        var bestExtras = Int.MAX_VALUE
+        for (k in cache.keys) {
+            val e = sigTokens(k)
+            if (e.size < q.size || !e.containsAll(q)) continue
+            val extras = e.size - q.size
+            if (extras < bestExtras) { bestExtras = extras; bestKey = k }
+        }
+        val key = bestKey ?: return null
+        val r = cache[key] ?: return null   // the get() refreshes the LRU
+        fuzzyHits++
+        return key to r
     }
 
     override fun record(text: String, response: NovaResponse) {
@@ -112,8 +152,27 @@ class PersistentLearner(
         val total = hits + misses
         val hitRate = if (total == 0) 0.0 else hits.toDouble() * 100 / total
         val routes = routeCounts.entries.joinToString(", ") { "${it.key}=${it.value}" }
-        return "cache ${cache.size} entries, hit-rate ${"%.0f".format(hitRate)}% | routes: $routes"
+        val fz = if (fuzzyHits > 0) " (+$fuzzyHits fuzzy)" else ""
+        return "cache ${cache.size} entries, hit-rate ${"%.0f".format(hitRate)}%$fz | routes: $routes"
     }
+
+    /** Question words never count for matching — only the topic does. */
+    private val queryStop = setOf(
+        "a", "an", "and", "any", "about", "are", "can", "define", "describe",
+        "did", "do", "does", "explain", "for", "gimme", "give", "how", "in",
+        "is", "it", "its", "me", "mean", "means", "meaning", "my", "of", "on",
+        "or", "please", "teach", "tell", "the", "that", "this", "to", "us",
+        "was", "were", "what", "whats", "when", "where", "which", "who",
+        "whos", "why", "you", "your",
+    )
+
+    /** Significant tokens: lowercase, alphanumeric, not a question
+     *  word, and longer than one character (single digits survive —
+     *  "chapter 3" keeps its 3). */
+    private fun sigTokens(s: String): Set<String> =
+        s.lowercase().split(Regex("[^a-z0-9]+"))
+            .filter { it.length > 1 || it.all(Char::isDigit) }
+            .filter { it !in queryStop }.toSet()
 
     /** One snapshot write per record; a host that records often can
      *  debounce inside its LearningStore. */

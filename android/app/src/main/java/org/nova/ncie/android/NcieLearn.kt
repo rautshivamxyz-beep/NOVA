@@ -50,20 +50,30 @@ object NcieLearn {
             VerifyResult(false, 0.5, "unused — quality() is the actual gate here")
     }
 
-    /** Smart Skip: an exact repeat served instantly. Renders exactly like
-     *  the study-Q cache block in NcieChat — user bubble, reply bubble,
-     *  toast, chat save, and a context carry so follow-ups ("explain that
-     *  again") are answered with transcript context, not cold. */
+    /** Smart Skip: an exact repeat served instantly — and, since kernel
+     *  v0.8.0, a differently-worded one too. The exact recall runs first;
+     *  only a miss falls through to the kernel's fuzzy recall, whose
+     *  covering rule guarantees the cached question was at least as
+     *  specific as the ask ("explain federalism" finds the answer
+     *  recorded under "what is federalism"; "explain federalism in
+     *  india" stays a miss until india was actually covered). Renders
+     *  exactly like the study-Q cache block in NcieChat — user bubble,
+     *  reply bubble, toast, chat save, and a context carry so follow-ups
+     *  ("explain that again") are answered with transcript context. */
     fun recall(act: MainActivity, text: String): Boolean {
-        val hit = learner(act)?.recall(text) ?: return false
+        val l = learner(act) ?: return false
+        val exact = l.recall(text)
+        val fuzzy = if (exact == null) l.recallFuzzy(text) else null
+        val answer = exact?.answer ?: fuzzy?.second?.answer ?: return false
         val um = Msg(Role.USER, text)
         act.currentChat.messages.add(um)
         act.adapter.add(um)
-        val reply = Msg(Role.ASSISTANT, hit.answer)
+        val reply = Msg(Role.ASSISTANT, answer)
         act.currentChat.messages.add(reply)
         act.adapter.add(reply)
         act.scrollToEnd()
-        act.toast("Answer (cached from last time)")
+        act.toast(if (exact != null) "Answer (cached from last time)"
+                  else "Answer (cached from a similar question)")
         try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
         act.needsContextCarry = true
         return true
