@@ -477,7 +477,7 @@ fun MainActivity.ncieSend() {
 internal val SELF_INTRO_REGEX = Regex(
     "(?i)^[\\s']*(?:(?:hi+|hello+|hey+|yo|namaste)[,!.\\s']+)*" +
         "(?:i'?m|i am|my name'?s|my name is|call me)\\s+" +
-        "([a-z][a-z'-]*(?:\\s+[a-z][a-z'-]*){0,1})\\s*[.!?\\s]*$"
+        "([a-z][a-z'-]*(?:\\s+[a-z][a-z'-]*){0,1})\\s*[.!\\s]*$"
 )
 
 /** v7.8.1: an introduction is worth keeping - offer to store the user's
