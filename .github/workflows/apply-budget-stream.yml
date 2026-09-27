@@ -1,0 +1,21 @@
+name: Apply v0.8.1 app patch
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Budget + streaming - patch, guard, commit
+        run: |
+          python3 tmp/budget_stream_patch.py
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m "v0.8.1: kernel-sized generation leash + live streaming in the summarizers" \
+            -m "The main chat turn's maxTokens now comes from the kernel's PLAN via NcieKnowledge.generationBudget (lean turns: half the user cap, floor 192; everything else the full cap). The four summarizer generations stream into the reply bubble live (throttled) instead of a frozen progress line. Guard extended and run green before this commit."
+          git push
