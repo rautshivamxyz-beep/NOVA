@@ -11,9 +11,16 @@ import java.io.File
 
 /**
  * NCIE Stage 3–4 (#1): the notes layer behind send() — the kernel now owns
- * the whole RAG surface for chat, not just retrieval. MainActivity calls
- * [search] / [hasDocs] / [bestDocName] / [bestChunks] / [docs] /
- * [nameOnlyQuery]; inside, the kernel runs ① ANALYZE (study-question /
+ * the whole RAG surface for chat, not just retrieval. The v0.7.0 polish
+ * finishes the boundary: every knowledge access in the app — chat search,
+ * the summarizers' chunk pulls, the notes filter, the import/export flow
+ * in KnowledgeActivity, the save-to-knowledge share action — goes through
+ * this object. MainActivity and KnowledgeActivity make no direct
+ * Knowledge.* calls anymore; Knowledge.kt is the app's storage
+ * implementation, exactly as NovaEngine is the engine behind
+ * NovaEngineAdapter. The calls are [search] / [hasDocs] / [bestDocName] /
+ * [bestChunks] / [docs] / [nameOnlyQuery] / [leanContext], plus the
+ * storage forwards at the bottom; inside, the kernel runs ① ANALYZE (study-question /
  * notes intent) → ② PLAN (the context budget this request deserves) →
  * ③ EXECUTE (KnowledgeStore search — the ported Knowledge.kt logic — over
  * the app's knowledge.json chunks verbatim), then the v7.6 relevance gate
@@ -109,6 +116,39 @@ object NcieKnowledge {
      *  the whole document, not one topic inside it. */
     fun nameOnlyQuery(query: String, doc: String): Boolean =
         store.nameOnlyQuery(query, doc)
+
+    // ------------------------------------------------------------------
+    // Storage, exposed on the kernel boundary (v0.7.0 polish). The
+    // functions below are thin forwards to Knowledge.kt — the app's
+    // storage layer. Behavior is exactly Knowledge's; the point is the
+    // architecture: after this, no app file calls Knowledge.* directly.
+    // Knowledge remains the single writer of knowledge.json (and its
+    // addDoc/removeDoc still invalidate the study-Q cache), while the
+    // kernel adapter stays the single reader for chat and summarizers.
+    // ------------------------------------------------------------------
+
+    /** Parse knowledge.json once, off the main thread. (Forward.) */
+    fun warmUp(c: Context) = Knowledge.warmUp(c)
+
+    /** All chunks of one document, in order. (Forward — used by the
+     *  whole-doc summarizer.) */
+    fun docChunks(c: Context, name: String): List<String> =
+        Knowledge.docChunks(c, name)
+
+    /** The full text of one document. (Forward — KnowledgeActivity's
+     *  export/share.) */
+    fun docText(c: Context, name: String): String =
+        Knowledge.docText(c, name)
+
+    /** Index a document: replaces any older copy, invalidates the
+     *  study-Q cache. (Forward — KnowledgeActivity import and the
+     *  save-to-knowledge share action.) */
+    fun addDoc(c: Context, name: String, text: String) =
+        Knowledge.addDoc(c, name, text)
+
+    /** Delete a document and its cache. (Forward.) */
+    fun removeDoc(c: Context, name: String) =
+        Knowledge.removeDoc(c, name)
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity
      *  add/delete). A stat per message; a parse only on change. */
