@@ -1,0 +1,22 @@
+name: Apply NCIE Stage 5
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+      - name: Collapse send() into the NCIE dispatch
+        run: python3 tmp/ncie_stage5_patch.py
+      - name: Verify the source-integrity guard (updated for the move) still passes
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add android/app/src/main/java/org/nova/MainActivity.kt tmp/verify_patches.py
+          git commit -qm "Stage 5 of #1: collapse send() into the NCIE dispatch (body verbatim in ncie/android/NcieChat.kt)"
+          git push
