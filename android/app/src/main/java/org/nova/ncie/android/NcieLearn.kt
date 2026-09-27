@@ -52,7 +52,7 @@ object NcieLearn {
 
     /** Smart Skip: an exact repeat served instantly. Renders exactly like
      *  the study-Q cache block in NcieChat — user bubble, reply bubble,
-     ˙ toast, chat save, and a context carry so follow-ups ("explain that
+     *  toast, chat save, and a context carry so follow-ups ("explain that
      *  again") are answered with transcript context, not cold. */
     fun recall(act: MainActivity, text: String): Boolean {
         val hit = learner(act)?.recall(text) ?: return false

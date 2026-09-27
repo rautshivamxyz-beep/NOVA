@@ -436,6 +436,11 @@ fun MainActivity.ncieSend() {
 
         // v5.4.7: show when the answer is grounded in the user's notes
         if (knowledgePart.isNotEmpty()) toast("Using your notes")
+        // NCIE v0.7.0 (#1): Smart Skip - the kernel's LEARN phase now has a
+        // disk-backed cache. An exact repeat of an already-answered model
+        // turn is served instantly, zero tokens - the study-Q cache's
+        // idea, generalized to every turn by the kernel.
+        if (NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
         startGeneration(prompt, text)
