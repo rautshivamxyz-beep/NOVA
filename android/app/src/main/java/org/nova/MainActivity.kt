@@ -352,11 +352,11 @@ class MainActivity : Activity() {
                     minWidth = 0
                     minimumWidth = 0
                     gravity = Gravity.CENTER
-                    background = GradientDrawable().apply {
+                    background = rippleOverlay(GradientDrawable().apply {
                         setColor(NovaTheme.pill)
                         cornerRadius = dp(22).toFloat()
                         setStroke(dp(1), NovaTheme.border)
-                    }
+                    })
                     setOnClickListener {
                         input.setText(
                             when {
@@ -401,7 +401,7 @@ class MainActivity : Activity() {
         val docClear = Button(this).apply {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_close, textDim), null, null, null)
-            background = null
+            background = rippleOverlay(null, dp(16).toFloat())
             minWidth = 0
             minimumWidth = 0
             setPadding(dp(8), dp(8), dp(8), dp(8))
@@ -446,7 +446,7 @@ class MainActivity : Activity() {
             icon.colorFilter = android.graphics.PorterDuffColorFilter(
                 textDim, android.graphics.PorterDuff.Mode.SRC_IN)
             gravity = Gravity.CENTER
-            background = null
+            background = rippleOverlay(null, dp(19).toFloat())
             setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
             setOnClickListener { startSpeech() }
         }
@@ -496,10 +496,10 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 0)
             minWidth = 0
             minimumWidth = 0
-            background = GradientDrawable().apply {
+            background = rippleOverlay(GradientDrawable().apply {
                 setColor(accentDeep)
                 cornerRadius = dp(20).toFloat()
-            }
+            })
             setOnClickListener { send() }
         }
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(40), dp(40)))
@@ -516,7 +516,7 @@ class MainActivity : Activity() {
         for (sym in listOf("π", "√", "²", "³", "½", "×", "÷", "±", "≤", "≥", "≠", "≈", "°", "∑", "θ", "→")) {
             symLine.addView(Button(this).apply {
                 text = sym; textSize = 16f; isAllCaps = false
-                setTextColor(NovaTheme.text); background = null
+                setTextColor(NovaTheme.text); background = rippleOverlay(null, dp(16).toFloat())
                 minWidth = 0; minimumWidth = 0
                 setPadding(dp(10), dp(2), dp(10), dp(2))
                 setOnClickListener {
@@ -1266,15 +1266,15 @@ class MainActivity : Activity() {
     private fun updateSendLook() {
         if (generating) return
         if (input.text.isNotBlank()) {
-            sendBtn.background = GradientDrawable().apply {
+            sendBtn.background = rippleOverlay(GradientDrawable().apply {
                 setColor(accentDeep); cornerRadius = dp(20).toFloat()
-            }
+            })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_send, Color.WHITE), null, null, null)
         } else {
-            sendBtn.background = GradientDrawable().apply {
+            sendBtn.background = rippleOverlay(GradientDrawable().apply {
                 setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
-            }
+            })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_send, NovaTheme.sendDimText), null, null, null)
         }
@@ -1928,16 +1928,18 @@ class MainActivity : Activity() {
                 setTextColor(NovaTheme.text)
                 minWidth = 0; minimumWidth = 0
                 setPadding(dp(12), dp(6), dp(12), dp(6))
-                background = GradientDrawable().apply {
+                background = rippleOverlay(GradientDrawable().apply {
                     setColor(NovaTheme.pill); cornerRadius = dp(16).toFloat()
                     setStroke(dp(1), NovaTheme.border)
-                }
+                })
                 setOnClickListener {
                     (line.parent as? View)?.visibility = View.GONE
                     input.setText(prompt)
                     send()
                 }
-            })
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { rightMargin = dp(6) })
         }
         (line.parent as? View)?.visibility = View.VISIBLE
     }
@@ -2846,11 +2848,11 @@ class MainActivity : Activity() {
         textSize = 14f
         isAllCaps = false
         setTextColor(color)
-        background = GradientDrawable().apply {
+        background = rippleOverlay(GradientDrawable().apply {
             setColor(surface)
             setStroke(dp(1), Color.parseColor("#28314A"))
             cornerRadius = dp(17).toFloat()
-        }
+        })
         setPadding(0, 0, 0, 0)
         minWidth = 0
         minimumWidth = 0
@@ -3243,6 +3245,22 @@ private fun copyToClipboard(ctx: Context, text: String) {
 }
 
 
+/** v7.6.5: pressed-state feedback for custom-drawn controls. Wraps any
+ *  background (or none) in a bounded ripple tinted with the theme accent;
+ *  radiusPx adds a round mask so icon-only buttons ripple in their own
+ *  shape instead of a rectangle. */
+private fun rippleOverlay(
+    bg: android.graphics.drawable.Drawable?,
+    radiusPx: Float? = null,
+): android.graphics.drawable.RippleDrawable {
+    val tint = android.content.res.ColorStateList.valueOf(Color.argb(
+        46, Color.red(NovaTheme.accent), Color.green(NovaTheme.accent), Color.blue(NovaTheme.accent)))
+    return android.graphics.drawable.RippleDrawable(
+        tint, bg,
+        if (radiusPx == null) null
+        else GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = radiusPx })
+}
+
 class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
 
     private val items = mutableListOf<Msg>()
@@ -3333,10 +3351,12 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 NovaTheme.dim, android.graphics.PorterDuff.Mode.SRC_IN)
         }
         val copyBtn = TextView(ctx).apply {
+            background = rippleOverlay(null, dp(ctx, 14).toFloat())
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 18), dp(ctx, 6))
             setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_copy), null, null, null)
         }
         val regenBtn = TextView(ctx).apply {
+            background = rippleOverlay(null, dp(ctx, 14).toFloat())
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6))
             setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_refresh), null, null, null)
         }

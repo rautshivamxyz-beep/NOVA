@@ -68,6 +68,7 @@ MA_MARKERS = [
     ("NCIE polish: summarizer chunks through the boundary", "NcieKnowledge.docChunks(this, doc)", 1),
     ("NCIE polish: save-to-knowledge through the boundary", "NcieKnowledge.addDoc(ctx, nm, msgText)", 1),
     ("NCIE polish: all generation through the kernel engine", "NovaEngineAdapter.stream(", 6),
+    ("v7.6.5: pressed-state ripple feedback", "fun rippleOverlay(", 1),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
     ("NCIE 7: record the completed turn for the learner", "NcieLearn.record(this@MainActivity, userText, replyMsg.text)", 1),
 ]
@@ -113,6 +114,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
+check("v7.6.5: version bumped for the polish build",
+      bg.count("versionName '7.6.5'") == 1 and bg.count("versionCode 57") == 1)
 
 # ---- old code that must be GONE (a skipped patch leaves these behind) ----
 check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sentences") == 0)
