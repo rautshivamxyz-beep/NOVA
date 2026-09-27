@@ -103,6 +103,21 @@ check("NCIE polish: import UI through the boundary", ka.count("NcieKnowledge.add
 nk = load("ncie/android/NcieKnowledge.kt")
 check("NCIE polish: storage exposed on the boundary", nk.count("fun addDoc(c: Context, name: String, text: String)") == 1)
 check("NCIE polish: doc chunks exposed on the boundary", nk.count("fun docChunks(c: Context, name: String)") == 1)
+# ---- v0.8.1: stale-learner fix + kernel generation budget ----
+nl = load("ncie/android/NcieLearn.kt")
+check("v0.8.1: learner invalidated when notes change",
+      nl.count("fun invalidate()") == 1)
+check("v0.8.1: records join the learner's own thread",
+      nl.count("io.execute { l.record(userText, response) }") == 1)
+check("v0.8.1: addDoc/removeDoc drop the learned cache",
+      nk.count("NcieLearn.invalidate()") == 2)
+check("v0.8.1: kernel-sized generation leash on the boundary",
+      nk.count("fun generationBudget(") == 1)
+lr = load("ncie/learn/Learner.kt")
+check("v0.8.1: vendored learner has clear() (interface + both impls)",
+      lr.count("fun clear()") == 3)
+check("v0.8.1: vendored learner has synonym classes",
+      lr.count("synonymGroups") == 2)
 knn = load("Knowledge.kt")
 wc = load("WikiCore.kt")
 check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
@@ -168,8 +183,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
