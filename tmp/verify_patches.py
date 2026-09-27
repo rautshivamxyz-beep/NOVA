@@ -63,7 +63,7 @@ MA_MARKERS = [
     ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
     ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
     ("v7.5.1 anti-invent guardrails", "never invent", 2),
-    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
+    "¢v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
     # moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
@@ -120,10 +120,14 @@ check("v0.8.1: addDoc/removeDoc drop the learned cache",
 check("v0.8.1: kernel-sized generation leash on the boundary",
       nk.count("fun generationBudget(") == 1)
 lr = load("ncie/learn/Learner.kt")
+# v0.9.0: PersistentLearner + LearningStore split out of Learner.kt into
+# their own file (same package) â€” the markers are counted across both.
+pl = load("ncie/learn/PersistentLearner.kt")
+lf = load("ncie/learn/LearnedFact.kt")
 check("v0.8.1: vendored learner has clear() (interface + both impls)",
-      lr.count("fun clear()") == 3)
+      lr.count("fun clear()") + pl.count("fun clear()") == 3)
 check("v0.8.1: vendored learner has synonym classes",
-      lr.count("synonymGroups") == 2)
+      lr.count("synonymGroups") + pl.count("synonymGroups") == 2)
 knn = load("Knowledge.kt")
 wc = load("WikiCore.kt")
 check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
@@ -209,7 +213,7 @@ def structural(f, text):
                 i += 1
             i += 1
         else:
-            if c == "{":
+            if c =  "{":
                 braces += 1
             elif c == "}":
                 braces -= 1
@@ -221,7 +225,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
