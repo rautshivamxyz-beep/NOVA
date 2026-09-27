@@ -62,33 +62,33 @@ src = swap(
 # 3-6. the four summarizer collects, live now
 src = swap(
     '''                                "present in the text - never invent:" +
-                                "\n-----\n$c2\n-----", 280
+                                "\\n-----\\n$c2\\n-----", 280
                         ).collect { sb.append(it) }''',
     '''                                "present in the text - never invent:" +
-                                "\n-----\n$c2\n-----", 280
-                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n", sb) }''',
+                                "\\n-----\\n$c2\\n-----", 280
+                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${chunks.size}\\u2026\\n\\n", sb) }''',
     "doc sections")
 src = swap(
     '''                        "Do not skip any topic. Use only the information given:" +
-                        "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
+                        "\\n\\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
                 ).collect { sb2.append(it) }''',
     '''                        "Do not skip any topic. Use only the information given:" +
-                        "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
-                ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }''',
+                        "\\n\\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
+                ).collect { sb2.append(it); uiProgress("Writing the final summary\\u2026\\n\\n", sb2) }''',
     "doc final")
 src = swap(
-    '''                                "stated in the text. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
+    '''                                "stated in the text. Only use facts present - never invent:$antiCot\\n-----\\n$c2\\n-----", 280
                         ).collect { sb.append(it) }''',
-    '''                                "stated in the text. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
-                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${sections.size}\u2026\n\n", sb) }''',
+    '''                                "stated in the text. Only use facts present - never invent:$antiCot\\n-----\\n$c2\\n-----", 280
+                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${sections.size}\\u2026\\n\\n", sb) }''',
     "notes sections")
 src = swap(
-    '''                        "outside knowledge or invent terms.$antiCot\n\n" +
+    '''                        "outside knowledge or invent terms.$antiCot\\n\\n" +
                         dedupeLines(sectionSummaries.toString()).take(11000), 1500
                 ).collect { sb2.append(it) }''',
-    '''                        "outside knowledge or invent terms.$antiCot\n\n" +
+    '''                        "outside knowledge or invent terms.$antiCot\\n\\n" +
                         dedupeLines(sectionSummaries.toString()).take(11000), 1500
-                ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }''',
+                ).collect { sb2.append(it); uiProgress("Writing the final summary\\u2026\\n\\n", sb2) }''',
     "notes final")
 
 assert src.count("uiProgress(") == 5, "expected 5 uiProgress references, got %d" % src.count("uiProgress(")
