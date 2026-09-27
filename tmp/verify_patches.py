@@ -66,6 +66,7 @@ MA_MARKERS = [
     # moved to NcieChat.kt below: ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("v7.6 notes cache warm-up", "Knowledge.warmUp(this@MainActivity)", 1),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
+    ("NCIE 7: record the completed turn for the learner", "NcieLearn.record(this@MainActivity, userText, replyMsg.text)", 1),
 ]
 for name, marker, n in MA_MARKERS:
     check("%s (x%d)" % (name, n), ma.count(marker) == n)
@@ -84,6 +85,7 @@ NC_MARKERS = [
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend()", 1),
     ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
+    ("NCIE 7: Smart Skip recall in the chat turn", "NcieLearn.recall(this, text)", 1),
 ]
 for name, marker, n in NC_MARKERS:
     check("%s (x%d)" % (name, n), nc.count(marker) == n)

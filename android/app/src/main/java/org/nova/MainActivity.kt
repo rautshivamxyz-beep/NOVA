@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieKnowledge
+import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NovaEngineAdapter
 import org.nova.ncie.android.ncieSend
 import io.noties.markwon.Markwon
@@ -1187,6 +1188,12 @@ class MainActivity : Activity() {
                             "Continue your previous answer exactly where it stopped. Do not repeat anything.",
                             null, newBubble = false)
                     } else {
+                        // NCIE v0.7.0 (#1): the turn is complete (no continuation
+                        // pending) - hand the final answer to the kernel's LEARN
+                        // phase. NcieLearn quality-gates it (blank/leaked/boiler-
+                        // plate replies and internal prompts never enter the
+                        // cache) and writes asynchronously; nothing blocks here.
+                        NcieLearn.record(this@MainActivity, userText, replyMsg.text)
                         // auto-compact: compress old turns once the chat grows
                         if (!speechCancelled && !compacting &&
                             currentChat.messages.size > 20 &&
