@@ -164,8 +164,111 @@ object NcieLearn {
 
     /** v0.8.1: the knowledge base changed — cached answers may be built
      *  on notes that no longer exist, so the learned cache is dropped
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "
-                 continue
+     *  (the same treatment Knowledge.addDoc/removeDoc give the study-Q
+     *  cache). The disk file is deleted, the in-memory learner runs
+     *  clear() — wiping memory and writing the empty snapshot — and a
+     *  boot that has not happened yet finds nothing to load. Runs on
+     *  the learner's own thread, so it can never interleave with a
+     *  record. */
+    fun invalidate() {
+        io.execute {
+            val f = learnFile ?: return@execute
+            try { f.delete() } catch (e: Exception) { }
+            learner?.clear()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // v0.9.1 phase 2 — the memory screen's API. Every call joins the
+    // learner's own io thread (so it can never interleave with a record
+    // or an invalidate), is fail-soft (a memory problem must never crash
+    // the app), and hands its result to the caller on the main thread,
+    // where a View can be updated.
+    // ------------------------------------------------------------------
+
+    /** The memory screen can be the app's entry point (it has its own
+     *  launcher icon until phase 3 wires it into MainActivity), so it
+     *  needs the same lazy boot the chat path gets. [ctx] is used only
+     *  to locate filesDir, at call time — nothing of it is retained. */
+    fun memoryBoot(ctx: Context) { learner(ctx) }
+
+    /** The whole graded memory plus the learner's stats line, or an
+     *  empty list / placeholder string while the learner still boots. */
+    fun memorySnapshot(onReady: (facts: List<LearnedFact>, stats: String) -> Unit) {
+        io.execute {
+            val facts = try { learner?.learnedFacts() ?: emptyList() }
+                        catch (e: Exception) { emptyList() }
+            val stats = try { learner?.stats() ?: "memory still loading" }
+                        catch (e: Exception) { "memory unavailable" }
+            post { onReady(facts, stats) }
+        }
+    }
+
+    /** Forget ONE question — fact and cached answer, memory and disk.
+     *  Everything else stays (the surgical opposite of [memoryClear]). */
+    fun memoryForget(question: String) {
+        io.execute {
+            try { learner?.forget(question) } catch (e: Exception) { }
+        }
+    }
+
+    /** Wipe the whole learned world — graded facts, cached answers,
+     *  counters — the same clear() the kernel's invalidation uses. */
+    fun memoryClear() {
+        io.execute {
+            try { learner?.clear() } catch (e: Exception) { }
+        }
+    }
+
+    /**
+     * One consolidation pass — the graduation ceremony. A fact with
+     * score >= Distiller.GRADUATION_SCORE and at least
+     * Distiller.GRADUATION_INTERACTIONS confirmations leaves the graded
+     * memory and becomes a knowledge-base document (its name the
+     * question, its content the answer), so the app's offline RAG
+     * serves it to every later answer.
+     *
+     * Persistence choice (deliberate, and the reason this does NOT call
+     * NcieKnowledge.addDoc): that forward persists a doc AND calls
+     * NcieLearn.invalidate() — which would wipe the not-yet-graduated
+     * facts still on probation, exactly what a graduation must never
+     * do. So the Distiller runs against a rebuilt KnowledgeStore (the
+     * same boot NcieKnowledge itself uses: KnowledgeAdapter.loadChunks
+     * + rebuildChunks + the user's Notes-filter exclusions), and each
+     * promoted doc is then persisted through Knowledge.addDoc — the
+     * app's single writer of knowledge.json, with NO learner
+     * invalidation. NcieKnowledge picks the change up the usual way:
+     * it stats knowledge.json per call and re-parses on mtime change.
+     *
+     * A promotion whose doc failed to land in knowledge.json is put
+     * back into the graded memory exactly as it was — nothing is lost.
+     */
+    fun memoryDistill(ctx: Context, onDone: (report: String) -> Unit) {
+        io.execute {
+            val l = learner
+            if (l == null) {
+                post { onDone("Memory is still loading — try again in a moment.") }
+                return@execute
+            }
+            try {
+                val before = l.learnedFacts()
+
+                // The same store NcieKnowledge boots: the app's chunks,
+                // verbatim, plus the user's Notes-filter exclusions.
+                val store = KnowledgeStore()
+                store.rebuildChunks(KnowledgeAdapter.loadChunks(ctx))
+                store.setExcluded(Settings(ctx).knowledgeExcluded)
+
+                val report = Distiller(l, store).distill()
+
+                // The Distiller promoted facts into the throwaway store
+                // above (the live one is NcieKnowledge's private field);
+                // now make each promotion real on disk. The promoted are
+                // the ones distill() forgot from the graded memory.
+                val remaining = l.learnedFacts().map { it.question }.toSet()
+                var unpersisted = 0
+                for (f in before) {
+                    if (f.question in remaining) continue
                     val q = f.question.trim()
                     val name = if (q.length <= Distiller.MAX_NAME_CHARS) q
                                else q.substring(0, Distiller.MAX_NAME_CHARS) + "…"
