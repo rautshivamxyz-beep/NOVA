@@ -82,6 +82,17 @@ object NcieKnowledge {
     fun leanContext(text: String): Boolean =
         planner.plan(analyzer.analyze(text), cacheHit = false).contextBudgetChars < 1500
 
+    /** v0.8.1 (#1): the kernel's thinking-budget verdict for a chat turn.
+     *  The user's predictLength setting stays the master cap; the kernel
+     *  only tightens the leash — lean turns (the same tier leanContext
+     *  reports) get half the cap with a floor of 192 tokens, everything
+     *  else — study questions, notes, documents — keeps the full cap.
+     *  Internal prompts (text == null) keep the full cap too. */
+    fun generationBudget(text: String?, userCap: Int): Int {
+        if (text == null) return userCap
+        return if (leanContext(text)) (userCap / 2).coerceAtLeast(192) else userCap
+    }
+
     /** Does the knowledge base have any documents? (Parity with
      *  Knowledge.hasDocs — no exclusion filtering.) */
     fun hasDocs(ctx: Context): Boolean {
@@ -141,14 +152,21 @@ object NcieKnowledge {
         Knowledge.docText(c, name)
 
     /** Index a document: replaces any older copy, invalidates the
-     *  study-Q cache. (Forward — KnowledgeActivity import and the
-     *  save-to-knowledge share action.) */
-    fun addDoc(c: Context, name: String, text: String) =
+     *  study-Q cache — and, v0.8.1, the learned cache too (answers
+     *  built on the old notes must not come back as Smart Skips).
+     *  (Forward — KnowledgeActivity import and the save-to-knowledge
+     *  share action.) */
+    fun addDoc(c: Context, name: String, text: String) {
         Knowledge.addDoc(c, name, text)
+        NcieLearn.invalidate()
+    }
 
-    /** Delete a document and its cache. (Forward.) */
-    fun removeDoc(c: Context, name: String) =
+    /** Delete a document and its caches — the study-Q cache and the
+     *  learned one. (Forward.) */
+    fun removeDoc(c: Context, name: String) {
         Knowledge.removeDoc(c, name)
+        NcieLearn.invalidate()
+    }
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity
      *  add/delete). A stat per message; a parse only on change. */

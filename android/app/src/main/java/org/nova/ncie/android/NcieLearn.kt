@@ -33,6 +33,12 @@ import java.util.concurrent.Executors
  * thread, and capped by the learner's own LRU. Boot is lazy and
  * fail-soft: the first turn after a cold start is always a miss while
  * the cache loads in the background — nothing ever blocks the chat.
+ *
+ * v0.8.1: [invalidate] — the kernel learner's clear() seam, called when
+ * the knowledge base changes (NcieKnowledge.addDoc/removeDoc). Answers
+ * learned from notes that no longer exist must never come back as Smart
+ * Skips. Records join the learner's own thread, so an invalidate can
+ * never interleave with a persist.
  */
 object NcieLearn {
 
@@ -42,6 +48,7 @@ object NcieLearn {
 
     @Volatile private var learner: PersistentLearner? = null
     @Volatile private var bootStarted = false
+    @Volatile private var learnFile: java.io.File? = null
 
     /** The quality gate: the Verifier interface's ground-truth-free
      *  quality() defaults are the gate here — no right answer needed. */
@@ -88,7 +95,8 @@ object NcieLearn {
         if (clean.length < 30) return   // same bar as the study-Q cache
         val verdict = quality.quality(clean)
         if (!verdict.passed) return
-        learner(act)?.record(userText, NovaResponse(
+        val l = learner(act) ?: return
+        val response = NovaResponse(
             answer = clean,
             plan = Plan(Route.LLM, null, 0, 0, "app chat turn"),
             verify = verdict,
@@ -96,7 +104,10 @@ object NcieLearn {
             cacheHit = false,
             llmUsed = true,
             trace = emptyList(),
-        ))
+        )
+        // v0.8.1: records join the learner's own thread, so an
+        // invalidate() can never interleave with a persist.
+        io.execute { l.record(userText, response) }
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
@@ -109,24 +120,41 @@ object NcieLearn {
                 if (!bootStarted) {
                     bootStarted = true
                     val dir = act.filesDir
-                    io.execute {
-                        val file = File(dir, "ncie_learn.txt")
-                        val l = PersistentLearner(object : LearningStore {
-                            override fun write(snapshot: String) {
-                                try {
-                                    file.parentFile?.mkdirs()
-                                    file.writeText(snapshot)
-                                } catch (e: Exception) { }
-                            }
-                            override fun read(): String? =
-                                try { if (file.exists()) file.readText() else null }
-                                catch (e: Exception) { null }
-                        })
-                        learner = l
-                    }
+                    val file = File(dir, "ncie_learn.txt")
+                    learnFile = file
+                    io.execute { learner = PersistentLearner(storeFor(file)) }
                 }
             }
         }
         return null
+    }
+
+    /** The file-backed LearningStore for [file]. */
+    private fun storeFor(file: File) = object : LearningStore {
+        override fun write(snapshot: String) {
+            try {
+                file.parentFile?.mkdirs()
+                file.writeText(snapshot)
+            } catch (e: Exception) { }
+        }
+        override fun read(): String? =
+            try { if (file.exists()) file.readText() else null }
+            catch (e: Exception) { null }
+    }
+
+    /** v0.8.1: the knowledge base changed — cached answers may be built
+     *  on notes that no longer exist, so the learned cache is dropped
+     *  (the same treatment Knowledge.addDoc/removeDoc give the study-Q
+     *  cache). The disk file is deleted, the in-memory learner runs
+     *  clear() — wiping memory and writing the empty snapshot — and a
+     *  boot that has not happened yet finds nothing to load. Runs on
+     *  the learner's own thread, so it can never interleave with a
+     *  record. */
+    fun invalidate() {
+        io.execute {
+            val f = learnFile ?: return@execute
+            try { f.delete() } catch (e: Exception) { }
+            learner?.clear()
+        }
     }
 }
