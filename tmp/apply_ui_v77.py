@@ -1,27 +1,52 @@
 #!/usr/bin/env python3
-"""One-shot v7.7.0 UI refresh applier (scaffold, deleted after the cycle).
+"""One-shot v7.7.0 UI refresh applier (scaffold; deleted after the cycle).
 
-Installs the Inter font family, the graphite+iris palette, and the
-all-screens polish, then runs the extended guard BEFORE committing so a
-drifted anchor can never ship a half-redesigned build.
+Backslash-free by construction: every embedded text block uses real
+newlines and binary writes, so the API commit channel cannot halve
+anything. The extended guard is BUILT from the repo's current guard with
+anchored insertions, never embedded.
 """
-import hashlib, io, os, subprocess, sys, urllib.request, zipfile
+import hashlib
+import io
+import os
+import subprocess
+import sys
+import urllib.request
+import zipfile
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspati(__file__)), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 SKIP_GIT = os.environ.get("NOVA_SKIP_GIT") == "1"
+NL = chr(10)
 
 def die(msg):
     print("FATAL: " + msg)
     sys.exit(1)
 
+def rep(text, old, new, n):
+    c = text.count(old)
+    if c != n:
+        die("anchor x%d (want %d): %r" % (c, n, old[:60]))
+    return text.replace(old, new)
+
 # ---- 1. Inter font family (download, sha-verified, res/font) ----
 ZIP_URL = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
 ZIP_SHA = "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e"
-FONTS = [["extras/ttf/Inter-Regular.ttf", "inter_regular.ttf", "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82"], ["extras/ttf/Inter-Medium.ttf", "inter_medium.ttf", "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872"], ["extras/ttf/Inter-SemiBold.ttf", "inter_semibold.ttf", "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3"], ["extras/ttf/Inter-Bold.ttf", "inter_bold.ttf", "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f"]]
-
+FONTS = [
+    ("extras/ttf/Inter-Regular.ttf", "inter_regular.ttf",
+     "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82"),
+    ("extras/ttf/Inter-Medium.ttf", "inter_medium.ttf",
+     "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872"),
+    ("extras/ttf/Inter-SemiBold.ttf", "inter_semibold.ttf",
+     "78a843fade9d4612a5567302fb595b56976eb5fcebff4fea5a5912d638bafcde3"),
+    ("extras/ttf/Inter-Bold.ttf", "inter_bold.ttf",
+     "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f"),
+]
 print("downloading Inter 4.1 ...")
 cache = os.environ.get("INTER_ZIP_CACHE")
-data = open(cache, "rb").read() if cache else urllib.request.urlopen(ZIP_URL, timeout=600).read()
+if cache:
+    data = open(cache, "rb").read()
+else:
+    data = urllib.request.urlopen(ZIP_URL, timeout=600).read()
 if hashlib.sha256(data).hexdigest() != ZIP_SHA:
     die("inter zip sha mismatch")
 zf = zipfile.ZipFile(io.BytesIO(data))
@@ -31,13 +56,279 @@ for member, dest, sha in FONTS:
     b = zf.read(member)
     if hashlib.sha256(b).hexdigest() != sha:
         die("font sha mismatch: " + dest)
-    with open(os.path.join(font_dir, dest), "wb") as f:
-        f.write(b)
+    open(os.path.join(font_dir, dest), "wb").write(b)
     print("font ok:", dest)
 
 # ---- 2. static files, byte-exact ----
-STATICS = {
-    "android/app/src/main/res/font/inter.xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<font-family xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <font android:font=\"@font/inter_regular\" android:fontStyle=\"normal\" android:fontWeight=\"400\" />\n    <font android:font=\"@font/inter_medium\" android:fontStyle=\"normal\" android:fontWeight=\"500\" />\n    <font android:font=\"@font/inter_semibold\" android:fontStyle=\"normal\" android:fontWeight=\"600\" />\n    <font android:font=\"@font/inter_bold\" android:fontStyle=\"normal\" android:fontWeight=\"700\" />\n</font-family>\n",
-    "android/app/src/main/res/values/styles.xml": "<resources>\n    <style name=\"AppTheme\" parent=\"android:style/Theme.Material.NoActionBar\">\n        <item name=\"android:fontFamily\">@font/inter</item>\n        <item name=\"android:colorAccent\">#7C87FF</item>\n        <item name=\"android:windowBackground\">#0A0B0E</item>\n        <item name=\"android:statusBarColor\">#0A0B0E</item>\n        <item name=\"android:navigationBarColor\">#0A0B0E</item>\n    </style>\n</resources>\n",
-    "android/app/src/main/java/org/nova/NovaTheme.kt": "package org.nova\n\nimport android.graphics.Color\n\n/**\n * App-wide colors, switchable between dark (default) and light.\n * Every screen reads from here so the light theme works everywhere.\n *\n * v7.7.0 \"graphite + iris\" refresh: the old navy-blue scheme is replaced\n * with a neutral graphite dark surface and a single vivid iris accent.\n * Property names are unchanged so every existing call site keeps working;\n * only the values moved.\n */\nobject NovaTheme {\n\n    var dark = true\n    var bg = Color.parseColor(\"#0A0B0E\")\n    var pill = Color.parseColor(\"#16181D\")\n    var surface = Color.parseColor(\"#1D2026\")\n    var border = Color.parseColor(\"#292C34\")\n    var divider = Color.parseColor(\"#1E2025\")\n    var text = Color.parseColor(\"#F3F4F8\")\n    var dim = Color.parseColor(\"#9BA1AD\")\n    var accent = Color.parseColor(\"#7C87FF\")\n    var accentDeep = Color.parseColor(\"#5A5FE0\")\n    var bubble = Color.parseColor(\"#5A5FE0\")\n    var sendDim = Color.parseColor(\"#26272E\")\n    var sendDimText = Color.parseColor(\"#5B6170\")\n    var scrim = Color.parseColor(\"#99000000\")\n\n    fun apply(darkTheme: Boolean) {\n        dark = darkTheme\n        if (darkTheme) {\n            bg = Color.parseColor(\"#0A0B0E\")\n            pill = Color.parseColor(\"#16181D\")\n            surface = Color.parseColor(\"#1D2026\")\n            border = Color.parseColor(\"#292C34\")\n            divider = Color.parseColor(\"#1E2025\")\n            text = Color.parseColor(\"#F3F4F8\")\n            dim = Color.parseColor(\"#9BA1AD\")\n            accent = Color.parseColor(\"#7C87FF\")\n            accentDeep = Color.parseColor(\"#5A5FE0\")\n            bubble = Color.parseColor(\"#5A5FE0\")\n            sendDim = Color.parseColor(\"#26272E\")\n            sendDimText = Color.parseColor(\"#5B6170\")\n            scrim = Color.parseColor(\"#99000000\")\n        } else {\n            bg = Color.parseColor(\"#FAFAFC\")\n            pill = Color.parseColor(\"#F0F1F5\")\n            surface = Color.parseColor(\"#E8EAF0\")\n            border = Color.parseColor(\"#DEE1E9\")\n            divider = Color.parseColor(\"#E9EBF1\")\n            text = Color.parseColor(\"#16181D\")\n            dim = Color.parseColor(\"#687082\")\n            accent = Color.parseColor(\"#5A5FE0\")\n            accentDeep = Color.parseColor(\"#4C51CE\")\n            bubble = Color.parseColor(\"#5A5FE0\")\n            sendDim = Color.parseColor(\"#E3E5EC\")\n            sendDimText = Color.parseColor(\"#A8AEBB\")\n            scrim = Color.parseColor(\"#66000000\")\n        }\n    }\n}\n",
-    "tmp/verify_patches.py": "#!/usr/bin/env python3\n\"\"\"NOVA post-patch verification (automatic test, level 1).\n\nRuns in CI right after the patch chain. Checks that every feature marker\nfrom v6.2.3 .. v7.7.0 is present in the generated code exactly as many\ntimes as expected, that no old code survived where a patch should have\nreplaced it, that the send-order fix is in the right order, and that all\nfour patched Kotlin files still balance with no invalid escapes.\n\nThis is the guard against the #1 build risk from the code review: a patch\nsilently skipping (stale anchor, stray comment) and shipping the APK\nminus a feature with no error anywhere. Also checks build.gradle against\nthe srdDirs typo corruption seen on 2026-09-26.\n\nUsage: verify_patches.py <NOVA repo root>\nExits 1 (fails CI) if anything is missing.\"\"\"\n\nimport os\nimport re\nimport sys\n\nROOT = sys.argv[1] if len(sys.argv) > 1 else \".\"\nBASE = \"android/app/src/main/java/org/nova/\"\nFILES = [\"MainActivity.kt\", \"Backup.kt\", \"NotifBrain.kt\", \"KnowledgeActivity.kt\"]\n# Stage 5 (#1): send() collapsed - its body moved verbatim to\n# ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that\n# lived inside send() are checked against NcieChat.kt now; everything\n# else still points at MainActivity.\n\nfails = []\n\ndef check(name, cond):\n    print((\"PASS  \" if cond else \"FAIL  \") + name)\n    if not cond:\n        fails.append(name)\n\ndef load(f):\n    return open(os.path.join(ROOT, BASE + f), encoding=\"utf-8\").read()\n\nma = load(\"MainActivity.kt\")\nnc = load(\"ncie/android/NcieChat.kt\")\nbk = load(\"Backup.kt\")\nnb = load(\"NotifBrain.kt\")\nka = load(\"KnowledgeActivity.kt\")\nca = load(\"ChatsActivity.kt\")\nsa = load(\"SettingsActivity.kt\")\nea = load(\"ExamsActivity.kt\")\nmoa = load(\"ModelsActivity.kt\")\n\n# ---- feature markers, exactly as the patch chain writes them ----\nMO_MARKERS = [\n    (\"v6.2.3 base markers\", \"class MainActivity\", 1),\n    (\"v7.3 greeting fast-path (regex)\", \"SMALLTALK_REGEX\", 1),\n    (\"v7.4 chip prompt set\", \"CHIP_PROMPTS\", 1),\n    # moved to NcieChat.kt below: (\"v7.4 chip routing check\", \"val isChip = CHIP_PROMPTS.contains(text)\", 1),\n    (\"v7.4 chat-switch guard\", \"val genChat = currentChat\", 1),\n    (\"v7.4 input usable without model\", \"input.isEnabled = !NovaEngine.isLoading\", 1),\n    (\"v7.5 section extraction prompt\", \"Extract the key facts\", 2),\n    # moved to NcieChat.kt below: (\"v7.5 lean wiki cap\", \"val cap = if (tiny) 900 else 1200\", 1),\n    # moved to NcieChat.kt below: (\"v7.5.1 LFM tiny detection\", '\"1.2b\" in mlabel', 1),\n    # moved to NcieChat.kt below: (\"v7.5.1 tiny notes caps\", \"if (tiny) 1200 else 2400\", 4),\n    (\"v7.5.1 doc chunk overlap\", \"takeLast(650)\", 1),\n    (\"v7.5.1 notes chunk overlap\", \"takeLast(260)\", 1),\n    (\"v7.5.1 anti-invent guardrails\", \"never invent\", 2),\n    (\"v7.5.1 instant resets\", \"NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)\", 6),\n    # moved to NcieChat.kt below: (\"v7.6 greeting context reset\", \"greeting sent into a dirty/stale context\", 1),\n    # moved to NcieChat.kt below: (\"v7.6 notes relevance gate\", \"relevance gate - one shared word\", 1),\n    (\"v7.6 repl boilerplate cleaner\", \"private fun cleanReplyText\", 1),\n    # moved to NcieChat.kt below: (\"v7.6 input cleared only when consumed\", 'if (solveArithmetic(text)) { input.setText(\"\")', 1),\n    (\"v7.6 notes cache warm-up\", \"NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity)\", 1),\n    (\"NCIE polish: summarizer chunks through the boundary\", \"NcieKnowledge.docChunks(this, doc)\", 1),\n    (\"NCIE polish: save-to-knowledge through the boundary\", \"NcieKnowledge.addDoc(ctx, nm, msgText)\", 1),\n    (\"NCIE polish: all generation through the kernel engine\", \"NovaEngineAdapter.stream(\", 6),\n    (\"v7.6.5: pressed-state ripple feedback\", \"fun rippleOverlay(\", 1),\n    (\"v0.8.1: kernel-sized generation leash\", \"NcieKnowledge.generationBudget(\", 1),\n    (\"v0.8.1: live streaming in the summarizers\", \"uiProgress(\", 5),\n    (\"v7.6 compaction chat guard\", \"remember which chat this compaction belongs to\", 1),\n    (\"NCIE 7: record the completed turn for the learner\", \"NcieLearn.record(this@MainActivity, userText, replyMsg.text)\", 1),\n]\nfor name, marker, n in MO_MARKERS:\n    check(\"%s (x%d)\" % (name, n), ma.count(marker) == n)\n\n# markers that moved with send()'s body to ncie/android/NcieChat.kt\nNC_MARKERS = [\n    (\"v7.3 greeting fast-path (use)\", \"SMALLTALK_REGEX\", 2),\n    (\"v7.4 chip prompt set (use)\", \"CHIP_PROMPTS\", 2),\n    (\"v7.4 chip routing check\", \"val isChip = CHIP_PROMPTS.contains(text)\", 1),\n    (\"v7.5/NCIE-6 lean wiki cap\", \"val cap = if (lean) 900 else 1200\", 1),\n    (\"NCIE 6: kernel context-budget gate in the chat turn\", \"NcieKnowledge.leanContext(text)\", 1),\n    (\"v7.5.1 LFM tiny detection\", '\"1.2b\" in mlabel', 1),\n    (\"v7.5.1/NCIE-6 lean notes caps\", \"if (lean) 1200 else 2400\", 4),\n    (\"v7.6 greeting context reset\", \"greeting sent into a dirty/stale context\", 1),\n    (\"v7.6 notes relevance gate\", \"relevance gate - one shared word\", 1),\n    (\"v7.6 input cleared only when consumed\", 'if (solveArithmetic(text)) { input.setText(\"\")', 1),\n    (\"Stage 5 collapse: the moved body is one function\", \"fun MainActivity.ncieSend()\", 1),\n    (\"Stage 5 collapse: body reached the act capture\", \"val act = this\", 1),\n    (\"NCIE 7: Smart Skip recall in the chat turn\", \"NcieLearn.recall(this, text)\", 1),\n]\nfor name, marker, n in NC_MARKERS:\n    check(\"%s (x%d)\" % (name, n), nc.count(marker) == n)\ncheck(\"Stage 5 collapse: send() is the thin dispatch\", ma.count(\"ncieSend()\") == 1)\ncheck(\"v7.6 streaming turn through NovaEngineAdapter (all 6 generations now)\", ma.count(\"NovaEngineAdapter.stream(\") == 6)\n\ncheck(\"v7.4 backup key fix (Backup.kt)\", bk.count('put(\"knowledge_enabled\"') == 1)\ncheck(\"v7.4 notification thread fix (NotifBrain.kt)\", nb.count(\"return@Thread\") == 1)\ncheck(\"v7.4 bounded import (KnowledgeActivity.kt)\", ka.count(\"bound the read\") == 1)\ncheck(\"NCIE polish: import UI through the boundary\", ka.count(\"NcieKnowledge.addDoc(this, name, text)\") == 1)\nnk = load(\"ncie/android/NcieKnowledge.kt\")\ncheck(\"NCIE polish: storage exposed on the boundary\", nk.count(\"fun addDoc(c: Context, name: String, text: String)\") == 1)\ncheck(\"NCIE polish: doc chunks exposed on the boundary\", nk.count(\"fun docChunks(c: Context, name: String)\") == 1)\n# ---- v0.8.1: stale-learner fix + kernel generation budget ----\nnl = load(\"ncie/android/NcieLearn.kt\")\ncheck(\"v0.8.1: learner invalidated when notes change\",\n      nl.count(\"fun invalidate()\") == 1)\ncheck(\"v0.8.1: records join the learner's own thread\",\n      nl.count(\"io.execute { l.record(userText, response) }\") == 1)\ncheck(\"v0.8.1: addDoc/removeDoc drop the learned cache\",\n      nk.count(\"NcieLearn.invalidate()\") == 2)\ncheck(\"v0.8.1: kernel-sized generation leash on the boundary\",\n      nk.count(\"fun generationBudget(\") == 1)\nlr = load(\"ncie/learn/Learner.kt\")\ncheck(\"v0.8.1: vendored learner has clear() (interface + both impls)\",\n      lr.count(\"fun clear()\") == 3)\ncheck(\"v0.8.1: vendored learner has synonym classes\",\n      lr.count(\"synonymGroups\") == 2)\nknn = load(\"Knowledge.kt\")\nwc = load(\"WikiCore.kt\")\ncheck(\"v7.6 atomic notes saves (Knowledge.kt)\", knn.count(\"atomic write\") == 1)\ncheck(\"v7.6 notes warm-up for send gate (Knowledge.kt)\", knn.count(\"warm the cache from a background thread\") == 1)\ncheck(\"v7.6 wiki done marker written last (WikiCore.kt)\", wc.count(\"done.tmp\") == 1)\ncheck(\"v7.6 backup restores exams+reminders (Backup.kt)\", bk.count(\"restore exams and reminders too\") == 1)\n\n# ---- build.gradle: guard against the srdDirs corruption seen on 2026-09-26 ----\nbg = open(os.path.join(ROOT, \"android/app/build.gradle\"), encoding=\"utf-8\").read()\ncheck(\"build.gradle: jniLibs srdDirs intact (no typo corruption)\",\n      bg.count(\"jniLibs.srcDirs\") == 1 and bg.count(\"srdDirs\") == 0)\ncheck(\"v7.7.0: version bumped for the UI refresh\",\n      bg.count(\"versionName '7.7.0'\") == 1 and bg.count(\"versionCode 59\") == 1)\n\n# ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----\nsty = open(os.path.join(ROOT, \"android/app/src/main/res/values/styles.xml\"), encoding=\"utf-8\").read()\nnt = load(\"NovaTheme.kt\")\ncheck(\"v7.7.0: Inter applied app-wide via the theme\", sty.count(\"@font/inter\") == 1)\ncheck(\"v7.7.0: theme chrome matches graphite dark\", sty.count(\"#0A0B0E\") = 3)\nfam = open(os.path.join(ROOT, \"android/app/src/main/res/font/inter.xml\"), encoding=\"utf-8\").read()\ncheck(\"v7.7.0: font family ships 4 weights\", fam.count(\"inter_\") == 4)\nfor w in (\"inter_regular\", \"inter_medium\", \"inter_semibold\", \"inter_bold\"):\n    check(\"v7.7.0: %s.ttf present\" % w,\n            os.path.exists(os.path.join(ROOT, \"android/app/src/main/res/fonts\", w + \".ttf\")))\ncheck(\"v7.7.0: graphite + iris palette installed\",\n        nt.count(\"#7C87FF\") == 2 and nt.count(\"#0A0B0E\") == 2)\ncheck(\"v7.7.0: old navy accent gone from the palette\",\n        nt.count(\"#5B9BFF\") == 0 and nt.count(\"#2E6BE6\") == 0)\ncheck(\"v7.7.0: send button is an iris gradient\",\n      ma.count(\"GradientDrawable.Orientation.TL_BR\") == 1)\ncheck(\"v7.7.0: drawer widened (hide + layout)\", ma.count(\"dp(304)\") == 2)\ncheck(\"v7.7.0: header buttons enlarged\", ma.count(\"dp(36), dp(36)\") == 2)\ncheck(\"v7.7.0: no hardcoded navy stroke left\", ma.count(\"#28314A\") == 0)\ncheck(\"v7.7.0: bold resolves inside the Inter family\",\n      ma.count(\"setTypeface(typeface, Typeface.BOLD)\") == 2)\ncheck(\"v7.7.0: drawer rows carry a rounded ripple\",\n      ma.count(\"background = rippleOverlay(GradientDrawable().apply {\\n                cornerRadius = dp(14).toFloat()\\n            }, dp(14).toFloat())\") == 1)\ncheck(\"v7.7.0: ChatsActivity navy remnants gone\",\n    ca.count(\"#1A2030\") == 0 and ca.count(\"#1F2635\") == 0\n        and ca.count(\"Typeface.DEFAULT_BOLD\") == 0)\ncheck(\"v7.7.0: SettingsActivity legacy red replaced\",\n      sa.count(\"#FF6B6B\") == 0 and sa.count(\"Typeface.DEFAULT_BOLD\") == 0)\ncheck(\"v7.7.0: Knowledge/Exams/Models screens on Inter bold\",\n      ka.count(\"Typeface.DEFAULT_BOLD\") == 0 and ea.count(\"Typeface.DEFAULT_BOLD\") == 0\n          and moa.count(\"Typeface.DEFAULT_BOLD\") == 0)\n\n# ---- old code that must be GONE (a skipped patch leaves these behind) ----\ncheck(\"old 5-8-sentence summarizer prompts removed\", ma.count(\"5-8 detailed sentences\") == 1)\ncheck(\"old flash reloads in summarizers removed\", ma.count(\"NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath\") == 0)\n\n# ---- the send-order fix: no-model tools BEFORE ensureModelReady ----\ni_tools = nc.find('if (solveArithmetic(text)) { input.setText(\"\")')\ni_model = nc.find(\"if (!ensureModelReady()) return\")\ncheck(\"v7.4/v7.6 order: calculator/phone commands before model check\",\n      i_tools != -1 and i_model != -1 and i_tools < i_model)\n\n# ---- structural sanity: braces/parens balance + no invalid escapes ----\ndef structural(f, text):\n    i, n = 0, len(text)\n    braces = parens = 0\n    while i < n:\n       c = text[i]\n        if c == \"/\" and i + 1 < n and text[i + 1] == \"/\":\n            while i < n and text[i] != \"\\n\":\n                i += 1\n        elif c == \"/\" and i + 1 < n and text[i + 1] == \"*\":\n            i += 2\n            while i + 1 < n and not (text[i] == \"*\" and text[i + 1] == \"/\"):\n                i += 1\n            i += 2\n        elif c == '\"':\n            i += 1\n            while i < n and text[i] != '\"':\n                if text[i] == \"\\\\\":\n                    i += 1\n                i += 1\n            i += 1\n        elif c == \"'\":\n            i += 1\n            while i < n and text[i] != \"'\":\n                if text[i] == \"\\\\\":\n                    i += 1\n                i += 1\n            i += 1\n        else:\n            if c == \"{\":\n                braces += 1\n            elif c == \"}\":\n                braces -= 1\n            elif c == \"(\":\n                parens += 1\n            elif c == \")\":\n                parens -= 1\n            i += 1\n    check(\"%s: braces balanced\" % f, braces == 0)\n    check(\"%s: parentheses balanced\" % f, parens == 0)\n\nfor f, text in [(\"MainActivity.kt\", ma), (\"ncie/android/NcieChat.kt\", nc), (\"ncie/android/NcieLearn.kt\", nl), (\"ncie/android/NcieKnowledge.kt\", nk), (\"ncie/learn/Learner.kt\", lr), (\"Backup.kt\", bk), (\"NotifBrain.kt\", nb), (\"KnowledgeActivity.kt\", ka)]:\n    structural(f, text)\n    bad = []\n    for m in re.finditer(r'\"(?:[^\"\\\\]|\\\\.)*\"', text):\n        for e in re.finditer(r\"\\\\(.)\", m.group(0)):\n            if e.group(1) not in \"tbnr\\\"'\\\\$su\":\n                bad.append(e.group(1))\n        check(\"%s: no invaliÍÑÉ¥¹œ•Í…Á•Ípˆ€”˜°¹½Ð‰…¥q¹q¹ÁÉ¥¹Ð¡p‰pˆ¥q¹¥˜™…¥±Ìéq¸€€€ÁÉ¥¹Ð¡p‰YI%`%1è€•ÁÉ½‰±•´¡Ì¥pˆ€”±•¸¡™…¥±Ì¤¥q¸€€€™½Èà¥¸™…¥±Ìéq¸€€€€€€€ÁÉ¥¹Ð¡pˆ€´pˆ€¬à¥q¸€€€ÍåÌ¹•á¥Ð Ä¥q¹ÁÉ¥¹Ð¡p‰YI%`=,è…±°Á…Ñ µ…É­•ÉÌÁÉ•Í•¹Ð°½‘”ÍÑÉÕÑÕÉ”Í…¹•pˆ¥q¸ˆ°)ô)™½ÈÀ°Œ¥¸MQQ%L¹¥Ñ•µÌ ¤è(€€€™À€ô½Ì¹Á…Ñ ¹©½¥¸¡I==P°À¤(€€€½Ì¹µ…­•‘¥ÉÌ¡½Ì¹Á…Ñ ¹‘¥É¹…µ”¡™À¤°•á¥ÍÑ}½¬õQÉÕ”¤(€€€Ý¥Ñ ½Á•¸¡™À°€‰Ýˆˆ¤…Ì˜è(€€€€€€€˜¹ÝÉ¥Ñ”¡Œ¹•¹½‘” ‰ÕÑ˜´àˆ¤¤(€€€ÁÉ¥¹Ð ‰ÝÉ¥ÑÑ•¸èˆ°À¤((Œ€´´´´€Ì¸…¹¡½É••‘¥ÑÌ€¡…ÍÍ•ÉÑ•½Õ¹ÑÌì„µ¥ÍÌ…‰½ÉÑÌ¤€´´´´)€ôì‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½5…¥¹Ñ¥Ù¥Ñä¹­Ðˆèmlˆ€€€€€€€€€€€Í•ÑMÑÉ½­”¡‘À Ä¤°½±½È¹Á…ÉÍ•½±½È¡pˆŒÈàÌÄÑpˆ¤¥q¸€€€€€€€€€€€½É¹•ÉI…‘¥ÕÌ€ô‘À ÄÜ¤¹Ñ½±½…Ð ¤ˆ°€ˆ€€€€€€€€€€€Í•ÑMÑÉ½­”¡‘À Ä¤°9½Ù…Q¡•µ”¹‰½É‘•È¥q¸€€€€€€€€€€€½É¹•ÉI…‘¥ÕÌ€ô‘À Äà¤¹Ñ½±½…Ð ¤ˆ°€Åt°lˆ€€€€€€€€€€€Ñ•áÑM¥é”€ô€Äå™q¸€€€€€€€€€€€±•ÑÑ•ÉMÁ…¥¹œ€ô€À¸ÄÑ˜ˆ°€ˆ€€€€€€€€€€€Ñ•áÑM¥é”€ô€Äå™q¸€€€€€€€€€€€±•ÑÑ•ÉMÁ…¥¹œ€ô€À¸Äá˜ˆ°€Åt°l‰ô°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÌÐ¤°‘À ÌÐ¤¤¹…ÁÁ±äìÉ¥¡Ñ5…É¥¸€ô‘À Ü¤ô¤ˆ°€‰ô°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÌØ¤°‘À ÌØ¤¤¹…ÁÁ±äìÉ¥¡Ñ5…É¥¸€ô‘À Ü¤ô¤ˆ°€Åt°l‰ô°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÌÐ¤°‘À ÌÐ¤¤¤ˆ°€‰ô°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÌØ¤°‘À ÌØ¤¤¤ˆ°€Åt°l‰Í•ÑA…‘‘¥¹œ¡‘À ÄØ¤°‘À ÄÀ¤°‘À ÄØ¤°‘À Ø¤¤ˆ°€‰Í•ÑA…‘‘¥¹œ¡‘À ÄØ¤°‘À ÄÈ¤°‘À ÄØ¤°‘À à¤¤ˆ°€Åt°l‰Ñ•áÑM¥é”€ô€ÌÑ˜ˆ°€‰Ñ•áÑM¥é”€ô€Ìá˜ˆ°€Åt°l‰Ñ•áÑM¥é”€ô€ÈÁ˜ˆ°€‰Ñ•áÑM¥é”€ô€ÈÅ˜ˆ°€Åt°lˆ€€€€€€€€€€€€€€€Ñ•áÐ€ôp‰e½ÕÈÁÉ¥Ù…Ñ”$¸IÕ¹Ì€ÄÀÀ”½¸Ñ¡¥ÌÁ¡½¹”¹p‰q¸€€€€€€€€€€€€€€€Ñ•áÑM¥é”€ô€ÄÉ˜ˆ°€ˆ€€€€€€€€€€€€€€€Ñ•áÐ€ôp‰e½ÕÈÁÉ¥Ù…Ñ”$¸IÕ¹Ì€ÄÀÀ”½¸Ñ¡¥ÌÁ¡½¹”¹p‰q¸€€€€€€€€€€€€€€€Ñ•áÑM¥é”€ô€ÄÍ˜ˆ°€Åt°l‰½É¹•ÉI…‘¥ÕÌ€ô‘À ÈØ¤¹Ñ½±½…Ð ¤ˆ°€‰½É¹•ÉI…‘¥ÕÌ€ô‘À Èà¤¹Ñ½±½…Ð ¤ˆ°€Åt°l‰½É¹•ÉI…‘¥ÕÌ€ô‘À ÈÈ¤¹Ñ½±½…Ð ¤ˆ°€‰½É¹•ÉI…‘¥ÕÌ€ô‘À ÈØ¥pˆ°€Åt°l‰1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¹5Q!}AI9P°‘À ÐÐ¤ˆ°€‰1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¹5Q!}AI9P°‘À Ðà¤ˆ°€Åt°lˆ€€€€€€€€€€€‰…­É½Õ¹€ôÉ¥ÁÁ±•=Ù•É±…ä¡É…‘¥•¹ÑÉ…Ý…‰±” ¤¹…ÁÁ±äíq¸€€€€€€€€€€€€€€€Í•Ñ½±½È¡…•¹Ñ••À¥q¸€€€€€€€€€€€€€€€½É¹•ÉI…‘¥ÕÌ€ô‘À ÈÀ¤¹Ñ½±½…Ð ¥q¸€€€€€€€€€€€ô¤ˆ°€ˆ€€€€€€€€€€€‰…­É½Õ¹€ôÉ¥ÁÁ±•=Ù•É±…ä¡É…‘¥•¹ÑÉ…Ý…‰±”¡q¸€€€€€€€€€€€€€€€…¹‘É½¥¹É…Á¡¥Ì¹‘É…Ý…‰±”¹É…‘¥•¹ÑÉ…Ý…‰±”¹=É¥•¹Ñ…Ñ¥½¸¹Q1}	H±q¸€€€€€€€€€€€€€€€¥¹ÑÉÉ…å=˜¡…•¹Ð°…•¹Ñ••À¤¤¹…ÁÁ±äíq¸€€€€€€€€€€€€€€€½É¹•ÉI…‘¥ÕÌ€ô‘À ÈÄ¤¹Ñ½±½…Ð ¥q¸€€€€€€€€€€€ô¤ˆ°€Åt°l‰Á¥±°¹…‘‘Y¥•Ü¡Í•¹‘	Ñ¸°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÐÀ¤°‘À ÐÀ¤¤¤ˆ°€‰Á¥±°¹…‘‘Y¥•Ü¡Í•¹‘	Ñ¸°1¥¹•…É1…å½ÕÐ¹1…å½ÕÑA…É…µÌ¡‘À ÐÈ¤°‘À ÐÈ¤¤¤ˆ°€Åt°l‰Ù…°È€ô‘À¡Ñà°€ÈÀ¤¹Ñ½±½…Ð ¤ˆ°€‰Ù…°È€ô‘À¡Ñà°€ÈÈ¤¹Ñ½±½…Ð ¤ˆ°€Åt°l‰¡½±‘•È¹‰Õ‰‰±”¹Í•ÑA…‘‘¥¹œ¡‘À¡Ñà°€ÄÔ¤°‘À¡Ñà°€ÄÄ¤°‘À¡Ñà°€ÄÔ¤°‘À¡Ñà°€ÄÄ¤¤ˆ°€‰¡½±‘•È¹‰Õ‰‰±”¹Í•ÑA…‘‘¥¹œ¡‘À¡Ñà°€ÄØ¤°‘À¡Ñà°€ÄÈ¤°‘À¡Ñà°€ÄØ¤°‘À¡Ñà°€ÄÈ¤¤ˆ°€Åt°l‰Í•Ñ	…­É½Õ¹‘½±½È¡9½Ù…Q¡•µ”¹Á¥±°¤ˆ°€‰Í•Ñ	…­É½Õ¹‘½±½È¡9½Ù…Q¡•µ”¹ÍÕÉ™…”¤ˆ°€Åt°l‰‘À ÈäÈ¤ˆ°€‰‘À ÌÀÐ¤ˆ°€Ét°lˆ€€€€€€€€€€€É…Ù¥Ñä€ôÉ…Ù¥Ñä¹MQIP½ÈÉ…Ù¥Ñä¹9QI}YIQ%1q¸€€€€€€€€€€€Í•ÑQ•áÑ½±½È¡9½Ù…Q¡•µ”¹Ñ•áÐ¥q¸€€€€€€€€€€€‰…­É½Õ¹€ô¹Õ±°ˆ°€ˆ€€€€€€€€€€€É…Ù¥Ñä€ôÉ…Ù¥Ñä¹MQIP½ÈÉ…Ù¥Ñä¹9QI}YIQ%1q¸€€€€€€€€€€€Í•ÑQ•áÑ½±½È¡9½Ù…Q¡•µ”¹Ñ•áÐ¥q¸€€€€€€€€€€€‰…­É½Õ¹€ôÉ¥ÁÁ±•=Ù•É±…ä¡É…‘¥•¹ÑÉ…Ý…‰±” ¤¹…ÁÁ±äíq¸€€€€€€€€€€€€€€€½É¹•ÉI…‘¥ÕÌ€ô‘À ÄÐ¤¹Ñ½±½…Ð ¥q¸€€€€€€€€€€€ô°‘À ÄÐ¤¹Ñ½±½…Ð ¤¤ˆ°€Åt°l‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Éut°€‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½¡…ÑÍÑ¥Ù¥Ñä¹­Ðˆèml‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Ét°l‰Í•Ñ	…­É½Õ¹‘½±½È¡½±½È¹Á…ÉÍ•½±½È¡pˆŒÅÈÀÌÁpˆ¤¤ˆ°€‰Í•Ñ	…­É½Õ¹‘½±½È¡9½Ù…Q¡•µ”¹‘¥Ù¥‘•È¤ˆ°€Åt°l‰Í•Ñ	…­É½Õ¹‘½±½È¡½±½È¹Á…ÉÍ•½±½È¡pˆŒÅÈØÌÕpˆ¤¤ˆ°€‰Í•Ñ	…­É½Õ¹‘½±½È¡9½Ù…Q¡•µ”¹ÍÕÉ™…”¤ˆ°€Åut°€‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½-¹½Ý±•‘•Ñ¥Ù¥Ñä¹­Ðˆèml‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Åut°€‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½á…µÍÑ¥Ù¥Ñä¹­Ðˆèml‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Éut°€‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½5½‘•±ÍÑ¥Ù¥Ñä¹­Ðˆèml‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Ñut°€‰…¹‘É½¥½…ÁÀ½ÍÉŒ½µ…¥¸½©…Ù„½½Éœ½¹½Ù„½M•ÑÑ¥¹ÍÑ¥Ù¥Ñä¹­Ðˆèml‰ÑåÁ•™…”€ôQåÁ•™…”¹U1Q}	=1ˆ°€‰Í•ÑQåÁ•™…”¡ÑåÁ•™…”°QåÁ•™…”¹	=1¤ˆ°€Ét°l‰Á…ÉÍ•½±½È¡pˆÙÙ	pˆ¤ˆ°€‰Á…ÉÍ•½±½È¡pˆàÜÄÜÅpˆ¤ˆ°€Åuuô)™½ÈÀ°•‘¥ÑÌ¥¸¹¥Ñ•µÌ ¤è(€€€™À€ô½Ì¹Á…Ñ ¹©½¥¸¡I==P°À¤(€€€Ý¥Ñ ½Á•¸¡™À°•¹½‘¥¹œô‰ÕÑ˜´àˆ¤…Ì˜éq¸€€€€€€€ÍÉŒ€ô˜¹É•… ¥q¸€€€™½È½±°¹•Ü°¸¥¸•‘¥ÑÌéq¸€€€€€€€Œ€ôÍÉŒ¹½Õ¹Ð¡½±¥q¸€€€€€€€¥˜Œ€„ô¸éq¸€€€€€€€€€€€‘¥” ‰…¹¡½Èà•€¡Ý…¹Ð€•¤¥¸€•Ìè€•Épˆ€”€¡Œ°¸°À°½±‘lèØÁt¤¥q¸€€€€€€€ÍÉŒ€ôÍÉŒ¹É•Á±…”¡½±°¹•Ü¥q¸€€€Ý¥Ñ ½Á•¸¡™À°p‰Ýpˆ°•¹½‘¥¹œõp‰ÕÑ˜´ápˆ°¹•Ý±¥¹”õp‰q¹pˆ¤…Ì˜éq¸€€€€€€€˜¹ÝÉ¥Ñ”¡ÍÉŒ¥q¸€€€ÁÉ¥¹Ð ‰•‘¥Ñ•èˆ°À°€ˆ ••‘¥ÑÌ¤ˆ€”±•¸¡•‘¥ÑÌ¤¥q¹q¸Œ€´´´´€Ð¸Ù•ÉÍ¥½¸‰ÕµÀ€´´´µq¹É…‘±”€ô½Ì¹Á…Ñ ¹©½¥¸¡I==P°p‰…¹‘É½¥½…ÁÀ½‰Õ¥±¹É…‘±•pˆ¥q¹Ý¥Ñ ½Á•¸¡É…‘±”°•¹½‘¥¹œõp‰ÕÑ˜´ápˆ¤…Ì˜è(€€€œ€ô˜¹É•… ¥q¹™½È½±°¹•Ü¥¸l¡p‰Ù•ÉÍ¥½¹½‘”€Ôápˆ°p‰Ù•ÉÍ¥½¹½‘”€Ôåpˆ¤éq¸€€€€€€€€€€€€€€€€€¡p‰Ù•ÉÍ¥½¹9…µ”€œÜ¸Ø¸Øpˆ°p‰Ù•ÉÍ¥½¹9…µ”€œÜ¸Ü¸Àpˆ¥téq¸€€€¥˜œ¹½Õ¹Ð¡½±¤€„ô€Äéq¸€€€€€€€‘¥”¡p‰‰Õ¥±¹É…‘±”…¹¡½Èà•è€•Épˆˆ€”€¡œ¹½Õ¹Ð¡½±¤°½±¤¥q¸€€€œ€ôœ¹É•Á±…”¡½±°¹•Ü¥q¹Ý¥Ñ ½Á•¸¡É…‘±”°p‰épˆ°•¹½‘¥¹œõp‰ÕÑ˜´ápˆ°¹•Ý±¥¹”õp‰qq¹pˆ¤…Ì˜è(€€€˜¹ÝÉ¥Ñ”¡œ¥q¹ÁÉ¥¹Ð¡p‰‰Õ¥±¹É…‘±”è€Ü¸Ü¸À€¼€Ôåpˆ¥q¹q¸Œ€´´´´€Ô¸Õ…É	=I½µµ¥Ð€´´´µq¹È€ôÍÕ‰ÁÉ½•ÍÌ¹ÉÕ¸¡mÍåÌ¹•á•ÕÑ…‰±”°½Ì¹Á…Ñ ¹©½¥¸¡I==P°p‰ÑµÀ½Ù•É¥™å}Á…Ñ¡•Ì¹Áåpˆ¤°I==Qt±q¸€€€€€€€€€€€€€€€€€€ÝõI==P¥q¹¥˜È¹É•ÑÕÉ¹½‘”€„ô€Àér    die(\"verify_patches.py failed - nothing committed\")\n\n# ---- 6. commit + push ----\nif SKIP_GIT:érint(\"NOVA_SKIP_GIT=1 - local rehearsal done, no commit\")\n    sys.exit(0)\n\ndef git(*cmd):\n    r = subprocess.run([\"git\"] + list(cmd), cwd=ROOT, capture_output=True, t•áÐõQÉÕ”¥q¸€€€½ÕÐ€ôÈ¹ÍÑ‘½ÕÐ€¬È¹ÍÑ‘•ÉÉq¸€€€¥˜p‰%Q!U	}Q=-9pˆ¥¸½Ì¹•¹Ù¥É½¸éq¸€€€€€€€½ÕÐ€ô½ÕÐ¹É•Á±…”¡½Ì¹•¹Ù¥É½¹mp‰%Q!U	}Q=-9p‰t°pˆ¨¨©pˆ¥q¸€€€¥˜½ÕÐ¹ÍÑÉ¥À ¤éq¸€€€€€€€ÁÉ¥¹Ð¡½ÕÐ¹ÍÑÉ¥À ¤¥q¸€€€¥˜È¹É•ÑÕÉ¹½‘”€„ô€Àéq¸€€€€€€€‘¥”¡p‰¥Ð™…¥±•è¥Ðpˆ€¬p‰€ˆ¹©½¥¸¡µ¤¥q¹q¹¥Ð¡p‰½¹™¥pˆ°p‰ÕÍ•È¹¹…µ•pˆ°p‰¹½Ù„µÁ…Ñ µ‰½Ñpˆ¥q¹¥Ð¡p‰½¹™¥pˆ°p‰ÕÍ•È¹•µ…¥±pˆ°p‰…Ñ¥½¹ÍÕÍ•ÉÌ¹¹½É•Á±ä¹¥Ñ¡Õˆ¹½µpˆ¥q¹¥Ð¡p‰…‘‘pˆ°pˆµpˆ¥q¹¥Ð¡p‰½µµ¥Ñpˆ°pˆµµpˆ°p‰ØÜ¸Ü¸ÀèU$É•™É•Í €´É…Á¡¥Ñ”­¥É¥ÌÁ…±•ÑÑ”°%¹Ñ•ÈÑåÁ•™…”°…±°ÍÉ••¹Íq¹q¹½¹ÑÌè%¹Ñ•È€Ð¸Ä€¡M%0=0¤¸A…±•ÑÑ”è¹•ÕÑÉ…°É…Á¡¥Ñ”‘…É¬€¬¥É¥Ì…•¹Ð¹q¹±°ÍÉ••¹ÌÁ¥¬ÕÀ%¹Ñ•ÈÙ¥„Ñ¡”Ñ¡•µ”™½¹Ñ…µ¥±äì‰½±¹½ÜÉ•Í½±Ù•Íq¹¥¹Í¥‘”Ñ¡”e…µ¥±ä¸	Õ‰‰±•Ì½Á¥±°½¡¥ÁÌÉ½Õ¹‘•È°Í•¹‰ÕÑÑ½¸¥Ì…¸¥É¥Íq¹É…‘¥•¹Ð¥É±”°‘É…Ý•ÈÉ½ÝÌ•ÐÉ½Õ¹‘•É¥ÁÁ±•Ì°¹…ÙäÉ•µ¹…¹ÑÌÁÕÉ•¹q¹Õ…É•áÑ•¹‘•Ñ¼€äà¡•­Ì¹pˆ¥q¹Ñ½­•¸€ô½Ì¹•¹Ù¥É½¸¹•Ð¡p‰%Q!U	}Q=-9pˆ¥q¹É•Á¼€ô½Ì¹•¹Ù¥É½¸¹•Ð¡p‰%Q!U	}IA=M%Q=Iepˆ¥q¹¥˜¹½ÐÑ½­•¸½È¹½ÐÉ•Á¼éq¸€€€‘¥”¡p‰%Q!U	}Q=-8€¼%Q!U	}IA=M%Q=Idµ¥ÍÍ¥¹pˆ¥q¹¥Ð¡p‰ÁÕÍ¡pˆ°p‰¡ÑÑÁÌè¼½àµ…•ÍÌµÑ½­•¸épˆ€¬Ñ½­•¸€¬p‰¥Ñ¡Õˆ¹½´½pˆ€¬É•Á¼€¬pˆ¹¥Ñpˆ±q¸€€€p‰!éµ…¥¹pˆ¥q¹ÁÉ¥¹Ð¡p‰ØÜ¸Ü¸ÀU$É•™É•Í ½µµ¥ÑÑ•…¹ÁÕÍ¡•‘pˆ¤
+INTER_XML = '''<?xml version="1.0" encoding="utf-8"?>
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font android:font="@font/inter_regular" android:fontStyle="normal" android:fontWeight="400" />
+    <font android:font="@font/inter_medium" android:fontStyle="normal" android:fontWeight="500" />
+    <font android:font="@font/inter_semibold" android:fontStyle="normal" android:fontWeight="600" />
+    <font android:font="@font/inter_bold" android:fontStyle="normal" android:fontWeight="700" />
+</font-family>
+'''
+STYLES_XML = '''<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:colorAccent">#7C87FF</item>
+        <item name="android:windowBackground">#0A0B0E</item>
+        <item name="android:statusBarColor">#0A0B0E</item>
+        <item name="android:navigationBarColor">#0A0B0E</item>
+    </style>
+</resources>
+'''
+NOVATHEME_KT = '''package org.nova
+
+import android.graphics.Color
+
+/**
+ * App-wide colors, switchable between dark (default) and light.
+ * Every screen reads from here so the light theme works everywhere.
+ *
+ * v7.7.0 "graphite + iris" refresh: the old navy-blue scheme is replaced
+ * with a neutral graphite dark surface and a single vivid iris accent.
+ * Property names are unchanged so every existing call site keeps working;
+ * only the values moved.
+ */
+object NovaTheme {
+
+    var dark = true
+    var bg = Color.parseColor("#0A0B0E")
+    var pill = Color.parseColor("#16181D")
+    var surface = Color.parseColor("#1D2026")
+    var border = Color.parseColor("#292C34")
+    var divider = Color.parseColor("#1E2025")
+    var text = Color.parseColor("#F3F4F8")
+    var dim = Color.parseColor("#9BA1AD")
+    var accent = Color.parseColor("#7C87FF")
+    var accentDeep = Color.parseColor("#5A5FE0")
+    var bubble = Color.parseColor("#5A5FE0")
+    var sendDim = Color.parseColor("#26272E")
+    var sendDimText = Color.parseColor("#5B6170")
+    var scrim = Color.parseColor("#99000000")
+
+    fun apply(darkTheme: Boolean) {
+        dark = darkTheme
+        if (darkTheme) {
+            bg = Color.parseColor("#0A0B0E")
+            pill = Color.parseColor("#16181D")
+            surface = Color.parseColor("#1D2026")
+            border = Color.parseColor("#292C34")
+            divider = Color.parseColor("#1E2025")
+            text = Color.parseColor("#F3F4F8")
+            dim = Color.parseColor("#9BA1AD")
+            accent = Color.parseColor("#7C87FF")
+            accentDeep = Color.parseColor("#5A5FE0")
+            bubble = Color.parseColor("#5A5FE0")
+            sendDim = Color.parseColor("#26272E")
+            sendDimText = Color.parseColor("#5B6170")
+            scrim = Color.parseColor("#99000000")
+        } else {
+            bg = Color.parseColor("#FAFAFC")
+            pill = Color.parseColor("#F0F1F5")
+            surface = Color.parseColor("#E8EAF0")
+            border = Color.parseColor("#DEE1E9")
+            divider = Color.parseColor("#E9EBF1")
+            text = Color.parseColor("#16181D")
+            dim = Color.parseColor("#687082")
+            accent = Color.parseColor("#5A5FE0")
+            accentDeep = Color.parseColor("#4C51CE")
+            bubble = Color.parseColor("#5A5FE0")
+            sendDim = Color.parseColor("#E3E5EC")
+            sendDimText = Color.parseColor("#A8AEBB")
+            scrim = Color.parseColor("#66000000")
+        }
+    }
+}
+'''
+for p, c in [("android/app/src/main/res/font/inter.xml", INTER_XML),
+             ("android/app/src/main/res/values/styles.xml", STYLES_XML),
+             ("android/app/src/main/java/org/nova/NovaTheme.kt", NOVATHEME_KT)]:
+    fp = os.path.join(ROOT, p)
+    os.makedirs(os.path.dirname(fp), exist_ok=True)
+    open(fp, "wb").write(c.encode("utf-8"))
+    print("written:", p)
+
+# ---- 3. anchored edits (asserted counts; a miss aborts) ----
+EDITS = {
+"android/app/src/main/java/org/nova/MainActivity.kt": [
+('''            setStroke(dp(1), Color.parseColor("#28314A"))
+            cornerRadius = dp(17).toFloat()''',
+ '''            setStroke(dp(1), NovaTheme.border)
+            cornerRadius = dp(18).toFloat()''', 1),
+('''            textSize = 19f
+            letterSpacing = 0.14f''',
+ '''            textSize = 19f
+            letterSpacing = 0.18f''', 1),
+("}, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })",
+ "}, LinearLayout.LayoutParams(dp(36), dp(36)).apply { rightMargin = dp(7) })", 1),
+("}, LinearLayout.LayoutParams(dp(34), dp(34)))",
+ "}, LinearLayout.LayoutParams(dp(36), dp(36)))", 1),
+("setPadding(dp(16), dp(10), dp(16), dp(6))",
+ "setPadding(dp(16), dp(12), dp(16), dp(8))", 1),
+("textSize = 34f", "textSize = 38f", 1),
+("textSize = 20f", "textSize = 21f", 1),
+('''                text = "Your private AI. Runs 100% on this phone."
+                textSize = 12f''',
+ '''                text = "Your private AI. Runs 100% on this phone."
+                textSize = 13f''', 1),
+("cornerRadius = dp(26).toFloat()", "cornerRadius = dp(28).toFloat()", 1),
+("cornerRadius = dp(22).toFloat()", "cornerRadius = dp(26).toFloat()", 1),
+("LinearLayout.LayoutParams.MATCH_PARENT, dp(44)",
+ "LinearLayout.LayoutParams.MATCH_PARENT, dp(48)", 1),
+('''            background = rippleOverlay(GradientDrawable().apply {
+                setColor(accentDeep)
+                cornerRadius = dp(20).toFloat()
+            })''',
+ '''            background = rippleOverlay(GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, accentDeep)).apply {
+                cornerRadius = dp(21).toFloat()
+            })''', 1),
+("pill.addView(sendBtn, LinearLayout.LayoutParams(dp(40), dp(40)))",
+ "pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))", 1),
+("val r = dp(ctx, 20).toFloat()", "val r = dp(ctx, 22).toFloat()", 1),
+("holder.bubble.setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))",
+ "holder.bubble.setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))", 1),
+("setBackgroundColor(NovaTheme.pill)", "setBackgroundColor(NovaTheme.surface)", 1),
+("dp(292)", "dp(304)", 2),
+('''            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setTextColor(NovaTheme.text)
+            background = null''',
+ '''            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            setTextColor(NovaTheme.text)
+            background = rippleOverlay(GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+            }, dp(14).toFloat())''', 1),
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+],
+"android/app/src/main/java/org/nova/ChatsActivity.kt": [
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+('setBackgroundColor(Color.parseColor("#1A2030"))',
+ 'setBackgroundColor(NovaTheme.divider)', 1),
+('setBackgroundColor(Color.parseColor("#1F2635"))',
+ 'setBackgroundColor(NovaTheme.surface)', 1),
+],
+"android/app/src/main/java/org/nova/KnowledgeActivity.kt": [
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 1),
+],
+"android/app/src/main/java/org/nova/ExamsActivity.kt": [
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+],
+"android/app/src/main/java/org/nova/ModelsActivity.kt": [
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 4),
+],
+"android/app/src/main/java/org/nova/SettingsActivity.kt": [
+("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+('parseColor("#FF6B6B")', 'parseColor("#F87171")', 1),
+],
+}
+for p, edits in EDITS.items():
+    fp = os.path.join(ROOT, p)
+    src = open(fp, encoding="utf-8").read()
+    for old, new, n in edits:
+        src = rep(src, old, new, n)
+    open(fp, "wb").write(src.encode("utf-8"))
+    print("edited:", p, "(%d edits)" % len(edits))
+
+# ---- 4. build guard v4 from the repo's current guard ----
+NEW_SECTION = '''# ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
+sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
+nt = load("NovaTheme.kt")
+check("v7.7.0: Inter applied app-wide via the theme", sty.count("@font/inter") == 1)
+check("v7.7.0: theme chrome matches graphite dark", sty.count("#0A0B0E") == 3)
+fam = open(os.path.join(ROOT, "android/app/src/main/res/font/inter.xml"), encoding="utf-8").read()
+check("v7.7.0: font family ships 4 weights", fam.count("inter_") == 4)
+for w in ("inter_regular", "inter_medium", "inter_semibold", "inter_bold"):
+    check("v7.7.0: %s.ttf present" % w,
+          os.path.exists(os.path.join(ROOT, "android/app/src/main/res/font", w + ".ttf")))
+check("v7.7.0: graphite + iris palette installed",
+      nt.count("#7C87FF") == 2 and nt.count("#0A0B0E") == 2)
+check("v7.7.0: old navy accent gone from the palette",
+      nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
+check("v7.7.0: send button is an iris gradient",
+      ma.count("GradientDrawable.Orientation.TL_BR") == 1)
+check("v7.7.0: drawer widened (hide + layout)", ma.count("dp(304)") == 2)
+check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") == 2)
+check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
+check("v7.7.0: bold resolves inside the Inter family",
+      ma.count("setTypeface(typeface, Typeface.BOLD)") == 2)
+check("v7.7.0: rounded ripples on chips, round buttons and drawer rows",
+      ma.count("rippleOverlay(GradientDrawable().apply {") == 3)
+check("v7.7.0: ChatsActivity navy remnants gone",
+      ca.count("#1A2030") == 0 and ca.count("#1F2635") == 0
+      and ca.count("Typeface.DEFAULT_BOLD") == 0)
+check("v7.7.0: SettingsActivity legacy red replaced",
+      sa.count("#FF6B6B") == 0 and sa.count("Typeface.DEFAULT_BOLD") == 0)
+check("v7.7.0: Knowledge/Exams/Models screens on Inter bold",
+      ka.count("Typeface.DEFAULT_BOLD") == 0 and ea.count("Typeface.DEFAULT_BOLD") == 0
+      and moa.count("Typeface.DEFAULT_BOLD") == 0)
+
+'''
+OLD_V = '''check("v7.6.6: version bumped for the v0.8.1 sync",
+      bg.count("versionName '7.6.6'") == 1 and bg.count("versionCode 58") == 1)'''
+NEW_V = '''check("v7.7.0: version bumped for the UI refresh",
+      bg.count("versionName '7.7.0'") == 1 and bg.count("versionCode 59") == 1)'''
+LOADS = 'ka = load("KnowledgeActivity.kt")'
+MORE_LOADS = ('ca = load("ChatsActivity.kt")' + NL
+              + 'sa = load("SettingsActivity.kt")' + NL
+              + 'ea = load("ExamsActivity.kt")' + NL
+              + 'moa = load("ModelsActivity.kt")')
+GONE = "# ---- old code that must be GONE (a skipped patch leaves these behind) ----"
+gp = os.path.join(ROOT, "tmp/verify_patches.py")
+g = open(gp, encoding="utf-8").read()
+g = rep(g, "from v6.2.3 .. v7.6.0", "from v6.2.3 .. v7.7.0", 1)
+g = rep(g, LOADS, LOADS + NL + MORE_LOADS, 1)
+g = rep(g, OLD_V, NEW_V, 1)
+g = rep(g, GONE, NEW_SECTION + GONE, 1)
+open(gp, "wb").write(g.encode("utf-8"))
+print("guard extended to v7.7.0")
+
+# ---- 5. version bump ----
+gradle = os.path.join(ROOT, "android/app/build.gradle")
+g2 = open(gradle, encoding="utf-8").read()
+g2 = rep(g2, "versionCode 58", "versionCode 59", 1)
+g2 = rep(g2, "versionName '7.6.6'", "versionName '7.7.0'", 1)
+open(gradle, "wb").write(g2.encode("utf-8"))
+print("build.gradle: 7.7.0 / 59")
+
+# ---- 6. guard BEFORE commit ----
+r = subprocess.run([sys.executable, os.path.join(ROOT, "tmp/verify_patches.py"), ROOT],
+                   cwd=ROOT)
+if r.returncode != 0:
+    die("verify_patches.py failed - nothing committed")
+
+# ---- 7. commit + push ----
+if SKIP_GIT:
+    print("NOVA_SKIP_GIT=1 - local rehearsal done, no commit")
+    sys.exit(0)
+
+def git(*cmd):
+    r = subprocess.run(["git"] + list(cmd), cwd=ROOT, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if "GITHUB_TOKEN" in os.environ:
+        out = out.replace(os.environ["GITHUB_TOKEN"], "***")
+    if out.strip():
+        print(out.strip())
+    if r.returncode != 0:
+        die("git failed: git " + " ".join(cmd))
+
+git("config", "user.name", "nova-patch-bot")
+git("config", "user.email", "actions@users.noreply.github.com")
+git("add", "-A")
+MESSAGE = '''v7.7.0: UI refresh - graphite+iris palette, Inter typeface, all screens
+
+Fonts: Inter 4.1 (SIL OFL). Palette: neutral graphite dark + iris accent.
+All screens pick up Inter via the theme fontFamily; bold now resolves
+inside the family. Bubbles/pill/chips rounder, send button is an iris
+gradient circle, drawer rows get rounded ripples, navy remnants purged.
+Guard extended to 98 checks.'''
+git("commit", "-m", MESSAGE)
+token = os.environ.get("GITHUB_TOKEN")
+repo = os.environ.get("GITHUB_REPOSITORY")
+if not token or not repo:
+    die("GITHUB_TOKEN / GITHUB_REPOSITORY missing")
+git("push", "https://x-access-token:" + token + "@github.com/" + repo + ".git",
+    "HEAD:main")
+print("v7.7.0 UI refresh committed and pushed")
