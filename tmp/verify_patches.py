@@ -64,7 +64,10 @@ MA_MARKERS = [
     # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
     # moved to NcieChat.kt below: ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
-    ("v7.6 notes cache warm-up", "Knowledge.warmUp(this@MainActivity)", 1),
+    ("v7.6 notes cache warm-up", "NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity)", 1),
+    ("NCIE polish: summarizer chunks through the boundary", "NcieKnowledge.docChunks(this, doc)", 1),
+    ("NCIE polish: save-to-knowledge through the boundary", "NcieKnowledge.addDoc(ctx, nm, msgText)", 1),
+    ("NCIE polish: all generation through the kernel engine", "NovaEngineAdapter.stream(", 6),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
     ("NCIE 7: record the completed turn for the learner", "NcieLearn.record(this@MainActivity, userText, replyMsg.text)", 1),
 ]
@@ -90,11 +93,15 @@ NC_MARKERS = [
 for name, marker, n in NC_MARKERS:
     check("%s (x%d)" % (name, n), nc.count(marker) == n)
 check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
-check("v7.6 streaming turn through NovaEngineAdapter", ma.count("NovaEngineAdapter.stream(") == 1)
+check("v7.6 streaming turn through NovaEngineAdapter (all 6 generations now)", ma.count("NovaEngineAdapter.stream(") == 6)
 
 check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
 check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
+check("NCIE polish: import UI through the boundary", ka.count("NcieKnowledge.addDoc(this, name, text)") == 1)
+nk = load("ncie/android/NcieKnowledge.kt")
+check("NCIE polish: storage exposed on the boundary", nk.count("fun addDoc(c: Context, name: String, text: String)") == 1)
+check("NCIE polish: doc chunks exposed on the boundary", nk.count("fun docChunks(c: Context, name: String)") == 1)
 knn = load("Knowledge.kt")
 wc = load("WikiCore.kt")
 check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)

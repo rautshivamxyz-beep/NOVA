@@ -16,6 +16,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import org.nova.ncie.android.NcieKnowledge
 
 /** Manage NOVA's knowledge base: user documents indexed for answers. */
 class KnowledgeActivity : Activity() {
@@ -178,7 +179,7 @@ class KnowledgeActivity : Activity() {
 
     private fun rebuildList() {
         list.removeAllViews()
-        val docs = Knowledge.docs(this)
+        val docs = NcieKnowledge.docs(this)
         if (docs.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = "No documents yet."
@@ -217,7 +218,7 @@ class KnowledgeActivity : Activity() {
                     tinted(R.drawable.ic_close, NovaTheme.dim), null, null, null)
                 background = null
                 setOnClickListener {
-                    Knowledge.removeDoc(this@KnowledgeActivity, name)
+                    NcieKnowledge.removeDoc(this@KnowledgeActivity, name)
                     rebuildList()
                 }
             })
@@ -284,7 +285,7 @@ class KnowledgeActivity : Activity() {
                     3 -> AlertDialog.Builder(this)
                         .setMessage("Remove \"$name\" from knowledge?")
                         .setPositiveButton("Remove") { _, _ ->
-                            Knowledge.removeDoc(this, name)
+                            NcieKnowledge.removeDoc(this, name)
                             rebuildList()
                         }
                         .setNegativeButton("Cancel", null)
@@ -296,7 +297,7 @@ class KnowledgeActivity : Activity() {
 
     /** v5.4.9: show what was actually extracted (OCR/PDF import check). */
     private fun viewDocText(name: String) {
-        val text = Knowledge.docText(this, name)
+        val text = NcieKnowledge.docText(this, name)
         val words = text.split(Regex("\\s+")).count { it.isNotBlank() }
         val tv = TextView(this).apply {
             this.text = text.ifBlank { "(nothing was extracted from this document)" }
@@ -331,7 +332,7 @@ class KnowledgeActivity : Activity() {
             if (uri != null && nm != null) {
                 try {
                     contentResolver.openOutputStream(uri)?.use {
-                        it.write(Knowledge.docText(this, nm).toByteArray())
+                        it.write(NcieKnowledge.docText(this, nm).toByteArray())
                     }
                     toast("Saved")
                 } catch (e: Exception) { toast("Export failed: ${e.message}") }
@@ -350,7 +351,7 @@ class KnowledgeActivity : Activity() {
                 val name = displayName(uri) ?: "document"
                 val text = readText(uri)
                 if (text.isNotBlank()) {
-                    Knowledge.addDoc(this, name, text)
+                    NcieKnowledge.addDoc(this, name, text)
                     added++
                 }
             }

@@ -188,7 +188,7 @@ class MainActivity : Activity() {
         }
         // v7.6: warm the notes cache too - the first message of every
         // session otherwise parsed knowledge.json on the main thread
-        scope.launch(Dispatchers.IO) { Knowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity) }
+        scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity) }
         installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
@@ -1384,7 +1384,7 @@ class MainActivity : Activity() {
                     status.text = "summarizing section ${i + 1}/${chunks.size}\u2026"
                     val sb = StringBuilder()
                     try {
-                        NovaEngine.send(
+                        NovaEngineAdapter.stream(
                             // v7.5: dense fact bullets instead of long sentences - half the
                             // writing time, MORE facts for the final combine to organize
                             "Extract the key facts from this part of a " +
@@ -1422,7 +1422,7 @@ class MainActivity : Activity() {
                     try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                 }
                 val sb2 = StringBuilder()
-                NovaEngine.send(
+                NovaEngineAdapter.stream(
                     "These are summaries of " +
                         (if (strided) "the main sections of a long document" else "the sections of a document") +
                         ". Write a DETAILED final summary organized topic by topic: for each topic " +
@@ -1485,8 +1485,8 @@ class MainActivity : Activity() {
         if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
-        val chunks = if (fullDoc) Knowledge.docChunks(this, doc)
-                      else Knowledge.bestChunks(this, userText)
+        val chunks = if (fullDoc) NcieKnowledge.docChunks(this, doc)
+                      else NcieKnowledge.bestChunks(this, userText)
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
@@ -1578,7 +1578,7 @@ class MainActivity : Activity() {
                     status.text = "summarizing section ${i + 1}/${sections.size}\u2026"
                     val sb = StringBuilder()
                     try {
-                        NovaEngine.send(
+                        NovaEngineAdapter.stream(
                             // v7.5: dense fact bullets - see summarizeDoc
                             "Extract the key facts from this part of the notes " +
                                 "as a bullet list. One fact per line, short lines. " +
@@ -1618,7 +1618,7 @@ class MainActivity : Activity() {
                     try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
                 }
                 val sb2 = StringBuilder()
-                NovaEngine.send(
+                NovaEngineAdapter.stream(
                     "These are section summaries from the notes \"$doc\". Write a DETAILED " +
                         "final study summary. Organize it topic by topic: for each topic " +
                         "start with a short bold heading line, then 2-4 bullet points " +
@@ -2597,7 +2597,7 @@ class MainActivity : Activity() {
     /** v5.4.6: pick which documents Knowledge searches - e.g. only the
      *  English PDFs during an English exam, so SST can never leak in. */
     private fun showNotesFilter() {
-        val names = Knowledge.docs(this).map { it.first }
+        val names = NcieKnowledge.docs(this).map { it.first }
         if (names.isEmpty()) { toast("Import notes first (Knowledge screen)"); return }
         val excl = settings.knowledgeExcluded.toMutableSet()
         val checked = names.map { it !in excl }.toBooleanArray()
@@ -2674,7 +2674,7 @@ class MainActivity : Activity() {
                 }
             val sb = StringBuilder()
             try {
-                NovaEngine.send(
+                NovaEngineAdapter.stream(
                     "Summarize this conversation in one short paragraph. " +
                         "Keep all key facts, decisions, names and numbers:\n\n$old",
                     256
@@ -3471,7 +3471,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                         }
                         "Save to Knowledge" -> {
                             val nm = "Saved: " + msgText.replace("\n", " ").take(28)
-                            Thread { Knowledge.addDoc(ctx, nm, msgText) }.start()
+                            Thread { NcieKnowledge.addDoc(ctx, nm, msgText) }.start()
                             Toast.makeText(ctx, "Saved to Knowledge: $nm", Toast.LENGTH_SHORT).show()
                         }
                         "Regenerate" -> onRegenerate?.invoke()
