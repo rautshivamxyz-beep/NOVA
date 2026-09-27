@@ -37,7 +37,7 @@ NEW_SEND = '    private fun send() {\n        // NCIE Stage 5 (#1): the collapse
 assert src.count(old_send) == 1
 new_src = src.replace(old_send, NEW_SEND)
 
-DECLS = [('CHIP_PROMPTS', 'private val CHIP_PROMPTS = setOf('), ('FOLLOW_UP_Q', 'private val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")'), ('NL', '    private val NL = 10.toChar().toString()'), ('SMALLTALK_REGEX', 'private val SMALLTALK_REGEX = Regex('), ('adapter', '    private val adapter = MessageAdapter()'), ('autoContinueCount', '    private var autoContinueCount = 0'), ('compactSummary', '    private var compactSummary: String? = null'), ('compacting', '    private var compacting = false'), ('currentChat', '    private lateinit var currentChat: Chat'), ('docContext', '    private var docContext: String? = null'), ('docInjected', '    private var docInjected = false'), ('docInjectedText', '    private var docInjectedText: String = ""'), ('docName', '    private var docName: String? = null'), ('docSearch', '    private fun docSearch(query: String, maxChars: Int = 4000): String ='), ('docStop', 'private val docStop = setOf("what", "who", "when", "where", "why", "how", "the", "and",'), ('ensureModelReady', '    private fun ensureModelReady(): Boolean {'), ('generationJob', '    private var generationJob: Job? = null'), ('input', '    private lateinit var input: EditText'), ('lastInjectedExamKey', '    private var lastInjectedExamKey: String? = null'), ('lastInjectedMemory', '    private var lastInjectedMemory: String? = null'), ('lastNotesChatId', '    private var lastNotesChatId: String = ""'), ('lastNotesDoc', '    private var lastNotesDoc: String? = null'), ('lastNotesHit', '    private var lastNotesHit: List<Knowledge.Chunk> = emptyList()'), ('maybeAutoRemember', '    private fun maybeAutoRemember(text: String) {'), ('maybeSetReminder', '    private fun maybeSetReminder(text: String) {'), ('needsContextCarry', '    private var needsContextCarry = false'), ('pendingCards', '    private var pendingCards = false'), ('pendingCitation', '    private var pendingCitation: String? = null'), ('pendingQaKey', '    private var pendingQaKey: String? = null'), ('readIdx', '    private var readIdx = 0'), ('readSents', '    private var readSents: List<String> = emptyList()'), ('replyRetried', '    private var replyRetried = false'), ('runTool', '    private fun runTool(prompt: String) {'), ('scope', '    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)'), ('scrollToEnd', '    private fun scrollToEnd(force: Boolean = true) {'), ('settings', '    private lateinit var settings: Settings'), ('solveArithmetic', '    private fun solveArithmetic(text: String): Boolean {'), ('startGeneration', '    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true, plain: Boolean = false) {'), ('summarizeDoc', '    private fun summarizeDoc() {'), ('summarizeNotes', '    private fun summarizeNotes(doc: String, userText: String, fullDoc: Boolean) {'), ('toast', '    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()'), ('tryPhoneCommand', '    private fun tryPhoneCommand(text: String): Boolean {'), ('tts', '    private var tts: TextToSpeech? = null')]
+DECLS = [('CHIP_PROMPTS', 'private val CHIP_PROMPTS = setOf('), ('FOLLOW_UP_Q', 'private val FOLLOW_UP_Q = Regex('), ('NL', '    private val NL = 10.toChar().toString()'), ('SMALLTALK_REGEX', 'private val SMALLTALK_REGEX = Regex('), ('adapter', '    private val adapter = MessageAdapter()'), ('autoContinueCount', '    private var autoContinueCount = 0'), ('compactSummary', '    private var compactSummary: String? = null'), ('compacting', '    private var compacting = false'), ('currentChat', '    private lateinit var currentChat: Chat'), ('docContext', '    private var docContext: String? = null'), ('docInjected', '    private var docInjected = false'), ('docInjectedText', '    private var docInjectedText: String = ""'), ('docName', '    private var docName: String? = null'), ('docSearch', '    private fun docSearch(query: String, maxChars: Int = 4000): String ='), ('docStop', 'private val docStop = setOf("what", "who", "when", "where", "why", "how", "the", "and",'), ('ensureModelReady', '    private fun ensureModelReady(): Boolean {'), ('generationJob', '    private var generationJob: Job? = null'), ('input', '    private lateinit var input: EditText'), ('lastInjectedExamKey', '    private var lastInjectedExamKey: String? = null'), ('lastInjectedMemory', '    private var lastInjectedMemory: String? = null'), ('lastNotesChatId', '    private var lastNotesChatId: String = ""'), ('lastNotesDoc', '    private var lastNotesDoc: String? = null'), ('lastNotesHit', '    private var lastNotesHit: List<Knowledge.Chunk> = emptyList()'), ('maybeAutoRemember', '    private fun maybeAutoRemember(text: String) {'), ('maybeSetReminder', '    private fun maybeSetReminder(text: String) {'), ('needsContextCarry', '    private var needsContextCarry = false'), ('pendingCards', '    private var pendingCards = false'), ('pendingCitation', '    private var pendingCitation: String? = null'), ('pendingQaKey', '    private var pendingQaKey: String? = null'), ('readIdx', '    private var readIdx = 0'), ('readSents', '    private var readSents: List<String> = emptyList()'), ('replyRetried', '    private var replyRetried = false'), ('runTool', '    private fun runTool(prompt: String) {'), ('scope', '    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)'), ('scrollToEnd', '    private fun scrollToEnd(force: Boolean = true) {'), ('settings', '    private lateinit var settings: Settings'), ('solveArithmetic', '    private fun solveArithmetic(text: String): Boolean {'), ('startGeneration', '    private fun startGeneration(prompt: String, userText: String?, newBubble: Boolean = true, plain: Boolean = false) {'), ('summarizeDoc', '    private fun summarizeDoc() {'), ('summarizeNotes', '    private fun summarizeNotes(doc: String, userText: String, fullDoc: Boolean) {'), ('toast', '    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()'), ('tryPhoneCommand', '    private fun tryPhoneCommand(text: String): Boolean {'), ('tts', '    private var tts: TextToSpeech? = null')]
 for name, line in DECLS:
     assert new_src.count(line) == 1, f"anchor not unique: {name}"
 for name, line in DECLS:
@@ -53,181 +53,20 @@ assert "internal val docStop" in new_src and "internal val CHIP_PROMPTS" in new_
 assert new_src.count("{") - new_src.count("}") == src.count("{") - src.count("}")
 
 open(PATH, "w", encoding="utf-8").write(new_src)
-open(GUARD, "w", encoding="utf-8").write('''#!/usr/bin/env python3
-"""NOVA post-patch verification (automatic test, level 1).
+g = open(GUARD, encoding="utf-8").read()
 
-Runs in CI right after the patch chain. Checks that every feature marker
-from v6.2.3 .. v7.6.0 is present in the generated code exactly as many
-times as expected, that no old code survived where a patch should have
-replaced it, that the send-order fix is in the right order, and that all
-patched Kotlin files still balance with no invalid escapes.
+REPL = [('FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]', 'FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]\n# Stage 5 (#1): send() collapsed - its body moved verbatim to\n# ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that\n# lived inside send() are checked against NcieChat.kt now; everything\n# else still points at MainActivity.'), ('ma = load("MainActivity.kt")', 'ma = load("MainActivity.kt")\nnc = load("ncie/android/NcieChat.kt")'), ('("v7.3 greeting fast-path (regex + use)", "SMALLTALK_REGEX", 2)', '("v7.3 greeting fast-path (regex)", "SMALLTALK_REGEX", 1)'), ('("v7.4 chip prompt set", "CHIP_PROMPTS", 2)', '("v7.4 chip prompt set", "CHIP_PROMPTS", 1)'), ('("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1)', '# moved to NcieChat.kt below: ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1)'), ('("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1)', '# moved to NcieChat.kt below: ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1)'), ('("v7.5.1 LFM tiny detection", \'"1.2b" in mlabel\', 1)', '# moved to NcieChat.kt below: ("v7.5.1 LFM tiny detection", \'"1.2b" in mlabel\', 1)'), ('("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4)', '# moved to NcieChat.kt below: ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4)'), ('("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1)', '# moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1)'), ('("v7.6 notes relevance gate", "relevance gate - one shared word", 1)', '# moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1)'), ('("v7.6 input cleared only when consumed", \'if (solveArithmetic(text)) { input.setText("")\', 1)', '# moved to NcieChat.kt below: ("v7.6 input cleared only when consumed", \'if (solveArithmetic(text)) { input.setText("")\', 1)'), ('("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 7)', '("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6)'), ('i_tools = ma.find(\'if (solveArithmetic(text)) { input.setText("")\')\ni_model = ma.find("if (!ensureModelReady()) return")', 'i_tools = nc.find(\'if (solveArithmetic(text)) { input.setText("")\')\ni_model = nc.find("if (!ensureModelReady()) return")'), ('for f, text in [("MainActivity.kt", ma), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:', 'for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:')]
 
-This is the guard against the #1 build risk from the code review: a patch
-silently skipping (stale anchor, stray comment) and shipping the APK
-minus a feature with no error anywhere. Also checks build.gradle against
-the srdDirs typo corruption seen on 2026-09-26.
+for old, new in REPL:
+    assert g.count(old) == 1, f"guard anchor not unique: {old[:60]!r}"
+    g = g.replace(old, new)
 
-Usage: verify_patches.py <NOVA repo root>
-Exits 1 (fails CI) if anything is missing.
-"""
-import os
-import re
-import sys
-
-ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
-BASE = "android/app/src/main/java/org/nova/"
-FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]
-# Stage 5 (#1): send() collapsed - its body moved verbatim to
-# ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that
-# lived inside send() are checked against NcieChat.kt now; everything
-# else still points at MainActivity.
-
-fails = []
-
-def check(name, cond):
-    print(("PASS  " if cond else "FAIL  ") + name)
-    if not cond:
-        fails.append(name)
-
-def load(f):
-    return open(os.path.join(ROOT, BASE + f), encoding="utf-8").read()
-
-
-ma = load("MainActivity.kt")
-nc = load("ncie/android/NcieChat.kt")
-bk = load("Backup.kt")
-nb = load("NotifBrain.kt")
-ka = load("KnowledgeActivity.kt")
-
-# ---- feature markers, exactly as the patch chain writes them ----
-MA_MARKERS = [
-    ("v6.2.3 base markers", "class MainActivity", 1),
-    ("v7.3 greeting fast-path (regex)", "SMALLTALK_REGEX", 1),
-    ("v7.4 chip prompt set", "CHIP_PROMPTS", 1),
-    # moved to NcieChat.kt below: ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
-    ("v7.4 chat-switch guard", "val genChat = currentChat", 1),
-    ("v7.4 input usable without model", "input.isEnabled = !NovaEngine.isLoading", 1),
-    ("v7.5 section extraction prompt", "Extract the key facts", 2),
-    # moved to NcieChat.kt below: ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
-# moved to NcieChat.kt below:     ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
-    # moved to NcieChat.kt below: ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
-    ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
-    ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
-    ("v7.5.1 anti-invent guardrails", "never invent", 2),
-    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
-    # moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
-    # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
-    ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
-# moved to NcieChat.kt below:     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
-    ("v7.6 notes cache warm-up", "Knowledge.warmUp(this@MainActivity)", 1),
-    ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
-]
-for name, marker, n in MA_MARKERS:
-    check("%s (x%d)" % (name, n), ma.count(marker) == n)
-
-# markers that moved with send()'s body to ncie/android/NcieChat.kt
-NC_MARKERS = [
-    ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),
-    ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),
-    ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
-    ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
-    ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
-    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
-    ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
-    ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
-    ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
-    ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend()", 1),
-    ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
-]
-for name, marker, n in NC_MARKERS:
-    check("%s (x%d)" % (name, n), nc.count(marker) == n)
-check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
-check("v7.6 streaming turn through NovaEngineAdapter", ma.count("NovaEngineAdapter.stream(") == 1)
-
-check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
-check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
-check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
-knn = load("Knowledge.kt")
-wc = load("WikiCore.kt")
-check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
-check("v7.6 notes warm-up for send gate (Knowledge.kt)", knn.count("warm the cache from a background thread") == 1)
-check("v7.6 wiki done marker written last (WikiCore.kt)", wc.count("done.tmp") == 1)
-check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exams and reminders too") == 1)
-
-# ---- build.gradle: guard against the srdDirs corruption seen on 2026-09-26 ----
-bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
-check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
-      bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-
-# ---- old code that must be GONE (a skipped patch leaves these behind) ----
-check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sentences") == 0)
-check("old flash reloads in summarizers removed", ma.count("NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath") == 0)
-
-# ---- the send-order fix: no-model tools BEFORE ensureModelReady ----
-i_tools = nc.find('if (solveArithmetic(text)) { input.setText("")')
-i_model = nc.find("if (!ensureModelReady()) return")
-check("v7.4/v7.6 order: calculator/phone commands before model check",
-      i_tools != -1 and i_model != -1 and i_tools < i_model)
-
-# ---- structural sanity: braces/parens balance + no invalid escapes ----
-def structural(f, text):
-    i, n = 0, len(text)
-    braces = parens = 0
-    while i < n:
-        c = text[i]
-        if c == "/" and i + 1 < n and text[i + 1] == "/":
-            while i < n and text[i] != "\n":
-                i += 1
-        elif c == "/" and i + 1 < n and text[i + 1] == "*":
-            i += 2
-            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
-                i += 1
-            i += 2
-        elif c == '"':
-            i += 1
-            while i < n and text[i] != '"':
-                if text[i] == "\\":
-                    i += 1
-                i += 1
-            i += 1
-        elif c == "'":
-            i += 1
-            while i < n and text[i] != "'":
-                if text[i] == "\\":
-                    i += 1
-                i += 1
-            i += 1
-        else:
-            if c == "{":
-                braces += 1
-            elif c == "}":
-                braces -= 1
-            elif c == "(":
-                parens += 1
-            elif c == ")":
-                parens -= 1
-            i += 1
-    check("%s: braces balanced" % f, braces == 0)
-    check("%s: parentheses balanced" % f, parens == 0)
-
-
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
-    structural(f, text)
-    bad = []
-    for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
-        for e in re.finditer(r"\\(.)", m.group(0)):
-            if e.group(1) not in "tbnr\"'\\$su":
-                bad.append(e.group(1))
-    check("%s: no invalid string escapes" % f, not bad)
-
-print("")
-if fails:
-    print("VERIFY FAILED: %d problem(s)" % len(fails))
-    for x in fails:
-        print(" - " + x)
-    sys.exit(1)
-print("VERIFY OK: all patch markers present, code structure sane")
-''')
+OLD_BLOCK = 'for name, marker, n in MA_MARKERS:\n    check("%s (x%d)" % (name, n), ma.count(marker) == n)\n'
+NEW_BLOCK = 'for name, marker, n in MA_MARKERS:\n    check("%s (x%d)" % (name, n), ma.count(marker) == n)\n\n# markers that moved with send()\'s body to ncie/android/NcieChat.kt\nNC_MARKERS = [\n    ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),\n    ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),\n    ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),\n    ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),\n    ("v7.5.1 LFM tiny detection", \'"1.2b" in mlabel\', 1),\n    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),\n    ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),\n    ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),\n    ("v7.6 input cleared only when consumed", \'if (solveArithmetic(text)) { input.setText("")\', 1),\n    ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend()", 1),\n    ("Stage 5 collapse: body reached the act capture", "val act = this", 1),\n]\nfor name, marker, n in NC_MARKERS:\n    check("%s (x%d)" % (name, n), nc.count(marker) == n)\ncheck("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)\ncheck("v7.6 streaming turn through NovaEngineAdapter", ma.count("NovaEngineAdapter.stream(") == 1)\n'
+assert g.count(OLD_BLOCK) == 1, "MA_MARKERS loop not found"
+g = g.replace(OLD_BLOCK, NEW_BLOCK)
+new_guard = g
+open(GUARD, "w", encoding="utf-8").write(new_guard)
 print(f"OK: send() {old_send.count(chr(10))+1} -> {NEW_SEND.count(chr(10))+1} lines; "
       f"MainActivity {src.count(chr(10))+1} -> {new_src.count(chr(10))+1} lines; "
       f"guard updated for the moved markers")
