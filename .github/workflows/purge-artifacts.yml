@@ -1,0 +1,25 @@
+name: Purge old artifacts
+on: workflow_dispatch
+permissions:
+  actions: write
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all workflow artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          total=0
+          while :; do
+            ids="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '.artifacts[].id' 2>/dev/null || true)"
+            if [ -z "$ids" ]; then break; fi
+            n=0
+            for id in $ids; do
+              if gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" 2>/dev/null; then n=$((n+1)); fi
+            done
+            total=$((total+n))
+            echo "deleted $n this round (running total $total)"
+          done
+          echo "ALL DONE - total deleted: $total"
