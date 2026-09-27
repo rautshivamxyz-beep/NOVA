@@ -9,7 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply v7.7.0 UI refresh
-        run: python3 tmp/apply_ui_v77.py
+        run: |
+          python3 tmp/amend_v77.py
+          python3 tmp/apply_ui_v77.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
