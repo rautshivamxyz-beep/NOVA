@@ -1,10 +1,18 @@
 package org.nova.ncie.android
 
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import org.nova.ChatStore
+import org.nova.Knowledge
 import org.nova.MainActivity
 import org.nova.Msg
 import org.nova.Role
+import org.nova.Settings
 import org.nova.SMALLTALK_REGEX
+import org.nova.ncie.knowledge.KnowledgeStore
+import org.nova.ncie.learn.Distiller
+import org.nova.ncie.learn.LearnedFact
 import org.nova.ncie.learn.LearningStore
 import org.nova.ncie.learn.PersistentLearner
 import org.nova.ncie.model.Analysis
@@ -45,6 +53,10 @@ object NcieLearn {
     private val io = Executors.newSingleThreadExecutor { r ->
         Thread(r, "ncie-learn").apply { isDaemon = true }
     }
+
+    /** v0.9.1 phase 2: memory-screen callbacks are delivered here,
+     *  where a View can be updated. */
+    private val main = Handler(Looper.getMainLooper())
 
     @Volatile private var learner: PersistentLearner? = null
     @Volatile private var bootStarted = false
@@ -108,18 +120,26 @@ object NcieLearn {
         // v0.8.1: records join the learner's own thread, so an
         // invalidate() can never interleave with a persist.
         io.execute { l.record(userText, response) }
+        // v0.9.1 (phase 2): the same quality-gated turn is ALSO born as a
+        // graded fact — the kernel's memory system gets what the answer
+        // cache already got. verdict.qualityScore is a Double (see
+        // VerifyResult in Types.kt); with this stub Verifier a clean
+        // quality() pass scores 0.6 — the kernel's convention for a
+        // quality pass with no ground truth — so the fact is born with
+        // exactly the score of the gate that admitted it.
+        io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
      *  loads the cache off it. Returns null until loaded — a miss, never
      *  a block. All learner access afterwards is main-thread only. */
-    private fun learner(act: MainActivity): PersistentLearner? {
+    private fun learner(ctx: Context): PersistentLearner? {
         learner?.let { return it }
         if (!bootStarted) {
             synchronized(this) {
                 if (!bootStarted) {
                     bootStarted = true
-                    val dir = act.filesDir
+                    val dir = ctx.filesDir
                     val file = File(dir, "ncie_learn.txt")
                     learnFile = file
                     io.execute { learner = PersistentLearner(storeFor(file)) }
@@ -144,17 +164,36 @@ object NcieLearn {
 
     /** v0.8.1: the knowledge base changed — cached answers may be built
      *  on notes that no longer exist, so the learned cache is dropped
-     *  (the same treatment Knowledge.addDoc/removeDoc give the study-Q
-     *  cache). The disk file is deleted, the in-memory learner runs
-     *  clear() — wiping memory and writing the empty snapshot — and a
-     *  boot that has not happened yet finds nothing to load. Runs on
-     *  the learner's own thread, so it can never interleave with a
-     *  record. */
-    fun invalidate() {
-        io.execute {
-            val f = learnFile ?: return@execute
-            try { f.delete() } catch (e: Exception) { }
-            learner?.clear()
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                "
+                 continue
+                    val q = f.question.trim()
+                    val name = if (q.length <= Distiller.MAX_NAME_CHARS) q
+                               else q.substring(0, Distiller.MAX_NAME_CHARS) + "…"
+                    try {
+                        Knowledge.addDoc(ctx, name, q + "\n\n" + f.answer.trim())
+                        if (Knowledge.docText(ctx, name).isNotEmpty()) continue
+                    } catch (e: Exception) { }
+                    // The doc did NOT land in knowledge.json — the fact
+                    // goes back on probation, exactly as it was.
+                    try { l.record(f) } catch (e: Exception) { }
+                    unpersisted++
+                }
+                val tail = if (unpersisted > 0)
+                    " — $unpersisted promotion(s) failed to persist and were kept in memory"
+                else ""
+                post { onDone(report.toString() + tail) }
+            } catch (e: Exception) {
+                post { onDone("Consolidation failed: " + (e.message ?: "unknown error")) }
+            }
         }
+    }
+
+    /** Deliver [r] on the main thread, fail-soft at every step. */
+    private fun post(r: () -> Unit) {
+        try {
+            main.post {
+                try { r() } catch (e: Exception) { }
+            }
+        } catch (e: Exception) { }
     }
 }
