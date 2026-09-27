@@ -1014,8 +1014,13 @@ class MainActivity : Activity() {
                 // (chips/continue/retry) contain digits and injected notes are
                 // full of dates, which made every one of them "mathy"
                 val wantMath = !plain && userText != null && looksMathy(userText!!)
+                // v0.8.1 (#1): the kernel sizes the generation leash per
+                // request — lean turns get half the user cap, everything
+                // else the full cap.
                 NovaEngineAdapter.stream(if (wantMath) mathPrompt(p2) else p2,
-                    settings.predictLength)
+                    NcieKnowledge.generationBudget(
+                        if (!plain && userText != null) userText else null,
+                        settings.predictLength))
                     .collect { token ->
                         if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
                         pending.append(token)
@@ -1247,6 +1252,19 @@ class MainActivity : Activity() {
         return false
     }
 
+    /** v0.8.1: live progress for the summarizers — the token stream is
+     *  already flowing; this shows it in the reply bubble (throttled to
+     *  ~4 updates/s, bounded by tail300) instead of a frozen progress
+     *  line. The header names the phase, so the user always knows what
+     *  is running. */
+    private var lastStreamUi = 0L
+    private fun uiProgress(header: String, sb: StringBuilder) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastStreamUi < 250) return
+        lastStreamUi = now
+        adapter.setLastText(header + tail300(sb.toString()))
+    }
+
     /** True when a reply looks cut off mid-sentence at the token limit. */
     private fun shouldAutoContinue(text: String): Boolean {
         val t = stripThinking(text).trim()
@@ -1394,7 +1412,7 @@ class MainActivity : Activity() {
                                 "sentences, no commentary. Only use facts " +
                                 "present in the text - never invent:" +
                                 "\n-----\n$c2\n-----", 280
-                        ).collect { sb.append(it) }
+                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n", sb) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
                     if (s.length > 10) {
@@ -1432,7 +1450,7 @@ class MainActivity : Activity() {
                         "at least one date, name, number or term - never a single word. " +
                         "Do not skip any topic. Use only the information given:" +
                         "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
-                ).collect { sb2.append(it) }
+                ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 // if the model derailed (scratchpad / off-topic drivel) fall
                 // back to the deduped section summaries - they are detailed
@@ -1584,7 +1602,7 @@ class MainActivity : Activity() {
                                 "as a bullet list. One fact per line, short lines. " +
                                 "Keep every date, name, number, term and fact " +
                                 "stated in the text. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
-                        ).collect { sb.append(it) }
+                        ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${sections.size}\u2026\n\n", sb) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
                     if (s.length > 10) {
@@ -1629,7 +1647,7 @@ class MainActivity : Activity() {
                         "single word. Copy key terms exactly as written, do not add " +
                         "outside knowledge or invent terms.$antiCot\n\n" +
                         dedupeLines(sectionSummaries.toString()).take(11000), 1500
-                ).collect { sb2.append(it) }
+                ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
                 // if the model derailed (scratchpad / off-topic drivel) fall
                 // back to the deduped section summaries - they are detailed

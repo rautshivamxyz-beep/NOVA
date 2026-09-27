@@ -69,6 +69,8 @@ MA_MARKERS = [
     ("NCIE polish: save-to-knowledge through the boundary", "NcieKnowledge.addDoc(ctx, nm, msgText)", 1),
     ("NCIE polish: all generation through the kernel engine", "NovaEngineAdapter.stream(", 6),
     ("v7.6.5: pressed-state ripple feedback", "fun rippleOverlay(", 1),
+    ("v0.8.1: kernel-sized generation leash", "NcieKnowledge.generationBudget(", 1),
+    ("v0.8.1: live streaming in the summarizers", "uiProgress(", 5),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
     ("NCIE 7: record the completed turn for the learner", "NcieLearn.record(this@MainActivity, userText, replyMsg.text)", 1),
 ]
