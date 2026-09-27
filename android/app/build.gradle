@@ -33,8 +33,9 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        versionCode 59
-        versionName '7.7.0'
+        // v7.8.0: the memory system - quality-gated learning, distillation, memory screen
+        versionCode 60
+        versionName '7.8.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
