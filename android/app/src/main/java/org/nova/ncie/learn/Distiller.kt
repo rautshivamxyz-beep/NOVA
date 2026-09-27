@@ -16,7 +16,7 @@ class DistillReport(
 }
 
 /**
- * v0.9.0 — ④ LEARN's consolidation pass: the graded memory's
+ * v0.9.0 — ⑤ LEARN's consolidation pass: the graded memory's
  * graduation ceremony.
  *
  *     birth → probation → graduation → death
