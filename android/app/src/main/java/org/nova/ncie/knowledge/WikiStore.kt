@@ -40,11 +40,18 @@ class WikiStore {
     ): List<Hit> {
         val qw = words(query)
         if (qw.isEmpty()) return emptyList()
-        val ql = query.lowercase()
+        // v7.8.1: the title bonus used raw substring containment, so an
+        // article title could match INSIDE a longer word - "hiv" matched
+        // inside "shivam", and "my name is shivam" pulled the HIV article
+        // in as background. Both sides are normalised to space-padded
+        // whole words now: "nelson mandela" still earns the bonus inside
+        // "who is nelson mandela", "hiv" no longer matches "shivam".
+        val qWords = " " + query.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
         val scored = index.mapNotNull { (title, off) ->
             val tw = words(title)
+            val tn = " " + title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
             val score = qw.count { it in tw } +
-                (if (title.lowercase() in ql) 2 else 0)
+                (if (tn.length > 2 && qWords.contains(tn)) 2 else 0)
             if (score > 0) Triple(score, title, off) else null
         }.sortedWith(compareByDescending<Triple<Int, String, Long>> { it.first }
             .thenBy { it.second })
