@@ -128,8 +128,15 @@ check("v0.8.1: vendored learner has clear() (interface + both impls)",
       lr.count("fun clear()") + pl.count("fun clear()") == 3)
 check("v0.8.1: vendored learner has synonym classes",
       lr.count("synonymGroups") + pl.count("synonymGroups") == 2)
+ws = load("ncie/knowledge/WikiStore.kt")
 knn = load("Knowledge.kt")
 wc = load("WikiCore.kt")
+check("v7.8.1: wiki title bonus matches whole words (hiv no longer inside shivam)",
+      ws.count("space-padded") == 1 and ws.count("qWords") == 2)
+check("v7.8.1: self-introduction routed to plain chat (NcieChat.kt)",
+      nc.count("SELF_INTRO_REGEX") == 2 and nc.count("maybeRememberName") == 2)
+check("v7.8.1: name is a knowledge stopword (Knowledge.kt)",
+      knn.count('"name", "names"') == 1)
 check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
 check("v7.6 notes warm-up for send gate (Knowledge.kt)", knn.count("warm the cache from a background thread") == 1)
 check("v7.6 wiki done marker written last (WikiCore.kt)", wc.count("done.tmp") == 1)
@@ -139,8 +146,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.8.0: version bumped for the memory system",
-      bg.count("versionName '7.8.0'") == 1 and bg.count("versionCode 60") == 1)
+check("v7.8.1: version bumped for the chat-routing fixes",
+      bg.count("versionName '7.8.1'") == 1 and bg.count("versionCode 61") == 1)
 
 # ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
