@@ -5,6 +5,7 @@ import org.nova.ncie.execute.LlmEngine
 import org.nova.ncie.execute.ToolRegistry
 import org.nova.ncie.execute.tools.CalculatorTool
 import org.nova.ncie.knowledge.KnowledgeStore
+import org.nova.ncie.learn.LearnedFact
 import org.nova.ncie.learn.Learner
 import org.nova.ncie.model.Analysis
 import org.nova.ncie.model.NovaResponse
@@ -100,6 +101,16 @@ class NovaKernel(
             trace = trace,
         )
         if (plan.route != Route.CACHE) learner.record(request, response)
+        // v0.9.0: quality-gated memory — an answer that also clears the
+        // quality bar is born as a graded fact, which twice-confirmed
+        // facts graduate from into the knowledge base (see Distiller).
+        // Pure TOOL turns (the calculator) are deterministic: there is
+        // nothing to learn from them, so they stay out of the memory.
+        if (plan.route != Route.CACHE && plan.route != Route.TOOL &&
+            verdict.qualityScore >= LEARN_QUALITY_THRESHOLD
+        ) {
+            learner.record(LearnedFact.fromChat(request, answer, verdict.qualityScore))
+        }
         trace.add(PhaseTrace("LEARN", (System.nanoTime() - t) / 1_000_000, "cached for next time"))
 
         return response
@@ -193,6 +204,18 @@ class NovaKernel(
     }
 
     companion object {
+        /**
+         * v0.9.0: the quality bar a verified answer must clear to be born
+         * as a graded fact. Score semantics: verify() returns 1.0 for
+         * cross-checked math, 0.95 for cache, and 0.5 as the neutral
+         * floor when no deterministic check applies to the intent
+         * (exactly what an ordinary chat answer is); quality() returns
+         * 0.6 on a clean pass; every real failure is 0.0–0.4. 0.5
+         * therefore admits "nothing said otherwise" and excludes
+         * everything that actually failed a check.
+         */
+        const val LEARN_QUALITY_THRESHOLD = 0.5
+
         /** A ready-to-run kernel with every default implementation. */
         fun defaults(): NovaKernel {
             val calculator = CalculatorTool()

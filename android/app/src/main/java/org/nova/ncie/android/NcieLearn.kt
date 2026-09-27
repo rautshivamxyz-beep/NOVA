@@ -1,10 +1,18 @@
 package org.nova.ncie.android
 
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import org.nova.ChatStore
+import org.nova.Knowledge
 import org.nova.MainActivity
 import org.nova.Msg
 import org.nova.Role
+import org.nova.Settings
 import org.nova.SMALLTALK_REGEX
+import org.nova.ncie.knowledge.KnowledgeStore
+import org.nova.ncie.learn.Distiller
+import org.nova.ncie.learn.LearnedFact
 import org.nova.ncie.learn.LearningStore
 import org.nova.ncie.learn.PersistentLearner
 import org.nova.ncie.model.Analysis
@@ -45,6 +53,10 @@ object NcieLearn {
     private val io = Executors.newSingleThreadExecutor { r ->
         Thread(r, "ncie-learn").apply { isDaemon = true }
     }
+
+    /** v0.9.1 phase 2: memory-screen callbacks are delivered here,
+     *  where a View can be updated. */
+    private val main = Handler(Looper.getMainLooper())
 
     @Volatile private var learner: PersistentLearner? = null
     @Volatile private var bootStarted = false
@@ -108,18 +120,26 @@ object NcieLearn {
         // v0.8.1: records join the learner's own thread, so an
         // invalidate() can never interleave with a persist.
         io.execute { l.record(userText, response) }
+        // v0.9.1 (phase 2): the same quality-gated turn is ALSO born as a
+        // graded fact — the kernel's memory system gets what the answer
+        // cache already got. verdict.qualityScore is a Double (see
+        // VerifyResult in Types.kt); with this stub Verifier a clean
+        // quality() pass scores 0.6 — the kernel's convention for a
+        // quality pass with no ground truth — so the fact is born with
+        // exactly the score of the gate that admitted it.
+        io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
      *  loads the cache off it. Returns null until loaded — a miss, never
      *  a block. All learner access afterwards is main-thread only. */
-    private fun learner(act: MainActivity): PersistentLearner? {
+    private fun learner(ctx: Context): PersistentLearner? {
         learner?.let { return it }
         if (!bootStarted) {
             synchronized(this) {
                 if (!bootStarted) {
                     bootStarted = true
-                    val dir = act.filesDir
+                    val dir = ctx.filesDir
                     val file = File(dir, "ncie_learn.txt")
                     learnFile = file
                     io.execute { learner = PersistentLearner(storeFor(file)) }
@@ -156,5 +176,127 @@ object NcieLearn {
             try { f.delete() } catch (e: Exception) { }
             learner?.clear()
         }
+    }
+
+    // ------------------------------------------------------------------
+    // v0.9.1 phase 2 — the memory screen's API. Every call joins the
+    // learner's own io thread (so it can never interleave with a record
+    // or an invalidate), is fail-soft (a memory problem must never crash
+    // the app), and hands its result to the caller on the main thread,
+    // where a View can be updated.
+    // ------------------------------------------------------------------
+
+    /** The memory screen can be the app's entry point (it has its own
+     *  launcher icon until phase 3 wires it into MainActivity), so it
+     *  needs the same lazy boot the chat path gets. [ctx] is used only
+     *  to locate filesDir, at call time — nothing of it is retained. */
+    fun memoryBoot(ctx: Context) { learner(ctx) }
+
+    /** The whole graded memory plus the learner's stats line, or an
+     *  empty list / placeholder string while the learner still boots. */
+    fun memorySnapshot(onReady: (facts: List<LearnedFact>, stats: String) -> Unit) {
+        io.execute {
+            val facts = try { learner?.learnedFacts() ?: emptyList() }
+                        catch (e: Exception) { emptyList() }
+            val stats = try { learner?.stats() ?: "memory still loading" }
+                        catch (e: Exception) { "memory unavailable" }
+            post { onReady(facts, stats) }
+        }
+    }
+
+    /** Forget ONE question — fact and cached answer, memory and disk.
+     *  Everything else stays (the surgical opposite of [memoryClear]). */
+    fun memoryForget(question: String) {
+        io.execute {
+            try { learner?.forget(question) } catch (e: Exception) { }
+        }
+    }
+
+    /** Wipe the whole learned world — graded facts, cached answers,
+     *  counters — the same clear() the kernel's invalidation uses. */
+    fun memoryClear() {
+        io.execute {
+            try { learner?.clear() } catch (e: Exception) { }
+        }
+    }
+
+    /**
+     * One consolidation pass — the graduation ceremony. A fact with
+     * score >= Distiller.GRADUATION_SCORE and at least
+     * Distiller.GRADUATION_INTERACTIONS confirmations leaves the graded
+     * memory and becomes a knowledge-base document (its name the
+     * question, its content the answer), so the app's offline RAG
+     * serves it to every later answer.
+     *
+     * Persistence choice (deliberate, and the reason this does NOT call
+     * NcieKnowledge.addDoc): that forward persists a doc AND calls
+     * NcieLearn.invalidate() — which would wipe the not-yet-graduated
+     * facts still on probation, exactly what a graduation must never
+     * do. So the Distiller runs against a rebuilt KnowledgeStore (the
+     * same boot NcieKnowledge itself uses: KnowledgeAdapter.loadChunks
+     * + rebuildChunks + the user's Notes-filter exclusions), and each
+     * promoted doc is then persisted through Knowledge.addDoc — the
+     * app's single writer of knowledge.json, with NO learner
+     * invalidation. NcieKnowledge picks the change up the usual way:
+     * it stats knowledge.json per call and re-parses on mtime change.
+     *
+     * A promotion whose doc failed to land in knowledge.json is put
+     * back into the graded memory exactly as it was — nothing is lost.
+     */
+    fun memoryDistill(ctx: Context, onDone: (report: String) -> Unit) {
+        io.execute {
+            val l = learner
+            if (l == null) {
+                post { onDone("Memory is still loading — try again in a moment.") }
+                return@execute
+            }
+            try {
+                val before = l.learnedFacts()
+
+                // The same store NcieKnowledge boots: the app's chunks,
+                // verbatim, plus the user's Notes-filter exclusions.
+                val store = KnowledgeStore()
+                store.rebuildChunks(KnowledgeAdapter.loadChunks(ctx))
+                store.setExcluded(Settings(ctx).knowledgeExcluded)
+
+                val report = Distiller(l, store).distill()
+
+                // The Distiller promoted facts into the throwaway store
+                // above (the live one is NcieKnowledge's private field);
+                // now make each promotion real on disk. The promoted are
+                // the ones distill() forgot from the graded memory.
+                val remaining = l.learnedFacts().map { it.question }.toSet()
+                var unpersisted = 0
+                for (f in before) {
+                    if (f.question in remaining) continue
+                    val q = f.question.trim()
+                    val name = if (q.length <= Distiller.MAX_NAME_CHARS) q
+                               else q.substring(0, Distiller.MAX_NAME_CHARS) + "…"
+                    try {
+                        Knowledge.addDoc(ctx, name, q + "\n\n" + f.answer.trim())
+                        if (Knowledge.docText(ctx, name).isNotEmpty()) continue
+                    } catch (e: Exception) { }
+                    // The doc did NOT land in knowledge.json — the fact
+                    // goes back on probation, exactly as it was.
+                    try { l.record(f) } catch (e: Exception) { }
+                    unpersisted++
+                }
+                val tail = if (unpersisted > 0)
+                    " — $unpersisted promotion(s) failed to persist and were kept in memory"
+                else ""
+                post { onDone(report.toString() + tail) }
+            } catch (e: Exception) {
+                post { onDone("Consolidation failed: " + (e.message ?: "unknown error")) }
+            }
+        }
+    }
+
+    /** Deliver [r] on the main thread, fail-soft at every step. */
+    private fun post(r: () -> Unit) {
+        try {
+            main.post {
+                try { r() } catch (e: Exception) { }
+            }
+        } catch (e: Exception) { }
     }
 }
