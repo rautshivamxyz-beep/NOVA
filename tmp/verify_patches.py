@@ -22,6 +22,10 @@ import sys
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 BASE = "android/app/src/main/java/org/nova/"
 FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]
+# Stage 5 (#1): send() collapsed - its body moved verbatim to
+# ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that
+# lived inside send() are checked against NcieChat.kt now; everything
+# else still points at MainActivity.
 
 fails = []
 
@@ -37,6 +41,7 @@ def load(f):
 
 
 ma = load("MainActivity.kt")
+nc = load("ncie/android/NcieChat.kt")
 bk = load("Backup.kt")
 nb = load("NotifBrain.kt")
 ka = load("KnowledgeActivity.kt")
@@ -44,28 +49,47 @@ ka = load("KnowledgeActivity.kt")
 # ---- feature markers, exactly as the patch chain writes them ----
 MA_MARKERS = [
     ("v6.2.3 base markers", "class MainActivity", 1),
-    ("v7.3 greeting fast-path (regex + use)", "SMALLTALK_REGEX", 2),
-    ("v7.4 chip prompt set", "CHIP_PROMPTS", 2),
-    ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
+    ("v7.3 greeting fast-path (regex)", "SMALLTALK_REGEX", 1),
+    ("v7.4 chip prompt set", "CHIP_PROMPTS", 1),
+    # moved to NcieChat.kt below: ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
     ("v7.4 chat-switch guard", "val genChat = currentChat", 1),
     ("v7.4 input usable without model", "input.isEnabled = !NovaEngine.isLoading", 1),
     ("v7.5 section extraction prompt", "Extract the key facts", 2),
-    ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
-    ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
-    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
+    # moved to NcieChat.kt below: ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
+    # moved to NcieChat.kt below: ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
+    # moved to NcieChat.kt below: ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
     ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
     ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
     ("v7.5.1 anti-invent guardrails", "never invent", 2),
-    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 7),
-    ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
-    ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
+    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
+    # moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
+    # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
-    ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
+    # moved to NcieChat.kt below: ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("v7.6 notes cache warm-up", "Knowledge.warmUp(this@MainActivity)", 1),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
 ]
 for name, marker, n in MA_MARKERS:
     check("%s (x%d)" % (name, n), ma.count(marker) == n)
+
+# markers that moved with send()'s body to ncie/android/NcieChat.kt
+NC_MARKERS = [
+    ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),
+    ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),
+    ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
+    ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
+    ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
+    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
+    ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
+    ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
+    ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
+    ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend()", 1),
+    ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
+]
+for name, marker, n in NC_MARKERS:
+    check("%s (x%d)" % (name, n), nc.count(marker) == n)
+check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
+check("v7.6 streaming turn through NovaEngineAdapter", ma.count("NovaEngineAdapter.stream(") == 1)
 
 check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
 check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
@@ -87,8 +111,8 @@ check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sent
 check("old flash reloads in summarizers removed", ma.count("NovaEngine.load(this@MainActivity, NovaEngine.activeModelPath") == 0)
 
 # ---- the send-order fix: no-model tools BEFORE ensureModelReady ----
-i_tools = ma.find('if (solveArithmetic(text)) { input.setText("")')
-i_model = ma.find("if (!ensureModelReady()) return")
+i_tools = nc.find('if (solveArithmetic(text)) { input.setText("")')
+i_model = nc.find("if (!ensureModelReady()) return")
 check("v7.4/v7.6 order: calculator/phone commands before model check",
       i_tools != -1 and i_model != -1 and i_tools < i_model)
 
@@ -134,7 +158,7 @@ def structural(f, text):
     check("%s: parentheses balanced" % f, parens == 0)
 
 
-for f, text in [("MainActivity.kt", ma), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
