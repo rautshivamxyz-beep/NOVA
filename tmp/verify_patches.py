@@ -63,7 +63,7 @@ MA_MARKERS = [
     ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
     ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
     ("v7.5.1 anti-invent guardrails", "never invent", 2),
-    "¢v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
+    ("v7.5.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 6),
     # moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 reply boilerplate cleaner", "private fun cleanReplyText", 1),
@@ -213,7 +213,7 @@ def structural(f, text):
                 i += 1
             i += 1
         else:
-            if c =  "{":
+            if c == "{":
                 braces += 1
             elif c == "}":
                 braces -= 1
