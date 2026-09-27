@@ -302,6 +302,13 @@ fun MainActivity.ncieSend() {
         // two-source prefill meant for big models - lean now, like 1B
         val tiny = "1b" in mlabel || "1.2b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
 
+        // NCIE Stage 6 (#1): the kernel's context budget now picks the
+        // injection profile. Plain short chat gets the lean caps (the
+        // same profile tiny models get); knowledge-seeking turns keep
+        // the full ones. The numbers themselves are unchanged - only who
+        // decides. Tiny models always stay lean regardless.
+        val lean = tiny || NcieKnowledge.leanContext(text)
+
         if (!tiny) {
             // exam countdown awareness - injected once per conversation,
             // re-injected only when the day changes the countdown text
@@ -372,8 +379,8 @@ fun MainActivity.ncieSend() {
                 lastNotesHit = hits
                 lastNotesChatId = currentChat.id
                 var notes = hits.joinToString("\n---\n") { "[${it.doc}] ${it.text}" }
-                if (notes.length > (if (tiny) 1200 else 2400))
-                    notes = notes.substring(0, if (tiny) 1200 else 2400) + "\n[...more omitted]"
+                if (notes.length > (if (lean) 1200 else 2400))
+                    notes = notes.substring(0, if (lean) 1200 else 2400) + "\n[...more omitted]"
                 knowledgePart = "(Relevant notes from the user's documents - use them ONLY if they clearly help answer this exact request; if they do not, ignore them completely and answer normally:\n$notes)\n\n"
             }
         }
@@ -385,7 +392,7 @@ fun MainActivity.ncieSend() {
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 // v7.5: wiki is background only - halve it so the model reads
                 // less before the first word; notes (the quality driver) stay
-                val cap = if (tiny) 900 else 1200
+                val cap = if (lean) 900 else 1200
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
             }
@@ -394,8 +401,8 @@ fun MainActivity.ncieSend() {
         // record the source pages, and let the notes be the only background
         if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {
             var notes2 = hits.joinToString(NL + "---" + NL) { "[" + it.doc + "] " + it.text }
-            if (notes2.length > (if (tiny) 1200 else 2400))
-                notes2 = notes2.substring(0, if (tiny) 1200 else 2400)
+            if (notes2.length > (if (lean) 1200 else 2400))
+                notes2 = notes2.substring(0, if (lean) 1200 else 2400)
             knowledgePart = "(Study notes from the user's documents follow. " +
                 "Answer ONLY using these notes. If the answer is not in the " +
                 "notes, say plainly that the notes do not cover it. Copy key " +

@@ -65,6 +65,16 @@ object NcieKnowledge {
         return hits.map { Knowledge.Chunk(it.doc, it.text, it.text.lowercase(), normOf(it.text)) }
     }
 
+    /** The kernel's context-budget verdict for a chat turn: true when the
+     *  planner assigns the lean tier (plain short chat, complexity below
+     *  the study threshold — budget 0; study questions and keyword pulls
+     *  get 1500+). Combined with the app's tiny-model flag it picks the
+     *  injection profile: lean turns get the 1200/900 caps, everything
+     *  else the full 2400/1200 — the same two profiles the app has
+     *  always shipped, now chosen per request by the kernel. */
+    fun leanContext(text: String): Boolean =
+        planner.plan(analyzer.analyze(text), cacheHit = false).contextBudgetChars < 1500
+
     /** Does the knowledge base have any documents? (Parity with
      *  Knowledge.hasDocs — no exclusion filtering.) */
     fun hasDocs(ctx: Context): Boolean {
@@ -101,7 +111,7 @@ object NcieKnowledge {
         store.nameOnlyQuery(query, doc)
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity
-     *  add/delete). A stat per message; a parse only on change. */
+     * add/delete). A stat per message; a parse only on change. */
     private fun refresh(ctx: Context) {
         val f = File(ctx.filesDir, "knowledge.json")
         val m = if (f.exists()) f.lastModified() else -1L

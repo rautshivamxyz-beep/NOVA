@@ -29,12 +29,10 @@ FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"
 
 fails = []
 
-
 def check(name, cond):
     print(("PASS  " if cond else "FAIL  ") + name)
     if not cond:
         fails.append(name)
-
 
 def load(f):
     return open(os.path.join(ROOT, BASE + f), encoding="utf-8").read()
@@ -77,9 +75,10 @@ NC_MARKERS = [
     ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),
     ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),
     ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
-    ("v7.5 lean wiki cap", "val cap = if (tiny) 900 else 1200", 1),
+    ("v7.5/NCIE-6 lean wiki cap", "val cap = if (lean) 900 else 1200", 1),
+    ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
     ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
-    ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
+    ("v7.5.1/NCIE-6 lean notes caps", "if (lean) 1200 else 2400", 4),
     ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
