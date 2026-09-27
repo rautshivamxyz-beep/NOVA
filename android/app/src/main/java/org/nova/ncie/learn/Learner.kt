@@ -20,6 +20,10 @@ import org.nova.ncie.model.VerifyResult
  * requires the cached question's significant tokens to cover every
  * significant token of the asking one (question words never count), so
  * the served answer is always for a same-or-more-specific question.
+ *
+ * v0.8.1: [clear] — the world changed, drop what was learned; and
+ * [recallFuzzy] now matches curated synonym classes (study/learn,
+ * exam/test, ...) as the same topic token.
  */
 interface Learner {
     /** Return a cached answer for this exact request, if any. */
@@ -30,6 +34,11 @@ interface Learner {
     fun recallFuzzy(query: String): Pair<String, NovaResponse>? = null
     /** Record a completed exchange. */
     fun record(text: String, response: NovaResponse)
+    /** v0.8.1: the world the answers were learned from changed — drop
+     *  everything learned. Hosts call this when their knowledge base is
+     *  invalidated (the NOVA app: notes were edited or deleted). Default
+     *  is a no-op so custom learners keep compiling. */
+    fun clear() {}
     /** Human-readable stats for the Learn dashboard. */
     fun stats(): String
 }
@@ -49,6 +58,14 @@ class SimpleLearner : Learner {
     override fun record(text: String, response: NovaResponse) {
         cache[text.trim()] = response
         routeCounts[response.plan.route] = (routeCounts[response.plan.route] ?: 0) + 1
+    }
+
+    /** v0.8.1: factory-fresh again — entries and counters. */
+    override fun clear() {
+        cache.clear()
+        routeCounts.clear()
+        hits = 0
+        misses = 0
     }
 
     override fun stats(): String {
@@ -122,14 +139,19 @@ class PersistentLearner(
      * question that actually covers india was answered. A fuzzy hit
      * refreshes the LRU like an exact one and is counted separately
      * in [stats].
+     *
+     * v0.8.1: curated synonym classes count as the same token, so
+     * "the best way to study for the exam" covers "best way to learn
+     * for the test" — the covering guarantee holds per class, and a
+     * class never spans two topics (small, deliberate groups only).
      */
     override fun recallFuzzy(query: String): Pair<String, NovaResponse>? {
-        val q = sigTokens(query)
+        val q = canonTokens(query)
         if (q.isEmpty()) return null
         var bestKey: String? = null
         var bestExtras = Int.MAX_VALUE
         for (k in cache.keys) {
-            val e = sigTokens(k)
+            val e = canonTokens(k)
             if (e.size < q.size || !e.containsAll(q)) continue
             val extras = e.size - q.size
             if (extras < bestExtras) { bestExtras = extras; bestKey = k }
@@ -146,6 +168,19 @@ class PersistentLearner(
         cache[key] = response
         routeCounts[response.plan.route] = (routeCounts[response.plan.route] ?: 0) + 1
         persist()
+    }
+
+    /** v0.8.1: wipe the learned cache — memory AND disk. Counters reset
+     *  too: a cleared learner reports a clean slate, exactly like a
+     *  fresh one. The empty snapshot is written at once, so a restart
+     *  finds nothing to load. */
+    override fun clear() {
+        cache.clear()
+        routeCounts.clear()
+        hits = 0
+        misses = 0
+        fuzzyHits = 0
+        store.write("")
     }
 
     override fun stats(): String {
@@ -173,6 +208,35 @@ class PersistentLearner(
         s.lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length > 1 || it.all(Char::isDigit) }
             .filter { it !in queryStop }.toSet()
+
+    /** v0.8.1: equivalence classes for recallFuzzy — every word in a
+     *  group is the same topic token. Deliberately tiny and curated:
+     *  an unbounded thesaurus trades precision for noise, and one
+     *  wrong group would serve the wrong answer. Question words stay
+     *  in queryStop where they belong. */
+    private val synonymGroups = listOf(
+        setOf("math", "maths", "mathematics"),
+        setOf("calculation", "arithmetic"),
+        setOf("exam", "test"),
+        setOf("study", "learn"),
+        setOf("photo", "picture", "image"),
+        setOf("big", "large", "huge"),
+        setOf("small", "little", "tiny"),
+        setOf("fast", "quick", "rapid"),
+        setOf("start", "begin"),
+        setOf("make", "create", "build"),
+        setOf("buy", "purchase"),
+        setOf("city", "town"),
+        setOf("car", "vehicle"),
+        setOf("word", "term"),
+    )
+    private val synonymIndex: Map<String, String> =
+        synonymGroups.flatMapIndexed { i, g -> g.map { it to "syn$i" } }.toMap()
+
+    /** Canonical significant tokens: synonym classes collapse to one
+     *  id; everything else maps to itself. */
+    private fun canonTokens(s: String): Set<String> =
+        sigTokens(s).map { synonymIndex[it] ?: it }.toSet()
 
     /** One snapshot write per record; a host that records often can
      *  debounce inside its LearningStore. */
