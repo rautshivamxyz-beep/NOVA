@@ -15,9 +15,56 @@ import org.nova.ncie.model.VerifyResult
  * evaluators (recursive-descent and shunting-yard), so a routed
  * calculation is cross-checked with an algorithm that shares no code
  * with the one that produced it.
+ *
+ * v0.7.0: [quality] adds the checks that need no ground truth — blank
+ * answers, leaked chat boilerplate, length limits and source grounding.
  */
 interface Verifier {
     fun verify(analysis: Analysis, plan: Plan, answer: String): VerifyResult
+
+    /**
+     * v0.7.0 — answer-quality checks that need no ground truth. Hosts
+     * run this on every LLM answer (the deterministic routes are already
+     * covered by [verify]):
+     *  - a blank answer fails outright
+     *  - leaked chat boilerplate fails: a transcript header ("NOVA:",
+     *    "You:") or strict-mode prologue ("From general knowledge...") —
+     *    the failure modes the NOVA app's cleanReplyText repairs reactively
+     *  - more than [maxWords] words fails, when a limit is given
+     *  - with [sources], the answer must ground in them: a solid
+     *    fraction of its significant words must appear in the source text
+     */
+    fun quality(answer: String, sources: List<String> = emptyList(), maxWords: Int = 0): VerifyResult {
+        val a = answer.trim()
+        if (a.isEmpty()) {
+            return VerifyResult(false, 0.0, "answer is empty")
+        }
+        if (Regex("(?m)^\\s*(?:NOVA|You)\\s*:").containsMatchIn(a)) {
+            return VerifyResult(false, 0.1, "answer leaked a chat transcript header")
+        }
+        if (Regex("(?i)from general knowledge").containsMatchIn(a)) {
+            return VerifyResult(false, 0.2, "answer leaked strict-mode boilerplate")
+        }
+        val words = a.split(Regex("\\W+")).filter { it.isNotEmpty() }
+        if (maxWords > 0 && words.size > maxWords) {
+            return VerifyResult(false, 0.4, "${words.size} words — over the $maxWords-word limit")
+        }
+        if (sources.isNotEmpty()) {
+            val src = sources.joinToString(" ").lowercase()
+            val sig = words.map { it.lowercase() }.filter { it.length > 3 }.distinct()
+            if (sig.isNotEmpty()) {
+                val covered = sig.count { it in src }
+                val ratio = covered.toDouble() / sig.size
+                if (ratio < 0.3) {
+                    return VerifyResult(
+                        false, 0.3,
+                        "answer drifts from its sources ($covered/${sig.size} significant terms grounded)",
+                    )
+                }
+            }
+        }
+        return VerifyResult(true, 0.6, "quality checks passed (no ground truth needed)")
+    }
 }
 
 class MathVerifier(private val calculator: CalculatorTool) : Verifier {
@@ -27,7 +74,7 @@ class MathVerifier(private val calculator: CalculatorTool) : Verifier {
             return VerifyResult(true, 0.95, "served from cache (verified when first computed)")
         }
         if (analysis.intent != Intent.CALCULATION) {
-            // Nothing deterministic to check yet — grammar/fact checks come later.
+            // Nothing deterministic to check — quality() covers the rest.
             return VerifyResult(false, 0.5, "no deterministic check available for this intent")
         }
 
