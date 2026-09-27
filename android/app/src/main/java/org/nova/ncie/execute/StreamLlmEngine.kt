@@ -22,10 +22,12 @@ import kotlinx.coroutines.flow.collect
  *   - [send]       : (prompt, maxTokens) → cold Flow of token chunks
  *
  * generate() blocks the calling thread until the stream completes — call
- * it from a worker thread (Dispatchers.IO on Android). stop() may be
- * called from any other thread (the UI) to cancel the in-flight
- * collection: generation halts, the partial answer is returned, and the
- * model stays loaded — the same semantics the NOVA chat's stop button has.
+ * it from a worker thread (Dispatchers.IO on Android). stream() is the
+ * non-blocking counterpart for callers that want the Flow itself (a chat
+ * UI collecting token by token). stop() may be called from any other
+ * thread (the UI) to cancel the in-flight generation: it halts, the
+ * partial answer is returned, and the model stays loaded — the same
+ * semantics the NOVA chat's stop button has.
  */
 class StreamLlmEngine(
     private val engineName: () -> String,
@@ -46,6 +48,15 @@ class StreamLlmEngine(
 
     /** True while a generation is in flight. */
     val isGenerating: Boolean get() = job?.isActive == true
+
+    /**
+     * The streaming counterpart of [generate]: hand the token Flow to the
+     * caller instead of blocking on it. The NOVA app's startGeneration
+     * collects this token by token into the chat bubble; stopping is the
+     * caller cancelling the collecting coroutine (the stop button) — the
+     * engine stays loaded, exactly as before.
+     */
+    fun stream(prompt: String, maxTokens: Int): Flow<String> = send(prompt, maxTokens)
 
     override fun generate(prompt: String, maxTokens: Int): String {
         if (!loaded()) return "[engine] no model loaded"
@@ -76,7 +87,7 @@ class StreamLlmEngine(
      * Cancel the in-flight generation (call from the UI thread while
      * generate() is blocking a worker thread). Returns immediately.
      */
- fun stop() {
+    fun stop() {
         job?.cancel(CancellationException("stopped by user"))
     }
 }
