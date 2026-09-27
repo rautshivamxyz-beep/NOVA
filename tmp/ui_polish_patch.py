@@ -32,7 +32,7 @@ def swap(old, new, what):
 # 1. the helper, file-private, before MessageAdapter
 src = swap(
     "class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {",
-    "/** v7.6.5: pressed-state feedback for custom-drawn controls. Wraps any
+    """/** v7.6.5: pressed-state feedback for custom-drawn controls. Wraps any
  *  background (or none) in a bounded ripple tinted with the theme accent;
  *  radiusPx adds a round mask so icon-only buttons ripple in their own
  *  shape instead of a rectangle. */
@@ -48,7 +48,7 @@ private fun rippleOverlay(
         else GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = radiusPx })
 }
 
-class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {",
+class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {""",
     "helper insertion")
 
 # 2. roundButton (header add/menu + doc button)
