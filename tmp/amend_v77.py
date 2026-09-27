@@ -29,27 +29,30 @@ rep("78a843fade9d4612a5567302fb595b56976eb5fcebff4fea5a5912d638bafcde3",
 rep('Orientation.TL_BR") == 1)', 'Orientation.TL_BR") == 2)', 1)
 rep('apply {") == 3)', 'apply {") == 5)', 1)
 
-# 3. send button states in updateSendLook must match the new iris design
-rep('''("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+# 3. send button states in updateSendLook must match the new iris design.
+#    The injected block lives inside one outer triple-quoted string, so the
+#    inner Kotlin snippets use double-quote triples to avoid nesting.
+OLD_TAIL = '''("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
 ],
-"android/app/src/main/java/org/nova/ChatsActivity.kt": [''',
-    '''("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
-('''            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+"android/app/src/main/java/org/nova/ChatsActivity.kt": ['''
+NEW_TAIL = '''("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+("""            sendBtn.background = rippleOverlay(GradientDrawable().apply {
                 setColor(accentDeep); cornerRadius = dp(20).toFloat()
-            })''',
- '''            sendBtn.background = rippleOverlay(GradientDrawable(
+            })""",
+ """            sendBtn.background = rippleOverlay(GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
                 intArrayOf(accent, accentDeep)).apply {
                 cornerRadius = dp(21).toFloat()
-            })''', 1),
-('''            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+            })""", 1),
+("""            sendBtn.background = rippleOverlay(GradientDrawable().apply {
                 setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
-            })''',
- '''            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+            })""",
+ """            sendBtn.background = rippleOverlay(GradientDrawable().apply {
                 setColor(NovaTheme.sendDim); cornerRadius = dp(21).toFloat()
-            })''', 1),
+            })""", 1),
 ],
-"android/app/src/main/java/org/nova/ChatsActivity.kt": [''', 1)
+"android/app/src/main/java/org/nova/ChatsActivity.kt": ['''
+rep(OLD_TAIL, NEW_TAIL, 1)
 
 open(P, "wb").write(src.encode("utf-8"))
 print("apply_ui_v77.py amended: sha, guard counts, updateSendLook states")
