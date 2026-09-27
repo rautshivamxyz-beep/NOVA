@@ -131,8 +131,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.6.5: version bumped for the polish build",
-      bg.count("versionName '7.6.5'") == 1 and bg.count("versionCode 57") == 1)
+check("v7.6.6: version bumped for the v0.8.1 sync",
+      bg.count("versionName '7.6.6'") == 1 and bg.count("versionCode 58") == 1)
 
 # ---- old code that must be GONE (a skipped patch leaves these behind) ----
 check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sentences") == 0)
