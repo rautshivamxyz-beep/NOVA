@@ -111,7 +111,7 @@ object NcieKnowledge {
         store.nameOnlyQuery(query, doc)
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity
-     * add/delete). A stat per message; a parse only on change. */
+     *  add/delete). A stat per message; a parse only on change. */
     private fun refresh(ctx: Context) {
         val f = File(ctx.filesDir, "knowledge.json")
         val m = if (f.exists()) f.lastModified() else -1L
