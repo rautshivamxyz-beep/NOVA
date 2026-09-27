@@ -106,7 +106,7 @@ class ModelsActivity : Activity() {
         header.addView(TextView(this).apply {
             text = "Models"
             textSize = 22f
-            typeface = Typeface.DEFAULT_BOLD
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
             setPadding(dp(8), 0, 0, 0)
         })
@@ -224,7 +224,7 @@ class ModelsActivity : Activity() {
         text = s
         setTextColor(textDim)
         textSize = 13f
-        typeface = Typeface.DEFAULT_BOLD
+        setTypeface(typeface, Typeface.BOLD)
         setPadding(dp(22), 0, dp(22), dp(8))
         letterSpacing = 0.08f
     }
@@ -281,7 +281,7 @@ class ModelsActivity : Activity() {
             text = entry.name
             setTextColor(textMain)
             textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
+            setTypeface(typeface, Typeface.BOLD)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         top.addView(TextView(this).apply {
             text = "${fit.emoji} ${entry.params}"
@@ -350,7 +350,7 @@ class ModelsActivity : Activity() {
                 text = (if (isActive) "● " else "") + ModelCatalog.labelFor(m)
                 setTextColor(if (isActive) accent else textMain)
                 textSize = 14f
-                typeface = Typeface.DEFAULT_BOLD
+                setTypeface(typeface, Typeface.BOLD)
             })
             localInner.addView(TextView(this).apply {
                 text = "${m.name} · ${String.format(java.util.Locale.US, "%.1f", m.length() / 1e9)} GB"

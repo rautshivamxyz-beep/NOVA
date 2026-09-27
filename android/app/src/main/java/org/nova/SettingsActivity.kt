@@ -52,7 +52,7 @@ class SettingsActivity : Activity() {
             text = title
             textSize = 12f
             letterSpacing = 0.1f
-            typeface = Typeface.DEFAULT_BOLD
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.dim)
         })
         return outer
@@ -129,7 +129,7 @@ class SettingsActivity : Activity() {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
         header.addView(TextView(this).apply {
-            text = "Settings"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            text = "Settings"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.text)
         })
         col.addView(header)
@@ -220,7 +220,7 @@ class SettingsActivity : Activity() {
             text = "Delete all chats"
             isAllCaps = false
             textSize = 14f
-            setTextColor(android.graphics.Color.parseColor("#FF6B6B"))
+            setTextColor(android.graphics.Color.parseColor("#F87171"))
             background = null
             setPadding(0, dp(10), 0, dp(4))
             setOnClickListener {

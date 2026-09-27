@@ -68,7 +68,7 @@ class ChatsActivity : Activity() {
         header.addView(TextView(this).apply {
             text = "Chats"
             textSize = 22f
-            typeface = Typeface.DEFAULT_BOLD
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
             setPadding(dp(8), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -86,7 +86,7 @@ class ChatsActivity : Activity() {
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        root.addView(View(this).apply { setBackgroundColor(Color.parseColor("#1A2030")) },
+        root.addView(View(this).apply { setBackgroundColor(NovaTheme.divider) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         // v5.4.8: search across all chats - names and message text
@@ -184,7 +184,7 @@ class ChatsActivity : Activity() {
                 text = (if (active) "● " else "") + chat.name
                 setTextColor(if (active) accent else textMain)
                 textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
+                setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             titleRow.addView(TextView(this).apply {
                 text = fmt.format(Date(chat.updatedAt))
@@ -200,7 +200,7 @@ class ChatsActivity : Activity() {
             })
 
             val sep = View(this).apply {
-                setBackgroundColor(Color.parseColor("#1F2635"))
+                setBackgroundColor(NovaTheme.surface)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { topMargin = dp(10) }
             }

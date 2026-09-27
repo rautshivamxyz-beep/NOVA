@@ -2,7 +2,7 @@
 """NOVA post-patch verification (automatic test, level 1).
 
 Runs in CI right after the patch chain. Checks that every feature marker
-from v6.2.3 .. v7.6.0 is present in the generated code exactly as many
+from v6.2.3 .. v7.7.0 is present in the generated code exactly as many
 times as expected, that no old code survived where a patch should have
 replaced it, that the send-order fix is in the right order, and that all
 four patched Kotlin files still balance with no invalid escapes.
@@ -43,6 +43,10 @@ nc = load("ncie/android/NcieChat.kt")
 bk = load("Backup.kt")
 nb = load("NotifBrain.kt")
 ka = load("KnowledgeActivity.kt")
+ca = load("ChatsActivity.kt")
+sa = load("SettingsActivity.kt")
+ea = load("ExamsActivity.kt")
+moa = load("ModelsActivity.kt")
 
 # ---- feature markers, exactly as the patch chain writes them ----
 MA_MARKERS = [
@@ -131,8 +135,40 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.6.6: version bumped for the v0.8.1 sync",
-      bg.count("versionName '7.6.6'") == 1 and bg.count("versionCode 58") == 1)
+check("v7.7.0: version bumped for the UI refresh",
+      bg.count("versionName '7.7.0'") == 1 and bg.count("versionCode 59") == 1)
+
+# ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
+sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
+nt = load("NovaTheme.kt")
+check("v7.7.0: Inter applied app-wide via the theme", sty.count("@font/inter") == 1)
+check("v7.7.0: theme chrome matches graphite dark", sty.count("#0A0B0E") == 3)
+fam = open(os.path.join(ROOT, "android/app/src/main/res/font/inter.xml"), encoding="utf-8").read()
+check("v7.7.0: font family ships 4 weights", fam.count("inter_") == 4)
+for w in ("inter_regular", "inter_medium", "inter_semibold", "inter_bold"):
+    check("v7.7.0: %s.ttf present" % w,
+          os.path.exists(os.path.join(ROOT, "android/app/src/main/res/font", w + ".ttf")))
+check("v7.7.0: graphite + iris palette installed",
+      nt.count("#7C87FF") == 2 and nt.count("#0A0B0E") == 2)
+check("v7.7.0: old navy accent gone from the palette",
+      nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
+check("v7.7.0: send button is an iris gradient",
+      ma.count("GradientDrawable.Orientation.TL_BR") == 2)
+check("v7.7.0: drawer widened (hide + layout)", ma.count("dp(304)") == 2)
+check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") == 2)
+check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
+check("v7.7.0: bold resolves inside the Inter family",
+      ma.count("setTypeface(typeface, Typeface.BOLD)") == 2)
+check("v7.7.0: rounded ripples on chips, round buttons and drawer rows",
+      ma.count("rippleOverlay(GradientDrawable().apply {") == 5)
+check("v7.7.0: ChatsActivity navy remnants gone",
+      ca.count("#1A2030") == 0 and ca.count("#1F2635") == 0
+      and ca.count("Typeface.DEFAULT_BOLD") == 0)
+check("v7.7.0: SettingsActivity legacy red replaced",
+      sa.count("#FF6B6B") == 0 and sa.count("Typeface.DEFAULT_BOLD") == 0)
+check("v7.7.0: Knowledge/Exams/Models screens on Inter bold",
+      ka.count("Typeface.DEFAULT_BOLD") == 0 and ea.count("Typeface.DEFAULT_BOLD") == 0
+      and moa.count("Typeface.DEFAULT_BOLD") == 0)
 
 # ---- old code that must be GONE (a skipped patch leaves these behind) ----
 check("old 5-8-sentence summarizer prompts removed", ma.count("5-8 detailed sentences") == 0)

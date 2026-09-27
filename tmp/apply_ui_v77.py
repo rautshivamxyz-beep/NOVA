@@ -37,7 +37,7 @@ FONTS = [
     ("extras/ttf/Inter-Medium.ttf", "inter_medium.ttf",
      "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872"),
     ("extras/ttf/Inter-SemiBold.ttf", "inter_semibold.ttf",
-     "78a843fade9d4612a5567302fb595b56976eb5fcebff4fea5a5912d638bafcde3"),
+     "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3"),
     ("extras/ttf/Inter-Bold.ttf", "inter_bold.ttf",
      "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f"),
 ]
@@ -202,6 +202,20 @@ EDITS = {
                 cornerRadius = dp(14).toFloat()
             }, dp(14).toFloat())''', 1),
 ("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
+("""            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+                setColor(accentDeep); cornerRadius = dp(20).toFloat()
+            })""",
+ """            sendBtn.background = rippleOverlay(GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, accentDeep)).apply {
+                cornerRadius = dp(21).toFloat()
+            })""", 1),
+("""            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+                setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
+            })""",
+ """            sendBtn.background = rippleOverlay(GradientDrawable().apply {
+                setColor(NovaTheme.sendDim); cornerRadius = dp(21).toFloat()
+            })""", 1),
 ],
 "android/app/src/main/java/org/nova/ChatsActivity.kt": [
 ("typeface = Typeface.DEFAULT_BOLD", "setTypeface(typeface, Typeface.BOLD)", 2),
@@ -248,14 +262,14 @@ check("v7.7.0: graphite + iris palette installed",
 check("v7.7.0: old navy accent gone from the palette",
       nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
 check("v7.7.0: send button is an iris gradient",
-      ma.count("GradientDrawable.Orientation.TL_BR") == 1)
+      ma.count("GradientDrawable.Orientation.TL_BR") == 2)
 check("v7.7.0: drawer widened (hide + layout)", ma.count("dp(304)") == 2)
 check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") == 2)
 check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
 check("v7.7.0: bold resolves inside the Inter family",
       ma.count("setTypeface(typeface, Typeface.BOLD)") == 2)
 check("v7.7.0: rounded ripples on chips, round buttons and drawer rows",
-      ma.count("rippleOverlay(GradientDrawable().apply {") == 3)
+      ma.count("rippleOverlay(GradientDrawable().apply {") == 5)
 check("v7.7.0: ChatsActivity navy remnants gone",
       ca.count("#1A2030") == 0 and ca.count("#1F2635") == 0
       and ca.count("Typeface.DEFAULT_BOLD") == 0)

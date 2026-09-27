@@ -65,7 +65,7 @@ class KnowledgeActivity : Activity() {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
         header.addView(TextView(this).apply {
-            text = "Knowledge"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            text = "Knowledge"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.text)
         })
         col.addView(header)

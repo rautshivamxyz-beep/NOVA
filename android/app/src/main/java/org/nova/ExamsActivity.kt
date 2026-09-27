@@ -59,7 +59,7 @@ class ExamsActivity : Activity() {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
         header.addView(TextView(this).apply {
-            text = "Exams"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            text = "Exams"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.text)
         })
         col.addView(header)
@@ -138,7 +138,7 @@ class ExamsActivity : Activity() {
             row.addView(TextView(this).apply {
                 text = e.name
                 textSize = 16f; setTextColor(NovaTheme.text)
-                typeface = Typeface.DEFAULT_BOLD
+                setTypeface(typeface, Typeface.BOLD)
             })
             row.addView(TextView(this).apply {
                 text = when {

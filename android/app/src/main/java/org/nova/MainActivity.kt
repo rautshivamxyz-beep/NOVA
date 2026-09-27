@@ -244,8 +244,8 @@ class MainActivity : Activity() {
         brandRow.addView(TextView(this).apply {
             text = "NOVA"
             textSize = 19f
-            letterSpacing = 0.14f
-            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.18f
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
         })
         status = TextView(this).apply {
@@ -269,11 +269,11 @@ class MainActivity : Activity() {
         header.addView(roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_add, textDim), null, null, null)
             setOnClickListener { newConversation() }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { rightMargin = dp(7) })
+        }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { rightMargin = dp(7) })
         header.addView(roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_menu, textDim), null, null, null)
             setOnClickListener { openDrawer() }
-        }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        }, LinearLayout.LayoutParams(dp(36), dp(36)))
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
@@ -284,7 +284,7 @@ class MainActivity : Activity() {
         messagesRv = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@MainActivity).apply { stackFromEnd = true }
             adapter = this@MainActivity.adapter
-            setPadding(dp(16), dp(10), dp(16), dp(6))
+            setPadding(dp(16), dp(12), dp(16), dp(8))
         }
         // Track whether the user is at the bottom of the chat. We only
         // auto-scroll during streaming when they're already there — this
@@ -300,20 +300,20 @@ class MainActivity : Activity() {
             setPadding(dp(36), dp(30), dp(36), dp(20))
             addView(TextView(this@MainActivity).apply {
                 text = "✦"
-                textSize = 34f
+                textSize = 38f
                 setTextColor(accent)
                 gravity = Gravity.CENTER
             })
             addView(TextView(this@MainActivity).apply {
                 text = "How can I help you today?"
-                textSize = 20f
+                textSize = 21f
                 setTextColor(textMain)
                 gravity = Gravity.CENTER
                 setPadding(0, dp(12), 0, dp(4))
             })
             addView(TextView(this@MainActivity).apply {
                 text = "Your private AI. Runs 100% on this phone."
-                textSize = 12f
+                textSize = 13f
                 setTextColor(textDim)
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, dp(20))
@@ -354,7 +354,7 @@ class MainActivity : Activity() {
                     gravity = Gravity.CENTER
                     background = rippleOverlay(GradientDrawable().apply {
                         setColor(NovaTheme.pill)
-                        cornerRadius = dp(22).toFloat()
+                        cornerRadius = dp(26).toFloat()
                         setStroke(dp(1), NovaTheme.border)
                     })
                     setOnClickListener {
@@ -368,7 +368,7 @@ class MainActivity : Activity() {
                         input.setSelection(input.text.length)
                     }
                 }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(44)
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
                 ).apply {
                     topMargin = dp(10)
                 })
@@ -436,7 +436,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 setColor(NovaTheme.pill)
-                cornerRadius = dp(26).toFloat()
+                cornerRadius = dp(28).toFloat()
                 setStroke(dp(1), NovaTheme.border)
             }
             setPadding(dp(6), dp(6), dp(6), dp(6))
@@ -496,13 +496,14 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 0)
             minWidth = 0
             minimumWidth = 0
-            background = rippleOverlay(GradientDrawable().apply {
-                setColor(accentDeep)
-                cornerRadius = dp(20).toFloat()
+            background = rippleOverlay(GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, accentDeep)).apply {
+                cornerRadius = dp(21).toFloat()
             })
             setOnClickListener { send() }
         }
-        pill.addView(sendBtn, LinearLayout.LayoutParams(dp(40), dp(40)))
+        pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         // v5.6.0: math symbol row - tap a symbol to insert it at the cursor
@@ -556,7 +557,7 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         drawerPane = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(NovaTheme.pill)
+            setBackgroundColor(NovaTheme.surface)
             setPadding(dp(20), dp(44), dp(16), dp(20))
             visibility = View.GONE
         }
@@ -569,7 +570,7 @@ class MainActivity : Activity() {
             text = "NOVA"
             textSize = 22f
             letterSpacing = 0.14f
-            typeface = Typeface.DEFAULT_BOLD
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.text)
             setPadding(0, dp(2), 0, dp(4))
         })
@@ -650,7 +651,7 @@ class MainActivity : Activity() {
         drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         drawerPane.addView(drawerList, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        frame.addView(drawerPane, FrameLayout.LayoutParams(dp(292), FrameLayout.LayoutParams.MATCH_PARENT))
+        frame.addView(drawerPane, FrameLayout.LayoutParams(dp(304), FrameLayout.LayoutParams.MATCH_PARENT))
         return frame
     }
 
@@ -1284,14 +1285,16 @@ class MainActivity : Activity() {
     private fun updateSendLook() {
         if (generating) return
         if (input.text.isNotBlank()) {
-            sendBtn.background = rippleOverlay(GradientDrawable().apply {
-                setColor(accentDeep); cornerRadius = dp(20).toFloat()
+            sendBtn.background = rippleOverlay(GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(accent, accentDeep)).apply {
+                cornerRadius = dp(21).toFloat()
             })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_send, Color.WHITE), null, null, null)
         } else {
             sendBtn.background = rippleOverlay(GradientDrawable().apply {
-                setColor(NovaTheme.sendDim); cornerRadius = dp(20).toFloat()
+                setColor(NovaTheme.sendDim); cornerRadius = dp(21).toFloat()
             })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_send, NovaTheme.sendDimText), null, null, null)
@@ -2440,7 +2443,9 @@ class MainActivity : Activity() {
             textSize = 15f
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
             setTextColor(NovaTheme.text)
-            background = null
+            background = rippleOverlay(GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+            }, dp(14).toFloat())
             setPadding(dp(4), dp(12), dp(4), dp(12))
             compoundDrawablePadding = dp(14)
             if (iconRes != 0)
@@ -2454,7 +2459,7 @@ class MainActivity : Activity() {
         scrim.visibility = View.VISIBLE
         scrim.alpha = 0f
         scrim.animate().alpha(1f).setDuration(200).start()
-        drawerPane.translationX = -dp(292).toFloat()
+        drawerPane.translationX = -dp(304).toFloat()
         drawerPane.animate().translationX(0f).setDuration(220).start()
     }
 
@@ -2868,8 +2873,8 @@ class MainActivity : Activity() {
         setTextColor(color)
         background = rippleOverlay(GradientDrawable().apply {
             setColor(surface)
-            setStroke(dp(1), Color.parseColor("#28314A"))
-            cornerRadius = dp(17).toFloat()
+            setStroke(dp(1), NovaTheme.border)
+            cornerRadius = dp(18).toFloat()
         })
         setPadding(0, 0, 0, 0)
         minWidth = 0
@@ -3415,12 +3420,12 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 rightMargin = 0
             }
             holder.bubble.background = GradientDrawable().apply {
-                val r = dp(ctx, 20).toFloat()
+                val r = dp(ctx, 22).toFloat()
                 val s = dp(ctx, 5).toFloat()
                 setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
                 setColor(NovaTheme.bubble)
             }
-            holder.bubble.setPadding(dp(ctx, 15), dp(ctx, 11), dp(ctx, 15), dp(ctx, 11))
+            holder.bubble.setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))
             holder.bubble.setTextColor(Color.WHITE)
         } else {
             holder.avatar.visibility = View.VISIBLE
