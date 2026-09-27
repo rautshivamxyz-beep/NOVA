@@ -4,7 +4,7 @@ import org.nova.ncie.model.NovaResponse
 import org.nova.ncie.model.Route
 
 /**
- * ④ LEARN — make the next answer faster or better.
+ * ⑤ LEARN — make the next answer faster or better.
  *
  * v0.1: an exact-match predictive cache plus route statistics
  * (how often each route wins, per intent).
