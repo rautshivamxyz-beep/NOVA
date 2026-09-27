@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieKnowledge
+import org.nova.ncie.android.NovaEngineAdapter
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
@@ -936,7 +937,7 @@ class MainActivity : Activity() {
         }
         // "gimme the notes of federalism" - paste stored Knowledge notes,
         // even when no document is attached in this chat
-        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+        if (docContext == null && settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             val wantsNotes = Regex("(?i)\\b(show|gimme|give|send|paste|display|want|read)\\b[^.]*\\b(notes?|material|answers?)\\b")
                 .containsMatchIn(text) &&
                 !Regex("(?i)\\bsummar|explain|simpl|quiz|points").containsMatchIn(text)
@@ -944,8 +945,8 @@ class MainActivity : Activity() {
                 // the chapter window around the best match - scattered
                 // top-4 fragments used to mix chapters ("money and credit"
                 // returned Great Depression text)
-                val ndoc = Knowledge.bestDocName(this, text)
-                val parts = if (ndoc != null) Knowledge.bestChunks(this, text, 10) else emptyList()
+                val ndoc = NcieKnowledge.bestDocName(this, text)
+                val parts = if (ndoc != null) NcieKnowledge.bestChunks(this, text, 10) else emptyList()
                 if (parts.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um)
@@ -962,7 +963,7 @@ class MainActivity : Activity() {
                     return
                 }
                 // nothing matched - list what notes exist so the user can name one
-                val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                val names = NcieKnowledge.docs(this).joinToString(", ") { it.first }
                 if (names.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um)
@@ -978,7 +979,7 @@ class MainActivity : Activity() {
         }
         // "summarise sst notes" / "gimme the whole summary" - summarize the
         // saved notes over the WHOLE chapter (map-reduce), clean engine
-        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+        if (docContext == null && settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             val wantsSumm = Regex("(?i)\\bsummaris|\\bsummariz").containsMatchIn(text)
             val summNoun = text.lowercase().contains("summary")
             // v5.4.1: "teach me whole power sharing chapter" - the user wants
@@ -994,19 +995,19 @@ class MainActivity : Activity() {
                 // "summarise it notes" - "it" means the IT notes here,
                 // not the pronoun the tokenizer throws away
                 val qtext = text.replace(" it notes", " IT Revision notes", ignoreCase = true)
-                val doc = if (wantsSumm || summNoun || wholeTeach) Knowledge.bestDocName(this, qtext)
+                val doc = if (wantsSumm || summNoun || wholeTeach) NcieKnowledge.bestDocName(this, qtext)
                           else lastNotesDoc
                 if (doc != null) {
                     lastNotesDoc = doc
                     // "summarise sst notes" NAMES the document -> the user
                     // wants the whole doc, not just the first 18 chunks
-                    val whole = wholeTeach || !wantsSumm || Knowledge.nameOnlyQuery(qtext, doc)
+                    val whole = wholeTeach || !wantsSumm || NcieKnowledge.nameOnlyQuery(qtext, doc)
                     summarizeNotes(doc, text, fullDoc = whole)
                     return
                 }
                 // nothing matched - NEVER fall back to guessing from chat:
                 // list what notes exist so the user can name one
-                val names = Knowledge.docs(this).joinToString(", ") { it.first }
+                val names = NcieKnowledge.docs(this).joinToString(", ") { it.first }
                 if (names.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um)
@@ -1023,11 +1024,11 @@ class MainActivity : Activity() {
         // v5.4.7: "quiz me on power sharing" - study flashcards straight
         // from the notes, reusing the study-card machinery and its Q:/A:
         // parser, so a quiz is graded material you already verified
-        if (docContext == null && settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+        if (docContext == null && settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             val quizMe = Regex("(?i)\\b(?:quiz|test) me on\\b").find(text)
             if (quizMe != null) {
                 val topic = text.substringAfter(quizMe.value).trim()
-                val parts = Knowledge.bestChunks(this, if (topic.length > 2) topic else text, 10)
+                val parts = NcieKnowledge.bestChunks(this, if (topic.length > 2) topic else text, 10)
                 if (parts.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
                     currentChat.messages.add(um); adapter.add(um)
@@ -1136,7 +1137,7 @@ class MainActivity : Activity() {
             qLow.startsWith("define ") || qLow.startsWith("describe ") ||
             qLow.startsWith("tell me about ") || qLow.contains(" explain ") ||
             qLow.contains(" teach me ") || qLow.contains(" what is ")
-        if (settings.knowledgeEnabled && Knowledge.hasDocs(this)) {
+        if (settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             // v5.4: cached answer from last time? -> instant, no model run
             if (studyQ && !isChip && docPart.isEmpty()) {
                 val qaKey = "qa_" + Integer.toHexString(qLow.hashCode()) + "_" +
@@ -1395,7 +1396,7 @@ class MainActivity : Activity() {
                 // (chips/continue/retry) contain digits and injected notes are
                 // full of dates, which made every one of them "mathy"
                 val wantMath = !plain && userText != null && looksMathy(userText!!)
-                NovaEngine.send(if (wantMath) mathPrompt(p2) else p2,
+                NovaEngineAdapter.stream(if (wantMath) mathPrompt(p2) else p2,
                     settings.predictLength)
                     .collect { token ->
                         if (tFirstToken == 0L) tFirstToken = android.os.SystemClock.elapsedRealtime()
