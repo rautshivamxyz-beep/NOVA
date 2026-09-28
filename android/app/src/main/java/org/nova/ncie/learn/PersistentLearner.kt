@@ -50,10 +50,12 @@ class PersistentLearner(
     private val store: LearningStore,
     private val maxEntries: Int = 200,
 ) : Learner {
-    private val cache = object : LinkedHashMap<String, NovaResponse>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, NovaResponse>?): Boolean =
-            size > maxEntries
-    }
+    private val cache = LinkedHashMap<String, NovaResponse>(16, 0.75f, true)
+    /** v0.9.2 (opt #4): the canonical fuzzy-match tokens of every cache
+     *  key, computed ONCE at insert - recallFuzzy no longer re-parses
+     *  every key (lowercase, split, stopword filter, synonym map) on
+     *  every miss. Evicted in lockstep with the cache below. */
+    private val canon = HashMap<String, Set<String>>()
     /** v0.9.0: the graded memory — keyed by trimmed question, same
      *  access-order LRU budget as the answer cache. */
     private val facts = LinkedHashMap<String, LearnedFact>(16, 0.75f, true)
@@ -61,6 +63,44 @@ class PersistentLearner(
     private var hits = 0
     private var misses = 0
     private var fuzzyHits = 0
+
+    // v0.9.2 fix: these token sets moved ABOVE the init block. restore()
+    // (which init runs) now warms the canonical-token cache for every
+    // loaded key, and canonTokens reads them - in declaration order they
+    // were still null during construction (the CI demo crashed on it).
+    /** Question words never count for matching — only the topic does. */
+    private val queryStop = setOf(
+        "a", "an", "and", "any", "about", "are", "can", "define", "describe",
+        "did", "do", "does", "explain", "for", "gimme", "give", "how", "in",
+        "is", "it", "its", "me", "mean", "means", "meaning", "my", "of", "on",
+        "or", "please", "teach", "tell", "the", "that", "this", "to", "us",
+        "was", "were", "what", "whats", "when", "where", "which", "who",
+        "whos", "why", "you", "your",
+    )
+
+    /** v0.8.1: equivalence classes for recallFuzzy — every word in a
+     *  group is the same topic token. Deliberately tiny and curated:
+     *  an unbounded thesaurus trades precision for noise, and one
+     *  wrong group would serve the wrong answer. Question words stay
+     *  in queryStop where they belong. */
+    private val synonymGroups = listOf(
+        setOf("math", "maths", "mathematics"),
+        setOf("calculation", "arithmetic"),
+        setOf("exam", "test"),
+        setOf("study", "learn"),
+        setOf("photo", "picture", "image"),
+        setOf("big", "large", "huge"),
+        setOf("small", "little", "tiny"),
+        setOf("fast", "quick", "rapid"),
+        setOf("start", "begin"),
+        setOf("make", "create", "build"),
+        setOf("buy", "purchase"),
+        setOf("city", "town"),
+        setOf("car", "vehicle"),
+        setOf("word", "term"),
+    )
+    private val synonymIndex: Map<String, String> =
+        synonymGroups.flatMapIndexed { i, g -> g.map { it to "syn$i" } }.toMap()
 
     init {
         restore()
@@ -96,7 +136,8 @@ class PersistentLearner(
         var bestKey: String? = null
         var bestExtras = Int.MAX_VALUE
         for (k in cache.keys) {
-            val e = canonTokens(k)
+            // v0.9.2 (opt #4): the tokens come from the insert-time cache
+            val e = canon[k] ?: continue
             if (e.size < q.size || !e.containsAll(q)) continue
             val extras = e.size - q.size
             if (extras < bestExtras) { bestExtras = extras; bestKey = k }
@@ -111,6 +152,8 @@ class PersistentLearner(
         val key = text.trim()
         if (key.isEmpty() || response.plan.route == Route.CACHE) return
         cache[key] = response
+        canon[key] = canonTokens(key)
+        evictLocked()
         routeCounts[response.plan.route] = (routeCounts[response.plan.route] ?: 0) + 1
         persist()
     }
@@ -141,6 +184,8 @@ class PersistentLearner(
         facts[key] = merged
         while (facts.size > maxEntries) facts.remove(facts.keys.first())
         cache[key] = factResponse(merged)
+        canon[key] = canonTokens(key)
+        evictLocked()
         persist()
     }
 
@@ -154,6 +199,7 @@ class PersistentLearner(
         val key = questionKey.trim()
         val fromFacts = facts.remove(key) != null
         val fromCache = cache.remove(key) != null
+        canon.remove(key)
         if (!fromFacts && !fromCache) return false
         persist()
         return true
@@ -190,6 +236,7 @@ class PersistentLearner(
      *  clear() is the whole-world reset, forget() is the scalpel. */
     override fun clear() {
         cache.clear()
+        canon.clear()
         facts.clear()
         routeCounts.clear()
         hits = 0
@@ -207,14 +254,14 @@ class PersistentLearner(
             "memory ${facts.size} facts | routes: $routes"
     }
 
-    /** Question words never count for matching — only the topic does. */
-    private val queryStop = setOf(
-        "a", "an", "and", "any", "about", "are", "can", "define", "describe",
-        "did", "do", "does", "explain", "for", "gimme", "give", "how", "in",
-        "is", "it", "its", "me", "mean", "means", "meaning", "my", "of", "on",
-        "or", "please", "teach", "tell", "the", "that", "this", "to", "us",
-        "was", "were", "what", "whats", "when", "where", "which", "who",
-        "whos", "why", "you", "your",
+    /** v0.9.2 (opt #10): the structured twin of [stats]. */
+    override fun statsData(): LearningStats? = LearningStats(
+        cacheEntries = cache.size,
+        factCount = facts.size,
+        hits = hits,
+        misses = misses,
+        fuzzyHits = fuzzyHits,
+        routeCounts = routeCounts.toMap(),
     )
 
     /** Significant tokens: lowercase, alphanumeric, not a question
@@ -224,30 +271,6 @@ class PersistentLearner(
         s.lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length > 1 || it.all(Char::isDigit) }
             .filter { it !in queryStop }.toSet()
-
-    /** v0.8.1: equivalence classes for recallFuzzy — every word in a
-     *  group is the same topic token. Deliberately tiny and curated:
-     *  an unbounded thesaurus trades precision for noise, and one
-     *  wrong group would serve the wrong answer. Question words stay
-     *  in queryStop where they belong. */
-    private val synonymGroups = listOf(
-        setOf("math", "maths", "mathematics"),
-        setOf("calculation", "arithmetic"),
-        setOf("exam", "test"),
-        setOf("study", "learn"),
-        setOf("photo", "picture", "image"),
-        setOf("big", "large", "huge"),
-        setOf("small", "little", "tiny"),
-        setOf("fast", "quick", "rapid"),
-        setOf("start", "begin"),
-        setOf("make", "create", "build"),
-        setOf("buy", "purchase"),
-        setOf("city", "town"),
-        setOf("car", "vehicle"),
-        setOf("word", "term"),
-    )
-    private val synonymIndex: Map<String, String> =
-        synonymGroups.flatMapIndexed { i, g -> g.map { it to "syn$i" } }.toMap()
 
     /** Canonical significant tokens: synonym classes collapse to one
      *  id; everything else maps to itself. */
@@ -285,6 +308,7 @@ class PersistentLearner(
             val key = unescapeLine(line.substring(0, i)) ?: continue
             val answer = unescapeLine(line.substring(i + 1)) ?: continue
             if (key.isEmpty() || answer.isEmpty()) continue
+            canon[key] = canonTokens(key)
             cache[key] = NovaResponse(
                 answer = answer,
                 plan = Plan(Route.CACHE, null, 0, 0, "restored from the learner store"),
@@ -296,6 +320,20 @@ class PersistentLearner(
             )
         }
         while (facts.size > maxEntries) facts.remove(facts.keys.first())
+        evictLocked()
+    }
+
+    /** v0.9.2 (opt #4): explicit LRU eviction - the LinkedHashMap's
+     *  removeEldestEntry hook fired inside restore() and record() but
+     *  could not keep the canon token cache in lockstep, so it is
+     *  manual now. keys.first() of an access-ordered map IS the least
+     *  recently used entry. */
+    private fun evictLocked() {
+        while (cache.size > maxEntries) {
+            val eldest = cache.keys.first()
+            cache.remove(eldest)
+            canon.remove(eldest)
+        }
     }
 
     /** v0.9.0: the cache shape of a graded fact — the same canonical
