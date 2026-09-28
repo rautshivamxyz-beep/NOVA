@@ -56,18 +56,24 @@ class ChatsActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(6), dp(18), dp(6))
         }
+        // v7.9.2: sized 36dp back button like the other screens -
+        // the unsized default Button rendered oversized and off-center
         header.addView(Button(this).apply {
             isAllCaps = false
             background = null
+            minWidth = 0; minimumWidth = 0
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            gravity = Gravity.CENTER
             val d = getDrawable(R.drawable.ic_back)!!.mutate()
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
             setOnClickListener { finish() }
-        })
+        }, LinearLayout.LayoutParams(dp(36), dp(36)))
         header.addView(TextView(this).apply {
             text = "Chats"
-            textSize = 22f
+            // v7.9.2: 20f everywhere - matches the Knowledge screen title
+            textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
             setPadding(dp(8), 0, 0, 0)
