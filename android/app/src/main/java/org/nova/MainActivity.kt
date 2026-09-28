@@ -63,7 +63,6 @@ class MainActivity : Activity() {
     private lateinit var emptyView: View
     internal lateinit var input: EditText
     private lateinit var sendBtn: Button
-    private lateinit var micBtn: Button
     private lateinit var symRow: android.widget.HorizontalScrollView
     internal val adapter = MessageAdapter()
 
@@ -448,15 +447,6 @@ class MainActivity : Activity() {
             }
             setPadding(dp(6), dp(6), dp(6), dp(6))
         }
-        micBtn = roundButton("", textDim).apply {
-            val icon = getDrawable(R.drawable.ic_mic)!!.mutate()
-            icon.colorFilter = android.graphics.PorterDuffColorFilter(
-                textDim, android.graphics.PorterDuff.Mode.SRC_IN)
-            gravity = Gravity.CENTER
-            background = rippleOverlay(null, dp(19).toFloat())
-            setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
-            setOnClickListener { startSpeech() }
-        }
         docBtn = roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_attach, textDim), null, null, null)
             setOnClickListener { openDocPicker() }
@@ -513,11 +503,8 @@ class MainActivity : Activity() {
             })
             setOnClickListener { send() }
         }
-        // v7.9.2: mic moved to the right, beside send - the left side
-        // was crowded and the input text started mid-pill
-        pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
-            rightMargin = dp(2)
-        })
+        // v7.9.3: one smart button on the right - mic when the input
+        // is empty, send when there is text (see updateSendLook)
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -1332,12 +1319,18 @@ class MainActivity : Activity() {
             })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_send, Color.WHITE), null, null, null)
+            sendBtn.setOnClickListener { send() }
         } else {
+            // v7.9.3: empty input turns the button into the mic - one
+            // smart button that morphs, like the big chat apps
             sendBtn.background = rippleOverlay(GradientDrawable().apply {
-                setColor(NovaTheme.sendDim); cornerRadius = dp(21).toFloat()
+                setColor(NovaTheme.surface)
+                setStroke(dp(1), NovaTheme.border)
+                cornerRadius = dp(21).toFloat()
             })
             sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-                icon(R.drawable.ic_send, NovaTheme.sendDimText), null, null, null)
+                icon(R.drawable.ic_mic, textDim), null, null, null)
+            sendBtn.setOnClickListener { startSpeech() }
         }
     }
 
