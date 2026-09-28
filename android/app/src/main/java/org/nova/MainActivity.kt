@@ -350,10 +350,15 @@ class MainActivity : Activity() {
                     setCompoundDrawablesWithIntrinsicBounds(icon(ico, NovaTheme.dim), null, null, null)
                     textSize = 14f
                     setTextColor(textMain)
-                    setPadding(dp(18), 0, dp(18), 0)
+                    setPadding(dp(16), 0, dp(16), 0)
                     minWidth = 0
                     minimumWidth = 0
-                    gravity = Gravity.CENTER
+                    minHeight = 0
+                    minimumHeight = 0
+                    // v7.9.2: icon on the leading edge, text right after
+                    // it - centering the icon+text block pushed every
+                    // label off-balance against the left icon
+                    gravity = Gravity.CENTER_VERTICAL or Gravity.START
                     background = rippleOverlay(GradientDrawable().apply {
                         setColor(NovaTheme.pill)
                         cornerRadius = dp(26).toFloat()
@@ -456,7 +461,9 @@ class MainActivity : Activity() {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_attach, textDim), null, null, null)
             setOnClickListener { openDocPicker() }
         }
-        pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+        pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+            rightMargin = dp(2)
+        })
         val symBtn = Button(this).apply {
             text = "√x"; textSize = 12f; isAllCaps = false
             setTextColor(textDim); background = null
@@ -467,9 +474,10 @@ class MainActivity : Activity() {
                     if (symRow.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             }
         }
-        pill.addView(symBtn, LinearLayout.LayoutParams(
-            dp(38), LinearLayout.LayoutParams.WRAP_CONTENT))
-        pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+        // v7.9.2: fixed height so the sqrt glyph lines up with the icons
+        pill.addView(symBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+            rightMargin = dp(4)
+        })
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
@@ -505,6 +513,11 @@ class MainActivity : Activity() {
             })
             setOnClickListener { send() }
         }
+        // v7.9.2: mic moved to the right, beside send - the left side
+        // was crowded and the input text started mid-pill
+        pill.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+            rightMargin = dp(2)
+        })
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
