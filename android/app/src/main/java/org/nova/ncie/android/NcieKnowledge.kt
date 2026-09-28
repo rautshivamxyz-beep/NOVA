@@ -6,7 +6,10 @@ import org.nova.Settings
 import org.nova.ncie.analyze.RuleBasedAnalyzer
 import org.nova.ncie.execute.ToolRegistry
 import org.nova.ncie.knowledge.KnowledgeStore
+import org.nova.ncie.learn.Learner
+import org.nova.ncie.plan.AdaptiveKernel
 import org.nova.ncie.plan.DecisionKernel
+import org.nova.ncie.plan.Planner
 import java.io.File
 
 /**
@@ -38,7 +41,9 @@ import java.io.File
 object NcieKnowledge {
 
     private val analyzer = RuleBasedAnalyzer()
-    private val planner = DecisionKernel(ToolRegistry(emptyList()))
+    /** v8.2.0: the base planner until the learner boots, the adaptive
+     *  one after — see [adoptAdaptivePlanner]. */
+    @Volatile private var planner: Planner = DecisionKernel(ToolRegistry(emptyList()))
     private val store = KnowledgeStore()
 
     @Volatile private var lastMtime = -1L
@@ -48,6 +53,18 @@ object NcieKnowledge {
      *  Knowledge.warmUp at startup. */
     fun warmUpNotes(ctx: Context) {
         refresh(ctx)
+    }
+
+    /** v8.2.0 (#10 rules): swap the base planner for the adaptive one
+     *  once the learner is live — the Mastery Rule takes over from there.
+     *  Idempotent; before the first boot the base budgets apply exactly
+     *  as before. */
+    @Volatile private var adaptivePlanner: Planner? = null
+    fun adoptAdaptivePlanner(l: Learner) {
+        if (adaptivePlanner != null) return
+        val p = AdaptiveKernel(planner, l)
+        adaptivePlanner = p
+        this.planner = p
     }
 
     /** The kernel-routed notes search for chat: analyze → plan → search,
