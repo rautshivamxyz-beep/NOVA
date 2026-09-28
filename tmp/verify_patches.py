@@ -155,8 +155,12 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.2.0: version bumped for the adaptive rules + sourced memory",
-      bg.count("versionName '8.2.0'") == 1 and bg.count("versionCode 69") == 1)
+check("v8.3.0: version bumped for the study planner + doubt journal",
+      bg.count("versionName '8.3.0'") == 1 and bg.count("versionCode 70") == 1)
+
+# ---- v8.3.0: the study planner + doubt journal (drawer row) ----
+check("v8.3.0: planner drawer row present (MainActivity)",
+      ma.count("PlannerActivity::class.java") == 1)
 
 # ---- v8.2.0: adaptive budgets (NCIE v0.9.3) + RAG-sourced memory ----
 check("v8.2.0: adaptive planner adoptable (NcieKnowledge.kt)",
