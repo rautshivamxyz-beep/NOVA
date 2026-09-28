@@ -149,8 +149,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.9.1: version bumped for the drawer redesign",
-      bg.count("versionName '7.9.1'") == 1 and bg.count("versionCode 64") == 1)
+check("v7.9.2: version bumped for the home-screen alignment pass",
+      bg.count("versionName '7.9.2'") == 1 and bg.count("versionCode 65") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
@@ -171,6 +171,14 @@ check("v7.9.1: secondary actions behind the More dialog",
       ma.count('drawerRow("Help & Tips"') == 0 and
       ma.count('drawerRow("Check for updates"') == 0 and
       ma.count('"Check for updates")') == 1)
+
+# ---- v7.9.2: home screen alignment + chats header polish ----
+check("v7.9.2: home chips left-aligned (icon leads, text follows)",
+      ma.count("Gravity.CENTER_VERTICAL or Gravity.START") == 1)
+check("v7.9.2: mic sits beside send on the right of the pill",
+      ma.index("pill.addView(micBtn") > ma.index("pill.addView(input,"))
+check("v7.9.2: chats header matches the other screens (20f title, 36dp back)",
+      ca.count("textSize = 20f") >= 1 and ca.count("dp(36), dp(36)") >= 1)
 
 # ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
