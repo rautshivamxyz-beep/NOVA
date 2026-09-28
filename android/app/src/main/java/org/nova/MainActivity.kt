@@ -249,11 +249,19 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
         })
+        // v8.0.0: the model label wears a chip now
         status = TextView(this).apply {
             text = "starting…"
-            textSize = 11.5f
+            textSize = 10.5f
             setTextColor(textDim)
-            setPadding(dp(17), dp(2), 0, 0)
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }
+            setPadding(dp(10), dp(3), dp(10), dp(3))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         busyDot = ProgressBar(this).apply {
             isIndeterminate = true
@@ -261,7 +269,9 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         brandCol.addView(brandRow)
-        brandCol.addView(status)
+        brandCol.addView(status, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
         header.addView(brandCol, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(busyDot, FrameLayout.LayoutParams(dp(18), dp(18)).apply {
@@ -301,13 +311,13 @@ class MainActivity : Activity() {
             setPadding(dp(36), dp(30), dp(36), dp(20))
             addView(TextView(this@MainActivity).apply {
                 text = "✦"
-                textSize = 38f
+                textSize = 42f
                 setTextColor(accent)
                 gravity = Gravity.CENTER
             })
             addView(TextView(this@MainActivity).apply {
                 text = "How can I help you today?"
-                textSize = 21f
+                textSize = 23f
                 setTextColor(textMain)
                 gravity = Gravity.CENTER
                 setPadding(0, dp(12), 0, dp(4))
@@ -3404,7 +3414,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         }
         val actions = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(ctx, 15), 0, 0, dp(ctx, 2))
+            setPadding(dp(ctx, 16), 0, 0, dp(ctx, 4))
         }
         fun actIcon(res: Int) = ctx.getDrawable(res)!!.mutate().apply {
             colorFilter = android.graphics.PorterDuffColorFilter(
@@ -3456,11 +3466,12 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 leftMargin = dp(ctx, 48)
                 rightMargin = 0
             }
-            holder.bubble.background = GradientDrawable().apply {
+            holder.bubble.background = GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(NovaTheme.accent, NovaTheme.accentDeep)).apply {
                 val r = dp(ctx, 22).toFloat()
                 val s = dp(ctx, 5).toFloat()
                 setCornerRadii(floatArrayOf(r, r, r, r, s, s, r, r))
-                setColor(NovaTheme.bubble)
             }
             holder.bubble.setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))
             holder.bubble.setTextColor(Color.WHITE)
@@ -3481,8 +3492,14 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                 leftMargin = 0
                 rightMargin = 0
             }
-            holder.bubble.background = null
-            holder.bubble.setPadding(0, dp(ctx, 8), 0, dp(ctx, 8))
+            // v8.0.0: replies live in cards now - surface + hairline
+            // border instead of floating bare text
+            holder.bubble.background = GradientDrawable().apply {
+                setCornerRadius(dp(ctx, 18).toFloat())
+                setColor(NovaTheme.surface)
+                setStroke(dp(1), NovaTheme.border)
+            }
+            holder.bubble.setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))
             holder.bubble.setTextColor(NovaTheme.text)
         }
 
