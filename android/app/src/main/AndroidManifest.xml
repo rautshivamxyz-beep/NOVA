@@ -35,17 +35,12 @@
 
         </activity>
 
-        <!-- v0.9.1 phase 2: NOVA's memory screen — its own launcher icon
-             until phase 3 wires it into MainActivity's UI. -->
+        <!-- v0.9.2 phase 3: NOVA's memory screen, reached from the
+             MainActivity drawer's "Memory" row - no launcher icon. -->
         <activity
             android:name=".MemoryActivity"
-            android:exported="true"
-            android:label="NOVA Memory">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false"
+            android:label="NOVA Memory" />
 
         <activity
             android:name=".ModelsActivity"
