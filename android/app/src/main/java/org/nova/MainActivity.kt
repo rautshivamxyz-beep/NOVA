@@ -653,6 +653,9 @@ class MainActivity : Activity() {
             true
         }
         drawerPane.addView(studyRow)
+        drawerPane.addView(drawerRow("Study plan", R.drawable.ic_lightbulb) {
+            startActivity(Intent(this, PlannerActivity::class.java))
+        })
         drawerPane.addView(drawerRow("More", R.drawable.ic_globe) {
             closeDrawer()
             AlertDialog.Builder(this)
