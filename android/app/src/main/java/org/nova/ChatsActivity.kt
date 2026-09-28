@@ -178,7 +178,13 @@ class ChatsActivity : Activity() {
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(4), dp(10), dp(4), dp(10))
+                // v8.0.0: chat rows are cards now, like the knowledge screen
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = GradientDrawable().apply {
+                    setColor(NovaTheme.pill)
+                    cornerRadius = dp(14).toFloat()
+                    setStroke(dp(1), NovaTheme.border)
+                }
                 setOnClickListener {
                     setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_CHAT_ID, chat.id))
                     finish()
@@ -205,10 +211,10 @@ class ChatsActivity : Activity() {
                 setPadding(0, dp(2), 0, 0)
             })
 
+            // v8.0.0: cards need breathing room, not divider lines
             val sep = View(this).apply {
-                setBackgroundColor(NovaTheme.surface)
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 1).apply { topMargin = dp(10) }
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
             }
             listInner.addView(row)
             listInner.addView(sep)
