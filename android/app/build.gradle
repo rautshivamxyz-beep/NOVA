@@ -33,9 +33,10 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        // v7.9.3: smart send button - mic when empty, send when typed
-        versionCode 66
-        versionName '7.9.3'
+        // v8.0.0: UI overhaul - midnight palette, reply cards,
+        // gradient bubbles, model chip, carded lists
+        versionCode 67
+        versionName '8.0.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
