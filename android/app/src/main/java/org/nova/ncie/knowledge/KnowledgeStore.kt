@@ -25,7 +25,11 @@ class KnowledgeStore(
     @Volatile private var excluded: Set<String> = emptySet(),
 ) {
 
-    class Chunk(val doc: String, val text: String, val low: String, val norm: String)
+    // v0.9.2 (opt #6): the never-read `low` copy of every chunk is gone
+    // (a third of chunk memory back), and each chunk precomputes its
+    // document's lowercase name - search no longer lowercases it per
+    // chunk per query.
+    class Chunk(val doc: String, val text: String, val norm: String, val docLow: String)
 
     private val STOP = setOf(
         "the", "and", "for", "are", "this", "that", "with", "what", "when",
@@ -46,6 +50,13 @@ class KnowledgeStore(
 
     private val chunks = ArrayList<Chunk>()
 
+    // v0.9.2 (opt #2): term -> chunk ids holding that term, and
+    // doc name -> chunk ids, both rebuilt whenever the chunk list
+    // changes. Search scores only the chunks a query term actually
+    // hits instead of scanning every chunk's norm string per term.
+    private val index = HashMap<String, LinkedHashSet<Int>>()
+    private val docIds = LinkedHashMap<String, MutableList<Int>>()
+
     // ------------------------------------------------------------ contents
 
     fun isEmpty(): Boolean = chunks.isEmpty()
@@ -64,6 +75,7 @@ class KnowledgeStore(
         synchronized(this) {
             chunks.clear()
             for ((name, text) in docs) addDocLocked(name, text)
+            reindexLocked()
         }
     }
 
@@ -75,25 +87,28 @@ class KnowledgeStore(
     fun rebuildChunks(chunks: List<Pair<String, String>>) {
         this.chunks.clear()
         for ((doc, text) in chunks) {
-            this.chunks.add(Chunk(doc, text, text.lowercase(), normOf(text)))
+            this.chunks.add(Chunk(doc, text, normOf(text), doc.lowercase()))
         }
+        reindexLocked()
     }
 
     @Synchronized
     fun addDoc(name: String, text: String) {
         addDocLocked(name, text)
+        reindexLocked()
     }
 
     private fun addDocLocked(name: String, text: String) {
         chunks.removeAll { it.doc == name }
         for (piece in chunkText(text)) {
-            chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))
+            chunks.add(Chunk(name, piece, normOf(piece), name.lowercase()))
         }
     }
 
     @Synchronized
     fun removeDoc(name: String) {
         chunks.removeAll { it.doc == name }
+        reindexLocked()
     }
 
     /** Update the exclusion filter (the app's Notes filter). */
@@ -115,12 +130,23 @@ class KnowledgeStore(
         val weights = termWeights(terms)
         val total = weights.values.sum()
         val scored = ArrayList<Pair<Double, Chunk>>()
-        for (c in chunks) {
+        // v0.9.2 (opt #2): the candidate set is the union of the chunks a
+        // query term hits plus the chunks of any document whose NAME
+        // matches a term (the x2 name bonus) - every chunk the old full
+        // scan could have scored, and no others. Iterated in chunk order
+        // so equal scores rank exactly as before.
+        val candidates = HashSet<Int>()
+        for (t in terms) index[t]?.let { candidates.addAll(it) }
+        for ((doc, ids) in docIds) {
+            if (terms.any { doc.lowercase().contains(it) }) candidates.addAll(ids)
+        }
+        for (i in candidates.sorted()) {
+            val c = chunks[i]
             if (c.doc in skip) continue
-            val dl = c.doc.lowercase()
+            val dl = c.docLow
             var s = 0.0
             for (t in terms) {
-                if (c.norm.contains(" " + t + " ")) s += weights[t] ?: 1.0
+                if (index[t]?.contains(i) == true) s += weights[t] ?: 1.0
                 if (dl.contains(t)) s += 2.0 * (weights[t] ?: 1.0)
             }
             if (s > 0.0 && s >= 0.55 * total) scored.add(s to c)
@@ -140,12 +166,19 @@ class KnowledgeStore(
         val skip = excluded
         val nameDocs = HashMap<String, MutableSet<String>>()   // term -> docs named after it
         val textDocs = HashMap<String, MutableSet<String>>()   // term -> docs containing it
-        for (c in chunks) {
-            if (c.doc in skip) continue
-            val dl = c.doc.lowercase()
+        // v0.9.2 (opt #2): text hits come straight from the inverted
+        // index, name hits from the per-doc chunk map - the same sets
+        // the full scan built, without walking every chunk
+        for (t in terms) {
+            val docs = HashSet<String>()
+            index[t]?.forEach { docs.add(chunks[it].doc) }
+            textDocs[t] = docs
+        }
+        for ((doc, _) in docIds) {
+            if (doc in skip) continue
+            val dl = doc.lowercase()
             for (t in terms) {
-                if (dl.contains(t)) nameDocs.getOrPut(t) { HashSet() }.add(c.doc)
-                if (c.norm.contains(" " + t + " ")) textDocs.getOrPut(t) { HashSet() }.add(c.doc)
+                if (dl.contains(t)) nameDocs.getOrPut(t) { HashSet() }.add(doc)
             }
         }
         val weights = termWeights(terms)
@@ -235,11 +268,23 @@ class KnowledgeStore(
     private fun termWeights(terms: List<String>): Map<String, Double> {
         val w = HashMap<String, Double>()
         for (t in terms) {
-            var n = 0
-            for (c in chunks) if (c.norm.contains(" " + t + " ")) ++n
+            val n = index[t]?.size ?: 0
             w[t] = if (n == 0) 1.0 else Math.log(1.0 + chunks.size.toDouble() / n)
         }
         return w
+    }
+
+    /** v0.9.2 (opt #2): rebuild the inverted index and the per-doc chunk
+     *  map. Called with the store's monitor held, after any mutation. */
+    private fun reindexLocked() {
+        index.clear()
+        docIds.clear()
+        for (i in chunks.indices) {
+            for (t in chunks[i].norm.split(' ')) {
+                if (t.isNotEmpty()) index.getOrPut(t) { LinkedHashSet() }.add(i)
+            }
+            docIds.getOrPut(chunks[i].doc) { ArrayList() }.add(i)
+        }
     }
 
     /** Lowercase with non-alphanumeric runs collapsed to single spaces,
