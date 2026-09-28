@@ -50,10 +50,14 @@ interface Verifier {
             return VerifyResult(false, 0.4, "${words.size} words — over the $maxWords-word limit")
         }
         if (sources.isNotEmpty()) {
-            val src = sources.joinToString(" ").lowercase()
+            // v0.9.2 (opt #9): whole-word grounding. The old substring
+            // test counted "paris" as grounded by "comparison" - the same
+            // word-boundary bug the wiki title search once had.
+            val srcWords = sources.joinToString(" ").lowercase()
+                .split(Regex("\\W+")).filter { it.isNotEmpty() }.toHashSet()
             val sig = words.map { it.lowercase() }.filter { it.length > 3 }.distinct()
             if (sig.isNotEmpty()) {
-                val covered = sig.count { it in src }
+                val covered = sig.count { it in srcWords }
                 val ratio = covered.toDouble() / sig.size
                 if (ratio < 0.3) {
                     return VerifyResult(
@@ -61,6 +65,14 @@ interface Verifier {
                         "answer drifts from its sources ($covered/${sig.size} significant terms grounded)",
                     )
                 }
+                // v0.9.2 (opt #1): a grounded answer earns a CONTINUOUS score
+                // instead of the flat 0.6, so a well-grounded answer can
+                // actually climb past the graduation bar (0.7). The old flat
+                // score froze every learned fact at 0.6 forever.
+                return VerifyResult(
+                    true, 0.5 + 0.45 * ratio,
+                    "quality checks passed (grounding ${(100 * ratio).toInt()}%)",
+                )
             }
         }
         return VerifyResult(true, 0.6, "quality checks passed (no ground truth needed)")
@@ -78,7 +90,13 @@ class MathVerifier(private val calculator: CalculatorTool) : Verifier {
             return VerifyResult(false, 0.5, "no deterministic check available for this intent")
         }
 
-        val expr = calculator.expressionOf(analysis.text)
+        // v0.8.1: worded calculations ("what is 5*4 in physics") have no
+        // parseable full expression — verify against the embedded one,
+        // the same expression TOOL_THEN_LLM would contribute as a fact.
+        val full = calculator.expressionOf(analysis.text)
+        val expr = if (calculator.evaluateDirect(full) != null) full
+            else calculator.embeddedExpression(analysis.text)
+                ?: return VerifyResult(false, 0.3, "expression could not be evaluated")
         val direct = calculator.evaluateDirect(expr)
         val rpn = calculator.evaluateRpn(expr)
         if (direct == null || rpn == null) {
