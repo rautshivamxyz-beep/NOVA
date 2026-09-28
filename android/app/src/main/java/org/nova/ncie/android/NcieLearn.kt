@@ -108,12 +108,17 @@ object NcieLearn {
 
     /** The completed turn. Internal prompts (userText == null) and greetings
      *  are never recorded; short or degenerate replies never enter the cache. */
-    fun record(act: MainActivity, userText: String?, reply: String) {
+    /** v8.2.0: [sources] are the note chunks that grounded the answer —
+     *  the same texts the prompt was built from, so the kernel's quality
+     *  gate can score the answer against them (continuous score + drift
+     *  rejection, exactly like kernel turns). */
+    fun record(act: MainActivity, userText: String?, reply: String,
+               sources: List<String> = emptyList()) {
         if (userText == null) return
         if (SMALLTALK_REGEX.containsMatchIn(userText)) return
         val clean = reply.trim()
         if (clean.length < 30) return   // same bar as the study-Q cache
-        val verdict = quality.quality(clean)
+        val verdict = quality.quality(clean, sources)
         if (!verdict.passed) return
         val l = learner(act) ?: return
         val response = NovaResponse(
@@ -153,7 +158,11 @@ object NcieLearn {
                     io.execute {
                         val d = storeFor(file)
                         disk = d
-                        learner = PersistentLearner(d)
+                        val l = PersistentLearner(d)
+                        learner = l
+                        // v8.2.0 (#10 rules): the live learner upgrades the
+                        // planner — the Mastery Rule applies from here on
+                        NcieKnowledge.adoptAdaptivePlanner(l)
                     }
                 }
             }
