@@ -30,6 +30,20 @@ import org.nova.ncie.model.Route
  * KnowledgeStore by [Distiller]. All four default to no-ops so custom
  * learners keep compiling.
  */
+/**
+ * v0.9.2 (opt #10): the Learner's counters, structured - the raw
+ * material for adaptive planning and dashboards. What [Learner.stats]
+ * renders as a string, in a form code can read.
+ */
+class LearningStats(
+    val cacheEntries: Int,
+    val factCount: Int,
+    val hits: Int,
+    val misses: Int,
+    val fuzzyHits: Int,
+    val routeCounts: Map<Route, Int>,
+)
+
 interface Learner {
     /** Return a cached answer for this exact request, if any. */
     fun recall(text: String): NovaResponse?
@@ -46,6 +60,10 @@ interface Learner {
     fun clear() {}
     /** Human-readable stats for the Learn dashboard. */
     fun stats(): String
+    /** v0.9.2 (opt #10): the same numbers [stats] renders, structured
+     *  for code. Default: null - learners that keep no counters simply
+     *  report nothing. */
+    fun statsData(): LearningStats? = null
     /** v0.9.0: record a graded fact into the memory system — the
      *  quality-gated half of learning. Implementations merge by question
      *  (see [PersistentLearner.record]). Default no-op. */
@@ -95,4 +113,13 @@ class SimpleLearner : Learner {
         val routes = routeCounts.entries.joinToString(", ") { "${it.key}=${it.value}" }
         return "cache ${cache.size} entries, hit-rate ${"%.0f".format(hitRate)}% | routes: $routes"
     }
+
+    override fun statsData(): LearningStats? = LearningStats(
+        cacheEntries = cache.size,
+        factCount = 0,
+        hits = hits,
+        misses = misses,
+        fuzzyHits = 0,
+        routeCounts = routeCounts.toMap(),
+    )
 }
