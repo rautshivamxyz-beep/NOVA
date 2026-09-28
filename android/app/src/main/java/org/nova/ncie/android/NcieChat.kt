@@ -42,6 +42,9 @@ import java.io.File
  */
 fun MainActivity.ncieSend() {
     val act = this
+    // v8.2.0: per-turn grounding sources — filled when the notes are
+    // assembled below, consumed by the LEARN record at turn completion
+    lastAnswerSources = emptyList()
 
         pendingCitation = null
         pendingQaKey = null
@@ -458,6 +461,12 @@ fun MainActivity.ncieSend() {
         prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
                   else knowledgePart + wikiPart) + prompt
 
+        // v8.2.0: the notes that grounded THIS answer — handed to LEARN
+        // so the quality gate scores the answer against what it was built
+        // from. Wiki stays out: its prompt says "ignore if not relevant",
+        // so a chatty reply that ignored background facts is CORRECT and
+        // must not be punished as drift.
+        lastAnswerSources = hits.map { it.text }
         // v5.4.7: show when the answer is grounded in the user's notes
         if (knowledgePart.isNotEmpty()) toast("Using your notes")
         // NCIE v0.7.0 (#1): Smart Skip - the kernel's LEARN phase now has a
