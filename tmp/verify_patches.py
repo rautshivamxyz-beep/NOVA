@@ -47,6 +47,8 @@ ca = load("ChatsActivity.kt")
 sa = load("SettingsActivity.kt")
 ea = load("ExamsActivity.kt")
 moa = load("ModelsActivity.kt")
+mea = load("MemoryActivity.kt")
+nt = load("NovaTheme.kt")
 
 # ---- feature markers, exactly as the patch chain writes them ----
 MA_MARKERS = [
@@ -149,8 +151,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.9.3: version bumped for the smart send button",
-      bg.count("versionName '7.9.3'") == 1 and bg.count("versionCode 66") == 1)
+check("v8.0.0: version bumped for the UI overhaul",
+      bg.count("versionName '8.0.0'") == 1 and bg.count("versionCode 67") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
@@ -188,6 +190,20 @@ check("v7.9.3: smart button morphs between mic and send",
       ma.index("icon(R.drawable.ic_send, Color.WHITE)") <
       ma.index("icon(R.drawable.ic_mic, textDim)"))
 
+# ---- v8.0.0: UI overhaul - midnight palette + cards everywhere ----
+check("v8.0.0: midnight palette in NovaTheme (init + dark apply)",
+      nt.count("#12141D") == 2 and nt.count("#6C9CFF") == 2)
+check("v8.0.0: replies live in cards (surface + hairline border)",
+      ma.count("replies live in cards now") == 1 and
+      ma.count("setCornerRadius(dp(ctx, 18).toFloat())") == 1)
+check("v8.0.0: user bubble is a gradient now",
+      ma.count("intArrayOf(NovaTheme.accent, NovaTheme.accentDeep)") == 1)
+check("v8.0.0: model label chip in the header",
+      ma.count("wears a chip now") == 1)
+check("v8.0.0: chats and memory rows are cards",
+      ca.count("chat rows are cards now") == 1 and
+      mea.count("learned facts live in cards now") == 1)
+
 # ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
 nt = load("NovaTheme.kt")
@@ -198,12 +214,12 @@ check("v7.7.0: font family ships 4 weights", fam.count("inter_") == 4)
 for w in ("inter_regular", "inter_medium", "inter_semibold", "inter_bold"):
     check("v7.7.0: %s.ttf present" % w,
           os.path.exists(os.path.join(ROOT, "android/app/src/main/res/font", w + ".ttf")))
-check("v7.7.0: graphite + iris palette installed",
-      nt.count("#7C87FF") == 2 and nt.count("#0A0B0E") == 2)
+check("v8.0.0: midnight palette installed (was graphite + iris)",
+      nt.count("#6C9CFF") == 2 and nt.count("#06070B") == 2)
 check("v7.7.0: old navy accent gone from the palette",
       nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
-check("v7.7.0: send button is an iris gradient",
-      ma.count("GradientDrawable.Orientation.TL_BR") == 2)
+check("v7.7.0/v8.0.0: send button + user bubble are gradients",
+      ma.count("GradientDrawable.Orientation.TL_BR") == 3)
 check("v7.7.0: drawer widened (hide + layout)", ma.count("dp(304)") == 2)
 check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") == 2)
 check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
