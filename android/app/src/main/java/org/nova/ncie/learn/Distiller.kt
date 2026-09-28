@@ -62,17 +62,39 @@ class Distiller(
     }
 
     /** The graduation bar: good enough, confirmed more than once, and
-     *  long enough to survive the store's chunker. */
-    private fun graduates(fact: LearnedFact): Boolean =
-        fact.score >= GRADUATION_SCORE &&
-            fact.interactions >= GRADUATION_INTERACTIONS &&
-            fact.answer.length > MIN_DOC_CHARS
+     *  long enough to survive the store's chunker.
+     *
+     *  v0.9.2 (opt #1) adds the probation path: ordinary chat answers are
+     *  born at the flat 0.6 quality score and the 0.6*old + 0.4*new blend
+     *  can never lift them past 0.7, so the score-only bar froze
+     *  graduation forever - the Distiller could never promote anything.
+     *  A fact confirmed [GRADUATION_STREAK] times while still holding at
+     *  least [MIN_STREAK_SCORE] has served its probation: it graduates
+     *  on the streak. Stale-demoted facts (score halved below 0.6) and
+     *  born-bad facts stay out. */
+    fun graduates(fact: LearnedFact): Boolean {
+        if (fact.answer.length <= MIN_DOC_CHARS) return false
+        if (fact.score >= GRADUATION_SCORE &&
+            fact.interactions >= GRADUATION_INTERACTIONS
+        ) return true
+        return fact.interactions >= GRADUATION_STREAK && fact.score >= MIN_STREAK_SCORE
+    }
 
     /** The promoted document's name: the question itself (capped), so
-     *  the store's x2 name bonus rewards a query that re-asks it. */
-    private fun docNameOf(fact: LearnedFact): String {
+     *  the store's x2 name bonus rewards a query that re-asks it.
+     *
+     *  v0.9.2 (opt #8): the cap ends in a short hash of the FULL
+     *  question instead of an ellipsis - two questions sharing their
+     *  first 64 characters used to promote into the SAME document name,
+     *  and KnowledgeStore.addDoc REPLACES same-named docs, silently
+     *  destroying the first question's knowledge. Public so hosts that
+     *  persist promotions themselves (the NOVA app) build the exact
+     *  same name instead of re-implementing the cap. */
+    fun docNameOf(fact: LearnedFact): String {
         val q = fact.question.trim()
-        return if (q.length <= MAX_NAME_CHARS) q else q.substring(0, MAX_NAME_CHARS) + "…"
+        if (q.length <= MAX_NAME_CHARS) return q
+        val hash = Integer.toHexString(q.hashCode()).padStart(8, '0').takeLast(8)
+        return q.substring(0, MAX_NAME_CHARS - 9) + "…" + hash
     }
 
     /** The promoted document's content: the answer, headed by its own
@@ -91,6 +113,11 @@ class Distiller(
         const val MIN_DOC_CHARS = 40
         /** Document-name cap, so docs() stays readable on a screen. */
         const val MAX_NAME_CHARS = 64
+        /** v0.9.2 (opt #1): confirmations that graduate a steady-scoring
+         *  fact on probation alone (see [graduates]). */
+        const val GRADUATION_STREAK = 3
+        /** v0.9.2 (opt #1): the floor a streak-graduating fact must hold. */
+        const val MIN_STREAK_SCORE = 0.6
     }
 }
 
