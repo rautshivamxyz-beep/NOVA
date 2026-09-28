@@ -91,7 +91,7 @@ NC_MARKERS = [
     ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
     ("v7.5/NCIE-6 lean wiki cap", "val cap = if (lean) 900 else 1200", 1),
     ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
-    ("v7.5.1 LFM tiny detection", '"1.2b" in mlabel', 1),
+    ("v8.3.1 tiny detection parses the parameter count", "MODEL_PARAMS.find(mlabel)", 1),
     ("v7.5.1/NCIE-6 lean notes caps", "if (lean) 1200 else 2400", 4),
     ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
@@ -155,8 +155,12 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.3.0: version bumped for the study planner + doubt journal",
-      bg.count("versionName '8.3.0'") == 1 and bg.count("versionCode 70") == 1)
+check("v8.3.1: version bumped for the tiny-model detection fix",
+      bg.count("versionName '8.3.1'") == 1 and bg.count("versionCode 71") == 1)
+
+# ---- v8.3.1: tiny-model detection parses the label (1.5B was missed) ----
+check("v8.3.1: model size parsed, not substring-matched (NcieChat.kt)",
+      nc.count("MODEL_PARAMS") == 2)
 
 # ---- v8.3.0: the study planner + doubt journal (drawer row) ----
 check("v8.3.0: planner drawer row present (MainActivity)",
