@@ -45,7 +45,13 @@ class NovaKernel(
 
         // ② PLAN (with the Learn phase consulted as a gate) -------------------
         val cached = learner.recall(request)
-        val plan = timed(trace, "PLAN") { planner.plan(analysis, cached != null) }
+        // v0.9.2 (opt #10): the Learn phase's counters ride along in the
+        // PLAN trace - what an adaptive planner could have used, visible
+        val ls = learner.statsData()
+        val plan = timed(trace, "PLAN", if (ls != null)
+            "facts=${ls.factCount} cache=${ls.cacheEntries}" else "") {
+            planner.plan(analysis, cached != null)
+        }
 
         // ③ EXECUTE ----------------------------------------------------------
         var answer: String
@@ -58,7 +64,7 @@ class NovaKernel(
                 val tool = tools.byName(plan.toolName!!)
                 answer = tool?.execute(analysis) ?: "route error: tool '${plan.toolName}' not found"
             }
-            Route.LLM, Route.TOOL_THEN_LLM -> {
+            Route.LLM -> {
                 // The Plan's context budget is spent HERE: retrieved knowledge
                 // is prepended to the prompt, capped at the budget.
                 val context = knowledgeContext(analysis, plan.contextBudgetChars)
@@ -66,17 +72,37 @@ class NovaKernel(
                 answer = llm.generate(context + analysis.text, plan.thinkingBudgetTokens)
                 llmUsed = true
             }
+            Route.TOOL_THEN_LLM -> {
+                // v0.8.1: the tool's exact fact is injected as
+                // authoritative context ahead of everything else — a
+                // blank contribution degrades to the plain LLM path.
+                val fact = plan.toolName?.let { tools.byName(it) }?.let { tool ->
+                    try { tool.contribute(analysis) } catch (_: Exception) { "" }
+                } ?: ""
+                val factCtx = if (fact.isBlank()) ""
+                    else "(Exact computed fact from the '${plan.toolName}' tool: $fact.\n" +
+                        "Use it as given — do not recompute it differently.)\n\n"
+                val context = knowledgeContext(analysis, plan.contextBudgetChars)
+                contextChars = factCtx.length + context.length
+                answer = llm.generate(factCtx + context + analysis.text, plan.thinkingBudgetTokens)
+                llmUsed = true
+            }
         }
         trace.add(PhaseTrace("EXECUTE", (System.nanoTime() - t) / 1_000_000,
             if (llmUsed) "llm=${llm.name()} budget=${plan.thinkingBudgetTokens}t" +
-                (if (contextChars > 0) " ctx=${contextChars}c" else "")
+                (if (contextChars > 0) " ctx=${contextChars}c" else "") +
+                (if (plan.route == Route.TOOL_THEN_LLM) " tool=${plan.toolName}" else "")
             else "tool=${plan.toolName}"))
 
         // ④ VERIFY (+ Response Repair) ---------------------------------------
         t = System.nanoTime()
         var verdict = verifier.verify(analysis, plan, answer)
         var repaired = false
-        if (!verdict.passed && analysis.toolSufficient) {
+        // v0.8.1: repair only fires on the plain LLM route — a
+        // TOOL_THEN_LLM request already used the tool for its fact;
+        // re-running execute() on a request the tool can't fully
+        // answer would only produce a parse complaint.
+        if (!verdict.passed && analysis.toolSufficient && plan.route == Route.LLM) {
             // Repair: a deterministic tool exists — its answer outranks the failed one.
             val tool = tools.bestToolFor(analysis)
             if (tool != null) {
@@ -175,10 +201,15 @@ class NovaKernel(
         return response
     }
 
-    private fun <T> timed(trace: ArrayList<PhaseTrace>, phase: String, block: () -> T): T {
+    private fun <T> timed(
+        trace: ArrayList<PhaseTrace>,
+        phase: String,
+        detail: String = "",
+        block: () -> T,
+    ): T {
         val start = System.nanoTime()
         val result = block()
-        trace.add(PhaseTrace(phase, (System.nanoTime() - start) / 1_000_000, ""))
+        trace.add(PhaseTrace(phase, (System.nanoTime() - start) / 1_000_000, detail))
         return result
     }
 
