@@ -16,6 +16,14 @@ import org.nova.SMALLTALK_REGEX
 import org.nova.WikiCore
 import java.io.File
 
+/** v8.3.1: the model's parameter count, parsed from its label - the
+ *  substring list kept missing new sizes ("1b" missed "1.2b" in v7.5.1,
+ *  and a 1.5B model matched nothing at all), so every new download was
+ *  a silent regression to the fat prompt stack. Anything up to 2B is a
+ *  tiny model that drowns in stacked instructions; a label with no
+ *  parseable size (a custom file name) stays a big model, as before. */
+private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
+
 /**
  * NCIE Stage 5 (#1): the collapsed send(). The chat turn's entire routing
  * body - pre-model gates (calculator, phone commands, model-ready), the
@@ -325,9 +333,9 @@ fun MainActivity.ncieSend() {
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
         // get ONE background source, no exam line, and short injections
         val mlabel = NovaEngine.activeModelLabel.lowercase()
-        // v7.5.1: "1b" missed "1.2b", so LFM 2.5 1.2B got the fat
-        // two-source prefill meant for big models - lean now, like 1B
-        val tiny = "1b" in mlabel || "1.2b" in mlabel || "0.6b" in mlabel || "0.5b" in mlabel
+        // v8.3.1: parse the size out of the label instead of matching
+        // strings by hand - covers 1.5B, 1.7B and 2B the list never knew
+        val tiny = MODEL_PARAMS.find(mlabel)?.let { it.groupValues[1].toDouble() <= 2.0 } ?: false
 
         // NCIE Stage 6 (#1): the kernel's context budget now picks the
         // injection profile. Plain short chat gets the lean caps (the
