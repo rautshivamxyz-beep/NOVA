@@ -603,6 +603,11 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
+        // v0.9.2 phase 3: the memory screen lives in the drawer now -
+        // one tap from the chat, no separate launcher icon
+        drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
+            startActivity(Intent(this, MemoryActivity::class.java))
+        })
         drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
