@@ -55,6 +55,7 @@ object WikiCore {
     /** Deletes the downloaded articles. */
     fun remove(ctx: Context) {
         index = null
+        prepared = null
         dir(ctx).deleteRecursively()
     }
 
@@ -108,6 +109,7 @@ object WikiCore {
             doneTmp.renameTo(doneFile(ctx))
             File(d, "count").writeText(n.toString())
             index = null
+            prepared = null
             _state.value = Pair(0f, "done - $n articles saved")
         } catch (e: Exception) {
             lastError = "download failed - check internet, then try again"
@@ -151,9 +153,20 @@ object WikiCore {
     /** In-memory title index: (title, byte offset of its line). */
     @Volatile private var index: List<Pair<String, Long>>? = null
 
+    /** v8.1.0 (opt #3): the index's PRE-TOKENIZED form - titles are
+     *  tokenized once per build here, not once per query inside
+     *  WikiStore.search. Built together with [index], invalidated
+     *  together with it. */
+    @Volatile private var prepared: WikiStore.PreparedIndex? = null
+    private val wikiStore = WikiStore()
+
     /** Builds the search index ahead of time (call from a background thread). */
     fun warmUp(ctx: Context) {
-        if (index == null) index = buildIndex(ctx)
+        if (index == null) {
+            val ix = buildIndex(ctx)
+            index = ix
+            prepared = wikiStore.prepare(ix)
+        }
     }
 
     /** Finds the most relevant stored articles for a question. */
@@ -172,7 +185,10 @@ object WikiCore {
         // that was here and verified query-identical (20-query battery,
         // exact output match) before this swap. This wrapper keeps the
         // file I/O: the byte-offset index and the reads at offsets.
-        return WikiStore().search(ix, query, maxResults) { off -> readLineAt(ctx, off) }
+        // v8.1.0 (opt #3): the PREPARED index - one WikiStore instance,
+        // its titles tokenized once at warm-up, not once per query
+        val p = prepared ?: return emptyList()
+        return wikiStore.search(p, query, maxResults) { off -> readLineAt(ctx, off) }
             .map { Hit(it.title, it.text) }
     }
 
