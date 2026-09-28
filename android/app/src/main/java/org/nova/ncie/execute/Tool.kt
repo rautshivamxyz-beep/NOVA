@@ -14,10 +14,22 @@ interface Tool {
     fun canHandle(analysis: Analysis): Boolean
     /** Execute; return the final user-facing answer. */
     fun execute(analysis: Analysis): String
+    /** v0.8.1 TOOL_THEN_LLM: like [canHandle], but the tool only
+     *  contributes a computed FACT the answer needs, not the whole
+     *  answer (an arithmetic expression buried inside a worded
+     *  question). Default: never assists. */
+    fun assists(analysis: Analysis): Boolean = false
+    /** The fact to inject for a request this tool [assists]. Blank =
+     *  nothing usable was found; the kernel degrades to the plain LLM
+     *  path. Default: no facts. */
+    fun contribute(analysis: Analysis): String = ""
 }
 
 class ToolRegistry(private val tools: List<Tool>) {
     fun bestToolFor(analysis: Analysis): Tool? = tools.firstOrNull { it.canHandle(analysis) }
+    /** v0.8.1: the first tool that can contribute a fact (not a full
+     *  answer) — the TOOL_THEN_LLM planner check. */
+    fun bestAssistantFor(analysis: Analysis): Tool? = tools.firstOrNull { it.assists(analysis) }
     fun byName(name: String): Tool? = tools.firstOrNull { it.name() == name }
 }
 
