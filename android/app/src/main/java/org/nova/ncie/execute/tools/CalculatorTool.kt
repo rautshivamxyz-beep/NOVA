@@ -27,6 +27,35 @@ class CalculatorTool : Tool {
         return evaluateDirect(expr)?.let { format(it) } ?: "I couldn't parse that expression."
     }
 
+    /** v0.8.1 TOOL_THEN_LLM: a calculation-flavored request that can't
+     *  be fully answered here (words around the numbers) can still
+     *  yield its embedded expression as an exact fact for the LLM to
+     *  build on. */
+    override fun assists(analysis: Analysis): Boolean =
+        analysis.intent == Intent.CALCULATION &&
+            !canHandle(analysis) &&
+            embeddedExpression(analysis.text) != null
+
+    override fun contribute(analysis: Analysis): String {
+        val expr = embeddedExpression(analysis.text) ?: return ""
+        val v = evaluateDirect(expr) ?: return ""
+        return "the expression $expr evaluates exactly to ${format(v)}"
+    }
+
+    /** The longest run of arithmetic characters in the text that
+     *  actually parses AND contains an operator — "what is 5*4 in
+     *  physics" yields "5*4"; a bare year like "1947" is not a
+     *  computation and never qualifies. */
+    fun embeddedExpression(text: String): String? {
+        var best: String? = null
+        for (m in Regex("[0-9(][0-9+\\-*/%^().\\s]*[0-9)]").findAll(text)) {
+            val cand = m.value.trim()
+            if (!Regex("[+\\-*/%^]").containsMatchIn(cand)) continue
+            if (cand.length > (best?.length ?: 0) && evaluateDirect(cand) != null) best = cand
+        }
+        return best
+    }
+
     /** "what is 2+2?" → "2+2"; plain math text passes through untouched. */
     fun expressionOf(text: String): String {
         val cleaned = text.lowercase()
