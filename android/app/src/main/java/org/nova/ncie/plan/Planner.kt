@@ -16,7 +16,16 @@ interface Planner {
     fun plan(analysis: Analysis, cacheHit: Boolean): Plan
 }
 
-class DecisionKernel(private val tools: ToolRegistry) : Planner {
+class DecisionKernel(
+    private val tools: ToolRegistry,
+    /** v0.9.2 (opt #10): the three-tier thinking budget (trivial /
+     *  medium / hard complexity) - injectable, so hosts and future
+     *  adaptive planners tune budgets without editing the kernel.
+     *  Defaults are the shipped values. */
+    private val thinkingBudgets: Triple<Int, Int, Int> = Triple(128, 384, 768),
+    /** v0.9.2 (opt #10): the matching three-tier context budget. */
+    private val contextBudgets: Triple<Int, Int, Int> = Triple(0, 1500, 6000),
+) : Planner {
 
     override fun plan(analysis: Analysis, cacheHit: Boolean): Plan {
         // Smart Skip / Predictive Cache: an exact repeat is answered from Learn.
@@ -40,8 +49,24 @@ class DecisionKernel(private val tools: ToolRegistry) : Planner {
             )
         }
 
+        // v0.8.1 TOOL_THEN_LLM: no tool fully answers, but one can
+        // compute an exact fact the answer needs (arithmetic buried
+        // inside a worded question). EXECUTE runs the tool first and
+        // injects its fact as authoritative context for the LLM.
+        val assistant = tools.bestAssistantFor(analysis)
+        if (assistant != null) {
+            val tokens = thinkingBudget(analysis.complexity)
+            val context = contextBudget(analysis.complexity)
+            return Plan(
+                route = Route.TOOL_THEN_LLM,
+                toolName = assistant.name(),
+                thinkingBudgetTokens = tokens,
+                contextBudgetChars = context,
+                rationale = "no tool fully answers — '${assistant.name()}' computes the exact fact first, then the LLM explains it",
+            )
+        }
+
         // Otherwise the LLM answers; budget scales with complexity.
-        // (Later: TOOL_THEN_LLM when a tool computes a fact the answer needs.)
         val tokens = thinkingBudget(analysis.complexity)
         val context = contextBudget(analysis.complexity)
         return Plan(
@@ -55,15 +80,15 @@ class DecisionKernel(private val tools: ToolRegistry) : Planner {
 
     /** Thinking Budget Engine: simple, fast requests get short leashes. */
     private fun thinkingBudget(complexity: Double): Int {
-        if (complexity < 0.35) return 128
-        if (complexity < 0.7) return 384
-        return 768
+        if (complexity < 0.35) return thinkingBudgets.first
+        if (complexity < 0.7) return thinkingBudgets.second
+        return thinkingBudgets.third
     }
 
     /** Context Budget: how much retrieved knowledge to inject into the prompt. */
     private fun contextBudget(complexity: Double): Int {
-        if (complexity < 0.35) return 0
-        if (complexity < 0.7) return 1500
-        return 6000
+        if (complexity < 0.35) return contextBudgets.first
+        if (complexity < 0.7) return contextBudgets.second
+        return contextBudgets.third
     }
 }
