@@ -27,13 +27,62 @@ class WikiStore {
             .filter { it.length > 2 && it !in STOP }.toSet()
 
     /**
-     * Finds the most relevant articles for a question.
+     * v0.9.2 (opt #3): the title index PRE-TOKENIZED once, instead of
+     * re-tokenizing every title (regex split, stopword filter, padded
+     * normalize) on every query. Hosts that hold one index call
+     * [prepare] once and pass the result to the prepared [search]
+     * overload; the per-query work drops to integer counting.
+     */
+    class PreparedIndex internal constructor(
+        internal val titles: Array<String>,
+        internal val offsets: LongArray,
+        internal val titleWords: Array<Set<String>>,
+        internal val titleNorms: Array<String>,
+        internal val byToken: Map<String, IntArray>,
+    )
+
+    /** Tokenize the whole title index ONCE - call after the index is
+     *  built or rebuilt, keep the result beside it. */
+    fun prepare(index: List<Pair<String, Long>>): PreparedIndex {
+        val tw = Array(index.size) { words(index[it].first) }
+        val norms = Array(index.size) {
+            val t = index[it].first.lowercase()
+            " " + t.replace(Regex("[^a-z0-9]+"), " ").trim() + " "
+        }
+        val tokenMap = HashMap<String, ArrayList<Int>>()
+        for (i in index.indices) {
+            for (t in tw[i]) tokenMap.getOrPut(t) { ArrayList() }.add(i)
+        }
+        val byToken = HashMap<String, IntArray>(tokenMap.size)
+        for ((t, ids) in tokenMap) byToken[t] = ids.toIntArray()
+        return PreparedIndex(
+            Array(index.size) { index[it].first },
+            LongArray(index.size) { index[it].second },
+            tw, norms, byToken,
+        )
+    }
+
+    /**
+     * Finds the most relevant articles for a question - the compat entry
+     * point that prepares the index first. Hosts that search repeatedly
+     * should call [prepare] once and use the other [search] overload.
      *
      * @param index the host's title index: (title, byte offset of its line)
      * @param readLine reads the full article line at a byte offset, or null
      */
     fun search(
         index: List<Pair<String, Long>>,
+        query: String,
+        maxResults: Int = 2,
+        readLine: (Long) -> String?,
+    ): List<Hit> = search(prepare(index), query, maxResults, readLine)
+
+    /**
+     * The same search over a [PreparedIndex]: identical results to the
+     * compat overload, without re-tokenizing every title per query.
+     */
+    fun search(
+        prepared: PreparedIndex,
         query: String,
         maxResults: Int = 2,
         readLine: (Long) -> String?,
@@ -47,17 +96,31 @@ class WikiStore {
         // whole words now: "nelson mandela" still earns the bonus inside
         // "who is nelson mandela", "hiv" no longer matches "shivam".
         val qWords = " " + query.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
-        val scored = index.mapNotNull { (title, off) ->
-            val tw = words(title)
-            val tn = " " + title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
-            val score = qw.count { it in tw } +
-                (if (tn.length > 2 && qWords.contains(tn)) 2 else 0)
-            if (score > 0) Triple(score, title, off) else null
-        }.sortedWith(compareByDescending<Triple<Int, String, Long>> { it.first }
+        val scored = ArrayList<Triple<Int, String, Long>>()
+        // v0.9.2 (opt #3): candidates are the titles a query token hits
+        // (from the token map built once by prepare) plus titles earning
+        // the whole-word title bonus. Iterated in index order so ties
+        // rank exactly as the full scan did.
+        val candidates = HashSet<Int>()
+        for (t in qw) prepared.byToken[t]?.forEach { candidates.add(it) }
+        for (i in prepared.titleNorms.indices) {
+            if (prepared.titleNorms[i].length > 2 &&
+                qWords.contains(prepared.titleNorms[i])
+            ) candidates.add(i)
+        }
+        for (i in candidates.sorted()) {
+            val score = qw.count { it in prepared.titleWords[i] } +
+                (if (prepared.titleNorms[i].length > 2 &&
+                    qWords.contains(prepared.titleNorms[i])) 2 else 0)
+            if (score > 0) {
+                scored.add(Triple(score, prepared.titles[i], prepared.offsets[i]))
+            }
+        }
+        val ranked = scored.sortedWith(compareByDescending<Triple<Int, String, Long>> { it.first }
             .thenBy { it.second })
         if (scored.isEmpty()) return emptyList()
         val out = mutableListOf<Hit>()
-        for ((_, title, off) in scored.take(maxResults)) {
+        for ((_, title, off) in ranked.take(maxResults)) {
             val line = readLine(off) ?: continue
             val parts = line.split('\u241F')
             val paras = parts.drop(1).filter { it.isNotBlank() }
