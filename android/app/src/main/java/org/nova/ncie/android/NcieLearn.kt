@@ -61,6 +61,10 @@ object NcieLearn {
     @Volatile private var learner: PersistentLearner? = null
     @Volatile private var bootStarted = false
     @Volatile private var learnFile: java.io.File? = null
+    /** v8.1.0 (opt #5): the debounced disk the learner persists through
+     *  (null until boot). Held here so the memory screen's destructive
+     *  operations can force an immediate flush. */
+    @Volatile private var disk: DebouncedDisk? = null
 
     /** The quality gate: the Verifier interface's ground-truth-free
      *  quality() defaults are the gate here — no right answer needed. */
@@ -93,7 +97,11 @@ object NcieLearn {
         act.scrollToEnd()
         act.toast(if (exact != null) "Answer (cached from last time)"
                   else "Answer (cached from a similar question)")
-        try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+        // v8.1.0 (opt #7): the chat save is file I/O - it moves off the
+        // caller's (main) thread, where it had no business sitting
+        io.execute {
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+        }
         act.needsContextCarry = true
         return true
     }
@@ -142,25 +150,56 @@ object NcieLearn {
                     val dir = ctx.filesDir
                     val file = File(dir, "ncie_learn.txt")
                     learnFile = file
-                    io.execute { learner = PersistentLearner(storeFor(file)) }
+                    io.execute {
+                        val d = storeFor(file)
+                        disk = d
+                        learner = PersistentLearner(d)
+                    }
                 }
             }
         }
         return null
     }
 
-    /** The file-backed LearningStore for [file]. */
-    private fun storeFor(file: File) = object : LearningStore {
+    /** v8.1.0 (opt #5): a DEBOUNCED file-backed LearningStore. The
+     *  learner persists the FULL snapshot after every record, so a
+     *  chatty session rewrote the whole file every turn. Writes now
+     *  coalesce: the latest snapshot lands ~2s after the last record,
+     *  and the explicit flushes (invalidate / clear / distill) write
+     *  immediately so a wipe never sits unflushed on disk. */
+    private class DebouncedDisk(
+        private val file: File,
+        private val io: java.util.concurrent.Executor,
+        private val main: Handler,
+    ) : LearningStore {
+        @Volatile private var pending: String? = null
+        private val flusher = Runnable {
+            io.execute {
+                val snap = pending ?: return@execute
+                pending = null
+                try {
+                    file.parentFile?.mkdirs()
+                    file.writeText(snap)
+                } catch (e: Exception) { }
+            }
+        }
         override fun write(snapshot: String) {
-            try {
-                file.parentFile?.mkdirs()
-                file.writeText(snapshot)
-            } catch (e: Exception) { }
+            pending = snapshot
+            main.removeCallbacks(flusher)
+            main.postDelayed(flusher, 2_000)
+        }
+        /** Write any pending snapshot now. */
+        fun flushNow() {
+            main.removeCallbacks(flusher)
+            flusher.run()
         }
         override fun read(): String? =
             try { if (file.exists()) file.readText() else null }
             catch (e: Exception) { null }
     }
+
+    /** The file-backed LearningStore for [file]. */
+    private fun storeFor(file: File) = DebouncedDisk(file, io, main)
 
     /** v0.8.1: the knowledge base changed — cached answers may be built
      *  on notes that no longer exist, so the learned cache is dropped
@@ -175,6 +214,7 @@ object NcieLearn {
             val f = learnFile ?: return@execute
             try { f.delete() } catch (e: Exception) { }
             learner?.clear()
+            disk?.flushNow()
         }
     }
 
@@ -217,6 +257,7 @@ object NcieLearn {
     fun memoryClear() {
         io.execute {
             try { learner?.clear() } catch (e: Exception) { }
+            try { disk?.flushNow() } catch (e: Exception) { }
         }
     }
 
@@ -259,7 +300,8 @@ object NcieLearn {
                 store.rebuildChunks(KnowledgeAdapter.loadChunks(ctx))
                 store.setExcluded(Settings(ctx).knowledgeExcluded)
 
-                val report = Distiller(l, store).distill()
+                val distiller = Distiller(l, store)
+                val report = distiller.distill()
 
                 // The Distiller promoted facts into the throwaway store
                 // above (the live one is NcieKnowledge's private field);
@@ -270,8 +312,11 @@ object NcieLearn {
                 for (f in before) {
                     if (f.question in remaining) continue
                     val q = f.question.trim()
-                    val name = if (q.length <= Distiller.MAX_NAME_CHARS) q
-                               else q.substring(0, Distiller.MAX_NAME_CHARS) + "…"
+                    // v8.1.0 (opt #8): the kernel's own name builder - same
+                    // 64-char cap, but with a hash tail so two questions
+                    // sharing their first characters can never overwrite
+                    // each other's documents again
+                    val name = distiller.docNameOf(f)
                     try {
                         Knowledge.addDoc(ctx, name, q + "\n\n" + f.answer.trim())
                         if (Knowledge.docText(ctx, name).isNotEmpty()) continue
@@ -281,6 +326,7 @@ object NcieLearn {
                     try { l.record(f) } catch (e: Exception) { }
                     unpersisted++
                 }
+                try { disk?.flushNow() } catch (e: Exception) { }
                 val tail = if (unpersisted > 0)
                     " — $unpersisted promotion(s) failed to persist and were kept in memory"
                 else ""
