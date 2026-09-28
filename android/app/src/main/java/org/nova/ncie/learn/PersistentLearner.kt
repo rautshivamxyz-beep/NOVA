@@ -106,7 +106,7 @@ class PersistentLearner(
         restore()
     }
 
-    override fun recall(text: String): NovaResponse? {
+    @Synchronized override fun recall(text: String): NovaResponse? {
         val r = cache[text.trim()]
         if (r != null) hits++ else misses++
         return r
@@ -130,7 +130,16 @@ class PersistentLearner(
      * for the test" — the covering guarantee holds per class, and a
      * class never spans two topics (small, deliberate groups only).
      */
-    override fun recallFuzzy(query: String): Pair<String, NovaResponse>? {
+    @Synchronized override fun recallFuzzy(query: String): Pair<String, NovaResponse>? {
+        val key = fuzzyMatch(query) ?: return null
+        val r = cache[key] ?: return null   // the get() refreshes the LRU
+        fuzzyHits++
+        return key to r
+    }
+
+    /** v0.9.3 (#10): the matching half of [recallFuzzy] without the
+     *  counter bump — the shared body of the fuzzy path and [knowsTopic]. */
+    private fun fuzzyMatch(query: String): String? {
         val q = canonTokens(query)
         if (q.isEmpty()) return null
         var bestKey: String? = null
@@ -142,13 +151,20 @@ class PersistentLearner(
             val extras = e.size - q.size
             if (extras < bestExtras) { bestExtras = extras; bestKey = k }
         }
-        val key = bestKey ?: return null
-        val r = cache[key] ?: return null   // the get() refreshes the LRU
-        fuzzyHits++
-        return key to r
+        return bestKey
     }
 
-    override fun record(text: String, response: NovaResponse) {
+    /** v0.9.3 (#10): half-known topic probe — side-effect-free, so the
+     *  adaptive planner can call it every turn without polluting the
+     *  counters. An EXACTLY known question does not count as half-known:
+     *  recall serves it before PLAN ever runs, so there is nothing to
+     *  adapt on. */
+    @Synchronized override fun knowsTopic(text: String): Boolean {
+        if (cache.containsKey(text.trim())) return false
+        return fuzzyMatch(text) != null
+    }
+
+    @Synchronized override fun record(text: String, response: NovaResponse) {
         val key = text.trim()
         if (key.isEmpty() || response.plan.route == Route.CACHE) return
         cache[key] = response
@@ -168,7 +184,7 @@ class PersistentLearner(
      * also refreshes the plain cache, so [recall]/[recallFuzzy] keep
      * serving the newest answer.
      */
-    override fun record(fact: LearnedFact) {
+    @Synchronized override fun record(fact: LearnedFact) {
         val key = fact.question.trim()
         if (key.isEmpty() || fact.answer.isEmpty()) return
         val merged = facts[key]?.let { old ->
@@ -195,7 +211,7 @@ class PersistentLearner(
      * wipes the world). Returns true when something was removed, so
      * hosts can report a forgotten-vs-unknown distinction.
      */
-    override fun forget(questionKey: String): Boolean {
+    @Synchronized override fun forget(questionKey: String): Boolean {
         val key = questionKey.trim()
         val fromFacts = facts.remove(key) != null
         val fromCache = cache.remove(key) != null
@@ -206,7 +222,7 @@ class PersistentLearner(
     }
 
     /** v0.9.0: the graded memory, in learn order (eldest first). */
-    override fun learnedFacts(): List<LearnedFact> = facts.values.toList()
+    @Synchronized override fun learnedFacts(): List<LearnedFact> = facts.values.toList()
 
     /**
      * v0.9.0: aging — entries whose lastConfirmed is older than
@@ -216,7 +232,7 @@ class PersistentLearner(
      * usual way: re-answering the question re-confirms the fact and
      * blends its score back up. Returns how many entries were demoted.
      */
-    override fun demoteStale(maxAgeDays: Int): Int {
+    @Synchronized override fun demoteStale(maxAgeDays: Int): Int {
         val cutoff = System.currentTimeMillis() - maxAgeDays * DAY_MILLIS
         var demoted = 0
         for ((k, f) in facts) {
@@ -234,7 +250,7 @@ class PersistentLearner(
      *  fresh one. The empty snapshot is written at once, so a restart
      *  finds nothing to load. v0.9.0: the graded memory goes with it —
      *  clear() is the whole-world reset, forget() is the scalpel. */
-    override fun clear() {
+    @Synchronized override fun clear() {
         cache.clear()
         canon.clear()
         facts.clear()
@@ -245,7 +261,7 @@ class PersistentLearner(
         store.write("")
     }
 
-    override fun stats(): String {
+    @Synchronized override fun stats(): String {
         val total = hits + misses
         val hitRate = if (total == 0) 0.0 else hits.toDouble() * 100 / total
         val routes = routeCounts.entries.joinToString(", ") { "${it.key}=${it.value}" }
@@ -255,7 +271,7 @@ class PersistentLearner(
     }
 
     /** v0.9.2 (opt #10): the structured twin of [stats]. */
-    override fun statsData(): LearningStats? = LearningStats(
+    @Synchronized override fun statsData(): LearningStats? = LearningStats(
         cacheEntries = cache.size,
         factCount = facts.size,
         hits = hits,
