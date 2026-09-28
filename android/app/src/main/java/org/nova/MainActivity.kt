@@ -91,6 +91,10 @@ class MainActivity : Activity() {
 
     /** Guards the degenerate-reply retry (one retry per turn). */
     internal var replyRetried = false
+    /** v8.2.0: the note chunks that grounded the current answer — set by
+     *  ncieSend when the prompt is assembled, read by the LEARN record
+     *  when the turn completes. */
+    internal var lastAnswerSources: List<String> = emptyList()
     // v5.4 grounded answers: escape-free newline, source citation, Q&A cache
     internal val NL = 10.toChar().toString()
     internal var pendingCitation: String? = null
@@ -1236,7 +1240,7 @@ class MainActivity : Activity() {
                         // phase. NcieLearn quality-gates it (blank/leaked/boiler-
                         // plate replies and internal prompts never enter the
                         // cache) and writes asynchronously; nothing blocks here.
-                        NcieLearn.record(this@MainActivity, userText, replyMsg.text)
+                        NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)
                         // auto-compact: compress old turns once the chat grows
                         if (!speechCancelled && !compacting &&
                             currentChat.messages.size > 20 &&
