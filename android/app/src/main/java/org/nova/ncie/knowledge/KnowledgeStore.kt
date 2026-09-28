@@ -38,6 +38,10 @@ class KnowledgeStore(
         "notes", "note", "summarise", "summarize", "summary", "material",
         "give", "show", "tell", "read", "topic", "chapter", "gimme",
         "want", "whole", "full", "complete",
+        // v7.8.1: "name" matched half the knowledge base ("my name is
+        // shivam" injected random notes that happened to contain the
+        // word "name") - it is never a discriminative keyword
+        "name", "names"
     )
 
     private val chunks = ArrayList<Chunk>()
