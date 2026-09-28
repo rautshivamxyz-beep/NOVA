@@ -149,8 +149,19 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.8.2: version bumped for the kernel stopword sync",
-      bg.count("versionName '7.8.2'") == 1 and bg.count("versionCode 62") == 1)
+check("v7.9.0: version bumped for the memory screen integration",
+      bg.count("versionName '7.9.0'") == 1 and bg.count("versionCode 63") == 1)
+
+# ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
+amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+check("v7.9.0: memory screen in the drawer, not the launcher (AndroidManifest.xml)",
+      amf.count("NOVA Memory") == 1 and
+      amf.count("android.intent.category.LAUNCHER") == 1)
+check("v7.9.0: memory row in the chat drawer (MainActivity.kt)",
+      ma.count('drawerRow("Memory"') == 1)
+wf = open(os.path.join(ROOT, ".github/workflows/nova-apk.yml"), encoding="utf-8").read()
+check("v7.9.0: CI fails when app source changes without a version bump",
+      wf.count("already released with this versionName") == 1)
 
 # ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
