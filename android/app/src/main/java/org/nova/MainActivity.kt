@@ -3497,7 +3497,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             holder.bubble.background = GradientDrawable().apply {
                 setCornerRadius(dp(ctx, 18).toFloat())
                 setColor(NovaTheme.surface)
-                setStroke(dp(1), NovaTheme.border)
+                setStroke(dp(ctx, 1), NovaTheme.border)
             }
             holder.bubble.setPadding(dp(ctx, 16), dp(ctx, 12), dp(ctx, 16), dp(ctx, 12))
             holder.bubble.setTextColor(NovaTheme.text)
