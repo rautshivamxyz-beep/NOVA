@@ -149,8 +149,8 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v7.9.0: version bumped for the memory screen integration",
-      bg.count("versionName '7.9.0'") == 1 and bg.count("versionCode 63") == 1)
+check("v7.9.1: version bumped for the drawer redesign",
+      bg.count("versionName '7.9.1'") == 1 and bg.count("versionCode 64") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
@@ -162,6 +162,15 @@ check("v7.9.0: memory row in the chat drawer (MainActivity.kt)",
 wf = open(os.path.join(ROOT, ".github/workflows/nova-apk.yml"), encoding="utf-8").read()
 check("v7.9.0: CI fails when app source changes without a version bump",
       wf.count("already released with this versionName") == 1)
+
+# ---- v7.9.1: scrollable, decluttered drawer ----
+check("v7.9.1: the drawer scrolls (drawerScroller wraps drawerPane)",
+      ma.count("drawerScroller") == 9)
+check("v7.9.1: secondary actions behind the More dialog",
+      ma.count('drawerRow("More"') == 1 and
+      ma.count('drawerRow("Help & Tips"') == 0 and
+      ma.count('drawerRow("Check for updates"') == 0 and
+      ma.count('"Check for updates")') == 1)
 
 # ---- v7.7.0: UI refresh (graphite + iris palette, Inter typeface, all screens) ----
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
