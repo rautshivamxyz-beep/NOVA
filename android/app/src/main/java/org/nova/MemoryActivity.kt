@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.app.ListActivity
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
@@ -78,9 +79,11 @@ class MemoryActivity : ListActivity() {
 
         val title = TextView(this).apply {
             text = "NOVA Memory"
-            textSize = 22f
+            // v8.0.0: 20f + NovaTheme, like every other screen title
+            textSize = 20f
+            letterSpacing = 0.06f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.parseColor("#ECEFF1"))
+            setTextColor(NovaTheme.text)
             setPadding(pad(16), pad(16), pad(16), pad(4))
         }
         root.addView(title)
@@ -88,7 +91,7 @@ class MemoryActivity : ListActivity() {
         statsLine = TextView(this).apply {
             text = "loading…"
             textSize = 12f
-            setTextColor(Color.parseColor("#9AA4AE"))
+            setTextColor(NovaTheme.dim)
             setPadding(pad(16), 0, pad(16), pad(4))
         }
         root.addView(statsLine)
@@ -97,14 +100,32 @@ class MemoryActivity : ListActivity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(pad(8), pad(4), pad(8), pad(4))
         }
+        // v8.0.0: styled buttons - default Material buttons stuck out
         val consolidate = Button(this).apply {
             text = "Consolidate now"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.accentDeep)
+                cornerRadius = pad(12).toFloat()
+            }
+            setPadding(pad(16), pad(10), pad(16), pad(10))
             setOnClickListener { consolidateNow() }
         }
         buttons.addView(consolidate,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val wipe = Button(this).apply {
             text = "Wipe all memory"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(NovaTheme.dim)
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = pad(12).toFloat()
+                setStroke(pad(1), NovaTheme.border)
+            }
+            setPadding(pad(16), pad(10), pad(16), pad(10))
             setOnClickListener { confirmWipe() }
         }
         buttons.addView(wipe,
@@ -115,7 +136,7 @@ class MemoryActivity : ListActivity() {
             text = "Nothing learned yet — chat with NOVA and verified answers will appear here."
             textSize = 14f
             gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#9AA4AE"))
+            setTextColor(NovaTheme.dim)
             setPadding(pad(24), pad(32), pad(24), pad(32))
         }
         root.addView(empty, LinearLayout.LayoutParams(
@@ -123,7 +144,9 @@ class MemoryActivity : ListActivity() {
 
         val list = ListView(this).apply {
             id = android.R.id.list
-            divider = null
+            // v8.0.0: transparent divider doubles as card spacing
+            divider = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+            dividerHeight = pad(8)
         }
         root.addView(list, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -144,24 +167,30 @@ class MemoryActivity : ListActivity() {
         fun pad(n: Int) = (n * dp).toInt()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(pad(16), pad(10), pad(16), pad(10))
+            // v8.0.0: learned facts live in cards now
+            setPadding(pad(16), pad(12), pad(16), pad(12))
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.pill)
+                cornerRadius = pad(14).toFloat()
+                setStroke(pad(1), NovaTheme.border)
+            }
         }
         val q = TextView(this).apply {
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.parseColor("#ECEFF1"))
+            setTextColor(NovaTheme.text)
         }
         row.addView(q)
         val a = TextView(this).apply {
             textSize = 13f
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            setTextColor(Color.parseColor("#B0BEC5"))
+            setTextColor(NovaTheme.dim)
         }
         row.addView(a)
         val s = TextView(this).apply {
             textSize = 12f
-            setTextColor(Color.parseColor("#8A939D"))
+            setTextColor(NovaTheme.dim)
         }
         row.addView(s)
         return row
