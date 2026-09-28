@@ -134,8 +134,10 @@ ws = load("ncie/knowledge/WikiStore.kt")
 kstore = load("ncie/knowledge/KnowledgeStore.kt")
 knn = load("Knowledge.kt")
 wc = load("WikiCore.kt")
+# v8.1.0: the title-bonus loop now reads the PREPARED index, so qWords
+# appears once more - whole-word matching itself is unchanged
 check("v7.8.1: wiki title bonus matches whole words (hiv no longer inside shivam)",
-      ws.count("space-padded") == 1 and ws.count("qWords") == 2)
+      ws.count("space-padded") == 1 and ws.count("qWords") == 3)
 check("v7.8.1: self-introduction routed to plain chat (NcieChat.kt)",
       nc.count("SELF_INTRO_REGEX") == 2 and nc.count("maybeRememberName") == 2)
 check("v7.8.1: name is a knowledge stopword (Knowledge.kt)",
@@ -151,8 +153,22 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.0.0: version bumped for the UI overhaul",
-      bg.count("versionName '8.0.0'") == 1 and bg.count("versionCode 67") == 1)
+check("v8.1.0: version bumped for the kernel optimization sync",
+      bg.count("versionName '8.1.0'") == 1 and bg.count("versionCode 68") == 1)
+
+# ---- v8.1.0: kernel optimization sync (NCIE v0.9.2) + app-side wiring ----
+check("v8.1.0: learner canon-token cache kernel-side (PersistentLearner.kt)",
+      pl.count("v0.9.2 fix") == 1 and pl.count("statsData") == 1)
+check("v8.1.0: knowledge store inverted index (KnowledgeStore.kt)",
+      kstore.count("reindexLocked") == 5)
+check("v8.1.0: wiki store prepared index kernel-side (WikiStore.kt)",
+      ws.count("fun prepare") == 1 and ws.count("PreparedIndex") == 5)
+check("v8.1.0: debounced learner disk (NcieLearn.kt)",
+      nl.count("DebouncedDisk") == 3 and nl.count("flushNow") == 4)
+check("v8.1.0: graduated doc names via the kernel builder (NcieLearn.kt)",
+      nl.count("docNameOf") == 1)
+check("v8.1.0: single prepared WikiStore in the app (WikiCore.kt)",
+      wc.count("prepared") == 5 and wc.count("WikiStore()") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
