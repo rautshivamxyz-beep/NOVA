@@ -29,6 +29,8 @@ import org.nova.ncie.model.Route
  * answers, confirm toward graduation, and are promoted into the
  * KnowledgeStore by [Distiller]. All four default to no-ops so custom
  * learners keep compiling.
+ *
+ * v0.9.3: [knowsTopic] — a side-effect-free probe for adaptive planning.
  */
 /**
  * v0.9.2 (opt #10): the Learner's counters, structured - the raw
@@ -51,6 +53,15 @@ interface Learner {
      *  exists for a differently-worded ask, or null. Hosts that do not
      *  implement it simply never fuzzy-hit. */
     fun recallFuzzy(query: String): Pair<String, NovaResponse>? = null
+    /** v0.9.3 (#10): a side-effect-free probe for the adaptive planner —
+     *  true when the memory HALF-knows the question: an exact recall
+     *  would miss, but a fuzzy recall would hit. The planner spends one
+     *  tier more budget on such turns (see AdaptiveKernel). Unlike
+     *  [recallFuzzy] this never bumps counters, so it is safe to call on
+     *  every plan. Default: false — learners without fuzzy recall simply
+     *  never report it. */
+    fun knowsTopic(text: String): Boolean = false
+
     /** Record a completed exchange. */
     fun record(text: String, response: NovaResponse)
     /** v0.8.1: the world the answers were learned from changed — drop
