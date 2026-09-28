@@ -13,8 +13,32 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out NOVA
+      - name: Check out NOVA (full history and tags for the version check)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: App source changes require a new versionName
+        run: |
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "not a push - version $VER, check skipped"; exit 0
+          fi
+          BEFORE="${{ github.event.before }}"
+          if ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            echo "no before commit - version $VER, check skipped"; exit 0
+          fi
+          if [ "$(git diff --name-only "$BEFORE" "$GITHUB_SHA" -- '*.kt' '*.java' | wc -l)" -eq 0 ]; then
+            echo "no app source change - version $VER may stay"
+            exit 0
+          fi
+          if git rev-parse -q --verify "refs/tags/v$VER" >/dev/null; then
+            echo "FATAL: app source changed but v$VER was already released with this versionName"
+            echo "bump versionName/versionCode in android/app/build.gradle"
+            exit 1
+          fi
+          echo "app source changed and version $VER is new - OK"
       - name: Verify source integrity
         run: python3 tmp/verify_patches.py .
       - name: Set up Java 17
