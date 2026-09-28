@@ -78,7 +78,8 @@ MA_MARKERS = [
     ("v0.8.1: kernel-sized generation leash", "NcieKnowledge.generationBudget(", 1),
     ("v0.8.1: live streaming in the summarizers", "uiProgress(", 5),
     ("v7.6 compaction chat guard", "remember which chat this compaction belongs to", 1),
-    ("NCIE 7: record the completed turn for the learner", "NcieLearn.record(this@MainActivity, userText, replyMsg.text)", 1),
+    ("NCIE 7: record the completed turn for the learner",
+     "NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)", 1),
 ]
 for name, marker, n in MA_MARKERS:
     check("%s (x%d)" % (name, n), ma.count(marker) == n)
@@ -125,6 +126,7 @@ lr = load("ncie/learn/Learner.kt")
 # v0.9.0: PersistentLearner + LearningStore split out of Learner.kt into
 # their own file (same package) — the markers are counted across both.
 pl = load("ncie/learn/PersistentLearner.kt")
+ak = load("ncie/plan/AdaptiveKernel.kt")
 lf = load("ncie/learn/LearnedFact.kt")
 check("v0.8.1: vendored learner has clear() (interface + both impls)",
       lr.count("fun clear()") + pl.count("fun clear()") == 3)
@@ -153,8 +155,22 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.1.0: version bumped for the kernel optimization sync",
-      bg.count("versionName '8.1.0'") == 1 and bg.count("versionCode 68") == 1)
+check("v8.2.0: version bumped for the adaptive rules + sourced memory",
+      bg.count("versionName '8.2.0'") == 1 and bg.count("versionCode 69") == 1)
+
+# ---- v8.2.0: adaptive budgets (NCIE v0.9.3) + RAG-sourced memory ----
+check("v8.2.0: adaptive planner adoptable (NcieKnowledge.kt)",
+      nk.count("AdaptiveKernel") == 2 and nk.count("adoptAdaptivePlanner") == 2)
+check("v8.2.0: learner boot upgrades the planner (NcieLearn.kt)",
+      nl.count("adoptAdaptivePlanner(l)") == 1)
+check("v8.2.0: memory records carry their RAG sources (NcieLearn.kt)",
+      nl.count("sources: List<String>") == 1 and nl.count("quality(clean, sources)") == 1)
+check("v8.2.0: per-turn sources flow (MainActivity.kt + NcieChat.kt)",
+      ma.count("lastAnswerSources") == 2 and nc.count("lastAnswerSources") == 2)
+check("v8.2.0: knowsTopic probe synced (kernel learn files)",
+      pl.count("knowsTopic") == 2 and lr.count("knowsTopic") == 2)
+check("v8.2.0: the Mastery Rule synced (AdaptiveKernel.kt)",
+      ak.count("THE MASTERY RULE") == 1)
 
 # ---- v8.1.0: kernel optimization sync (NCIE v0.9.2) + app-side wiring ----
 check("v8.1.0: learner canon-token cache kernel-side (PersistentLearner.kt)",
