@@ -24,6 +24,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
@@ -132,6 +133,7 @@ class MainActivity : Activity() {
 
     /** Side drawer. */
     private lateinit var drawerPane: LinearLayout
+    private lateinit var drawerScroller: ScrollView
     private lateinit var scrim: View
     private lateinit var drawerList: LinearLayout
 
@@ -598,8 +600,13 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-        drawerPane.addView(drawerRow("Help & Tips", R.drawable.ic_lightbulb) { showHelpTips() })
+        // v7.9.1 redesign: the drawer held 13 rows and overflowed small
+        // screens - the daily actions stay in the drawer, everything
+        // else moved one tap deeper into "More".
         drawerPane.addView(drawerRow("New chat", R.drawable.ic_add) { newConversation() })
+        drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
+            startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
+        })
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
@@ -608,7 +615,6 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
             startActivity(Intent(this, MemoryActivity::class.java))
         })
-        drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",
@@ -633,17 +639,26 @@ class MainActivity : Activity() {
             true
         }
         drawerPane.addView(studyRow)
-        drawerPane.addView(drawerRow("Share chat", R.drawable.ic_send) { shareChat() })
-        drawerPane.addView(drawerRow("Exams", R.drawable.ic_doc) {
-            startActivity(Intent(this, ExamsActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("What did I miss?", R.drawable.ic_chat) { missedNotifications() })
-        drawerPane.addView(drawerRow("Write in my style", R.drawable.ic_edit) { writeInMyStyle() })
-        drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
-            startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
+        drawerPane.addView(drawerRow("More", R.drawable.ic_globe) {
+            closeDrawer()
+            AlertDialog.Builder(this)
+                .setTitle("More")
+                .setItems(arrayOf(
+                    "Help & Tips", "Notes filter", "Share chat", "Exams",
+                    "What did I miss?", "Write in my style", "Check for updates")) { _, which ->
+                    when (which) {
+                        0 -> showHelpTips()
+                        1 -> showNotesFilter()
+                        2 -> shareChat()
+                        3 -> startActivity(Intent(this, ExamsActivity::class.java))
+                        4 -> missedNotifications()
+                        5 -> writeInMyStyle()
+                        6 -> checkForUpdates()
+                    }
+                }
+                .show()
         })
         drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
-        drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_globe) { checkForUpdates() })
         drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         drawerPane.addView(TextView(this).apply {
@@ -656,7 +671,14 @@ class MainActivity : Activity() {
         drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         drawerPane.addView(drawerList, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        frame.addView(drawerPane, FrameLayout.LayoutParams(dp(304), FrameLayout.LayoutParams.MATCH_PARENT))
+        // v7.9.1: the pane scrolls now - the drawer outgrew small screens
+        drawerScroller = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            visibility = View.GONE
+            addView(drawerPane, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
+        frame.addView(drawerScroller, FrameLayout.LayoutParams(dp(304), FrameLayout.LayoutParams.MATCH_PARENT))
         return frame
     }
 
@@ -2460,20 +2482,24 @@ class MainActivity : Activity() {
 
     private fun openDrawer() {
         refreshDrawer()
+        drawerScroller.visibility = View.VISIBLE
         drawerPane.visibility = View.VISIBLE
         scrim.visibility = View.VISIBLE
         scrim.alpha = 0f
         scrim.animate().alpha(1f).setDuration(200).start()
-        drawerPane.translationX = -dp(304).toFloat()
-        drawerPane.animate().translationX(0f).setDuration(220).start()
+        drawerScroller.translationX = -dp(304).toFloat()
+        drawerScroller.animate().translationX(0f).setDuration(220).start()
     }
 
     private fun closeDrawer() {
         if (scrim.visibility != View.VISIBLE) return
         scrim.animate().alpha(0f).setDuration(180)
             .withEndAction { scrim.visibility = View.GONE }.start()
-        drawerPane.animate().translationX(-drawerPane.width.toFloat()).setDuration(200)
-            .withEndAction { drawerPane.visibility = View.GONE }.start()
+        drawerScroller.animate().translationX(-drawerScroller.width.toFloat()).setDuration(200)
+            .withEndAction {
+                drawerPane.visibility = View.GONE
+                drawerScroller.visibility = View.GONE
+            }.start()
     }
 
     private fun refreshDrawer() {
