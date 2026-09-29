@@ -132,6 +132,10 @@ nsk = load("ncie/android/NcieSkills.kt")
 cov = load("ncie/verify/Coverage.kt")
 sk = load("ncie/skill/SkillStore.kt")
 gs = load("ncie/learn/GapStore.kt")
+np_ = load("ncie/android/NcieProfile.kt")
+fla = load("FetchLogActivity.kt")
+html = load("ncie/knowledge/HtmlText.kt")
+skl = open(os.path.join(ROOT, "android/app/src/main/assets/skills.txt"), encoding="utf-8").read()
 lf = load("ncie/learn/LearnedFact.kt")
 check("v0.8.1: vendored learner has clear() (interface + both impls)",
       lr.count("fun clear()") + pl.count("fun clear()") == 3)
@@ -160,8 +164,28 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.4.0: version bumped for the four stages",
-      bg.count("versionName '8.4.0'") == 1 and bg.count("versionCode 72") == 1)
+check("v8.5.0: version bumped for live search + quality fixes",
+      bg.count("versionName '8.5.0'") == 1 and bg.count("versionCode 73") == 1)
+
+# ---- v8.5.0: live search, code mode, fetch log, profile tool ----
+check("v8.5.0: live web search - Wikipedia first, DuckDuckGo fallback (OnlineFetch)",
+      of_.count("duckduckgo") == 2 and of_.count("HtmlText") == 6)
+check("v8.5.0: every fetch logged (OnlineFetch)",
+      of_.count("fetch_log") == 3)
+check("v8.5.0: HtmlText synced from NCIE v0.9.5",
+      html.count("codeBlocks") == 2)
+check("v8.5.0: the profile tool intercepts the question (NcieChat + NcieProfile)",
+      nc.count("answerProfile") == 1 and np_.count("memorySnapshot") == 1 and np_.count("PROFILE_Q") == 2)
+check("v8.5.0: wiki background only on knowledge-seeking turns (NcieChat)",
+      nc.count("val seek =") == 1)
+check("v8.5.0: the Fetches screen (FetchLogActivity + WikiCore + manifest + drawer)",
+      fla.count("removeArticle") == 2 and wc.count("removeArticle") == 1 and
+      wc.count("articleText") == 1 and open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count("FetchLogActivity") == 1 and
+      ma.count("Fetches") == 1)
+check("v8.5.0: hands gap-fill - timers and email drafts (MainActivity)",
+      ma.count("ACTION_SET_TIMER") == 1 and ma.count("Email drafted") == 1)
+check("v8.5.0: code mode skill ships (skills.txt, 6 skills)",
+      skl.count("[skill]") == 6)
 
 # ---- v8.4.0: the four stages - online learning, weak topics, skills, gaps ----
 check("v8.4.0: online learning toggle (SettingsActivity)",
@@ -180,9 +204,9 @@ check("v8.4.0: failures noted, gaps logged (NcieLearn)",
 check("v8.4.0: weak topics surface on the Memory screen (NcieLearn)",
       nl.count("weakTopics") == 1)
 check("v8.4.0: the fetcher gates with Coverage and sends keywords only",
-      of_.count("Coverage.ratio") == 1 and of_.count("wikipedia.org") == 2)
+      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 2)
 check("v8.4.0: skills parsed by the kernel (NcieSkills)",
-      nsk.count("SkillStore.parse") == 1)
+      nsk.count("SkillStore.parse") == 2)
 check("v8.4.0: kernel stage files synced (Coverage, SkillStore, GapStore)",
       cov.count("v0.9.4") >= 1 and sk.count("[skill]") >= 1 and gs.count("MAX = 100") == 1)
 check("v8.4.0: the Struggle Rule synced (AdaptiveKernel)",
@@ -224,7 +248,7 @@ check("v8.1.0: debounced learner disk (NcieLearn.kt)",
 check("v8.1.0: graduated doc names via the kernel builder (NcieLearn.kt)",
       nl.count("docNameOf") == 1)
 check("v8.1.0: single prepared WikiStore in the app (WikiCore.kt)",
-      wc.count("prepared") == 7 and wc.count("WikiStore()") == 1)
+      wc.count("prepared") == 9 and wc.count("WikiStore()") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
