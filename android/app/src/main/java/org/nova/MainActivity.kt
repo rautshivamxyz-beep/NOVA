@@ -10,7 +10,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
@@ -64,6 +66,9 @@ class MainActivity : Activity() {
     private lateinit var emptyView: View
     internal lateinit var input: EditText
     private lateinit var sendBtn: Button
+    // v9.0.0 "Voice": the always-visible tap-to-talk mic next to the
+    // smart button (which is itself a mic only while the input is empty)
+    private lateinit var voiceBtn: Button
     private lateinit var symRow: android.widget.HorizontalScrollView
     internal val adapter = MessageAdapter()
 
@@ -148,8 +153,12 @@ class MainActivity : Activity() {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     internal var generationJob: Job? = null
     private var generating = false
-    internal var tts: TextToSpeech? = null
-    private var ttsReady = false
+    // v9.0.0 "Voice": NcieVoice owns the engine now - this alias keeps
+    // the document read-aloud and the streaming read-aloud on the ONE
+    // shared TextToSpeech instance (init/ready/shutdown live in NcieVoice)
+    internal var tts: TextToSpeech?
+        get() = NcieVoice.tts
+        set(value) { NcieVoice.tts = value }
 
     // streaming TTS: how much of the reply has been spoken already
     private var spokenLength = 0
@@ -214,17 +223,18 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4253)
         }
 
-        tts = TextToSpeech(this) { code ->
-            ttsReady = code == TextToSpeech.SUCCESS
-            if (ttsReady) tts?.language = Locale.getDefault()
-        }
+        // v9.0.0 "Voice": the shared engine for spoken replies and the
+        // document read-aloud (replaces the private TextToSpeech instance)
+        NcieVoice.init(this)
     }
 
 
     override fun onDestroy() {
         super.onDestroy()
-        tts?.stop()
-        tts?.shutdown()
+        // v9.0.0 "Voice": release the recognizer and the shared engine
+        endListen()
+        NcieVoice.stop()
+        NcieVoice.shutdown(this)
     }
 
     private fun buildUi(): View {
@@ -522,6 +532,16 @@ class MainActivity : Activity() {
             })
             setOnClickListener { send() }
         }
+        // v9.0.0 "Voice": tap-to-talk mic - always available next to
+        // the smart button (which only morphs into a mic while the
+        // input is empty; this one works mid-sentence too)
+        voiceBtn = roundButton("", textDim).apply {
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_mic, accent), null, null, null)
+            setOnClickListener { startSpeech() }
+        }
+        pill.addView(voiceBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+            rightMargin = dp(4)
+        })
         // v7.9.3: one smart button on the right - mic when the input
         // is empty, send when there is text (see updateSendLook)
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
@@ -659,6 +679,12 @@ class MainActivity : Activity() {
                     Uri.parse("https://github.com/rautshivamxyz-beep/NOVA/releases")))
             } catch (e: Exception) { }
         })
+        // v9.0.0 "Voice": spoken replies - one persisted toggle right
+        // under Update (key "voiceReplies" in the shared nova prefs)
+        drawerPane.addView(drawerRow("Voice replies", R.drawable.ic_mic) {
+            NcieVoice.enabled = !NcieVoice.enabled
+            toast(if (NcieVoice.enabled) "Voice replies on" else "Voice replies off")
+        })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",
@@ -732,8 +758,12 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------- chats
 
     private fun displayChatMessages() {
+        // v9.0.0 "Voice": replaying stored history must not read every
+        // old reply aloud
+        adapter.suppressSpeak = true
         adapter.clear()
         for (m in currentChat.messages) adapter.add(m)
+        adapter.suppressSpeak = false
         if (currentChat.messages.isNotEmpty()) scrollToEnd()
         updateDocBanner()
     }
@@ -800,6 +830,21 @@ class MainActivity : Activity() {
                     }
                 }
             }
+        }
+    }
+
+    // v9.0.0 "Voice": the RECORD_AUDIO runtime permission result -
+    // granted means start listening right away (the tap that asked
+    // for the permission is completed here)
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_MIC) {
+            if (grantResults.isNotEmpty() &&
+                grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) listenNow()
+            else toast("Microphone permission needed for voice input")
         }
     }
 
@@ -1254,6 +1299,15 @@ class MainActivity : Activity() {
                         try { speakNewSentences(stripThinking(replyMsg.text), flush = true) }
                         catch (e: Exception) { }
                     }
+                    // v9.0.0 "Voice": spoken replies - the model's answer is
+                    // read aloud ONCE, in full, when the turn truly ends.
+                    // Continuations keep appending to this same bubble, so
+                    // only the final segment (which holds the whole text)
+                    // speaks; every streamed chunk before it stays silent
+                    // (deterministic replies speak at the display point
+                    // in MessageAdapter.add instead).
+                    if (!speechCancelled && !willContinue)
+                        NcieVoice.speak(stripThinking(replyMsg.text))
                     // conversation mode: listen again once the voice finishes
                     if (settings.autoListen) scope.launch {
                         var waited = 0
@@ -2463,7 +2517,7 @@ Study:
     /** Reads the attached document aloud, sentence by sentence. */
     private fun readDocAloud() {
         val doc = docContext ?: return
-        if (!ttsReady || tts == null) { toast("Voice not ready yet - wait a moment"); return }
+        if (!NcieVoice.isReady || tts == null) { toast("Voice not ready yet - wait a moment"); return }
         readSents = doc.replace(Regex("\\s+"), " ")
             .split(Regex("(?<=[.!?])\\s+"))
             .filter { it.isNotBlank() }
@@ -2705,6 +2759,12 @@ Study:
         displayChatMessages()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // v9.0.0 "Voice": never keep the mic open in the background
+        endListen()
+    }
+
     override fun onResume() {
         super.onResume()
         if (appliedTheme.isNotEmpty() && settings.theme != appliedTheme) {
@@ -2715,7 +2775,7 @@ Study:
     }
 
     private fun speakNewSentences(full: String, flush: Boolean) {
-        if (!settings.readAloud || !ttsReady || tts == null) return
+        if (!settings.readAloud || !NcieVoice.isReady || tts == null) return
         if (spokenLength >= full.length) return
         val pending = full.substring(spokenLength)
 
@@ -2743,21 +2803,90 @@ Study:
         }
     }
 
+    /** v9.0.0 "Voice": tap-to-talk state - the in-app recognizer and
+     *  whether it is mid-listen (the mic button is disabled while it
+     *  runs, re-enabled the moment results or an error arrive). */
+    private var voiceRecognizer: SpeechRecognizer? = null
+    private var listening = false
+
+    /** v9.0.0 "Voice": tap-to-talk via android.speech.SpeechRecognizer.
+     *  Recognition runs in-app (no external dialog, fully local), the
+     *  best match lands in the input box and goes through the SAME
+     *  send path as the send button. RECORD_AUDIO is requested at
+     *  runtime first (first tap only). */
     private fun startSpeech() {
         if (generating) return
-        if (!ensureModelReady()) return
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-            )
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to NOVA… (say \"send\" at the end to send)")
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            toast("Speech recognition not available on this device")
+            return
         }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQ_MIC)
+            return
+        }
+        listenNow()
+    }
+
+    private fun listenNow() {
+        if (listening) return
+        val recognizer = try {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        } catch (e: Exception) { null }
+        if (recognizer == null) {
+            toast("Speech recognition not available on this device")
+            return
+        }
+        voiceRecognizer = recognizer
+        listening = true
+        voiceBtn.isEnabled = false
+        voiceBtn.alpha = 0.4f
+        val listenIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        }
+        recognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle) {
+                endListen()
+                val heard = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()?.trim()
+                if (heard.isNullOrBlank()) { toast("Didn't catch that"); return }
+                input.setText(heard)
+                input.setSelection(heard.length)
+                send()
+            }
+            override fun onError(error: Int) {
+                endListen()
+                toast(if (error == SpeechRecognizer.ERROR_NO_MATCH ||
+                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                    "Didn't catch that" else "Speech error")
+            }
+            override fun onRmsChanged(rmsdB: Float) { }
+            override fun onBeginningOfSpeech() { }
+            override fun onBufferReceived(buffer: ByteArray) { }
+            override fun onEndOfSpeech() { }
+            override fun onEvent(eventType: Int, params: Bundle?) { }
+            override fun onPartialResults(partialResults: Bundle?) { }
+            override fun onReadyForSpeech(params: Bundle?) { }
+        })
         try {
-            startActivityForResult(intent, REQ_SPEECH)
-        } catch (e: android.content.ActivityNotFoundException) {
-            toast("Speech input is not available on this phone")
+            recognizer.startListening(listenIntent)
+        } catch (e: Exception) {
+            endListen()
+            toast("Speech error")
         }
+    }
+
+    private fun endListen() {
+        listening = false
+        if (this::voiceBtn.isInitialized) {
+            voiceBtn.isEnabled = true
+            voiceBtn.alpha = 1f
+        }
+        try { voiceRecognizer?.destroy() } catch (e: Exception) { }
+        voiceRecognizer = null
     }
 
     // ------------------------------------------------------- share-in
@@ -3121,6 +3250,7 @@ Study:
     companion object {
         private const val REQ_SPEECH = 4251
         private const val REQ_CHATS = 4252
+        private const val REQ_MIC = 4254
         private var crashHandlerInstalled = false
     }
 }
@@ -3490,7 +3620,18 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     fun add(m: Msg) {
         items.add(m)
         notifyItemInserted(items.size - 1)
+        // v9.0.0 "Voice": the single display point - every finished
+        // assistant message shown in the chat (the deterministic eyes,
+        // tutor and profile answers included) passes through here, so
+        // this is where NOVA reads it aloud. Model replies stream into
+        // their bubble (done=false at this point) and speak once at
+        // their completion instead; history replays set suppressSpeak.
+        if (m.role == Role.ASSISTANT && m.done && m.text.isNotBlank() && !suppressSpeak)
+            NcieVoice.speak(m.text)
     }
+
+    /** True while displayChatMessages replays stored history. */
+    var suppressSpeak = false
 
     fun appendToLast(token: String) {
         if (items.isEmpty()) return
