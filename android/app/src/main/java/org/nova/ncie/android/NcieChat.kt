@@ -144,6 +144,14 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // they work before any model is loaded at all.
         if (answerSummary(text)) { input.setText(""); return }
         if (answerForget(text)) { input.setText(""); return }
+        // v9.5.0 "Document Grounding": "from my notes: <question>" -
+        // strict answers from the user's own material, and "my
+        // documents" - the inventory of it. Both run before the
+        // seek/fetch offer below; the normal docPart injection logic
+        // further down stays untouched - this is a separate explicit
+        // mode the user invokes.
+        if (answerGrounded(text)) { input.setText(""); return }
+        if (answerDocsList(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -1005,4 +1013,119 @@ private fun MainActivity.answerForget(text: String): Boolean {
         try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
     }
     return true
+}
+
+// v9.5.0 "Document Grounding": "from my notes: <question>" (also "from
+// my documents", with or without the colon) - the remainder is the
+// question, answered STRICTLY from the user's own material. Retrieval
+// is deterministic (NcieGround.retrieve: ~1500-char chunks, keyword
+// overlap, top 2 per source, top 4 overall); the model only words the
+// final answer from those chunks (NovaEngineAdapter.generate on
+// Dispatchers.IO, the NcieTutor pattern), and the reply ends with a
+// monospace source list. No network, no new dependency.
+private val GROUND_Q = Regex(
+    "(?i)^\\s*from\\s+my\\s+(?:notes?|documents?)\\b\\s*:?\\s*(.*)$")
+
+private fun postGroundReply(act: MainActivity, body: String) {
+    val groundMsg = Msg(Role.ASSISTANT, body)
+    act.currentChat.messages.add(groundMsg); act.adapter.add(groundMsg); act.scrollToEnd()
+    act.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+    }
+}
+
+private fun MainActivity.answerGrounded(text: String): Boolean {
+    val m = GROUND_Q.find(text) ?: return false
+    val question = m.groupValues[1].trim()
+    if (question.length < 2) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    // no material at all - honest, never a guess
+    if (!NcieKnowledge.hasDocs(this) && !WikiCore.isReady(this)) {
+        postGroundReply(activity,
+            "You have no documents yet — paste a chapter into Knowledge or fetch one online.")
+        return true
+    }
+    if (compacting) {
+        postGroundReply(activity, "Compressing older messages — one moment")
+        return true
+    }
+    if (!ensureModelReady()) return true
+    scope.launch(Dispatchers.IO) {
+        val chunks = NcieGround.retrieve(activity, question)
+        // zero keyword-matching chunks - nothing in the material is
+        // about this question, so say so instead of guessing
+        if (chunks.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                postGroundReply(activity, "I couldn't find anything about that in your " +
+                    "documents. Try different words, or fetch it online.")
+            }
+            return@launch
+        }
+        val groundReply = NovaEngineAdapter.generate(
+            NcieGround.groundPrompt(question, chunks), activity.settings.predictLength)
+        // monospace source list: "<name (chunk N)> ..." - N counts the
+        // chunks this answer used from each source
+        val seen = HashMap<String, Int>()
+        val src = StringBuilder("Sources:")
+        for (c in chunks) {
+            val n = (seen[c.first] ?: 0) + 1
+            seen[c.first] = n
+            src.append(" ").append(c.first).append(" (chunk ").append(n).append(")")
+        }
+        withContext(Dispatchers.Main) {
+            postGroundReply(activity, groundReply + "\n\n```\n" + src + "\n```")
+        }
+    }
+    return true
+}
+
+// v9.5.0: "what documents do i have" / "my documents" / "list my
+// documents" - the deterministic inventory of the user's own material
+// (Knowledge documents + offline wiki articles), monospace with sizes.
+// Like DOCS listing in Knowledge: no model call, no network, works with
+// no model loaded at all.
+private val DOCS_Q = Regex(
+    "(?i)^\\s*(?:what\\s+documents\\s+do\\s+i\\s+have|my\\s+documents|" +
+        "list\\s+my\\s+documents)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerDocsList(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - this command is always short and typed
+    if (text.length > 80 || !DOCS_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = groundDocsBody(activity)
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
+/** The monospace document inventory: Knowledge documents first, then
+ *  wiki articles, each with its size in characters. */
+private fun groundDocsBody(ctx: android.content.Context): String {
+    val docs = NcieKnowledge.docs(ctx)
+    val wiki = NcieGround.wikiNames(ctx)
+    if (docs.isEmpty() && wiki.isEmpty()) return "No documents yet."
+    val sb = StringBuilder("```\nYour documents:\n")
+    if (docs.isNotEmpty()) {
+        sb.append("\nKnowledge:\n")
+        for (d in docs) sb.append("  ").append(d.first).append(" — ")
+            .append(NcieKnowledge.docText(ctx, d.first).length).append(" chars\n")
+    }
+    if (wiki.isNotEmpty()) {
+        sb.append("\nWiki:\n")
+        try { WikiCore.warmUp(ctx) } catch (e: Exception) { }
+        for (t in wiki) {
+            val len = try { WikiCore.articleText(ctx, t)?.length ?: 0 } catch (e: Exception) { 0 }
+            sb.append("  ").append(t).append(" — ").append(len).append(" chars\n")
+        }
+    }
+    sb.append("```")
+    return sb.toString()
 }
