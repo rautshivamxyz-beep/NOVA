@@ -65,6 +65,15 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         val text = (raw ?: input.text.toString()).trim()
         if (text.isEmpty()) return
         val isChip = CHIP_PROMPTS.contains(text)
+        // v8.9.0: Tutor Mode's stateful continuation - while a quiz
+        // answer, a flashcard flip or a right/wrong verdict is pending,
+        // the user's next message belongs to that session BEFORE any
+        // other route (this is the one intercept that outranks all the
+        // others, including the calculator below).
+        if (NcieTutor.pendingAnswer()) {
+            input.setText("")
+            if (NcieTutor.continueSession(this, text)) return
+        }
         // v7.4: no-model tools FIRST - calculator and phone commands work
         // even before any model is downloaded
         if (solveArithmetic(text)) { input.setText(""); return }
@@ -80,6 +89,44 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // phone, and they work with no model loaded at all.
         if (answerMissed(text)) { input.setText(""); return }
         if (answerFrom(text)) { input.setText(""); return }
+        // v8.9.0: Tutor Mode - quiz me on X with two-pass LLM answer
+        // checking, weak areas with 1-day spaced repetition, flashcards.
+        // The deterministic paths (weak-area list, flashcard storage and
+        // the flip drill) never touch the model; question writing and
+        // answer grading run through the in-app engine - nothing leaves
+        // the phone for this feature.
+        val tutorTopic = TUTOR_QUIZ.find(text)
+        if (tutorTopic != null && text.length <= 120) {
+            input.setText("")
+            NcieTutor.startQuiz(this, text, tutorTopic.groupValues[1].trim())
+            return
+        }
+        if (TUTOR_STUDY.containsMatchIn(text)) {
+            input.setText("")
+            NcieTutor.startStudy(this, text)
+            return
+        }
+        if (TUTOR_WEAK.containsMatchIn(text)) {
+            input.setText("")
+            NcieTutor.weakAreas(this, text)
+            return
+        }
+        val flashRest = FLASH_ADD.find(text)
+        if (flashRest != null && text.length <= 120) {
+            input.setText("")
+            NcieTutor.addFlashcard(this, text, flashRest.groupValues[1].trim())
+            return
+        }
+        if (FLASH_LIST.containsMatchIn(text)) {
+            input.setText("")
+            NcieTutor.flashcardsList(this, text)
+            return
+        }
+        if (FLASH_QUIZ.containsMatchIn(text)) {
+            input.setText("")
+            NcieTutor.startFlashQuiz(this, text)
+            return
+        }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -705,6 +752,18 @@ private fun MainActivity.answerMissed(text: String): Boolean {
     }
     return true
 }
+
+// v8.9.0: Tutor Mode's entry phrases. Anchored short commands (study,
+// weak areas, flashcards) so OCR'd chapter pastes never fall into them;
+// quiz-me-on keeps the open topic capture but is length-gated in the
+// routing above.
+private val TUTOR_QUIZ = Regex("(?i)\\b(?:quiz|test)\\s+me\\s+on\\s+(.{2,80})")
+private val TUTOR_STUDY = Regex("(?i)^\\s*study(?:\\s+my\\s+weak\\s+areas)?\\s*[.!?]*\\s*$")
+private val TUTOR_WEAK = Regex(
+    "(?i)^\\s*(?:my\\s+weak\\s+areas|what\\s+am\\s+i\\s+weak\\s+in|weak\\s+areas)\\s*[.!?]*\\s*$")
+private val FLASH_ADD = Regex("(?i)^\\s*add\\s+flashcards?\\b\\s*(.*)$")
+private val FLASH_LIST = Regex("(?i)^\\s*my\\s+flashcards\\s*[.!?]*\\s*$")
+private val FLASH_QUIZ = Regex("(?i)^\\s*(?:quiz\\s+my\\s+flashcards|flashcards)\\s*[.!?]*\\s*$")
 
 // v8.8.0: "any messages from X" / "did X message me" / "anything from
 // X" - a deterministic search of NovaListener's log for X (the one to

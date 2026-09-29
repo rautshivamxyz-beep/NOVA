@@ -33,10 +33,10 @@ android {
         applicationId 'org.nova'
         minSdk 30
         targetSdk 35
-        // v8.8.0: eyes + update - notification listener with local
-        // logging, deterministic chat queries, update drawer row
-        versionCode 80
-        versionName '8.8.0'
+        // v8.9.0: tutor mode - quiz me on X with two-pass answer
+        // checking, weak areas, flashcards
+        versionCode 81
+        versionName '8.9.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
