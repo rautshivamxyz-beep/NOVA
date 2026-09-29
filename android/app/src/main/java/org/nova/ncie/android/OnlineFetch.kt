@@ -55,7 +55,7 @@ object OnlineFetch {
     private fun fetch(act: MainActivity, text: String, q: String) {
         act.scope.launch(Dispatchers.IO) {
             // 1. Wikipedia first - curated, clean, no page parsing needed
-            val wiki = try { fetchWiki(q) } catch (e: Exception){ null }
+            val wiki = try { fetchWiki(q) } catch (e: Exception) { null }
             var saved: String? = null
             if (wiki != null && Coverage.ratio(text, wiki.second) >= 0.3) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
@@ -66,11 +66,11 @@ object OnlineFetch {
             // 2. the open web - only when Wikipedia had nothing usable
             if (saved == null) {
                 val page = try { fetchWeb(q) } catch (e: Exception) { null }
-               if (page != null) {
+                if (page != null) {
                     // code blocks ride along verbatim, so fetched examples
                     // land exactly as written
                     val body = page.text + (if (page.code.isNotEmpty())
-                          "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
+                        "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
                         else "")
                     if (Coverage.ratio(text, body) >= 0.3 &&
                         WikiCore.appendArticle(act, page.title, body)) {
@@ -92,7 +92,7 @@ object OnlineFetch {
 
     /** (title, intro extract) from Wikipedia, or null. Two requests:
      *  the search API for the best title, then the extract API for its
-     *   intro paragraphs. */
+     *  intro paragraphs. */
     private fun fetchWiki(q: String): Pair<String, String>? {
         val search = http("https://en.wikipedia.org/w/api.php?action=query&format=json" +
             "&list=search&srlimit=1&srsearch=" + URLEncoder.encode(q, "UTF-8"))
@@ -133,7 +133,7 @@ object OnlineFetch {
     }
 
     /** (url, title) pairs from DuckDuckGo lite's plain result HTML -
-    *  ad and internal links filtered, uddg redirects unwrapped. */
+     *  ad and internal links filtered, uddg redirects unwrapped. */
     private fun parseDdgLinks(html: String): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         for (m in Regex("(?is)<a[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>").findAll(html)) {
