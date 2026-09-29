@@ -2087,7 +2087,14 @@ class MainActivity : Activity() {
         // never long multi-line question text
         if (t.length > 60 || t.contains('\n')) return false
         // users often prefix commands with filler ("no open...", "hey open...")
-        val t2 = t.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|please)[,!?\\s]+"), "").trim()
+        // v8.5.2: polite fillers stripped REPEATEDLY - "hey nova can you
+        // please open youtube" must still land on the open command
+        var t2 = t.trim()
+        repeat(5) {
+            t2 = t2.replaceFirst(Regex("(?i)^(?:no|nah|nop|okay|ok|hey|hello|hi|" +
+                "please|kindly|nova|can\\s+you|can\\s+u|could\\s+you|will\\s+you|" +
+                "would\\s+you|i\\s+want\\s+you\\s+to|i\\s+want\\s+to|help\\s+me)[,!?\\s]+"), "").trim()
+        }
         // fuzzy token matching: one typo ("torch of", "flah") still works
         val toks = t2.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
         fun near(want: String): Boolean = toks.any { editDistance(it, want) <= 1 }
@@ -2102,12 +2109,45 @@ class MainActivity : Activity() {
             ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
         val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
-        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t2)
+        // v8.5.2: "wake me up at 6" is the alarm too
+        val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:(?:set\\s+)?(?:an?\\s+)?alarm|wake\\s+me\\s+up(?:\\s+at)?)\\s+(.+)$").find(t2)
         val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
         // v8.5.0: hands gap-fill - timers and email drafts
         val timer = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:a\\s+)?timer\\s+(.+)$").find(t2)
         val email = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:send\\s+)?(?:an?\\s+)?email\\s+(?:to\\s+)?(.+)$").find(t2)
+        // v8.5.2: volume control - the phone control everyone reaches for first
+        val volume = Regex("(?i)^(?:set\\s+)?(?:the\\s+)?volume\\s+(?:to\\s+)?(.+)$").find(t2)
+        val phoneHelp = Regex("(?i)what\\s+(?:can|do)\\s+you\\s+(?:do|control)|^phone\\s+commands$|^list\\s+commands").containsMatchIn(t2)
         when {
+            // v8.5.2: "what can you do" answered in chat, no model needed
+            phoneHelp -> {
+                val help = """Here's what I can do - just type it:
+
+Phone:
+- open youtube (or any app)
+- set alarm 6:30am, wake me up at 6
+- timer 10 minutes
+- torch on / torch off
+- volume up / volume down / volume 50 / volume mute
+- wifi on / bluetooth off (opens the panel)
+- call mom, text john <message>, whatsapp tannu <message>
+- email dad about the trip (drafts it, you review and send)
+
+Study:
+- explain <topic>, teach me <chapter>
+- quiz me on <topic>, flashcards
+- summarize my notes
+- remember that <fact>
+- what do you know about me"""
+                val um = Msg(Role.USER, t)
+                currentChat.messages.add(um)
+                adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, help)
+                currentChat.messages.add(reply)
+                adapter.add(reply)
+                scrollToEnd()
+                return true
+            }
             torchWord -> {
                 val on = !hasOff
                 try {
@@ -2251,6 +2291,32 @@ class MainActivity : Activity() {
                     })
                     toast("Email drafted - review and send")
                 } catch (e: Exception) { toast("No email app found") }
+                return true
+            }
+            volume != null -> {
+                val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                val arg = volume.groupValues[1].trim().lowercase()
+                val stream = android.media.AudioManager.STREAM_MUSIC
+                val max = am.getStreamMaxVolume(stream)
+                when {
+                    arg == "up" || arg.startsWith("increase") || arg.startsWith("louder") ->
+                        am.setStreamVolume(stream,
+                            (am.getStreamVolume(stream) + max / 10).coerceAtMost(max), 0)
+                    arg == "down" || arg.startsWith("decrease") || arg.startsWith("lower") ||
+                        arg.startsWith("quieter") ->
+                        am.setStreamVolume(stream,
+                            (am.getStreamVolume(stream) - max / 10).coerceAtLeast(0), 0)
+                    arg == "full" || arg == "max" || arg.startsWith("maximum") ->
+                        am.setStreamVolume(stream, max, 0)
+                    arg == "mute" || arg == "silent" || arg.startsWith("zero") ->
+                        am.setStreamVolume(stream, 0, 0)
+                    else -> {
+                        val n = Regex("(\\d+)").find(arg)?.groupValues?.get(1)?.toIntOrNull()
+                        if (n == null) { toast("Try: volume 50, volume up, volume mute"); return true }
+                        am.setStreamVolume(stream, (max * n / 100).coerceIn(0, max), 0)
+                    }
+                }
+                toast("Volume set")
                 return true
             }
             open != null -> {

@@ -185,8 +185,17 @@ check("v8.5.0: code mode skill ships (skills.txt, 6 skills)",
       skl.count("[skill]") == 6)
 
 # ---- v8.5.1: the Fetches screen hotfix ----
-check("v8.5.1: version bumped for the Fetches crash fix",
-      bg.count("versionName '8.5.1'") == 1 and bg.count("versionCode 74") == 1)
+# ---- v8.5.2: natural phone commands ----
+check("v8.5.2: version bumped for natural phone commands",
+      bg.count("versionName '8.5.2'") == 1 and bg.count("versionCode 75") == 1)
+check("v8.5.2: polite fillers stripped repeatedly (MainActivity)",
+      ma.count("repeat(5)") == 1 and ma.count("kindly") == 1)
+check("v8.5.2: wake-me-up joins the alarm (MainActivity)",
+      ma.count("wake") == 3)
+check("v8.5.2: volume control (MainActivity)",
+      ma.count("AUDIO_SERVICE") == 1 and ma.count("volume mute") == 2)
+check("v8.5.2: phone help in chat (MainActivity)",
+      ma.count("Here's what I can do - just type it:") == 1 and ma.count("phoneHelp") == 2)
 check("v8.5.1: own ListView under android.R.id.list, never re-parented (FetchLogActivity)",
       fla.count("R.id.list") == 1 and fla.count("listAdapter = ") == 1 and
       fla.count("listView.apply") == 0)
