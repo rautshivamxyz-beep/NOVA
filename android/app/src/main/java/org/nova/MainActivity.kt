@@ -225,6 +225,10 @@ class MainActivity : Activity() {
                 }
                 Reminder.schedule(this, next, t, rep)
             }
+            // v9.8.0: scheduled texts ride the same re-arm pass - one that
+            // came due while NOVA was dead fires now, the nearest future
+            // one is re-armed (mirrors what BootReceiver does on boot)
+            ScheduledSends.fireDue(this)
         } catch (e: Exception) { }
 
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
@@ -676,6 +680,9 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Backup", R.drawable.ic_copy) {
             startActivity(Intent(this, BackupActivity::class.java))
         })
+        // v9.8.0 "OCR Notes": scan a photo of handwritten notes, fix the
+        // recognized text, save it as a Knowledge document - all on-device
+        drawerPane.addView(drawerRow("Scan notes", R.drawable.ic_doc) { scanNotes() })
         // v8.8.0: the eyes - notification access; NovaListener logs
         // notifications locally for "what did I miss" and "messages from X"
         drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
@@ -826,6 +833,11 @@ class MainActivity : Activity() {
                 val isImage = (contentResolver.getType(uri) ?: "").startsWith("image/")
                 if (isImage) ocrImage(uri) else loadSharedDocument(uri)
             }
+            return
+        }
+        // v9.8.0: "Scan notes" - a photo picked for the OCR notes import
+        if (requestCode == 7800 && resultCode == RESULT_OK) {
+            data?.data?.let { uri -> scanNotesImage(uri) }
             return
         }
         if (requestCode == REQ_CHATS && resultCode == Activity.RESULT_OK && data != null) {
@@ -2074,6 +2086,63 @@ class MainActivity : Activity() {
         }
     }
 
+    /** v9.8.0 "Scan notes": pick a photo from the gallery (SAF - no
+     *  camera permission needed) and import its text as a document. */
+    private fun scanNotes() {
+        try {
+            val pick = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            startActivityForResult(pick, 7800)
+        } catch (e: Exception) { toast("No gallery app available") }
+    }
+
+    /** v9.8.0: on-device ML Kit OCR -> editable preview -> Knowledge doc.
+     *  The user corrects OCR mistakes before anything is saved. */
+    private fun scanNotesImage(uri: Uri) {
+        try {
+            val img = com.google.mlkit.vision.common.InputImage.fromFilePath(this, uri)
+            val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
+                com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+            rec.process(img)
+                .addOnSuccessListener { t ->
+                    rec.close()
+                    val txt = t.text.trim()
+                    if (txt.isEmpty()) {
+                        toast("No text found in that image.")
+                        return@addOnSuccessListener
+                    }
+                    val edit = EditText(this).apply {
+                        setText(txt)
+                        setTextIsSelectable(true)
+                        minLines = 6
+                        gravity = Gravity.TOP or Gravity.START
+                        setPadding(dp(20), dp(12), dp(20), dp(12))
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle("Import as notes?")
+                        .setView(edit)
+                        .setPositiveButton("Save document") { _, _ ->
+                            val finalTxt = edit.text.toString().trim()
+                            if (finalTxt.isEmpty()) {
+                                toast("No text found in that image.")
+                                return@setPositiveButton
+                            }
+                            val nm = "Scan " + java.text.SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
+                                .format(java.util.Date())
+                            Thread { NcieKnowledge.addDoc(this, nm, finalTxt) }.start()
+                            toast("Saved as document — ask me to quiz you on it.")
+                        }
+                        .setNegativeButton("Discard", null)
+                        .show()
+                }
+                .addOnFailureListener {
+                    try { rec.close() } catch (e: Exception) { }
+                    toast("Text recognition failed on this image.")
+                }
+        } catch (e: Exception) {
+            toast("Text recognition failed on this image.")
+        }
+    }
+
     /** v7.0.0: every NOVA feature explained in one place. */
     private fun showHelpTips() {
         android.app.AlertDialog.Builder(this)
@@ -2189,7 +2258,14 @@ class MainActivity : Activity() {
         // v6.3.1: OCR'd question text ("...the torch is switched off...")
         // must reach the model - phone commands are short typed requests,
         // never long multi-line question text
-        if (t.length > 60 || t.contains('\n')) return false
+        // v9.8.0: scheduled texts ("text mom at 6pm remember the cake and
+        // pick up my sister too") are naturally longer than immediate
+        // commands - they pass the gate, everything else keeps it
+        if (t.length > 60 || t.contains('\n')) {
+            val longOk = Regex("(?i)^(?:text|message)\\s+\\S+\\s+at\\s+").containsMatchIn(t.trim()) ||
+                Regex("(?i)^cancel\\s+(?:the\\s+)?scheduled").containsMatchIn(t.trim())
+            if (!longOk) return false
+        }
         // users often prefix commands with filler ("no open...", "hey open...")
         // v8.5.2: polite fillers stripped REPEATEDLY - "hey nova can you
         // please open youtube" must still land on the open command
@@ -2213,6 +2289,15 @@ class MainActivity : Activity() {
             ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
         val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
+        // v9.8.0: "text <name> at <time>: <message>" - the scheduled send.
+        // The time is matched structurally ("in 20 minutes" / "6pm" /
+        // "18:30" / "tomorrow 9am") so the message after it is free text.
+        val textSched = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|message)\\s+(\\S+)\\s+at\\s+" +
+            "((?:in\\s+\\d+\\s*(?:sec(?:ond)?s?|min(?:ute)?s?|hr?s?|hours?)\\b|(?:tomorrow\\s+)?\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?))" +
+            "(?::\\s+|\\s+)(.+)$").find(t2)
+        // v9.8.0: undo for the scheduled sends
+        val cancelSends = Regex("(?i)^cancel\\s+(?:the\\s+)?(?:all\\s+)?(?:my\\s+)?scheduled\\s+(?:texts?|messages?|sends?)$")
+            .containsMatchIn(t2)
         // v8.5.2: "wake me up at 6" is the alarm too
         val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:(?:set\\s+)?(?:an?\\s+)?alarm|wake\\s+me\\s+up(?:\\s+at)?)\\s+(.+)$").find(t2)
         val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
@@ -2278,6 +2363,43 @@ Study:
                 } catch (e: Exception) { toast("Couldn't open settings") }
                 return true
             }
+            cancelSends -> {
+                // v9.8.0: clears every pending scheduled text and the alarm
+                ScheduledSends.clear(this)
+                chatCommandReply(t, "Scheduled texts cancelled.")
+                return true
+            }
+            textSched != null -> {
+                // v9.8.0 "Scheduled Sends": the user approves the message
+                // once, here, at command time - the alarm fires it later
+                val who = textSched.groupValues[1].trim()
+                val timeStr = textSched.groupValues[2].trim()
+                val msg = textSched.groupValues[3].trim()
+                val ms = parseScheduledTime(timeStr)
+                when {
+                    ms == null -> chatCommandReply(t,
+                        "I couldn't read that time - try: text $who at 6:30pm get milk")
+                    ms < System.currentTimeMillis() - 60_000L -> chatCommandReply(t,
+                        "That time has already passed — give me a future time.")
+                    else -> {
+                        if (!hasContacts()) {
+                            requestPermissions(arrayOf(android.Manifest.permission.READ_CONTACTS), 4254)
+                            toast("Grant contacts access, then say it again")
+                            return true
+                        }
+                        if (lookupContact(who) == null) {
+                            toast("Couldn't find '$who' in contacts")
+                            return true
+                        }
+                        ScheduledSends.add(this, ms, who, msg)
+                        val human = java.text.SimpleDateFormat("EEE d MMM h:mm a", Locale.getDefault())
+                            .format(java.util.Date(ms))
+                        chatCommandReply(t,
+                            "Scheduled: $msg to $who at $human. Say 'cancel scheduled texts' to undo.")
+                    }
+                }
+                return true
+            }
             saySend != null -> {
                 var who = saySend.groupValues[2].trim()
                 val msg = saySend.groupValues[1].trim()
@@ -2337,13 +2459,12 @@ Study:
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else {
-                    val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
-                        putExtra("sms_body", msg)
-                    }
-                    try { startActivity(send) } catch (e: Exception) {
-                        toast("No messaging app")
-                    }
-                    toast("Message ready for $who - press send")
+                    // v9.8.0: the send itself moved to NovaSms.openDraft -
+                    // the SAME draft path SendReceiver fires scheduled
+                    // texts through
+                    if (NovaSms.openDraft(this, number, msg))
+                        toast("Message ready for $who - press send")
+                    else toast("No messaging app")
                 }
                 return true
             }
@@ -3153,6 +3274,42 @@ Study:
         if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
         else if (cal.timeInMillis <= now.timeInMillis) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
         return cal.timeInMillis
+    }
+
+    /**
+     * v9.8.0: time parser for the scheduled sends. "in 20 minutes" and
+     * "tomorrow 9am" reuse parseReminderTime's semantics; a bare clock
+     * time ("6pm", "18:30") means TODAY, even when that moment already
+     * passed - the caller answers honestly instead of silently rolling
+     * the send over to tomorrow.
+     */
+    private fun parseScheduledTime(s: String): Long? {
+        val t = s.trim().lowercase()
+        if (t.startsWith("in ") || t.contains("tomorrow")) return parseReminderTime(t)
+        val tm = Regex("(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?").find(t) ?: return null
+        var hour = tm.groupValues[1].toIntOrNull() ?: return null
+        val minute = tm.groupValues[2].toIntOrNull() ?: 0
+        val ampm = tm.groupValues[3]
+        if (ampm == "pm" && hour < 12) hour += 12
+        if (ampm == "am" && hour == 12) hour = 0
+        if (hour > 23) return null
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        cal.set(java.util.Calendar.SECOND, 0)
+        return cal.timeInMillis
+    }
+
+    // v9.8.0: phone-command answers that belong in the chat, not a toast
+    // (the same reply shape the phone-help branch uses)
+    private fun chatCommandReply(userText: String, replyText: String) {
+        val um = Msg(Role.USER, userText)
+        currentChat.messages.add(um)
+        adapter.add(um)
+        val reply = Msg(Role.ASSISTANT, replyText)
+        currentChat.messages.add(reply)
+        adapter.add(reply)
+        scrollToEnd()
     }
 
     internal fun scrollToEnd(force: Boolean = true) {

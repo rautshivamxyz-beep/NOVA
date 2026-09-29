@@ -88,5 +88,9 @@ class BootReceiver : android.content.BroadcastReceiver() {
             }
             Reminder.schedule(context, next, t, rep)
         }
+        // v9.8.0: pending scheduled texts survive the reboot too - fire
+        // anything that came due while the phone was off, then re-arm
+        // the nearest future one
+        try { ScheduledSends.fireDue(context) } catch (e: Exception) { }
     }
 }

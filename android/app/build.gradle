@@ -39,8 +39,9 @@ android {
         // v9.5.0 "Document Grounding": strict from-my-notes answers with sources
         // v9.6.0 "Engine Pack": experience, cache, flashmap, knowledge graph
         // v9.7.0 "Delta Updates + Quiet Fetch": on-device delta patches, offer only when nothing is local
-        versionCode 90
-        versionName '9.7.0'
+        // v9.8.0 "Scheduled Sends + OCR Notes": scheduled texts via AlarmManager, scan-my-notes photo import
+        versionCode 91
+        versionName '9.8.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -104,7 +105,8 @@ dependencies {
     implementation 'ru.noties:jlatexmath-android:0.2.0'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
 
-    // on-device OCR for scanned PDFs (bundled model - fully offline)
+    // on-device OCR for scanned PDFs and the v9.8.0 "scan my notes"
+    // photo import (bundled model - fully offline, no Play Services needed)
     implementation 'com.google.mlkit:text-recognition:16.0.1'
 
     // v9.7.0 "Delta Updates": bzip2 decompression for the bsdiff40
