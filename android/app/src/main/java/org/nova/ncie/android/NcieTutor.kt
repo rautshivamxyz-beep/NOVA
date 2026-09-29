@@ -49,6 +49,9 @@ object NcieTutor {
     var quizQuestions: List<Pair<String, String>> = emptyList()
     /** The pair the user is currently answering. */
     var quizIndex: Int = 0
+    /** v9.4.0 "Audit Fixes II" (audit: quizzes stopped at 3000 chars):
+     *  the 3000-char chunk of [quizSource] the running quiz is on. */
+    var quizChunk: Int = 0
     /** The card the flashcard drill is on. */
     var flashIndex: Int = 0
     /** The front of the card awaiting a flip (null = no drill running). */
@@ -124,14 +127,17 @@ object NcieTutor {
     }
 
     /** Drop the (topic, question) entry the user just re-answered
-     *  correctly - only called on a "study" session. */
+     *  correctly - only called on a "study" session.
+     *  v9.4.0: the topic matches case-insensitively, so every spelling
+     *  of the topic is pruned at once. */
     private fun pruneMissed(ctx: Context, topic: String, question: String) {
         try {
             val f = missFile(ctx)
             if (!f.exists()) return
+            val key = topic.trim().lowercase()
             val kept = f.readLines().filter { l ->
                 val p = l.split("\t", limit = 3)
-                !(p.size == 3 && p[1] == topic && p[2] == question)
+                !(p.size == 3 && p[1].trim().lowercase() == key && p[2] == question)
             }
             f.writeText(if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
         } catch (e: Exception) { }
@@ -206,8 +212,11 @@ object NcieTutor {
             val t = p[0].toLongOrNull() ?: continue
             val topic = p[1].trim()
             // v9.3.0: dead "flashcards" entries never come back
-            if (topic.isEmpty() || topic.equals("flashcards", ignoreCase = true) ||
-                !seen.add(topic)) continue
+            if (topic.isEmpty() || topic.equals("flashcards", ignoreCase = true)) continue
+            // v9.4.0 "Audit Fixes II" (audit: "Federalism" and
+            // "federalism" counted as two topics): dedupe on the
+            // normalized key, keep the first-seen spelling to quiz
+            if (!seen.add(topic.lowercase())) continue
             if (now - t >= DAY_MS) due.add(topic)
         }
         if (due.isEmpty()) {
@@ -252,22 +261,28 @@ object NcieTutor {
         val now = System.currentTimeMillis()
         val counts = HashMap<String, Int>()
         val lastAt = HashMap<String, Long>()
+        // v9.4.0 "Audit Fixes II" (audit: case/whitespace variants of the
+        // same topic were listed as separate weak areas): group on the
+        // normalized key, display the first-seen original spelling
+        val display = HashMap<String, String>()
         for (l in lines) {
             val p = l.split("\t", limit = 3)
             if (p.size < 3) continue
             val t = p[0].toLongOrNull() ?: continue
             val topic = p[1].trim()
             if (topic.isEmpty()) continue
-            counts[topic] = (counts[topic] ?: 0) + 1
-            if (t > (lastAt[topic] ?: 0L)) lastAt[topic] = t
+            val key = topic.lowercase()
+            counts[key] = (counts[key] ?: 0) + 1
+            if (t > (lastAt[key] ?: 0L)) lastAt[key] = t
+            if (!display.containsKey(key)) display[key] = topic
         }
         if (counts.isEmpty())
             return "No weak areas recorded yet — quiz yourself on something."
         val sb = StringBuilder("```\nWeak areas (most missed first):\n\n")
-        for (topic in counts.keys.sortedWith(
+        for (key in counts.keys.sortedWith(
                 compareByDescending<String> { counts[it] ?: 0 }.thenBy { it })) {
-            val days = ((now - (lastAt[topic] ?: 0L)) / DAY_MS).toInt()
-            sb.append(topic).append(" (").append(counts[topic] ?: 0)
+            val days = ((now - (lastAt[key] ?: 0L)) / DAY_MS).toInt()
+            sb.append(display[key]).append(" (").append(counts[key] ?: 0)
                 .append("), last missed ").append(days)
                 .append(if (days == 1) " day ago" else " days ago").append('\n')
         }
@@ -353,8 +368,10 @@ object NcieTutor {
                 return@launch
             }
             val (srcName, srcText) = found
+            // v9.4.0: chunk 0 - a source longer than 3000 chars is
+            // quizzed window by window until the chapter is covered
             val reply = NovaEngineAdapter.generate(
-                quizPrompt(t, srcText), act.settings.predictLength)
+                quizPrompt(t, chunkOf(srcText, 0)), act.settings.predictLength)
             val pairs = parseQuiz(reply)
             if (pairs.isEmpty()) {
                 postReplyOnMain(act, "Could not build questions from that text.")
@@ -364,10 +381,13 @@ object NcieTutor {
             quizTopic = t
             quizQuestions = pairs
             quizIndex = 0
+            quizChunk = 0
             studySession = viaStudy
+            val parts = chunkCount(srcText)
             val head = if (viaStudy)
                 "Revision time — this one gave you trouble before.\n\n"
-            else "Quiz on $t (from $srcName) — ${pairs.size} questions. " +
+            else "Quiz on $t (from $srcName) — ${pairs.size} questions" +
+                (if (parts > 1) ", part 1 of $parts" else "") + ". " +
                 "Answer each one in your own words.\n\n"
             postReplyOnMain(act, head + "Q1: " + pairs[0].first)
         }
@@ -379,9 +399,11 @@ object NcieTutor {
             "questions with answers, each on its own lines as 'Q: question' " +
             "then 'A: answer'. Nothing else. TEXT: " + text.take(3000)
 
-    /** The fixed two-pass check prompt (first 2000 chars of source). */
+    /** v9.4.0 "Audit Fixes II" (audit: grading saw a different window
+     *  than generation): the check prompt now uses the SAME 3000 chars
+     *  the questions came from. */
     private fun checkPrompt(text: String, q: String, a: String, userAnswer: String): String =
-        "Reference text: " + text.take(2000) + ". Question: " + q + ". Expected answer: " +
+        "Reference text: " + text.take(3000) + ". Question: " + q + ". Expected answer: " +
             a + ". Student's answer: " + userAnswer + ". Does the student's answer " +
             "show correct understanding? Reply with only YES or NO."
 
@@ -416,7 +438,8 @@ object NcieTutor {
         }
         val q = quizQuestions[quizIndex].first
         val a = quizQuestions[quizIndex].second
-        val src = quizSource ?: ""
+        // v9.4.0: grade against the chunk the question came from
+        val src = quizSource?.let { chunkOf(it, quizChunk) } ?: ""
         act.scope.launch(Dispatchers.IO) {
             val verdict = NovaEngineAdapter.generate(
                 checkPrompt(src, q, a, userAnswer), 16)
@@ -441,8 +464,8 @@ object NcieTutor {
                 sb.append("\n\nQ").append(quizIndex + 1).append(": ")
                     .append(quizQuestions[quizIndex].first)
             } else {
-                sb.append("\n\nQuiz complete")
-                resetQuiz()
+                appendChunkEnd(act, sb)
+                return@launch
             }
             postReplyOnMain(act, sb.toString())
         }
@@ -450,11 +473,69 @@ object NcieTutor {
 
     // -------------------------------------------------- the flashcards
 
+    /** v9.4.0 "Audit Fixes II" (audit: a long chapter was quizzed only
+     *  up to char 3000): how many 3000-char windows the source has. */
+    private fun chunkCount(src: String): Int =
+        if (src.isEmpty()) 1 else (src.length + 2999) / 3000
+
+    /** The i-th 3000-char window of the source. */
+    private fun chunkOf(src: String, i: Int): String =
+        src.substring(i * 3000, minOf((i + 1) * 3000, src.length))
+
+    /** v9.4.0: a chunk's questions just ran out. Either keep going with
+     *  the next 3000-char window, or finish with the part count. The
+     *  message is built into [sb]; the reply is posted from here on the
+     *  main dispatcher (safe from any thread). */
+    private fun appendChunkEnd(act: MainActivity, sb: StringBuilder) {
+        val src = quizSource
+        val total = if (src != null) chunkCount(src) else 1
+        if (src != null && quizChunk + 1 < total) {
+            sb.append("\n\nOn to the next part.")
+            act.scope.launch { postReply(act, sb.toString()) }
+            advanceChunk(act)
+        } else {
+            sb.append("\n\nQuiz complete — covered the whole chapter in ")
+                .append(total).append(" part")
+            if (total != 1) sb.append("s")
+            sb.append(".")
+            resetQuiz()
+            act.scope.launch { postReply(act, sb.toString()) }
+        }
+    }
+
+    /** v9.4.0: generate the questions for the next 3000-char window. */
+    private fun advanceChunk(act: MainActivity) {
+        val src = quizSource ?: return
+        val next = quizChunk + 1
+        val total = chunkCount(src)
+        if (next >= total) return
+        act.scope.launch(Dispatchers.IO) {
+            if (act.compacting) {
+                postReplyOnMain(act, "Compressing older messages — one moment")
+                return@launch
+            }
+            val reply = NovaEngineAdapter.generate(
+                quizPrompt(quizTopic, chunkOf(src, next)), act.settings.predictLength)
+            val pairs = parseQuiz(reply)
+            if (pairs.isEmpty()) {
+                postReplyOnMain(act, "Could not build questions from that text.")
+                resetQuiz()
+                return@launch
+            }
+            quizChunk = next
+            quizQuestions = pairs
+            quizIndex = 0
+            postReplyOnMain(act, "Part " + (next + 1) + " of " + total +
+                " — ${pairs.size} questions.\n\nQ1: " + pairs[0].first)
+        }
+    }
+
     /** v9.3.0: quiz state cleared, nothing kept. */
     private fun resetQuiz() {
         quizSource = null
         quizQuestions = emptyList()
         quizIndex = 0
+        quizChunk = 0
         studySession = false
     }
 
@@ -466,11 +547,13 @@ object NcieTutor {
             .append(quizQuestions[quizIndex].second)
         quizIndex = quizIndex + 1
         if (quizIndex < quizQuestions.size) {
-            sb.append("\\n\\nQ").append(quizIndex + 1).append(": ")
+            sb.append("\n\nQ").append(quizIndex + 1).append(": ")
                 .append(quizQuestions[quizIndex].first)
         } else {
-            sb.append("\\n\\nQuiz complete")
-            resetQuiz()
+            // v9.4.0 "Audit Fixes II": the next 3000-char window, or the
+            // whole-chapter finish with the part count
+            appendChunkEnd(act, sb)
+            return
         }
         postReply(act, sb.toString())
     }

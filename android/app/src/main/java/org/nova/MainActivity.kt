@@ -204,6 +204,23 @@ class MainActivity : Activity() {
         // deleted once, here (a no-op on every later run).
         NcieSummary.migrateLegacy(this)
 
+        // v9.4.0 "Audit Fixes II" (audit: a restore killed every alarm):
+        // AlarmManager alarms die with a restore or a force-stop, but
+        // reminders.json survives both - re-arm every future-dated
+        // reminder here, exactly like BootReceiver does after a reboot.
+        // Fire times are recoverable from the store ("at" + "rep").
+        try {
+            val nowMs = System.currentTimeMillis()
+            for ((at, t, rep) in ReminderStore.load(this)) {
+                val next = when {
+                    rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
+                    at > nowMs -> at
+                    else -> continue
+                }
+                Reminder.schedule(this, next, t, rep)
+            }
+        } catch (e: Exception) { }
+
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
             WikiCore.warmUp(this@MainActivity)
         }
@@ -679,6 +696,13 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Voice replies", R.drawable.ic_mic) {
             NcieVoice.enabled = !NcieVoice.enabled
             toast(if (NcieVoice.enabled) "Voice replies on" else "Voice replies off")
+        })
+        // v9.4.0 "Audit Fixes II" (audit: the speech locale was stuck on
+        // the recognizer's default): cycles en-IN -> hi-IN -> phone default
+        // (voice_lang.txt deleted). startSpeech() passes the choice as
+        // EXTRA_LANGUAGE when the file exists.
+        drawerPane.addView(drawerRow("Voice language", R.drawable.ic_mic) {
+            cycleVoiceLanguage()
         })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
@@ -2785,10 +2809,38 @@ Study:
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to NOVA")
+                // v9.4.0: the chosen voice language, when one is set
+                try {
+                    val lf = File(filesDir, "voice_lang.txt")
+                    if (lf.exists()) {
+                        val l = lf.readText().trim()
+                        if (l.isNotEmpty()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, l)
+                    }
+                } catch (e: Exception) { }
             }, VOICE_REQUEST_CODE)
         } catch (e: ActivityNotFoundException) {
             toast("No voice input app found on this phone")
         }
+    }
+
+    /**
+     * v9.4.0 "Audit Fixes II": cycles the recognition language
+     * en-IN -> hi-IN -> phone default. The choice persists in
+     * filesDir/voice_lang.txt (deleted = phone default) and is passed
+     * to the recognizer in startSpeech().
+     */
+    private fun cycleVoiceLanguage() {
+        val f = File(filesDir, "voice_lang.txt")
+        val cur = if (f.exists()) try { f.readText().trim() } catch (e: Exception) { "" } else ""
+        val next: String? = when (cur) {
+            "" -> "en-IN"
+            "en-IN" -> "hi-IN"
+            else -> null   // back to the phone default - no file
+        }
+        try {
+            if (next == null) f.delete() else f.writeText(next)
+        } catch (e: Exception) { }
+        toast("Voice language: " + (next ?: "phone default"))
     }
 
     // ------------------------------------------------------- share-in

@@ -284,12 +284,16 @@ class PlannerActivity : Activity() {
                     textSize = 14f
                     setTextColor(NovaTheme.text)
                 })
-                setOnClickListener { doubtActions(d.text) }
+                setOnClickListener { doubtActions(d.text, d.ts) }
             })
         }
     }
 
-    private fun doubtActions(text: String) {
+    /** v9.4.0 "Audit Fixes II" (audit: duplicate doubts were not
+     *  distinct - acting on one acted on all with the same text): the
+     *  entry's timestamp is part of the key, so each logged doubt
+     *  stays its own item. */
+    private fun doubtActions(text: String, ts: Long) {
         val options = arrayOf("Copy for NOVA chat", "Mark solved", "Delete")
         AlertDialog.Builder(this)
             .setTitle("Doubt")
@@ -303,12 +307,12 @@ class PlannerActivity : Activity() {
                     }
                     1 -> {
                         val all = Planner.doubts(this)
-                        for (d in all) if (d.text == text && !d.done) d.done = true
+                        for (d in all) if (d.text == text && d.ts == ts && !d.done) d.done = true
                         Planner.saveDoubts(this, all)
                         rebuild()
                     }
                     2 -> {
-                        val all = Planner.doubts(this).filter { !(it.text == text && !it.done) }
+                        val all = Planner.doubts(this).filter { !(it.text == text && it.ts == ts) }
                         Planner.saveDoubts(this, all)
                         rebuild()
                     }

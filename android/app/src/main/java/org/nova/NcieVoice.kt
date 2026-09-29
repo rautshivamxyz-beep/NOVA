@@ -34,8 +34,12 @@ object NcieVoice {
         get() = prefs?.getBoolean(KEY_ENABLED, false) ?: false
         set(value) { prefs?.edit()?.putBoolean(KEY_ENABLED, value)?.apply() }
 
-    /** Create the engine once, from MainActivity.onCreate. */
+    /** Create the engine once, from MainActivity.onCreate.
+     *  v9.4.0 "Audit Fixes II" (audit: TTS leak): init is idempotent -
+     *  a second call returns early instead of leaking another engine
+     *  over the shared one. */
     fun init(ctx: Context) {
+        if (ready || tts != null) return
         prefs = ctx.getSharedPreferences("nova", Context.MODE_PRIVATE)
         try {
             tts = TextToSpeech(ctx.applicationContext) { code ->
@@ -93,7 +97,13 @@ object NcieVoice {
             .replace(Regex("""[*_`>#~|]+"""), "")                // emphasis etc.
             .replace(Regex("""\s+"""), " ")
             .trim()
-        if (clean.length > 800) clean = clean.take(800)
+        if (clean.length > 800) {
+            // v9.4.0 "Audit Fixes II" (audit: speech cut mid-word): trim
+            // to the last whitespace before the cap, never mid-word
+            var end = 800
+            while (end > 0 && !clean[end - 1].isWhitespace()) end--
+            clean = clean.substring(0, if (end > 0) end else 800)
+        }
         return clean
     }
 

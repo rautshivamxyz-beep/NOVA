@@ -208,17 +208,25 @@ object OnlineFetch {
         return out.distinctBy { it.first }
     }
 
-    /** Every fetch, in plain sight: fetch_log.txt feeds the Fetches
-     *  screen, and deleting an entry deletes the article with it. */
+    /** Every fetch, in plain sight: the log file (fetch_log.txt) feeds
+     *  the Fetches screen, and deleting an entry deletes the article
+     *  with it.
+     *  v9.4.0 "Audit Fixes II" (audit: the log grew without bound):
+     *  rotate on append - only the last 500 entries are kept. */
     private fun logFetch(act: MainActivity, title: String, url: String) {
         try {
-            File(act.filesDir, "fetch_log.txt").appendText(
-                System.currentTimeMillis().toString() + "\t" +
-                    title.replace("\t", " ").replace("\n", " ") + "\t" + url + "\n")
+            val f = File(act.filesDir, "fetch_log.txt")
+            val line = System.currentTimeMillis().toString() + "\t" +
+                title.replace("\t", " ").replace("\n", " ") + "\t" + url
+            val kept = f.readLines().toMutableList()
+            kept.add(line)
+            f.writeText(kept.takeLast(500).joinToString("\n") + "\n")
         } catch (e: Exception) { }
     }
 
-    private fun http(url: String): String {
+    /** v9.4.0 "Audit Fixes II" (audit: plain-http links failed for
+     *  good): one raw request. */
+    private fun httpOnce(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 10000
         conn.readTimeout = 20000
@@ -228,5 +236,17 @@ object OnlineFetch {
         } finally {
             conn.disconnect()
         }
+    }
+
+    /** v9.4.0 "Audit Fixes II" (audit: an http URL that fails or
+     *  redirects was a dead end): a plain-http URL that fails (or
+     *  redirects to https, which HttpURLConnection will not follow
+     *  across protocols) is retried once over https. */
+    private fun http(url: String): String = try {
+        httpOnce(url)
+    } catch (e: Exception) {
+        if (url.startsWith("http://"))
+            httpOnce("https://" + url.substring("http://".length))
+        else throw e
     }
 }

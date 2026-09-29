@@ -34,9 +34,11 @@ import java.util.zip.ZipOutputStream
  * whatever is there) into a SAF-chosen zip, preserving relative paths.
  * The cache/ and code_cache/ dirs and *.tmp files are skipped, so the
  * rule stays future-proof: anything NOVA persists later is picked up
- * automatically. RESTORE reads a zip back over filesDir after an
- * explicit confirmation; the user then restarts NOVA themselves -
- * this screen never kills the process.
+ * automatically. RESTORE wipes every regular file under filesDir
+ * (minus the cache dirs) first, then reads a zip back - a true replace,
+ * not a merge. v9.4.0 "Audit Fixes II" (audit: restore left stale state
+ * behind): after a successful extraction NOVA force-restarts itself, so
+ * no in-memory copy of the old state ever gets written back.
  *
  * Same style as FetchLogActivity: ListActivity, programmatic UI, no
  * XML, no new permissions (SAF needs none), no network, fail-soft
@@ -210,7 +212,8 @@ class BackupActivity : ListActivity() {
 
     // ------------------------------------------------------------------
     // RESTORE - SAF ACTION_OPEN_DOCUMENT, show the contents, confirm,
-    // then extract over filesDir. NOVA is never restarted from here.
+    // then wipe filesDir (minus the cache dirs) and extract the zip.
+    // v9.4.0: a true replace, followed by a forced restart.
     // ------------------------------------------------------------------
 
     private fun pickRestoreSource() {
@@ -268,11 +271,32 @@ class BackupActivity : ListActivity() {
     private fun confirmRestore(uri: Uri) {
         AlertDialog.Builder(this)
             .setTitle("Restore this backup?")
-            .setMessage("This replaces all of NOVA's memory, wiki, knowledge " +
-                "and settings with this backup.")
+            // v9.4.0 "Audit Fixes II": the restore is a true replace now -
+            // the warning must say exactly what that means
+            .setMessage("This wipes NOVA's current memory, wiki, knowledge, " +
+                "chats and settings and restores the backup exactly.")
             .setPositiveButton("Restore") { _, _ -> restoreBackup(uri) }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** v9.4.0 "Audit Fixes II" (audit: restore was a merge, not a
+     *  replace): delete every file under filesDir except the cache
+     *  dirs, so what the backup lacks is really gone after a restore.
+     *  Subdirectories other than cache/code_cache are emptied and
+     *  removed - the zip recreates whatever it actually contains. */
+    private fun wipeFilesDir() {
+        fun wipe(dir: File) {
+            val kids = dir.listFiles() ?: return
+            for (f in kids) {
+                if (f.isDirectory) {
+                    if (f.name == "cache" || f.name == "code_cache") continue
+                    wipe(f)
+                    f.delete()
+                } else f.delete()
+            }
+        }
+        wipe(filesDir)
     }
 
     private fun restoreBackup(uri: Uri) {
@@ -281,6 +305,8 @@ class BackupActivity : ListActivity() {
             var ok = false
             try {
                 val root = filesDir.canonicalFile
+                // the true replace: current state goes first, then the zip
+                wipeFilesDir()
                 contentResolver.openInputStream(uri)?.use { ins ->
                     ZipInputStream(BufferedInputStream(ins)).use { zis ->
                         var ze: ZipEntry? = zis.nextEntry
@@ -304,9 +330,20 @@ class BackupActivity : ListActivity() {
             } catch (e: Exception) { }
             runOnUiThread {
                 if (ok) {
-                    hint?.text = "Restored $restored files.\n" +
-                        "Restart NOVA to apply the backup."
-                    toast("Backup restored - restart NOVA to apply")
+                    // v9.4.0 "Audit Fixes II" (audit: stale in-memory state
+                    // could be written back over the restored files): the
+                    // old "restart NOVA yourself" toast became a forced
+                    // restart - every old store and singleton dies here
+                    hint?.text = "Restored $restored files."
+                    AlertDialog.Builder(this)
+                        .setMessage("Restore complete — NOVA will now close. " +
+                            "Reopen it.")
+                        .setCancelable(false)
+                        .setPositiveButton("OK") { _, _ ->
+                            finishAffinity()
+                            System.exit(0)
+                        }
+                        .show()
                 } else {
                     toast("Restore failed - the zip could not be read")
                 }

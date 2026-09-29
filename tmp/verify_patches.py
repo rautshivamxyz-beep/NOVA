@@ -21,7 +21,7 @@ import sys
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 BASE = "android/app/src/main/java/org/nova/"
-FILES = ["MainActivity.kt", "Backup.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]
+FILES = ["MainActivity.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]
 # Stage 5 (#1): send() collapsed - its body moved verbatim to
 # ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that
 # lived inside send() are checked against NcieChat.kt now; everything
@@ -40,7 +40,9 @@ def load(f):
 
 ma = load("MainActivity.kt")
 nc = load("ncie/android/NcieChat.kt")
-bk = load("Backup.kt")
+# v9.4.0 "Audit Fixes II": Backup.kt (the legacy JSON backup) is deleted -
+# the full zip backup in BackupActivity replaced it, so its checks are
+# retired here with it.
 nb = load("NotifBrain.kt")
 ka = load("KnowledgeActivity.kt")
 ca = load("ChatsActivity.kt")
@@ -105,7 +107,6 @@ for name, marker, n in NC_MARKERS:
 check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
 check("v7.6 streaming turn through NovaEngineAdapter (all 6 generations now)", ma.count("NovaEngineAdapter.stream(") == 6)
 
-check("v7.4 backup key fix (Backup.kt)", bk.count('put("knowledge_enabled"') == 1)
 check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
 check("NCIE polish: import UI through the boundary", ka.count("NcieKnowledge.addDoc(this, name, text)") == 1)
@@ -158,7 +159,6 @@ check("v7.8.2: name is a KERNEL knowledge stopword (KnowledgeStore.kt)",
 check("v7.6 atomic notes saves (Knowledge.kt)", knn.count("atomic write") == 1)
 check("v7.6 notes warm-up for send gate (Knowledge.kt)", knn.count("warm the cache from a background thread") == 1)
 check("v7.6 wiki done marker written last (WikiCore.kt)", wc.count("done.tmp") == 1)
-check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exams and reminders too") == 1)
 
 # ---- build.gradle: guard against the srdDirs corruption seen on 2026-09-26 ----
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
@@ -206,8 +206,8 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
       nc.count("Never invent chapter contents") == 1)
 
 # ---- v8.6.0: online discovery for any question ----
-check("v9.3.0: version bumped for audit fixes I",
-      bg.count("versionName '9.3.0'") == 1 and bg.count("versionCode 86") == 1)
+check("v9.4.0: version bumped for audit fixes II",
+      bg.count("versionName '9.4.0'") == 1 and bg.count("versionCode 87") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
       nc.count("lastSkillMatched == null") == 1 and
       nc.count("OnlineFetch.offer(act, text,") == 1)
@@ -414,7 +414,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("Backup.kt", bk), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

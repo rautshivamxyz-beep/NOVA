@@ -44,7 +44,9 @@ object NcieRoutines {
      */
     fun morningBriefing(ctx: Context): String {
         val sb = StringBuilder("```\nGOOD MORNING\n\n")
-        sb.append(SimpleDateFormat("EEEE, d MMMM yyyy", Locale.US)
+        // v9.4.0 "Audit Fixes II": the date greets the user in THEIR
+        // locale, not always US English
+        sb.append(SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault())
             .format(Calendar.getInstance().time)).append('\n')
         // battery - the sticky ACTION_BATTERY_CHANGED intent the system
         // keeps broadcastable without waking anything

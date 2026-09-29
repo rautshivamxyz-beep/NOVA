@@ -33,16 +33,19 @@ class NovaListener : NotificationListenerService() {
         if (sbn.notification == null) return
         // v9.3.0: paused means paused - nothing is written, nothing rotated
         if (isPaused(this)) return
-        // the callback arrives on the main thread - keep file I/O off it
-        Thread {
+        // the callback arrives on the main thread - keep file I/O off it.
+        // v9.4.0 "Audit Fixes II" (audit: one Thread per notification):
+        // all notification work runs on ONE shared background executor,
+        // never a fresh thread per post
+        io.execute {
             try {
                 val ex = sbn.notification.extras
                 val title = (ex.getCharSequence(android.app.Notification.EXTRA_TITLE) ?: "").toString()
                 val text = (ex.getCharSequence(android.app.Notification.EXTRA_TEXT) ?: "").toString()
-                if (title.isBlank() && text.isBlank()) return@Thread
-                val pkg = sbn.packageName ?: return@Thread
+                if (title.isBlank() && text.isBlank()) return@execute
+                val pkg = sbn.packageName ?: return@execute
                 // never log our own chatter back at ourselves
-                if (pkg == packageName) return@Thread
+                if (pkg == packageName) return@execute
                 // tab/newline-free fields keep one line = one notification
                 val cleanTitle = title.replace('\n', ' ').replace('\t', ' ')
                 val cleanText = text.replace('\n', ' ').replace('\t', ' ').take(200)
@@ -51,19 +54,23 @@ class NovaListener : NotificationListenerService() {
                 synchronized(lock) {
                     // the same notification re-posted inside 5s (update
                     // tick, listener rebind) - not a new event, skip it
-                    if (key == lastLine && now - lastTime < 5000L) return@Thread
+                    if (key == lastLine && now - lastTime < 5000L) return@execute
                     append(this, now.toString() + "\t" + key)
                     lastLine = key
                     lastTime = now
                 }
             } catch (e: Exception) { }
-        }.start()
+        }
     }
 
     companion object {
         private val lock = Any()
         private var lastLine: String? = null
         private var lastTime = 0L
+
+        /** v9.4.0 "Audit Fixes II": the one shared background executor
+         *  every notification is handled on. */
+        private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
 
         fun logPath(ctx: Context): File = File(ctx.filesDir, "notif_log.txt")
 

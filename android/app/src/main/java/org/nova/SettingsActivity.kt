@@ -15,7 +15,6 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import java.util.Locale
 
 /**
  * Full settings screen: voice, memory, personality, appearance and data.
@@ -242,42 +241,21 @@ class SettingsActivity : Activity() {
         col.addView(data)
 
         // Backup
+        // v9.4.0 "Audit Fixes II" (audit: two backup systems, one stale):
+        // the legacy JSON path (Backup.kt - chats, memory and study deck
+        // only, silently dropping the wiki store, knowledge docs, fetch
+        // log, skills, planner and everything else added since v8.7.0)
+        // is retired. This row opens the full zip backup screen instead.
         val backup = card("BACKUP")
         backup.addView(Button(this).apply {
-            text = "Backup to file"
+            text = "Backup & restore"
             isAllCaps = false
             textSize = 15f
             setTextColor(NovaTheme.text)
             background = null
             setPadding(0, dp(10), 0, dp(4))
             setOnClickListener {
-                val name = "nova-backup-" + java.text.SimpleDateFormat(
-                    "yyyyMMdd-HHmm", Locale.US).format(java.util.Date()) + ".json"
-                try {
-                    val pick = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "application/json"
-                        putExtra(Intent.EXTRA_TITLE, name)
-                    }
-                    startActivityForResult(pick, 9001)
-                } catch (e: Exception) { toast("No file picker available") }
-            }
-        })
-        backup.addView(Button(this).apply {
-            text = "Restore from file"
-            isAllCaps = false
-            textSize = 15f
-            setTextColor(NovaTheme.text)
-            background = null
-            setPadding(0, dp(10), 0, dp(4))
-            setOnClickListener {
-                try {
-                    val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "*/*"
-                    }
-                    startActivityForResult(pick, 9002)
-                } catch (e: Exception) { toast("No file picker available") }
+                startActivity(Intent(this@SettingsActivity, BackupActivity::class.java))
             }
         })
         col.addView(backup)
@@ -294,61 +272,6 @@ class SettingsActivity : Activity() {
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         return scroll
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK || data == null) return
-        val uri = data.data ?: return
-        if (requestCode == 9001) {
-            // v7.6: run off the main thread - a big history froze the UI,
-            // and an empty export still said "Backup saved"
-            Thread {
-                val json = try { Backup.export(this) } catch (e: Exception) { "" }
-                if (json.isEmpty()) {
-                    runOnUiThread { toast("Backup failed - nothing was written") }
-                    return@Thread
-                }
-                try {
-                    contentResolver.openOutputStream(uri)?.use {
-                        it.write(json.toByteArray(Charsets.UTF_8))
-                    }
-                    runOnUiThread { toast("Backup saved") }
-                } catch (e: Exception) {
-                    runOnUiThread { toast("Backup failed") }
-                }
-            }.start()
-        } else if (requestCode == 9002) {
-            // restore from a chosen file
-            try {
-                val text = contentResolver.openInputStream(uri)?.use {
-                    it.readBytes().toString(Charsets.UTF_8)
-                } ?: ""
-                if (!Backup.looksLikeBackup(text)) {
-                    toast("That file is not a NOVA backup")
-                    return
-                }
-                AlertDialog.Builder(this)
-                    .setTitle("Restore backup?")
-                    .setMessage("Chats with the same id are replaced, others are kept. " +
-                        "Memory, personality and study deck are replaced.")
-                    .setPositiveButton("Restore") { _, _ ->
-                        // v7.6: restore off the main thread too
-                        Thread {
-                            val n = Backup.restore(this, text)
-                            runOnUiThread {
-                                if (n >= 0) {
-                                    toast("Restored $n chats")
-                                    recreate()
-                                } else toast("Restore failed")
-                            }
-                        }.start()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            } catch (e: Exception) { toast("Could not read that file") }
-        }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

@@ -122,8 +122,11 @@ class FetchLogActivity : ListActivity() {
             runOnUiThread {
                 AlertDialog.Builder(this)
                     .setTitle(e.title)
+                    // v9.4.0 "Audit Fixes II": 4000 chars cut long
+                    // articles off mid-sentence - the read dialog now
+                    // shows up to 8000
                     .setMessage((body ?: "(article text unavailable)")
-                        .take(4000) + "\n\nfrom: " +
+                        .take(8000) + "\n\nfrom: " +
                         (if (e.url == "wikipedia") "Wikipedia" else e.url))
                     .setPositiveButton("Delete") { _, _ -> confirmDelete(e.title) }
                     .setNegativeButton("Close", null)
