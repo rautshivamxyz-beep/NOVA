@@ -160,6 +160,21 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // file work only, like the commands above.
         if (answerLearned(text)) { input.setText(""); return }
         if (answerConnections(text)) { input.setText(""); return }
+        // v9.7.0 "Quiet Fetch": the manual online lookup - "look it up
+        // online: <q>" (also "look it up online <q>" / "search online for
+        // <q>"; the bare form re-runs the last question). The quiet
+        // offer below only fires when NOTHING local backs the question
+        // now, so this command is the always-available way online.
+        val onlineQ = onlineLookupQ(text)
+        if (onlineQ != null) {
+            input.setText("")
+            if (onlineQ.isEmpty()) {
+                toast("Add your question - look it up online: <question>")
+            } else {
+                offerOnlineFetch(act, onlineQ)
+            }
+            return
+        }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -621,11 +636,17 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // are the alternative: the offer says what is covered and what
         // looking it up would add. Skills and document mode stay
         // offline-only, and ask-first stays the law.
+        // v9.7.0 "Quiet Fetch" (user request: "for online fetching
+        // don't show everytime"): the offer dialog now appears ONLY when
+        // NO local material backs the question - docPart empty, no notes
+        // hits, no wiki coverage. When notes or wiki already cover it,
+        // NOVA answers locally with NO dialog at all; "look it up
+        // online" is the manual way in.
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
-            lastSkillMatched == null && WikiCore.isReady(this)
+            lastSkillMatched == null && WikiCore.isReady(this) &&
+            knowledgePart.isEmpty() && wikiPart.isEmpty()
         ) {
-            OnlineFetch.offer(act, text,
-                knowledgePart.isNotEmpty() || wikiPart.isNotEmpty())
+            offerOnlineFetch(act, text)
             return
         }
         // v5.4.7: show when the answer is grounded in the user's notes
@@ -1234,4 +1255,39 @@ private fun MainActivity.answerConnections(text: String): Boolean {
         withContext(Dispatchers.Main) { postGroundReply(activity, body) }
     }
     return true
+}
+
+// ---------------------------------------------------------------------
+// v9.7.0 "Quiet Fetch"
+// ---------------------------------------------------------------------
+
+/** v9.7.0 "Quiet Fetch": the single entry into the online fetch flow.
+ *  Both the quiet offer (only when NO local material backs the question)
+ *  and the manual "look it up online" command route through here, so the
+ *  fetch stays ask-first (OnlineFetch's dialog) and the call site stays
+ *  single. */
+private fun offerOnlineFetch(act: MainActivity, text: String) {
+    OnlineFetch.offer(act, text, false)
+}
+
+/** v9.7.0 "Quiet Fetch": parse the manual online-lookup command.
+ *  "look it up online: <q>" / "look it up online <q>" /
+ *  "search online for <q>" -> q; the bare "look it up online" -> the
+ *  last question in this chat ("" when there is none, so the caller can
+ *  explain itself). Null = not the command at all. */
+private fun MainActivity.onlineLookupQ(text: String): String? {
+    val lower = text.lowercase()
+    val prefix = when {
+        lower == "look it up online" -> 0
+        lower.startsWith("look it up online") -> "look it up online".length
+        lower.startsWith("search online for") -> "search online for".length
+        else -> return null
+    }
+    if (prefix == 0) {
+        val last = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
+        return last?.trim() ?: ""
+    }
+    var q = text.substring(prefix).trim(' ', ':')
+    if (q.lowercase().startsWith("for ")) q = q.substring(4)
+    return q.trim()
 }

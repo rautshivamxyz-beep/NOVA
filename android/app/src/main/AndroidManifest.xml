@@ -71,6 +71,10 @@
         <!-- v8.7.0: save/restore NOVA's full local state, from the drawer -->
         <activity android:name=".BackupActivity" android:exported="false" />
 
+        <!-- v9.7.0: the Update screen - releases page or an on-device
+             delta patch applied against the installed APK -->
+        <activity android:name=".UpdateActivity" android:exported="false" />
+
         <service
             android:name=".NotifBrain"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"

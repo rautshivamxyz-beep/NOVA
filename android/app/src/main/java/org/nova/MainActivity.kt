@@ -685,13 +685,12 @@ class MainActivity : Activity() {
                 startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             } catch (e: Exception) { }
         })
-        // v8.8.0: the update row - straight to the private releases page
+        // v8.8.0: the update row; v9.7.0 "Delta Updates" - it opens the
+        // Update screen now: the private releases page, or apply a
+        // downloaded NOVA-delta-*.patch against the installed APK on
+        // device and install the result
         drawerPane.addView(drawerRow("Update", R.drawable.ic_refresh) {
-            toast("Opening private releases - sign in as the owner")
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://github.com/rautshivamxyz-beep/NOVA/releases")))
-            } catch (e: Exception) { }
+            startActivity(Intent(this, UpdateActivity::class.java))
         })
         // v9.1.0: the app lock - set or remove the PIN (only a salted
         // SHA-256 hash is stored, never the PIN); the blocking launch
