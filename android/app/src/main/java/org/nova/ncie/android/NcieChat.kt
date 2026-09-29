@@ -67,6 +67,11 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // even before any model is downloaded
         if (solveArithmetic(text)) { input.setText(""); return }
         if (tryPhoneCommand(text)) { input.setText(""); return }
+        // v8.5.0: the profile tool - "what do you know about me" is
+        // answered from the graded memory, deterministically. The 1.5B
+        // model used to hallucinate a personality from wiki background;
+        // this question never reaches the model now.
+        if (answerProfile(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -421,7 +426,14 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         }
         // offline Wikipedia: matching articles as background facts
         var wikiPart = ""
-        if (settings.wikiEnabled && WikiCore.isReady(this)) {
+        // v8.5.0: wiki background only on knowledge-seeking turns. Chat
+        // and personal questions used to pull in junk articles ("what you
+        // know about me" matched random titles) and the model answered
+        // with that noise - the screenshot bug.
+        val seek = studyQ || text.contains("?") ||
+            Regex("(?i)^(?:how|why|when|where|which|who|what|does|do|is|are|can|define|describe|compare)\\b")
+                .containsMatchIn(text)
+        if (settings.wikiEnabled && seek && WikiCore.isReady(this)) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             if (wikiHits.isNotEmpty()) {
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
