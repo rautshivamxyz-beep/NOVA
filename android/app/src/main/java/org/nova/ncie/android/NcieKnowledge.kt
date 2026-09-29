@@ -106,12 +106,15 @@ object NcieKnowledge {
     /** v0.8.1 (#1): the kernel's thinking-budget verdict for a chat turn.
      *  The user's predictLength setting stays the master cap; the kernel
      *  only tightens the leash — lean turns (the same tier leanContext
-     *  reports) get half the cap with a floor of 192 tokens, everything
+     *  reports) get half the cap with a floor of 384 tokens, everything
      *  else — study questions, notes, documents — keeps the full cap.
-     *  Internal prompts (text == null) keep the full cap too. */
+     *  Internal prompts (text == null) keep the full cap too.
+     *  v9.3.0 "Audit Fixes I" (audit: casual-question halving cut
+     *  answers short): the halving floor is 384, not 192 - a halved
+     *  casual answer still has room to actually answer. */
     fun generationBudget(text: String?, userCap: Int): Int {
         if (text == null) return userCap
-        return if (leanContext(text)) (userCap / 2).coerceAtLeast(192) else userCap
+        return if (leanContext(text)) (userCap / 2).coerceAtLeast(384) else userCap
     }
 
     /** Does the knowledge base have any documents? (Parity with

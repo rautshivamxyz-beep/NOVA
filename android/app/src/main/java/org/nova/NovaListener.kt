@@ -17,11 +17,22 @@ import java.io.File
  * NOVA's own notifications are skipped, an identical package+title+text
  * inside 5 seconds is a re-post and is skipped too, and the log rotates
  * at 512 KB down to its last 2000 lines.
+ *
+ * v9.3.0 "Audit Fixes I" (privacy): lines older than 7 days are purged
+ * on append (the log is oldest-first, so a cheap probe of the first
+ * line decides when a full pass is due), and a persisted flag file
+ * (filesDir/notif_pause.txt - presence = paused) stops all logging:
+ * onNotificationPosted returns before anything is written. "clear my
+ * notifications" wipes the log, "pause/resume notifications" toggles
+ * the flag - both are chat commands in NcieChat, and BackupActivity
+ * keeps the log and the flag out of every backup zip.
  */
 class NovaListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.notification == null) return
+        // v9.3.0: paused means paused - nothing is written, nothing rotated
+        if (isPaused(this)) return
         // the callback arrives on the main thread - keep file I/O off it
         Thread {
             try {
@@ -56,12 +67,56 @@ class NovaListener : NotificationListenerService() {
 
         fun logPath(ctx: Context): File = File(ctx.filesDir, "notif_log.txt")
 
+        /** v9.3.0: the pause flag - its presence alone means paused. */
+        fun pauseFlag(ctx: Context): File = File(ctx.filesDir, "notif_pause.txt")
+
+        fun isPaused(ctx: Context): Boolean = try {
+            pauseFlag(ctx).exists()
+        } catch (e: Exception) { false }
+
+        /** Stop logging notifications ("pause notifications"). */
+        fun pause(ctx: Context) {
+            try { pauseFlag(ctx).writeText("paused\n") } catch (e: Exception) { }
+        }
+
+        /** Resume logging notifications ("resume notifications"). */
+        fun resume(ctx: Context) {
+            try { pauseFlag(ctx).delete() } catch (e: Exception) { }
+        }
+
+        /** Wipe the log ("clear my notifications"). */
+        fun clearLog(ctx: Context) {
+            synchronized(lock) {
+                try { logPath(ctx).delete() } catch (e: Exception) { }
+                lastLine = null
+                lastTime = 0L
+            }
+        }
+
         fun append(ctx: Context, line: String) {
             synchronized(lock) {
                 val f = logPath(ctx)
                 f.appendText(line + "\n")
+                // v9.3.0 privacy: 7-day expiry. The log is oldest-first, so
+                // the first line's timestamp is the cheap probe - a full
+                // filtering pass runs only when it has actually aged out.
+                val now = System.currentTimeMillis()
+                val cutoff = now - 7L * 24 * 60 * 60 * 1000
+                var lines: List<String>? = null
                 if (f.length() > 512 * 1024) {
-                    val kept = f.readLines().takeLast(2000)
+                    lines = f.readLines()
+                } else {
+                    val first = try {
+                        f.useLines { it.firstOrNull { l -> l.isNotBlank() } }
+                    } catch (e: Exception) { null }
+                    val t = first?.substringBefore('\t')?.toLongOrNull()
+                    if (t != null && t < cutoff) lines = f.readLines()
+                }
+                if (lines != null) {
+                    val kept = lines.filter { l ->
+                        val t = l.substringBefore('\t').toLongOrNull()
+                        t != null && t >= cutoff
+                    }.takeLast(2000)
                     f.writeText(kept.joinToString("\n") + "\n")
                 }
             }

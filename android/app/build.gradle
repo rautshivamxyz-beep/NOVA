@@ -34,8 +34,9 @@ android {
         minSdk 30
         targetSdk 35
         // v9.0.0: voice - tap-to-talk mic, spoken replies
-        versionCode 85
-        versionName '9.2.1'
+        // v9.3.0 "Audit Fixes I": notif privacy, per-chat state, robust grading
+        versionCode 86
+        versionName '9.3.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

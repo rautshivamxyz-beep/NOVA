@@ -5,7 +5,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.nova.ChatStore
 import org.nova.MainActivity
+import org.nova.Msg
+import org.nova.Role
 import org.nova.WikiCore
 import org.nova.ncie.knowledge.HtmlText
 import org.nova.ncie.verify.Coverage
@@ -33,13 +36,47 @@ import java.net.URLEncoder
  */
 object OnlineFetch {
 
+    /** v9.3.0 "Audit Fixes I": Devanagari (Hindi/Marathi) codepoints.
+     *  The keyword analyzer keeps ASCII letters and digits only, so a
+     *  Devanagari question normalizes to zero keywords - retrieval and
+     *  the online fetch both come back silently empty and the model
+     *  answers from imagination. Honesty beats silence. */
+    private val DEVANAGARI = Regex("[\\u0900-\\u097F]")
+
+    /** v9.3.0: a Devanagari question with no keywords - say so in the
+     *  chat, deterministically, instead of searching for nothing. */
+    private fun honestNotSearchable(act: MainActivity, text: String) {
+        val um = Msg(Role.USER, text)
+        act.currentChat.messages.add(um)
+        act.adapter.add(um)
+        act.scrollToEnd()
+        val reply = Msg(Role.ASSISTANT,
+            "I can't search your notes or the web in Hindi/Marathi yet — " +
+                "ask in English for now.")
+        act.currentChat.messages.add(reply)
+        act.adapter.add(reply)
+        act.scrollToEnd()
+        act.scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+        }
+    }
+
     /** v8.6.0: the ask-first offer, for ANY information question - not
      *  only the gaps. Local material is the ALTERNATIVE now, not a
      *  blocker: the dialog says what is already covered and offers to
      *  look online anyway. Ask-first stays the law either way. */
     fun offer(act: MainActivity, text: String, haveLocal: Boolean = false) {
         val kws = NcieKnowledge.keyTerms(text).take(6)
-        if (kws.isEmpty()) { act.ncieSend(text, offered = true); return }
+        if (kws.isEmpty()) {
+            // v9.3.0: keywords empty AND the raw text is Devanagari -
+            // nothing local or online can be searched for this; be
+            // honest about it instead of falling through silently
+            if (DEVANAGARI.containsMatchIn(text)) {
+                honestNotSearchable(act, text)
+                return
+            }
+            act.ncieSend(text, offered = true); return
+        }
         val q = kws.joinToString(" ")
         val title: String; val message: String; val noBtn: String
         if (haveLocal) {

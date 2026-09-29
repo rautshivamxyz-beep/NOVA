@@ -35,6 +35,7 @@ import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
+import org.nova.ncie.android.NcieSummary
 import org.nova.ncie.android.NovaEngineAdapter
 import org.nova.ncie.android.ncieSend
 import io.noties.markwon.Markwon
@@ -197,6 +198,11 @@ class MainActivity : Activity() {
         } else ChatStore.newChat()
         settings.currentChatId = currentChat.id
         needsContextCarry = currentChat.messages.isNotEmpty()
+        // v9.3.0 "Audit Fixes I": v9.2.0's rolling summary was one
+        // global file that leaked between chats. The summary and its
+        // counter are keyed per chat now; the old global files are
+        // deleted once, here (a no-op on every later run).
+        NcieSummary.migrateLegacy(this)
 
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
             WikiCore.warmUp(this@MainActivity)

@@ -71,7 +71,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // the user's next message belongs to that session BEFORE any
         // other route (this is the one intercept that outranks all the
         // others, including the calculator below).
-        if (NcieTutor.pendingAnswer()) {
+        if (NcieTutor.pendingAnswer(currentChat.id)) {
             input.setText("")
             if (NcieTutor.continueSession(this, text)) return
         }
@@ -90,6 +90,9 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // phone, and they work with no model loaded at all.
         if (answerMissed(text)) { input.setText(""); return }
         if (answerFrom(text)) { input.setText(""); return }
+        // v9.3.0 "Audit Fixes I": notification log privacy commands -
+        // clear / pause / resume, deterministic like MISSED_Q
+        if (answerNotifCmd(text)) { input.setText(""); return }
         // v8.9.0: Tutor Mode - quiz me on X with two-pass LLM answer
         // checking, weak areas with 1-day spaced repetition, flashcards.
         // The deterministic paths (weak-area list, flashcard storage and
@@ -569,7 +572,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // so a long chat never loses its beginning. Skills keep their
         // own instruction wrapper; the docPart logic above is untouched.
         if (skill == null) {
-            val chatSumm = NcieSummary.read(this)
+            val chatSumm = NcieSummary.read(this, currentChat.id)
             if (chatSumm != null) prompt = "Conversation so far (summary): $chatSumm\n\n" + prompt
         }
         // v8.5.3: a study question with NOTHING local behind it must not be
@@ -627,21 +630,21 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // The roll finishes BEFORE this turn's generation starts (they
         // share the native engine), and the `compacting` gate keeps a
         // second send out while it runs, exactly like auto-compaction.
-        if (NcieSummary.due(this)) {
+        if (NcieSummary.due(this, currentChat.id)) {
             val turnPrompt = prompt
             val chatAtRoll = currentChat
             val snap = ArrayList(chatAtRoll.messages)
             compacting = true
             scope.launch {
-                val rolled = withContext(Dispatchers.IO) { NcieSummary.roll(act, snap) }
+                val rolled = withContext(Dispatchers.IO) { NcieSummary.roll(act, chatAtRoll.id, snap) }
                 if (rolled) NcieSummary.trimHistory(act, chatAtRoll)
-                NcieSummary.reset(act)
-                NcieSummary.bump(act)
+                NcieSummary.reset(act, chatAtRoll.id)
+                NcieSummary.bump(act, chatAtRoll.id)
                 compacting = false
                 startGeneration(turnPrompt, text)
             }
         } else {
-            NcieSummary.bump(this)
+            NcieSummary.bump(this, currentChat.id)
             startGeneration(prompt, text)
         }
     }
@@ -800,6 +803,43 @@ private fun MainActivity.answerMissed(text: String): Boolean {
     return true
 }
 
+// v9.3.0 "Audit Fixes I": notification log privacy commands - "clear my
+// notifications" / "pause notifications" / "resume notifications",
+// whole-message and short like the MISSED_Q commands above. All three
+// are deterministic: a file wipe, a flag create, a flag delete - no
+// model, no network, nothing leaves the phone. While paused, NovaListener
+// writes nothing at all; the 7-day purge runs inside append.
+private val NOTIF_CLEAR_Q = Regex(
+    "(?i)^\\s*clear\\s+my\\s+notifications?\\s*[.!?]*\\s*$")
+private val NOTIF_PAUSE_Q = Regex(
+    "(?i)^\\s*pause\\s+notifications?\\s*[.!?]*\\s*$")
+private val NOTIF_RESUME_Q = Regex(
+    "(?i)^\\s*resume\\s+notifications?\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerNotifCmd(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - these commands are always short and typed
+    if (text.length > 80) return false
+    val clear = NOTIF_CLEAR_Q.containsMatchIn(text)
+    val pause = NOTIF_PAUSE_Q.containsMatchIn(text)
+    val resume = NOTIF_RESUME_Q.containsMatchIn(text)
+    if (!clear && !pause && !resume) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val body = when {
+        clear -> { NovaListener.clearLog(this); "Notification log cleared." }
+        pause -> { NovaListener.pause(this); "Notification logging paused." }
+        else -> { NovaListener.resume(this); "Notification logging resumed." }
+    }
+    val reply = Msg(Role.ASSISTANT, body)
+    currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
 // v8.9.0: Tutor Mode's entry phrases. Anchored short commands (study,
 // weak areas, flashcards) so OCR'd chapter pastes never fall into them;
 // quiz-me-on keeps the open topic capture but is length-gated in the
@@ -929,7 +969,7 @@ private fun MainActivity.answerSummary(text: String): Boolean {
     val activity = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
-    val sumBody = NcieSummary.read(this)
+    val sumBody = NcieSummary.read(this, currentChat.id)
     val sumReply = Msg(Role.ASSISTANT,
         if (sumBody != null) "Here's what I remember of our conversation so far:\n\n$sumBody"
         else "No summary yet — it builds automatically as we talk.")
@@ -952,7 +992,7 @@ private fun MainActivity.answerForget(text: String): Boolean {
     val activity = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
-    NcieSummary.clear(this)
+    NcieSummary.clear(this, currentChat.id)
     currentChat.messages.clear()
     adapter.clear()
     needsContextCarry = false

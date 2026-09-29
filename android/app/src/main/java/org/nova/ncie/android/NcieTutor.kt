@@ -53,6 +53,15 @@ object NcieTutor {
     var flashIndex: Int = 0
     /** The front of the card awaiting a flip (null = no drill running). */
     var flashFront: String? = null
+    /** v9.3.0 (audit: quiz state was global): the chat id the running
+     *  quiz/flashcard session was started in. A message from any other
+     *  chat is NOT an answer - it never enters the quiz flow at all
+     *  (see pendingAnswer). */
+    private var sessionChatId: String? = null
+
+    /** v9.3.0 "Audit Fixes I": the whole-message escape words - "stop",
+     *  "skip", "end", "cancel" - which end a running session cleanly. */
+    private val ESCAPE_WORDS = setOf("stop", "skip", "end", "cancel")
 
     /** The back was shown - waiting for the user's right/wrong verdict. */
     private var flashVerdictPending = false
@@ -69,6 +78,11 @@ object NcieTutor {
 
     private fun missFile(ctx: Context) = File(ctx.filesDir, "tutor_miss.txt")
     private fun flashFile(ctx: Context) = File(ctx.filesDir, "flashcards.txt")
+    /** v9.3.0 (audit: flashcard wrongs blocked "study"): flashcard misses
+     *  get their OWN log, never tutor_miss.txt - the dead "flashcards"
+     *  topic used to be picked by spaced repetition with no source to
+     *  re-quiz against. */
+    private fun flashMissFile(ctx: Context) = File(ctx.filesDir, "flash_miss.txt")
 
     private fun readMiss(ctx: Context): List<String> = try {
         val f = missFile(ctx)
@@ -98,6 +112,17 @@ object NcieTutor {
         } catch (e: Exception) { }
     }
 
+    /** v9.3.0: millis<TAB>front<TAB>back - one line per wrong flashcard,
+     *  in flash_miss.txt (NOT the weak-areas log). */
+    private fun appendFlashMiss(ctx: Context, front: String, back: String) {
+        try {
+            flashMissFile(ctx).apply { parentFile?.mkdirs() }.appendText(
+                System.currentTimeMillis().toString() + "\t" +
+                    front.replace("\t", " ").replace("\n", " ") + "\t" +
+                    back.replace("\t", " ").replace("\n", " ") + "\n")
+        } catch (e: Exception) { }
+    }
+
     /** Drop the (topic, question) entry the user just re-answered
      *  correctly - only called on a "study" session. */
     private fun pruneMissed(ctx: Context, topic: String, question: String) {
@@ -116,15 +141,38 @@ object NcieTutor {
 
     /** True while the user's next message belongs to a running session:
      *  a quiz answer, a flashcard flip, or a right/wrong verdict. The
-     *  chat turn routes to [continueSession] before anything else. */
-    fun pendingAnswer(): Boolean =
-        (quizSource != null && quizIndex < quizQuestions.size) ||
+     *  chat turn routes to [continueSession] before anything else.
+     *  v9.3.0 (audit: quiz state was global): when [chat] is given and
+     *  the session was started in a different chat, this is false - the
+     *  message never lands in the quiz flow at all. */
+    fun pendingAnswer(chat: String? = null): Boolean {
+        val active = (quizSource != null && quizIndex < quizQuestions.size) ||
             flashFront != null || flashVerdictPending
+        if (!active) return false
+        if (chat != null && sessionChatId != null && sessionChatId != chat) return false
+        return true
+    }
 
     /** The stateful continuation - the user's message while a session
-     *  is pending. Returns true when handled (always, when pending). */
+     *  is pending. Returns true when handled (always, when pending).
+     *  v9.3.0 "Audit Fixes I" (audit: no way out of a session): the
+     *  whole-message words "stop", "skip", "end", "cancel" end it
+     *  cleanly - stop/end/cancel cancel everything, skip shows the
+     *  current answer and moves on. */
     fun continueSession(act: MainActivity, text: String): Boolean {
         if (!pendingAnswer()) return false
+        val w = text.trim().lowercase()
+        if (w in ESCAPE_WORDS) {
+            showUser(act, text)
+            val flash = flashFront != null || flashVerdictPending
+            if (w == "skip") {
+                if (flash) skipFlash(act) else skipQuiz(act)
+            } else {
+                if (flash) { resetFlash(); postReply(act, "Flashcards stopped.") }
+                else { resetQuiz(); postReply(act, "Quiz stopped.") }
+            }
+            return true
+        }
         showUser(act, text)
         if (flashFront != null) { continueFlash(act, text); return true }
         if (quizSource != null && quizIndex < quizQuestions.size) {
@@ -142,28 +190,53 @@ object NcieTutor {
     }
 
     /** "study" / "study my weak areas" - 1-day spaced repetition: the
-     *  first distinct topic whose misses are at least a day old. */
+     *  first distinct topic whose misses are at least a day old.
+     *  v9.3.0 (audit: a dead "flashcards" topic blocked study): legacy
+     *  "flashcards" entries in tutor_miss.txt are ignored - they have no
+     *  retrievable source and can never be re-quit - and a due topic
+     *  whose source is gone is skipped with a note, not a dead end. */
     fun startStudy(act: MainActivity, text: String) {
         showUser(act, text)
         val now = System.currentTimeMillis()
         val seen = HashSet<String>()
-        var pick: String? = null
+        val due = ArrayList<String>()
         for (l in readMiss(act)) {
             val p = l.split("\t", limit = 3)
             if (p.size < 3) continue
             val t = p[0].toLongOrNull() ?: continue
             val topic = p[1].trim()
-            if (topic.isEmpty() || !seen.add(topic)) continue
-            if (now - t >= DAY_MS) { pick = topic; break }
+            // v9.3.0: dead "flashcards" entries never come back
+            if (topic.isEmpty() || topic.equals("flashcards", ignoreCase = true) ||
+                !seen.add(topic)) continue
+            if (now - t >= DAY_MS) due.add(topic)
         }
-        if (pick == null) {
+        if (due.isEmpty()) {
             postReply(act, if (readMiss(act).isEmpty())
                 "No weak areas recorded yet — quiz yourself on something."
             else "Nothing is due yet — weak areas come back for review after a day.")
             return
         }
-        studySession = true
-        beginQuiz(act, pick, viaStudy = true)
+        act.scope.launch(Dispatchers.IO) {
+            var pick: String? = null
+            val skipped = ArrayList<String>()
+            for (topic in due) {
+                if (findSource(act, topic) != null) { pick = topic; break }
+                skipped.add(topic)
+            }
+            withContext(Dispatchers.Main) {
+                if (pick == null) {
+                    val sb = StringBuilder()
+                    for (s in skipped) sb.append("no notes found for topic ").append(s)
+                        .append(" — skipped\n")
+                    sb.append("Nothing due is studyable right now — paste the " +
+                        "chapter into Knowledge or fetch it online first.")
+                    postReply(act, sb.toString().trim())
+                } else {
+                    studySession = true
+                    beginQuiz(act, pick!!, viaStudy = true)
+                }
+            }
+        }
     }
 
     /** "my weak areas" - deterministic, no model. */
@@ -251,6 +324,7 @@ object NcieTutor {
         flashTotal = cards.size
         flashVerdictPending = false
         flashFront = cards[0].first
+        sessionChatId = act.currentChat.id
         postReply(act, "Flashcards — " + cards.size +
             " cards. Say 'flip' when you want the answer.\n\n1. " + cards[0].first)
     }
@@ -268,6 +342,9 @@ object NcieTutor {
             return
         }
         if (!act.ensureModelReady()) return
+        // v9.3.0: bind the session to the chat it started in, on the
+        // main thread, before the source hunt goes to IO
+        sessionChatId = act.currentChat.id
         act.scope.launch(Dispatchers.IO) {
             val found = findSource(act, t)
             if (found == null) {
@@ -325,7 +402,13 @@ object NcieTutor {
     }
 
     /** Pass 2: grade the user's answer with the model, log the miss,
-     *  then present the next question (or Quiz complete). */
+     *  then present the next question (or Quiz complete).
+     *  v9.3.0 "Audit Fixes I" (audit: "Yes." marked wrong; engine error
+     *  graded wrong): the verdict's first word is stripped to letters
+     *  and lowercased before the yes/y check, and an engine failure
+     *  (blank reply or "[engine ...]") is NOT a wrong answer - no miss
+     *  is logged, the question is not advanced, the user just tries
+     *  again. */
     private fun checkAnswer(act: MainActivity, userAnswer: String) {
         if (act.compacting) {
             postReply(act, "Compressing older messages — one moment")
@@ -337,8 +420,14 @@ object NcieTutor {
         act.scope.launch(Dispatchers.IO) {
             val verdict = NovaEngineAdapter.generate(
                 checkPrompt(src, q, a, userAnswer), 16)
-            val firstWord = verdict.trim().split(Regex("\\s+")).firstOrNull() ?: ""
-            val yes = firstWord.equals("yes", ignoreCase = true)
+            val trimmed = verdict.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("[engine")) {
+                postReplyOnMain(act, "Couldn't grade that — say your answer again.")
+                return@launch
+            }
+            val firstWord = trimmed.split(Regex("\\s+")).firstOrNull() ?: ""
+            val norm = firstWord.filter { it.isLetter() }.lowercase()
+            val yes = norm == "y" || norm.startsWith("yes")
             val sb = StringBuilder()
             if (yes) {
                 sb.append("Correct.")
@@ -353,16 +442,57 @@ object NcieTutor {
                     .append(quizQuestions[quizIndex].first)
             } else {
                 sb.append("\n\nQuiz complete")
-                quizSource = null
-                quizQuestions = emptyList()
-                quizIndex = 0
-                studySession = false
+                resetQuiz()
             }
             postReplyOnMain(act, sb.toString())
         }
     }
 
     // -------------------------------------------------- the flashcards
+
+    /** v9.3.0: quiz state cleared, nothing kept. */
+    private fun resetQuiz() {
+        quizSource = null
+        quizQuestions = emptyList()
+        quizIndex = 0
+        studySession = false
+    }
+
+    /** v9.3.0 "Audit Fixes I" ("skip" during a quiz): show the current
+     *  answer and move to the next question - no miss is logged, the
+     *  skipped question is not counted as wrong. */
+    private fun skipQuiz(act: MainActivity) {
+        val sb = StringBuilder("Skipped — the answer is: ")
+            .append(quizQuestions[quizIndex].second)
+        quizIndex = quizIndex + 1
+        if (quizIndex < quizQuestions.size) {
+            sb.append("\\n\\nQ").append(quizIndex + 1).append(": ")
+                .append(quizQuestions[quizIndex].first)
+        } else {
+            sb.append("\\n\\nQuiz complete")
+            resetQuiz()
+        }
+        postReply(act, sb.toString())
+    }
+
+    /** v9.3.0 ("skip" during the flip drill): show the current card's
+     *  back, then the next card's front - no verdict, no miss logged. */
+    private fun skipFlash(act: MainActivity) {
+        val card = readCards(act).getOrNull(flashIndex)
+        flashVerdictPending = false
+        flashIndex = flashIndex + 1
+        val next = readCards(act).getOrNull(flashIndex)
+        if (card == null || next == null) {
+            val done = "Flashcards complete — " + flashRight + " of " +
+                flashTotal + " correct."
+            resetFlash()
+            postReply(act, done)
+        } else {
+            flashFront = next.first
+            postReply(act, card.second + "\\n\\n" + (flashIndex + 1) + ". " +
+                next.first + "\\n\\n(type flip when you want the answer)")
+        }
+    }
 
     private fun continueFlash(act: MainActivity, text: String) {
         val t = text.trim().lowercase()
@@ -371,7 +501,9 @@ object NcieTutor {
             when (t) {
                 "right" -> flashRight++
                 "wrong" -> if (card != null)
-                    appendMiss(act, "flashcards", card.first + " = " + card.second)
+                    // v9.3.0: flashcard misses go to flash_miss.txt, NOT
+                    // the weak-areas log (the dead "flashcards" topic)
+                    appendFlashMiss(act, card.first, card.second)
                 else -> { postReply(act, "Did you get it right? (right/wrong)"); return }
             }
             flashVerdictPending = false

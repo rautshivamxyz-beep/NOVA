@@ -145,7 +145,9 @@ class BackupActivity : ListActivity() {
 
     /**
      * Every regular file under filesDir, minus the cache dirs and *.tmp
-     * files, relative paths preserved. This is deliberately generic -
+     * files and the v9.3.0 privacy exclusions (the notification log and
+     * its pause flag never ride in a backup), relative paths preserved.
+     * This is deliberately generic -
      * it backs up memory, wiki, knowledge, chats, skills, the fetch
      * log and anything added later, without a per-store checklist.
      */
@@ -157,7 +159,10 @@ class BackupActivity : ListActivity() {
                 if (f.isDirectory) {
                     if (f.name == "cache" || f.name == "code_cache") continue
                     walk(f)
-                } else if (f.isFile && !f.name.endsWith(".tmp")) {
+                } else if (f.isFile && !f.name.endsWith(".tmp") &&
+                    // v9.3.0 "Audit Fixes I": the notification log is
+                    // private - it must not leave the phone in a backup
+                    f.name != "notif_log.txt" && f.name != "notif_pause.txt") {
                     out.add(f)
                 }
             }

@@ -22,6 +22,14 @@ import java.io.File
  * derived from the history length: the history is trimmed to the last
  * 8 messages after every roll and persists across restarts, so its
  * length says nothing about the distance to the next roll.
+ *
+ * v9.3.0 "Audit Fixes I" (audit: one global summary leaks between
+ * chats): the summary file and its counter are now keyed by the chat's
+ * id - chat_summary_<id>.txt / chat_count_<id>.txt - so every chat
+ * keeps (and forgets) its own start. "forget our conversation" clears
+ * only the current chat's files. v9.2.0's global chat_summary.txt /
+ * chat_count.txt are deleted once at startup (migrateLegacy, called
+ * from MainActivity.onCreate) - they are never read again either way.
  */
 object NcieSummary {
     /** Roll the summary once this many user messages have completed. */
@@ -29,39 +37,50 @@ object NcieSummary {
     /** History kept in memory (and on disk) after a roll. */
     private const val KEEP = 8
 
-    private fun summaryFile(c: Context): File = File(c.filesDir, "chat_summary.txt")
-    private fun countFile(c: Context): File = File(c.filesDir, "chat_count.txt")
+    private fun summaryFile(c: Context, id: String): File =
+        File(c.filesDir, "chat_summary_$id.txt")
+    private fun countFile(c: Context, id: String): File =
+        File(c.filesDir, "chat_count_$id.txt")
 
-    /** The stored summary, or null when absent or blank. */
-    fun read(c: Context): String? = try {
-        val s = summaryFile(c).takeIf { it.exists() }?.readText()?.trim()
+    /** v9.3.0: v9.2.0's global summary files - delete them if an old
+     * install still has them (each run is a no-op once they are gone). */
+    fun migrateLegacy(c: Context) {
+        try { File(c.filesDir, "chat_summary.txt").delete() } catch (e: Exception) { }
+        try { File(c.filesDir, "chat_count.txt").delete() } catch (e: Exception) { }
+    }
+
+    /** The stored summary for [id]'s chat, or null when absent or blank. */
+    fun read(c: Context, id: String): String? = try {
+        val s = summaryFile(c, id).takeIf { it.exists() }?.readText()?.trim()
         if (s.isNullOrEmpty()) null else s
     } catch (e: Exception) { null }
 
     /** True once EVERY user messages have completed since the last roll. */
-    fun due(c: Context): Boolean = count(c) >= EVERY
+    fun due(c: Context, id: String): Boolean = count(c, id) >= EVERY
 
     /** Count one user message toward the next roll. */
-    fun bump(c: Context) { writeCount(c, count(c) + 1) }
+    fun bump(c: Context, id: String) { writeCount(c, id, count(c, id) + 1) }
 
     /** Counter back to zero (the next message opens a new window). */
-    fun reset(c: Context) { writeCount(c, 0) }
+    fun reset(c: Context, id: String) { writeCount(c, id, 0) }
 
-    /** "forget our conversation": the summary and its counter are gone. */
-    fun clear(c: Context) {
-        try { summaryFile(c).delete() } catch (e: Exception) { }
-        try { countFile(c).delete() } catch (e: Exception) { }
+    /** "forget our conversation": THIS chat's summary and its counter
+     *  are gone - every other chat keeps its own. */
+    fun clear(c: Context, id: String) {
+        try { summaryFile(c, id).delete() } catch (e: Exception) { }
+        try { countFile(c, id).delete() } catch (e: Exception) { }
     }
 
     /**
-     * Fold the exchanges since the last roll into the summary. Runs on
+     * Fold the exchanges since the last roll into the summary of the
+     * chat [id]. Runs on
      * Dispatchers.IO (NcieTutor's pattern) and must complete before the
      * caller's own generation starts - both share the native engine.
      * [messages] is a main-thread snapshot of the chat history.
      * Returns true when a new summary was written.
      */
-    fun roll(c: Context, messages: List<Msg>): Boolean {
-        val old = read(c) ?: "(none)"
+    fun roll(c: Context, id: String, messages: List<Msg>): Boolean {
+        val old = read(c, id) ?: "(none)"
         var recent = messages.joinToString("\n") { m ->
             (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
         }
@@ -74,7 +93,7 @@ object NcieSummary {
         val reply = try { NovaEngineAdapter.generate(prompt, 300) } catch (e: Exception) { "" }
         val clean = reply.trim()
         if (clean.isEmpty() || clean.startsWith("[engine")) return false
-        return try { summaryFile(c).writeText(clean); true } catch (e: Exception) { false }
+        return try { summaryFile(c, id).writeText(clean); true } catch (e: Exception) { false }
     }
 
     /**
@@ -94,11 +113,11 @@ object NcieSummary {
         }
     }
 
-    private fun count(c: Context): Int = try {
-        countFile(c).takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: 0
+    private fun count(c: Context, id: String): Int = try {
+        countFile(c, id).takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: 0
     } catch (e: Exception) { 0 }
 
-    private fun writeCount(c: Context, n: Int) {
-        try { countFile(c).writeText(n.toString()) } catch (e: Exception) { }
+    private fun writeCount(c: Context, id: String, n: Int) {
+        try { countFile(c, id).writeText(n.toString()) } catch (e: Exception) { }
     }
 }
