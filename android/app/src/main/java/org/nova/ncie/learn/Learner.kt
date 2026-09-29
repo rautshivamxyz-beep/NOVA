@@ -31,6 +31,9 @@ import org.nova.ncie.model.Route
  * learners keep compiling.
  *
  * v0.9.3: [knowsTopic] — a side-effect-free probe for adaptive planning.
+ *
+ * v0.9.4: [noteFailure] and [weakTopics] — the weak-topic signal the
+ * adaptive planner's Struggle Rule and the Memory screen consume.
  */
 /**
  * v0.9.2 (opt #10): the Learner's counters, structured - the raw
@@ -45,6 +48,11 @@ class LearningStats(
     val fuzzyHits: Int,
     val routeCounts: Map<Route, Int>,
 )
+
+/** v0.9.4 (stage 2): a topic the memory keeps FAILING on. [failures]
+ * counts answers the quality gate rejected; the topic string is the
+ * learner's canonical topic key (its first significant tokens, sorted). */
+class WeakTopic(val topic: String, val failures: Int)
 
 interface Learner {
     /** Return a cached answer for this exact request, if any. */
@@ -61,6 +69,15 @@ interface Learner {
      *  every plan. Default: false — learners without fuzzy recall simply
      *  never report it. */
     fun knowsTopic(text: String): Boolean = false
+
+    /** v0.9.4 (stage 2): record a REJECTED answer — the failure signal
+     *  [weakTopics] aggregates, and the input to the adaptive planner's
+     *  Struggle Rule. Default: no-op, so custom learners keep compiling. */
+    fun noteFailure(question: String) {}
+
+    /** v0.9.4 (stage 2): the topics with rejected answers, most-failed
+     *  first. Default: empty — learners that track nothing report nothing. */
+    fun weakTopics(): List<WeakTopic> = emptyList()
 
     /** Record a completed exchange. */
     fun record(text: String, response: NovaResponse)

@@ -63,6 +63,9 @@ class PersistentLearner(
     private var hits = 0
     private var misses = 0
     private var fuzzyHits = 0
+    /** v0.9.4 (stage 2): rejected-answer counts per topic — the weak-
+     *  topic signal. Persisted as double-tab lines in the snapshot. */
+    private val weaknesses = HashMap<String, Int>()
 
     // v0.9.2 fix: these token sets moved ABOVE the init block. restore()
     // (which init runs) now warms the canonical-token cache for every
@@ -164,6 +167,29 @@ class PersistentLearner(
         return fuzzyMatch(text) != null
     }
 
+    /** v0.9.4 (stage 2): a question's topic — its first canonical
+     *  tokens, sorted, so word order never splits one topic in two. */
+    private fun topicKey(q: String) = canonTokens(q).sorted().take(3).joinToString(" ")
+
+    /** v0.9.4 (stage 2): a rejected answer counts against its topic. The
+     *  map is capped at 50 topics — the least-failed one drops when a NEW
+     *  topic arrives; existing counts only ever grow or clear. */
+    @Synchronized override fun noteFailure(question: String) {
+        val key = topicKey(question)
+        if (key.isEmpty()) return
+        if (!weaknesses.containsKey(key) && weaknesses.size >= 50) {
+            val drop = weaknesses.entries.minByOrNull { it.value }?.key ?: return
+            weaknesses.remove(drop)
+        }
+        weaknesses[key] = (weaknesses[key] ?: 0) + 1
+        persist()
+    }
+
+    /** v0.9.4 (stage 2): the most-failed topics first. */
+    @Synchronized override fun weakTopics(): List<WeakTopic> =
+        weaknesses.entries.map { WeakTopic(it.key, it.value) }
+            .sortedByDescending { it.failures }
+
     @Synchronized override fun record(text: String, response: NovaResponse) {
         val key = text.trim()
         if (key.isEmpty() || response.plan.route == Route.CACHE) return
@@ -198,6 +224,9 @@ class PersistentLearner(
             )
         } ?: fact.copy(question = key)
         facts[key] = merged
+        // v0.9.4 (stage 2): a fact that cleared the quality bar is the
+        // topic demonstrably working - its failure count clears.
+        weaknesses.remove(topicKey(key))
         while (facts.size > maxEntries) facts.remove(facts.keys.first())
         cache[key] = factResponse(merged)
         canon[key] = canonTokens(key)
@@ -259,6 +288,8 @@ class PersistentLearner(
         misses = 0
         fuzzyHits = 0
         store.write("")
+        // v0.9.4 (stage 2): a wiped world has no weak topics either
+        weaknesses.clear()
     }
 
     @Synchronized override fun stats(): String {
@@ -304,6 +335,12 @@ class PersistentLearner(
         for (f in facts.values) {
             sb.append('\t').append(f.serialize()).append('\n')
         }
+        // v0.9.4 (stage 2): weak topics ride in the same snapshot, two
+        // leading tabs - a cache line starts with neither, a fact line
+        // with exactly one, so all three kinds never collide.
+        for ((t, c) in weaknesses) {
+            sb.append("\t\t").append(escapeLine(t)).append('\t').append(c).append('\n')
+        }
         store.write(sb.toString())
     }
 
@@ -314,6 +351,17 @@ class PersistentLearner(
             // v0.9.0: a leading tab marks a graded-fact line — a cache
             // line can never start with one. Malformed fact lines are
             // skipped, never fatal.
+            if (line.length > 1 && line[0] == '\t' && line[1] == '\t') {
+                // v0.9.4 (stage 2): a weak-topic line
+                val body = line.substring(2)
+                val i2 = body.indexOf('\t')
+                if (i2 > 0) {
+                    val t = unescapeLine(body.substring(0, i2))
+                    val c = body.substring(i2 + 1).trim().toIntOrNull()
+                    if (t != null && t.isNotEmpty() && c != null && c > 0) weaknesses[t] = c
+                }
+                continue
+            }
             if (line[0] == '\t') {
                 val fact = LearnedFact.parse(line.substring(1))
                 if (fact != null) facts[fact.question.trim()] = fact
