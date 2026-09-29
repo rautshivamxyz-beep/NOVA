@@ -373,6 +373,10 @@ object NcieLearn {
                     try { l.record(f) } catch (e: Exception) { }
                     unpersisted++
                 }
+                // v9.6.0 "Engine Pack": the promotions above changed
+                // knowledge.json outside the NcieKnowledge boundary - reset
+                // the grounding index so the next retrieve re-reads fresh.
+                NcieGround.indexReset(ctx)
                 try { disk?.flushNow() } catch (e: Exception) { }
                 val tail = if (unpersisted > 0)
                     " — $unpersisted promotion(s) failed to persist and were kept in memory"

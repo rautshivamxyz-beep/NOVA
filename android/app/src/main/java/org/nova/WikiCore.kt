@@ -12,6 +12,7 @@ import java.io.FileWriter
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
+import org.nova.ncie.android.NcieGround
 import org.nova.ncie.knowledge.WikiStore
 
 /**
@@ -109,6 +110,9 @@ object WikiCore {
             doneTmp.renameTo(doneFile(ctx))
             File(d, "count").writeText(n.toString())
             index = null
+            // v9.6.0 "Engine Pack": the whole store was replaced - drop
+            // the grounding index; the next retrieve rebuilds it.
+            NcieGround.indexReset(ctx)
             prepared = null
             _state.value = Pair(0f, "done - $n articles saved")
         } catch (e: Exception) {
@@ -183,6 +187,8 @@ object WikiCore {
         val f = articlesFile(ctx)
         val off = f.length()
         try { f.appendText(line) } catch (e: Exception) { return false }
+        // v9.6.0 "Engine Pack": the stored article joins the grounding index
+        NcieGround.indexUpdate(ctx, title, text)
         val cur = index ?: return true   // warmUp() will pick it up
         val ix = cur.toMutableList()
         ix.removeAll { it.first.equals(title, ignoreCase = true) }
@@ -217,6 +223,7 @@ object WikiCore {
         } catch (e: Exception) { return false }
         val ix = buildIndex(ctx)
         index = ix
+        NcieGround.indexUpdate(ctx, title, null)
         prepared = wikiStore.prepare(ix)
         return true
     }

@@ -59,6 +59,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
 
         pendingCitation = null
         pendingQaKey = null
+        pendingAnswerQ = null
         if (generationJob?.isActive == true) {
             generationJob?.cancel()
             return
@@ -152,6 +153,13 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // mode the user invokes.
         if (answerGrounded(text)) { input.setText(""); return }
         if (answerDocsList(text)) { input.setText(""); return }
+        // v9.6.0 "Engine Pack": "what have you learned" - the Experience
+        // Engine's deterministic view of the questions whose answers the
+        // user regenerated; "connections" / "related documents" - the
+        // Knowledge Graph's deterministic cross-document map. Both are
+        // file work only, like the commands above.
+        if (answerLearned(text)) { input.setText(""); return }
+        if (answerConnections(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -622,6 +630,36 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         }
         // v5.4.7: show when the answer is grounded in the user's notes
         if (knowledgePart.isNotEmpty()) toast("Using your notes")
+        // v9.6.0 "Engine Pack": the Experience Engine speaks first - a
+        // question whose answer the user regenerated gets the
+        // better-answer instruction, and never touches the answer cache
+        // while it stays logged (so the engine keeps informing the next
+        // answer instead of the cache replaying the old one).
+        val experienced = NcieEngines.isExperienced(this, text)
+        if (experienced) {
+            prompt = "(The user previously asked this and was not satisfied " +
+                "with the answer. Try a better, clearer answer this time.)\n\n" + prompt
+        } else if (skill == null) {
+            // v9.6.0: the Predictive Cache - an exact repeat of a normal
+            // chat question is answered instantly, verbatim, before any
+            // generation. Regenerating bypasses this and refreshes the
+            // entry; commands, skills and grounded answers never reach
+            // this point.
+            val hit = NcieEngines.cachedAnswer(this, text)
+            if (hit != null) {
+                val um = Msg(Role.USER, text)
+                currentChat.messages.add(um); adapter.add(um)
+                val reply = Msg(Role.ASSISTANT, hit)
+                currentChat.messages.add(reply); adapter.add(reply)
+                scrollToEnd()
+                toast("Answer (cached - regenerate for a fresh one)")
+                scope.launch(Dispatchers.IO) {
+                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                }
+                needsContextCarry = true
+                return
+            }
+        }
         // NCIE v0.7.0 (#1): Smart Skip - the kernel's LEARN phase now has a
         // disk-backed cache. An exact repeat of an already-answered model
         // turn is served instantly, zero tokens - the study-Q cache's
@@ -629,6 +667,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         if (NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
+        // v9.6.0: the Predictive Cache write happens at turn completion
+        // (MainActivity) under this exact question. Experienced questions
+        // and skills never enter the cache.
+        pendingAnswerQ = if (experienced || skill != null) null else text
         // v9.2.0 "Rolling Chat Summary": once 12 user messages (and
         // their replies) have completed since the stored summary, fold
         // the conversation into filesDir/chat_summary.txt through the
@@ -1066,6 +1108,15 @@ private fun MainActivity.answerGrounded(text: String): Boolean {
         }
         val groundReply = NovaEngineAdapter.generate(
             NcieGround.groundPrompt(question, chunks), activity.settings.predictLength)
+        // v9.6.0 "Engine Pack": the truth check - deterministic answer-
+        // vs-source keyword verification. A grounded answer whose content
+        // words do not overlap the retrieved chunks is flagged below,
+        // never blocked.
+        val verified = NcieGround.truthCheck(groundReply, chunks)
+        // v9.6.0: the Knowledge Graph - the other sources sharing at
+        // least 3 key terms with the best-matching source.
+        val relatedNames = try { NcieGround.related(activity, chunks[0].first) }
+            catch (e: Exception) { emptyList() }
         // monospace source list: "<name (chunk N)> ..." - N counts the
         // chunks this answer used from each source
         val seen = HashMap<String, Int>()
@@ -1076,7 +1127,12 @@ private fun MainActivity.answerGrounded(text: String): Boolean {
             src.append(" ").append(c.first).append(" (chunk ").append(n).append(")")
         }
         withContext(Dispatchers.Main) {
-            postGroundReply(activity, groundReply + "\n\n```\n" + src + "\n```")
+            var groundBody = groundReply + "\n\n```\n" + src + "\n```"
+            if (relatedNames.isNotEmpty())
+                groundBody += "\nRelated: " + relatedNames.joinToString(", ")
+            if (!verified)
+                groundBody += "\n\nWarning: this answer may not have come from your notes — double-check."
+            postGroundReply(activity, groundBody)
         }
     }
     return true
@@ -1128,4 +1184,54 @@ private fun groundDocsBody(ctx: android.content.Context): String {
     }
     sb.append("```")
     return sb.toString()
+}
+
+// v9.6.0 "Engine Pack": "what have you learned" - the Experience Engine's
+// deterministic answer: the last 20 questions whose answers the user
+// regenerated (filesDir/experience.txt), monospace. Like DOCS_Q above: no
+// model call, no network, works with no model loaded at all.
+private val LEARNED_Q = Regex("(?i)^\\s*what\\s+have\\s+you\\s+learned\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerLearned(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - this command is always short and typed
+    if (text.length > 80 || !LEARNED_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val learned = NcieEngines.lastLearned(activity)
+        val body = if (learned.isEmpty())
+            "Nothing logged yet — it fills when you regenerate a reply."
+        else "```\nWhat I've learned from your regenerations:\n\n" +
+            learned.joinToString("\n") { "- " + it } + "\n```"
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
+// v9.6.0: "connections" / "related documents" - the Knowledge Graph's
+// deterministic cross-document map: every pair of the user's sources
+// (Knowledge documents + offline wiki articles) sharing at least 3 key
+// terms, monospace, with the shared terms. No model call, no network.
+private val CONNECT_Q = Regex("(?i)^\\s*(?:connections?|related\\s+documents?)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerConnections(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - this command is always short and typed
+    if (text.length > 80 || !CONNECT_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val conns = NcieGround.connections(activity)
+        val body = if (conns.isEmpty()) "No strong connections found."
+        else "```\n" + conns.joinToString("\n") {
+                it.first + " ↔ " + it.second + ": " + it.third.joinToString(", ")
+            } + "\n```"
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
 }

@@ -183,6 +183,10 @@ object NcieKnowledge {
     fun addDoc(c: Context, name: String, text: String) {
         Knowledge.addDoc(c, name, text)
         NcieLearn.invalidate()
+        // v9.6.0 "Engine Pack": the FlashMap index - refresh this
+        // source's chunk-count line as the grounding layer sees it
+        // (callers are already off the main thread, like the write above).
+        NcieGround.indexUpdate(c, name, text)
     }
 
     /** Delete a document and its caches — the study-Q cache and the
@@ -190,6 +194,8 @@ object NcieKnowledge {
     fun removeDoc(c: Context, name: String) {
         Knowledge.removeDoc(c, name)
         NcieLearn.invalidate()
+        // v9.6.0 "Engine Pack": the FlashMap index drops the source's line.
+        NcieGround.indexUpdate(c, name, null)
     }
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity

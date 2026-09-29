@@ -32,6 +32,7 @@ import org.json.JSONArray
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
+import org.nova.ncie.android.NcieEngines
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
@@ -113,6 +114,11 @@ class MainActivity : Activity() {
     private var chipsRow: LinearLayout? = null
     internal var lastNotesChatId: String = ""
     internal var pendingQaKey: String? = null
+    /** v9.6.0 "Engine Pack": the Predictive Cache - the exact question
+     *  under which the completing turn's final answer is stored
+     *  (answer_cache.txt). Set by the normal chat path and by regenerate;
+     *  commands, skills and grounded answers never set it. */
+    internal var pendingAnswerQ: String? = null
 
     /** Notes document the user last summarized - "gimme the whole summary" returns to it. */
     internal var lastNotesDoc: String? = null
@@ -1166,11 +1172,13 @@ class MainActivity : Activity() {
                 // stopped replies are truncated - never cache them
                 pendingQaKey = null
                 pendingCitation = null
+                pendingAnswerQ = null
             } catch (e: Exception) {
                 adapter.appendToLast("\n[error: ${e.message}]")
                 // error replies must never be cached as answers
                 pendingQaKey = null
                 pendingCitation = null
+                pendingAnswerQ = null
             } finally {
                 flush()
                 withContext(Dispatchers.Main) {
@@ -1285,6 +1293,20 @@ class MainActivity : Activity() {
                     val willContinue = newBubble && !speechCancelled &&
                         autoContinueCount < 2 &&
                         shouldAutoContinue(replyMsg.text)
+                    // v9.6.0 "Engine Pack": the Predictive Cache write -
+                    // the completed turn's final answer under its exact
+                    // question (capped, > 4000 chars never stored). Only
+                    // when nothing continues the reply, so the cached text
+                    // is the whole answer.
+                    if (pendingAnswerQ != null && !willContinue) {
+                        val ansQ = pendingAnswerQ!!
+                        val ans = stripThinking(replyMsg.text).trim()
+                        pendingAnswerQ = null
+                        if (!speechCancelled && ans.length > 30 && ans.length <= 4000)
+                            scope.launch(Dispatchers.IO) {
+                                NcieEngines.cacheAnswer(this@MainActivity, ansQ, ans)
+                            }
+                    }
                     // persist the conversation
                     try {
                         withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
@@ -1865,6 +1887,11 @@ class MainActivity : Activity() {
         }
         val lastUser = currentChat.messages.lastOrNull { it.role == Role.USER }
         if (lastUser == null) { toast("Nothing to regenerate"); return }
+        // v9.6.0 "Engine Pack": the Experience Engine - the user was not
+        // satisfied with this answer; the question is logged (capped) so
+        // future answers to it try harder. File work off the main thread.
+        val expQ = lastUser.text
+        scope.launch(Dispatchers.IO) { NcieEngines.logExperience(this@MainActivity, expQ) }
         // v5.4.3 fix: the old answer is still in the engine's context. The old
         // code just re-sent the question, leaving "Q, A, Q" (and a growing
         // pile of duplicates after every regenerate tap) in the context.
@@ -1887,6 +1914,9 @@ class MainActivity : Activity() {
     /** v5.4.3: re-asks [lastUser] with the earlier conversation attached,
      *  so regenerating never pollutes the engine context. */
     private fun regenerateFrom(lastUser: Msg) {
+        // v9.6.0: regenerating bypasses the Predictive Cache read (this
+        // path never consults it) and refreshes its entry at completion.
+        pendingAnswerQ = lastUser.text
         val recent = currentChat.messages.dropLast(1).takeLast(6)
             .joinToString("\n") { m ->
                 (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
