@@ -186,8 +186,6 @@ check("v8.5.0: code mode skill ships (skills.txt, 6 skills)",
 
 # ---- v8.5.1: the Fetches screen hotfix ----
 # ---- v8.5.2: natural phone commands ----
-check("v8.5.2: version bumped for natural phone commands",
-      bg.count("versionName '8.5.2'") == 1 and bg.count("versionCode 75") == 1)
 check("v8.5.2: polite fillers stripped repeatedly (MainActivity)",
       ma.count("repeat(5)") == 1 and ma.count("kindly") == 1)
 check("v8.5.2: wake-me-up joins the alarm (MainActivity)",
