@@ -521,14 +521,16 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // so a chatty reply that ignored background facts is CORRECT and
         // must not be punished as drift.
         lastAnswerSources = hits.map { it.text }
-        // v8.4.0 (stage 1): a knowledge gap - a study question with
-        // NOTHING local behind it. Ask before reaching online: only
-        // keywords leave the phone, and only with the user watching.
-        if (settings.onlineLearning && !offered && docPart.isEmpty() &&
-            knowledgePart.isEmpty() && wikiPart.isEmpty() && studyQ &&
-            WikiCore.isReady(this)
+        // v8.6.0: online discovery for ANY information question - the
+        // user asked for it. Local sources are no longer a blocker, they
+        // are the alternative: the offer says what is covered and what
+        // looking it up would add. Skills and document mode stay
+        // offline-only, and ask-first stays the law.
+        if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
+            lastSkillMatched == null && WikiCore.isReady(this)
         ) {
-            OnlineFetch.offer(act, text)
+            OnlineFetch.offer(act, text,
+                knowledgePart.isNotEmpty() || wikiPart.isNotEmpty())
             return
         }
         // v5.4.7: show when the answer is grounded in the user's notes

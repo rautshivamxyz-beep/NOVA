@@ -33,21 +33,37 @@ import java.net.URLEncoder
  */
 object OnlineFetch {
 
-    /** The ask-first dialog. Never called unless the setting is on and
-     *  the turn already came up empty locally. */
-    fun offer(act: MainActivity, text: String) {
+    /** v8.6.0: the ask-first offer, for ANY information question - not
+     *  only the gaps. Local material is the ALTERNATIVE now, not a
+     *  blocker: the dialog says what is already covered and offers to
+     *  look online anyway. Ask-first stays the law either way. */
+    fun offer(act: MainActivity, text: String, haveLocal: Boolean = false) {
         val kws = NcieKnowledge.keyTerms(text).take(6)
         if (kws.isEmpty()) { act.ncieSend(text, offered = true); return }
         val q = kws.joinToString(" ")
-        AlertDialog.Builder(act)
-            .setTitle("Look it up online?")
-            .setMessage("Nothing in your notes or offline Wikipedia covers " +
+        val title: String; val message: String; val noBtn: String
+        if (haveLocal) {
+            title = "Look online too?"
+            message = "Your notes and offline Wikipedia cover this.\n\n" +
+                "NOVA can also search Wikipedia and, if that is not enough, " +
+                "the open web for:\n\"$q\"\n\n" +
+                "Nothing else leaves your phone. Whatever it finds stays " +
+                "offline forever."
+            noBtn = "Answer locally"
+        } else {
+            title = "Look it up online?"
+            message = "Nothing in your notes or offline Wikipedia covers " +
                 "this.\n\nNOVA will search Wikipedia and, if that is not " +
                 "enough, the open web for:\n\"$q\"\n\n" +
                 "Nothing else leaves your phone. Whatever it finds stays " +
-                "offline forever.")
+                "offline forever."
+            noBtn = "Answer anyway"
+        }
+        AlertDialog.Builder(act)
+            .setTitle(title)
+            .setMessage(message)
             .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
-            .setNegativeButton("Answer anyway") { _, _ -> act.ncieSend(text, offered = true) }
+            .setNegativeButton(noBtn) { _, _ -> act.ncieSend(text, offered = true) }
             .setOnCancelListener { act.ncieSend(text, offered = true) }
             .show()
     }
