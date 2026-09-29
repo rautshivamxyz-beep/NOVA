@@ -634,6 +634,10 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
             startActivity(Intent(this, MemoryActivity::class.java))
         })
+        // v8.5.0: every online fetch, visible and deletable
+        drawerPane.addView(drawerRow("Fetches", R.drawable.ic_globe) {
+            startActivity(Intent(this, FetchLogActivity::class.java))
+        })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",

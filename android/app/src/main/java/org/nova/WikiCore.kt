@@ -192,6 +192,35 @@ object WikiCore {
         return true
     }
 
+    /** v8.5.0: the full text of one stored article (the Fetches screen's
+     *  preview), or null when the title is not in the store. */
+    fun articleText(ctx: Context, title: String): String? {
+        val ix = index ?: return null
+        val i = ix.indexOfFirst { it.first.equals(title, ignoreCase = true) }
+        if (i < 0) return null
+        val line = readLineAt(ctx, ix[i].second) ?: return null
+        return line.substringAfter('\u241F').replace('\u241F', '\n')
+    }
+
+    /** v8.5.0: remove one article - the Fetches screen's delete. The
+     *  whole file is rewritten without its line, then the index and its
+     *  prepared form are rebuilt. Call from a background thread. Returns
+     *  true when the title was there. */
+    fun removeArticle(ctx: Context, title: String): Boolean {
+        val f = articlesFile(ctx)
+        if (!f.exists()) return false
+        val lines = try { f.readLines() } catch (e: Exception) { return false }
+        val kept = lines.filter { !it.substringBefore('\u241F').equals(title, ignoreCase = true) }
+        if (kept.size == lines.size) return false
+        try {
+            f.writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
+        } catch (e: Exception) { return false }
+        val ix = buildIndex(ctx)
+        index = ix
+        prepared = wikiStore.prepare(ix)
+        return true
+    }
+
     /** Finds the most relevant stored articles for a question. */
     fun search(ctx: Context, query: String, maxResults: Int = 2): List<Hit> {
         if (!isReady(ctx)) return emptyList()
