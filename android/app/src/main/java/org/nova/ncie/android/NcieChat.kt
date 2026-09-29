@@ -127,6 +127,12 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             NcieTutor.startFlashQuiz(this, text)
             return
         }
+        // v9.1.0 "Automation I": deterministic routines - the morning
+        // briefing (date, battery, notifications, weak areas, flashcards)
+        // and the 45-minute study timer. No model call, no network, and
+        // they work before any model is loaded.
+        if (answerBriefing(text)) { input.setText(""); return }
+        if (answerStudy(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -819,6 +825,46 @@ private fun MainActivity.answerFrom(text: String): Boolean {
     }
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
+// v9.1.0 "Automation I": "good morning" / "morning briefing" / "briefing"
+// / "my briefing" - the deterministic morning briefing from local state
+// (date, battery, notifications since midnight, weak areas due,
+// flashcards). Like MISSED_Q: no model call, no network, nothing leaves
+// the phone, and it works with no model loaded at all.
+private val BRIEFING_Q = Regex(
+    "(?i)^\\s*(?:good\\s+morning|morning\\s+briefing|my\\s+briefing|briefing)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerBriefing(text: String): Boolean {
+    if (text.length > 80 || !BRIEFING_Q.containsMatchIn(text)) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val routReply = Msg(Role.ASSISTANT, NcieRoutines.morningBriefing(this))
+    currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
+// v9.1.0: "start study" / "start studying" / "study time" - a 45-minute
+// timer through the SAME clock-app path the phone commands use
+// (MainActivity.startClockTimer, the ACTION_SET_TIMER route).
+private val STUDY_Q = Regex(
+    "(?i)^\\s*(?:start\\s+study(?:ing)?|study\\s+time)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerStudy(text: String): Boolean {
+    if (text.length > 80 || !STUDY_Q.containsMatchIn(text)) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val routReply = Msg(Role.ASSISTANT, NcieRoutines.startStudy(this, this))
+    currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
         try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
     }

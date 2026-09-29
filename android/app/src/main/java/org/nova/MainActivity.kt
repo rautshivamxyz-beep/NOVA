@@ -679,6 +679,10 @@ class MainActivity : Activity() {
                     Uri.parse("https://github.com/rautshivamxyz-beep/NOVA/releases")))
             } catch (e: Exception) { }
         })
+        // v9.1.0: the app lock - set or remove the PIN (only a salted
+        // SHA-256 hash is stored, never the PIN); the blocking launch
+        // gate itself lives in onResume
+        drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
         // v9.0.0 "Voice": spoken replies - one persisted toggle right
         // under Update (key "voiceReplies" in the shared nova prefs)
         drawerPane.addView(drawerRow("Voice replies", R.drawable.ic_mic) {
@@ -2343,12 +2347,7 @@ Study:
                     else -> n
                 }
                 try {
-                    startActivity(android.content.Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
-                        putExtra(android.provider.AlarmClock.EXTRA_LENGTH, secs)
-                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOVA")
-                        putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
-                    })
-                    toast("Timer set: " + m.value)
+                    if (startClockTimer(secs)) toast("Timer set: " + m.value)
                 } catch (e: Exception) { toast("No clock app found") }
                 return true
             }
@@ -2767,6 +2766,10 @@ Study:
 
     override fun onResume() {
         super.onResume()
+        // v9.1.0: the PIN gate - covers launch (onCreate is always
+        // followed by onResume) and every return to the app; the
+        // process latch keeps it from re-asking mid-session
+        maybePinLock()
         if (appliedTheme.isNotEmpty() && settings.theme != appliedTheme) {
             recreate()
             return
@@ -3247,11 +3250,140 @@ Study:
         } catch (e: Exception) { }
     }
 
+    // ------------------------------------------- v9.1.0: the app lock
+
+    /** pin.txt - one line, the salted SHA-256 hex of the PIN. */
+    private fun pinFile(): File = File(filesDir, "pin.txt")
+
+    private fun pinSet(): Boolean = try { pinFile().exists() } catch (e: Exception) { false }
+
+    private fun pinHashMatches(pin: String): Boolean = try {
+        pinFile().readText().trim() == pinHash(pin)
+    } catch (e: Exception) { false }
+
+    /** The launch gate: a blocking dialog while a PIN is set and this
+     *  process has not unlocked yet. setCancelable(false) means the
+     *  back button cannot dismiss it - only the right PIN can. */
+    private fun maybePinLock() {
+        if (!pinSet() || pinUnlocked) return
+        val pinBox = EditText(this).apply {
+            hint = "PIN"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        }
+        val lockDialog = AlertDialog.Builder(this)
+            .setTitle("Enter PIN")
+            .setView(pinBox)
+            .setCancelable(false)
+            .setPositiveButton("OK", null)
+            .show()
+        lockDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+            if (pinHashMatches(pinBox.text.toString())) {
+                pinUnlocked = true
+                lockDialog.dismiss()
+            } else {
+                toast("Wrong PIN")
+                pinBox.setText("")
+            }
+        }
+    }
+
+    /** The drawer row: set a PIN when none is set, remove the lock
+     *  (current PIN required) when one is. */
+    private fun appLockDialog() {
+        if (!pinSet()) {
+            val pinBox = EditText(this).apply {
+                hint = "PIN (4-6 digits)"
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            }
+            val confirmBox = EditText(this).apply {
+                hint = "Confirm PIN"
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            }
+            val box = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(8), dp(20), 0)
+                addView(pinBox); addView(confirmBox)
+            }
+            val setDialog = AlertDialog.Builder(this)
+                .setTitle("Set a PIN (4-6 digits)")
+                .setView(box)
+                .setPositiveButton("Save", null)
+                .setNegativeButton("Cancel", null)
+                .show()
+            setDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                val p = pinBox.text.toString()
+                if (p != confirmBox.text.toString()) {
+                    toast("PINs do not match"); return@setOnClickListener
+                }
+                if (p.length !in 4..6 || !p.all { it.isDigit() }) {
+                    toast("PIN must be 4-6 digits"); return@setOnClickListener
+                }
+                try {
+                    pinFile().writeText(pinHash(p) + "\n")
+                    pinUnlocked = true
+                    toast("App lock on")
+                    setDialog.dismiss()
+                } catch (e: Exception) { toast("Could not save the PIN") }
+            }
+        } else {
+            val pinBox = EditText(this).apply {
+                hint = "Current PIN"
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            }
+            val removeDialog = AlertDialog.Builder(this)
+                .setTitle("Enter current PIN to remove the lock")
+                .setView(pinBox)
+                .setPositiveButton("Remove", null)
+                .setNegativeButton("Cancel", null)
+                .show()
+            removeDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                if (pinHashMatches(pinBox.text.toString())) {
+                    try { pinFile().delete() } catch (e: Exception) { }
+                    toast("App lock off")
+                    removeDialog.dismiss()
+                } else {
+                    toast("Wrong PIN")
+                    pinBox.setText("")
+                }
+            }
+        }
+    }
+
+    /** v9.1.0: the ONE clock-app timer launcher - the phone command
+     *  "timer 10 minutes" and NcieRoutines.startStudy both go through
+     *  here, so the mechanism and its failure handling stay identical. */
+    internal fun startClockTimer(secs: Int): Boolean = try {
+        startActivity(android.content.Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
+            putExtra(android.provider.AlarmClock.EXTRA_LENGTH, secs)
+            putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOVA")
+            putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+        })
+        true
+    } catch (e: Exception) { toast("No clock app found"); false }
+
     companion object {
         private const val REQ_SPEECH = 4251
         private const val REQ_CHATS = 4252
         private const val REQ_MIC = 4254
         private var crashHandlerInstalled = false
+        // v9.1.0 "Automation I": the app lock - pin.txt holds only the
+        // salted SHA-256 hex of the PIN (never the PIN), and the
+        // process-unlocked latch keeps the launch gate from re-asking
+        // inside one session.
+        private const val PIN_SALT = "a7f3d09b2e6c4158"
+        @Volatile private var pinUnlocked = false
+
+        private fun pinHash(pin: String): String {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val bytes = md.digest((PIN_SALT + pin).toByteArray(Charsets.UTF_8))
+            val hex = StringBuilder()
+            for (b in bytes) hex.append(String.format("%02x", b))
+            return hex.toString()
+        }
     }
 }
 
