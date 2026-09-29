@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import org.nova.NovaTheme
 import org.nova.WikiCore
@@ -75,14 +76,20 @@ class FetchLogActivity : ListActivity() {
             setOnClickListener { confirmClearAll() }
             setTextColor(NovaTheme.dim)
         })
-        val list = listView.apply {
+        // v8.5.1 crash fix: build our OWN ListView with the id ListActivity
+        // requires. Grabbing `listView` before setContentView makes
+        // ListActivity inflate its default layout, and re-adding that
+        // already-parented list to our root throws IllegalStateException -
+        // the Fetches screen crashed on open (the device report).
+        val list = ListView(this).apply {
+            id = android.R.id.list
             divider = null
             dividerHeight = pad(8)
         }
         root.addView(list, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        listView.adapter = EntryAdapter().also { adapter = it }
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        listAdapter = EntryAdapter().also { adapter = it }
     }
 
     private fun reload() {

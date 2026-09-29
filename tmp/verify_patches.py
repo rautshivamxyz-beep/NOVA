@@ -164,9 +164,6 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.5.0: version bumped for live search + quality fixes",
-      bg.count("versionName '8.5.0'") == 1 and bg.count("versionCode 73") == 1)
-
 # ---- v8.5.0: live search, code mode, fetch log, profile tool ----
 check("v8.5.0: live web search - Wikipedia first, DuckDuckGo fallback (OnlineFetch)",
       of_.count("duckduckgo") == 2 and of_.count("HtmlText") == 6)
@@ -186,6 +183,13 @@ check("v8.5.0: hands gap-fill - timers and email drafts (MainActivity)",
       ma.count("ACTION_SET_TIMER") == 1 and ma.count("Email drafted") == 1)
 check("v8.5.0: code mode skill ships (skills.txt, 6 skills)",
       skl.count("[skill]") == 6)
+
+# ---- v8.5.1: the Fetches screen hotfix ----
+check("v8.5.1: version bumped for the Fetches crash fix",
+      bg.count("versionName '8.5.1'") == 1 and bg.count("versionCode 74") == 1)
+check("v8.5.1: own ListView under android.R.id.list, never re-parented (FetchLogActivity)",
+      fla.count("R.id.list") == 1 and fla.count("listAdapter = ") == 1 and
+      fla.count("listView.apply") == 0)
 
 # ---- v8.4.0: the four stages - online learning, weak topics, skills, gaps ----
 check("v8.4.0: online learning toggle (SettingsActivity)",
