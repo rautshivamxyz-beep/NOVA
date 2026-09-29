@@ -96,7 +96,7 @@ NC_MARKERS = [
     ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
-    ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend()", 1),
+    ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend(", 1),
     ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
     ("NCIE 7: Smart Skip recall in the chat turn", "NcieLearn.recall(this, text)", 1),
 ]
@@ -127,6 +127,11 @@ lr = load("ncie/learn/Learner.kt")
 # their own file (same package) — the markers are counted across both.
 pl = load("ncie/learn/PersistentLearner.kt")
 ak = load("ncie/plan/AdaptiveKernel.kt")
+of_ = load("ncie/android/OnlineFetch.kt")
+nsk = load("ncie/android/NcieSkills.kt")
+cov = load("ncie/verify/Coverage.kt")
+sk = load("ncie/skill/SkillStore.kt")
+gs = load("ncie/learn/GapStore.kt")
 lf = load("ncie/learn/LearnedFact.kt")
 check("v0.8.1: vendored learner has clear() (interface + both impls)",
       lr.count("fun clear()") + pl.count("fun clear()") == 3)
@@ -155,8 +160,35 @@ check("v7.6 backup restores exams+reminders (Backup.kt)", bk.count("restore exam
 bg = open(os.path.join(ROOT, "android/app/build.gradle"), encoding="utf-8").read()
 check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
-check("v8.3.1: version bumped for the tiny-model detection fix",
-      bg.count("versionName '8.3.1'") == 1 and bg.count("versionCode 71") == 1)
+check("v8.4.0: version bumped for the four stages",
+      bg.count("versionName '8.4.0'") == 1 and bg.count("versionCode 72") == 1)
+
+# ---- v8.4.0: the four stages - online learning, weak topics, skills, gaps ----
+check("v8.4.0: online learning toggle (SettingsActivity)",
+      sa.count("onlineLearning") == 2)
+check("v8.4.0: fetched articles join the wiki store (WikiCore)",
+      wc.count("appendArticle") == 1)
+check("v8.4.0: keywords-only search terms (NcieKnowledge)",
+      nk.count("keyTerms") == 1)
+check("v8.4.0: ask-first gap offer + skill match in the chat path (NcieChat)",
+      nc.count("OnlineFetch.offer") == 1 and nc.count("NcieSkills.match") == 1)
+check("v8.4.0: skill turn bookkeeping (MainActivity + NcieChat + NcieLearn)",
+      ma.count("lastSkillMatched") == 2 and nc.count("lastSkillMatched") == 2 and
+      nl.count("lastSkillMatched") == 1)
+check("v8.4.0: failures noted, gaps logged (NcieLearn)",
+      nl.count("noteFailure") == 1 and nl.count("noteGap") == 2)
+check("v8.4.0: weak topics surface on the Memory screen (NcieLearn)",
+      nl.count("weakTopics") == 1)
+check("v8.4.0: the fetcher gates with Coverage and sends keywords only",
+      of_.count("Coverage.ratio") == 1 and of_.count("wikipedia.org") == 2)
+check("v8.4.0: skills parsed by the kernel (NcieSkills)",
+      nsk.count("SkillStore.parse") == 1)
+check("v8.4.0: kernel stage files synced (Coverage, SkillStore, GapStore)",
+      cov.count("v0.9.4") >= 1 and sk.count("[skill]") >= 1 and gs.count("MAX = 100") == 1)
+check("v8.4.0: the Struggle Rule synced (AdaptiveKernel)",
+      ak.count("STRUGGLE RULE") == 1)
+check("v8.4.0: weak-topic signal synced (Learner + PersistentLearner)",
+      lr.count("noteFailure") == 2 and pl.count("noteFailure") == 1 and pl.count("weakTopics") == 1)
 
 # ---- v8.3.1: tiny-model detection parses the label (1.5B was missed) ----
 check("v8.3.1: model size parsed, not substring-matched (NcieChat.kt)",
@@ -192,7 +224,7 @@ check("v8.1.0: debounced learner disk (NcieLearn.kt)",
 check("v8.1.0: graduated doc names via the kernel builder (NcieLearn.kt)",
       nl.count("docNameOf") == 1)
 check("v8.1.0: single prepared WikiStore in the app (WikiCore.kt)",
-      wc.count("prepared") == 5 and wc.count("WikiStore()") == 1)
+      wc.count("prepared") == 7 and wc.count("WikiStore()") == 1)
 
 # ---- v7.9.0: the memory screen joins the drawer; CI enforces version bumps ----
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
