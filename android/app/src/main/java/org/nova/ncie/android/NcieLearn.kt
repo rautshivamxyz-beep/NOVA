@@ -119,7 +119,15 @@ object NcieLearn {
         val clean = reply.trim()
         if (clean.length < 30) return   // same bar as the study-Q cache
         val verdict = quality.quality(clean, sources)
-        if (!verdict.passed) return
+        if (!verdict.passed) {
+            // v8.4.0 (stages 2+4): a rejected answer is a signal now -
+            // its topic's failure count grows (the Struggle Rule spends a
+            // bigger budget there next time), and a turn with nothing
+            // behind it (no sources, no skill) is a capability gap.
+            learner(act)?.let { l -> io.execute { l.noteFailure(userText) } }
+            if (sources.isEmpty() && act.lastSkillMatched == null) noteGap(act, userText)
+            return
+        }
         val l = learner(act) ?: return
         val response = NovaResponse(
             answer = clean,
@@ -247,9 +255,39 @@ object NcieLearn {
         io.execute {
             val facts = try { learner?.learnedFacts() ?: emptyList() }
                         catch (e: Exception) { emptyList() }
-            val stats = try { learner?.stats() ?: "memory still loading" }
+            var stats = try { learner?.stats() ?: "memory still loading" }
                         catch (e: Exception) { "memory unavailable" }
+            // v8.4.0 (stages 2+4): what NOVA knows it is bad at - the
+            // weak topics and the asked-for-but-can't-do requests
+            try {
+                val weak = learner?.weakTopics().orEmpty().take(3)
+                if (weak.isNotEmpty())
+                    stats += "\nWeakest topics: " + weak.joinToString(", ") { "${it.topic} (${it.failures})" }
+            } catch (e: Exception) { }
+            try {
+                val gaps = gapStore?.top(3).orEmpty()
+                if (gaps.isNotEmpty())
+                    stats += "\nAsked for, can't do: " + gaps.joinToString(", ") { g -> "'" + g.question + "' x" + g.count }
+            } catch (e: Exception) { }
             post { onReady(facts, stats) }
+        }
+    }
+
+    // v8.4.0 (stage 4): the capability-gap log - loaded with the
+    // learner, same io thread, same filesDir
+    @Volatile private var gapStore: org.nova.ncie.learn.GapStore? = null
+    private fun gapFile(ctx: android.content.Context) =
+        java.io.File(ctx.filesDir, "capability_gaps.txt")
+
+    /** v8.4.0 (stage 4): note a request NOVA structurally could not
+     *  answer - no tool, no skill, no sources behind it. */
+    fun noteGap(ctx: android.content.Context, question: String) {
+        io.execute {
+            val g = gapStore ?: org.nova.ncie.learn.GapStore.parse(
+                try { gapFile(ctx).readText() } catch (e: Exception) { "" }
+            ).also { gapStore = it }
+            g.note(question, System.currentTimeMillis())
+            try { gapFile(ctx).writeText(g.serialize()) } catch (e: Exception) { }
         }
     }
 

@@ -1,0 +1,24 @@
+[skill]
+name=Quiz me
+trigger=(?i)\bquiz me on\b|\btest me on\b
+instruction=You are quizzing the user on {q}, using the notes below when they cover it. Ask ONE question at a time and wait for the answer. After each answer, say whether it was right and give the correct fact in one line. Start easy, get harder. Ten questions maximum.
+
+[skill]
+name=Flashcards
+trigger=(?i)\bmake (?:me )?flashcards\b|\bflashcards (?:for|from|on)\b
+instruction=Make flashcards for: {q}\nUse the notes below when they cover it. Format every card exactly like this:\nFRONT: the term or question\nBACK: the definition or answer\nOne card per key idea, maximum 10 cards, no extra commentary.
+
+[skill]
+name=Summarize my notes
+trigger=(?i)\bsummarize (?:my |the )?notes\b
+instruction=Summarize the user's notes below in 5 short bullet points, one line each, simplest words possible. Use ONLY the notes; if something is not covered in them, skip it silently.
+
+[skill]
+name=Translate to Hindi
+trigger=(?i)\btranslate\b.*\bhindi\b|\bhindi\b.*\btranslate\b|\bhindi me(aning)?\b
+instruction=Translate into clear, simple Hindi: {q}\nOutput ONLY the Hindi translation, nothing else. The notes below are background only - do not translate them.
+
+[skill]
+name=Explain simply
+trigger=(?i)\beli5\b|\bexplain .* (?:simply|like i am|like i'm)\b
+instruction=Explain {q} step by step, like a good teacher: first a one-line answer, then the reason behind it in two lines, then one everyday example. Simple words only.

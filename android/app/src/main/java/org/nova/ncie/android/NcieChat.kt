@@ -48,7 +48,7 @@ private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
  *    relocation, not a redesign. send() went from 391 lines to a stub;
  *    the intelligence now lives behind the NCIE boundary.
  */
-fun MainActivity.ncieSend() {
+fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
     val act = this
     // v8.2.0: per-turn grounding sources — filled when the notes are
     // assembled below, consumed by the LEARN record at turn completion
@@ -60,7 +60,7 @@ fun MainActivity.ncieSend() {
             generationJob?.cancel()
             return
         }
-        val text = input.text.toString().trim()
+        val text = (raw ?: input.text.toString()).trim()
         if (text.isEmpty()) return
         val isChip = CHIP_PROMPTS.contains(text)
         // v7.4: no-model tools FIRST - calculator and phone commands work
@@ -465,8 +465,16 @@ fun MainActivity.ncieSend() {
                 "Source: " + hits.first().doc + ", " +
                 (if (pages.contains(",")) "pages " else "page ") + pages
         }
+        // v8.4.0 (stage 3): skills as data - a matched skill rewraps the
+        // prompt with its instruction; the notes above stay the grounding
+        var skillPart = ""
+        val skill = NcieSkills.match(text)
+        if (skill != null) {
+            lastSkillMatched = skill.name
+            skillPart = "(" + skill.render(text) + ")\n\n"
+        } else lastSkillMatched = null
         // one background source for tiny models, both for bigger ones
-        prompt = (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
+        prompt = skillPart + (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
                   else knowledgePart + wikiPart) + prompt
 
         // v8.2.0: the notes that grounded THIS answer — handed to LEARN
@@ -475,6 +483,16 @@ fun MainActivity.ncieSend() {
         // so a chatty reply that ignored background facts is CORRECT and
         // must not be punished as drift.
         lastAnswerSources = hits.map { it.text }
+        // v8.4.0 (stage 1): a knowledge gap - a study question with
+        // NOTHING local behind it. Ask before reaching online: only
+        // keywords leave the phone, and only with the user watching.
+        if (settings.onlineLearning && !offered && docPart.isEmpty() &&
+            knowledgePart.isEmpty() && wikiPart.isEmpty() && studyQ &&
+            WikiCore.isReady(this)
+        ) {
+            OnlineFetch.offer(act, text)
+            return
+        }
         // v5.4.7: show when the answer is grounded in the user's notes
         if (knowledgePart.isNotEmpty()) toast("Using your notes")
         // NCIE v0.7.0 (#1): Smart Skip - the kernel's LEARN phase now has a

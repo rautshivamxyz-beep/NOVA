@@ -95,6 +95,10 @@ class MainActivity : Activity() {
      *  ncieSend when the prompt is assembled, read by the LEARN record
      *  when the turn completes. */
     internal var lastAnswerSources: List<String> = emptyList()
+    /** v8.4.0 (stage 3): the skill that shaped the current answer, if
+     *  any - set by ncieSend at prompt assembly, read by the generation
+     *  budget and the LEARN record at turn completion. */
+    internal var lastSkillMatched: String? = null
     // v5.4 grounded answers: escape-free newline, source citation, Q&A cache
     internal val NL = 10.toChar().toString()
     internal var pendingCitation: String? = null
@@ -193,7 +197,7 @@ class MainActivity : Activity() {
         }
         // v7.6: warm the notes cache too - the first message of every
         // session otherwise parsed knowledge.json on the main thread
-        scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity) }
+        scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }
         installCrashReporter()
         setContentView(buildUi())
         displayChatMessages()
@@ -1063,7 +1067,10 @@ class MainActivity : Activity() {
                 // request — lean turns get half the user cap, everything
                 // else the full cap.
                 NovaEngineAdapter.stream(if (wantMath) mathPrompt(p2) else p2,
-                    NcieKnowledge.generationBudget(
+                    // v8.4.0 (stage 3): a matched skill is a structured
+                    // task - never the lean leash
+                    if (lastSkillMatched != null) settings.predictLength
+                    else NcieKnowledge.generationBudget(
                         if (!plain && userText != null) userText else null,
                         settings.predictLength))
                     .collect { token ->
