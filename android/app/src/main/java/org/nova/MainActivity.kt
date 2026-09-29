@@ -642,6 +642,23 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Backup", R.drawable.ic_copy) {
             startActivity(Intent(this, BackupActivity::class.java))
         })
+        // v8.8.0: the eyes - notification access; NovaListener logs
+        // notifications locally for "what did I miss" and "messages from X"
+        drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
+            if (NovaListener.isEnabled(this)) toast("Notification access already on")
+            else toast("Grant notification access to NOVA")
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            } catch (e: Exception) { }
+        })
+        // v8.8.0: the update row - straight to the private releases page
+        drawerPane.addView(drawerRow("Update", R.drawable.ic_refresh) {
+            toast("Opening private releases - sign in as the owner")
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://github.com/rautshivamxyz-beep/NOVA/releases")))
+            } catch (e: Exception) { }
+        })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",

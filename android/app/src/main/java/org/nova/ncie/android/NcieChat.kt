@@ -11,6 +11,7 @@ import org.nova.Knowledge
 import org.nova.MainActivity
 import org.nova.Msg
 import org.nova.NovaEngine
+import org.nova.NovaListener
 import org.nova.Role
 import org.nova.SMALLTALK_REGEX
 import org.nova.WikiCore
@@ -73,6 +74,12 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // model used to hallucinate a personality from wiki background;
         // this question never reaches the model now.
         if (answerProfile(text)) { input.setText(""); return }
+        // v8.8.0: the notification questions - "what did I miss" and
+        // "any messages from X" are answered from NovaListener's local
+        // log, deterministically, without the model. Nothing leaves the
+        // phone, and they work with no model loaded at all.
+        if (answerMissed(text)) { input.setText(""); return }
+        if (answerFrom(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -622,4 +629,139 @@ private fun MainActivity.maybeRememberFacts(text: String) {
         }
         .setNegativeButton("No", null)
         .show()
+}
+
+// v8.8.0: "what did I miss" / "any notifications" / "read my notifications"
+// - a summary of the last 24h from NovaListener's local log, grouped
+// by app. Deterministic like PROFILE_Q: no model call, no network,
+// nothing leaves the phone.
+private val MISSED_Q = Regex(
+    "(?i)\\bwhat\\s+did\\s+i\\s+miss\\b|\\bany\\s+notifications\\b" +
+        "|\\b(?:read|check)\\s+my\\s+notifications\\b|\\bnotification\\s+summary\\b")
+
+private fun MainActivity.answerMissed(text: String): Boolean {
+    // OCR'd or long text is a study question that merely contains the
+    // phrase - the missed question is always short and typed
+    if (text.length > 80 || !MISSED_Q.containsMatchIn(text)) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val body: String
+    if (!NovaListener.isEnabled(this)) {
+        body = "Notification access is off - open the drawer and tap " +
+            "Notifications to enable it. Nothing ever leaves this phone."
+    } else {
+        val lines = NovaListener.readLog(this)
+        if (lines.isEmpty()) {
+            body = "Nothing recorded yet — notifications get logged from " +
+                "the moment you enable access."
+        } else {
+            val now = System.currentTimeMillis()
+            val cutoff = now - 24L * 60 * 60 * 1000
+            val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+            // one pass over the log: per app, the count and the most
+            // recent entry (newest line wins - the log is oldest first)
+            val countBy = HashMap<String, Int>()
+            val lastTBy = HashMap<String, Long>()
+            val lastBy = HashMap<String, String>()
+            var total = 0
+            for (l in lines) {
+                val p = l.split('\t', limit = 4)
+                if (p.size < 3) continue
+                val t = p[0].toLongOrNull() ?: continue
+                if (t < cutoff) continue
+                val app = p[1].substringAfterLast('.')
+                val title = p[2]
+                val txt = if (p.size > 3) p[3] else ""
+                total++
+                countBy[app] = (countBy[app] ?: 0) + 1
+                lastTBy[app] = t
+                lastBy[app] = fmt.format(java.util.Date(t)) + "  " + title +
+                    (if (txt.isBlank()) "" else " - " + txt)
+            }
+            if (total == 0) {
+                body = "No notifications in the last 24 hours - the log " +
+                    "has older entries only."
+            } else {
+                // deterministic order: busiest-activity app first (most
+                // recent entry), ties broken alphabetically
+                val sb = StringBuilder("```\nWhat you missed (last 24 hours):\n\n")
+                for (app in countBy.keys.sortedWith(
+                        compareByDescending<String> { lastTBy[it] ?: 0L }.thenBy { it })) {
+                    sb.append(app).append(": ").append(countBy[app]).append('\n')
+                    sb.append("  ").append(lastBy[app]).append('\n')
+                }
+                sb.append("\nTotal: ").append(total).append(" notifications from ")
+                    .append(countBy.size).append(" apps")
+                sb.append("\n```")
+                body = sb.toString()
+            }
+        }
+    }
+    val reply = Msg(Role.ASSISTANT, body)
+    currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
+// v8.8.0: "any messages from X" / "did X message me" / "anything from
+// X" - a deterministic search of NovaListener's log for X (the one to
+// four words after the pattern) in every title and text.
+private val FROM_Q = Regex(
+    "(?i)\\bany\\s+messages?\\s+from\\s+([a-z0-9']+(?:\\s+[a-z0-9']+){0,3})" +
+        "|\\bdid\\s+([a-z0-9']+(?:\\s+[a-z0-9']+){0,3})\\s+message\\s+me\\b" +
+        "|\\bmessage\\s+from\\s+([a-z0-9']+(?:\\s+[a-z0-9']+){0,3})" +
+        "|\\banything\\s+from\\s+([a-z0-9']+(?:\\s+[a-z0-9']+){0,3})")
+
+private fun MainActivity.answerFrom(text: String): Boolean {
+    val m = FROM_Q.find(text) ?: return false
+    var who = ""
+    for (g in 1..4) if (m.groupValues[g].isNotBlank()) {
+        who = m.groupValues[g].trim(); break
+    }
+    if (who.isEmpty()) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val body: String
+    if (!NovaListener.isEnabled(this)) {
+        body = "Notification access is off - open the drawer and tap " +
+            "Notifications to enable it. Nothing ever leaves this phone."
+    } else {
+        val needle = who.lowercase()
+        val now = System.currentTimeMillis()
+        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+        val hits = ArrayList<String>()
+        for (l in NovaListener.readLog(this)) {
+            val p = l.split('\t', limit = 4)
+            if (p.size < 3) continue
+            val title = p[2]
+            val txt = if (p.size > 3) p[3] else ""
+            if (!title.lowercase().contains(needle) &&
+                !txt.lowercase().contains(needle)) continue
+            val t = p[0].toLongOrNull() ?: continue
+            val time = if (now - t < 24L * 60 * 60 * 1000) fmt.format(java.util.Date(t))
+                else java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.US)
+                    .format(java.util.Date(t))
+            hits.add(time + "  " + p[1].substringAfterLast('.') + " - " + title +
+                (if (txt.isBlank()) "" else " — " + txt))
+        }
+        if (hits.isEmpty()) {
+            body = "No notifications from $who in the log."
+        } else {
+            // the log is oldest first - take the latest 3, newest first
+            val sb = StringBuilder("```\nMessages from $who:\n\n")
+            for (h in hits.takeLast(3).asReversed()) sb.append(h).append('\n')
+            sb.append("```")
+            body = sb.toString()
+        }
+    }
+    val reply = Msg(Role.ASSISTANT, body)
+    currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
 }
