@@ -2104,6 +2104,9 @@ class MainActivity : Activity() {
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
         val alarm = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:an?\\s+)?alarm\\s+(.+)$").find(t2)
         val open = Regex("(?i)^(?:nova\\s*,?\\s*)?open\\s+(.+)$").find(t2)
+        // v8.5.0: hands gap-fill - timers and email drafts
+        val timer = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:set\\s+)?(?:a\\s+)?timer\\s+(.+)$").find(t2)
+        val email = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:send\\s+)?(?:an?\\s+)?email\\s+(?:to\\s+)?(.+)$").find(t2)
         when {
             torchWord -> {
                 val on = !hasOff
@@ -2211,6 +2214,43 @@ class MainActivity : Activity() {
                         putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOVA")
                     })
                 } catch (e: Exception) { toast("No clock app found") }
+                return true
+            }
+            timer != null -> {
+                // v8.5.0: "timer 10 minutes" -> the clock app's timer
+                val m = Regex("(?i)(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\b")
+                    .find(timer.groupValues[1])
+                if (m == null) { toast("Try: timer 10 minutes"); return true }
+                val n = m.groupValues[1].toInt()
+                val secs = when (m.groupValues[2].lowercase()[0]) {
+                    'h' -> n * 3600
+                    'm' -> n * 60
+                    else -> n
+                }
+                try {
+                    startActivity(android.content.Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
+                        putExtra(android.provider.AlarmClock.EXTRA_LENGTH, secs)
+                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOVA")
+                        putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+                    })
+                    toast("Timer set: " + m.value)
+                } catch (e: Exception) { toast("No clock app found") }
+                return true
+            }
+            email != null -> {
+                // v8.5.0: "email mom about the trip" -> a Gmail draft, the
+                // user reviews and sends - NOVA never sees the account
+                val rest = email.groupValues[1].trim()
+                val about = Regex("(?i)\\s+about\\s+(.+)$").find(rest)
+                val subject = about?.groupValues?.get(1)?.trim() ?: "From NOVA"
+                val addr = (if (about != null) rest.substringBefore(about.value) else rest).trim()
+                val uri = if (addr.contains("@")) "mailto:" + addr else "mailto:"
+                try {
+                    startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse(uri)).apply {
+                        putExtra(Intent.EXTRA_SUBJECT, subject)
+                    })
+                    toast("Email drafted - review and send")
+                } catch (e: Exception) { toast("No email app found") }
                 return true
             }
             open != null -> {
