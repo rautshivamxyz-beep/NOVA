@@ -196,6 +196,18 @@ check("v8.5.2: volume control (MainActivity)",
       ma.count("AUDIO_SERVICE") == 1 and ma.count("volume mute") == 2)
 check("v8.5.2: phone help in chat (MainActivity)",
       ma.count("Here's what I can do - just type it:") == 1 and ma.count("phoneHelp") == 2)
+
+# ---- v8.5.3: the two bad replies fixed ----
+check("v8.5.3: version bumped for the reply-quality fixes",
+      bg.count("versionName '8.5.3'") == 1 and bg.count("versionCode 76") == 1)
+check("v8.5.3: tell-me-about-me joins the profile question (NcieProfile)",
+      np_.count("myself|me") == 1)
+check("v8.5.3: self-description facts offered to memory (NcieChat)",
+      nc.count("maybeRememberFacts") == 2 and nc.count("FACT_SCHOOL") == 2)
+check("v8.5.3: wiki background passes the Coverage gate (NcieChat)",
+      nc.count("Coverage.ratio") == 1)
+check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
+      nc.count("Never invent chapter contents") == 1)
 check("v8.5.1: own ListView under android.R.id.list, never re-parented (FetchLogActivity)",
       fla.count("R.id.list") == 1 and fla.count("listAdapter = ") == 1 and
       fla.count("listView.apply") == 0)

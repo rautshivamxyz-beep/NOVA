@@ -21,7 +21,7 @@ private val PROFILE_Q = Regex(
     "(?i)\\bwhat\\s+(?:do|did|have)\\s+you\\s+(?:know|remember|learned)\\b" +
         "|\\bwhat\\s+you\\s+know\\s+(?:about\\s+me|so\\s+far)\\b" +
         "|\\bwho\\s+am\\s+i\\b|\\bmy\\s+profile\\b" +
-        "|\\btell\\s+me\\s+about\\s+myself\\b")
+        "|\\btell\\s+me\\s+(?:about\\s+(?:myself|me)|who\\s+i\\s+am)\\b")
 
 fun MainActivity.answerProfile(text: String): Boolean {
     // OCR'd or long text is a study question that merely contains the

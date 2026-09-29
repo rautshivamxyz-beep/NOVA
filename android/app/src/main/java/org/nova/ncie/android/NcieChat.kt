@@ -14,6 +14,7 @@ import org.nova.NovaEngine
 import org.nova.Role
 import org.nova.SMALLTALK_REGEX
 import org.nova.WikiCore
+import org.nova.ncie.verify.Coverage
 import java.io.File
 
 /** v8.3.1: the model's parameter count, parsed from its label - the
@@ -269,6 +270,9 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 }
             }
         }
+        // v8.5.3: "im in class 10, lives in ..., studies at ..." - offer
+        // to keep the self-description before answering the request
+        maybeRememberFacts(text)
         maybeAutoRemember(text)
         maybeSetReminder(text)
 
@@ -435,7 +439,14 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 .containsMatchIn(text)
         if (settings.wikiEnabled && seek && WikiCore.isReady(this)) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
-            if (wikiHits.isNotEmpty()) {
+            // v8.5.3: the same Coverage gate that guards fetched articles
+            // now guards wiki background. "Teach me footprints without feet
+            // chapter 1" matched a FOOTPRINT article, the model invented a
+            // lesson from it, and the junk match even blocked the online
+            // fetch offer. Background that does not cover the question is
+            // dropped, not injected.
+            if (wikiHits.isNotEmpty() &&
+                Coverage.ratio(text, wikiHits.joinToString(" ") { it.text }) >= 0.3) {
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 // v7.5: wiki is background only - halve it so the model reads
                 // less before the first word; notes (the quality driver) stay
@@ -485,6 +496,21 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             lastSkillMatched = skill.name
             skillPart = "(" + skill.render(text) + ")\n\n"
         } else lastSkillMatched = null
+        // v8.5.3: a study question with NOTHING local behind it must not be
+        // answered from imagination - the model invented chapter contents
+        // and even a TV-series biography for the user's own name. Be
+        // honest, answer only what is certain, point at the real options.
+        if (studyQ && docPart.isEmpty() && knowledgePart.isEmpty() &&
+            wikiPart.isEmpty() && !offered) {
+            prompt = "(The user asks a study question that is not in their notes, " +
+                "and your background does not cover it. Say plainly that you do " +
+                "not have their notes on this. If you actually know the topic, " +
+                "give a short overview and say it is from general knowledge. " +
+                "Never invent chapter contents, page details or facts. Never " +
+                "write 'From general knowledge' as a prefix - just answer. " +
+                "Suggest adding the chapter to Knowledge, or looking it up " +
+                "online if that is allowed.)\n\n" + prompt
+        }
         // one background source for tiny models, both for bigger ones
         prompt = skillPart + (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
                   else knowledgePart + wikiPart) + prompt
@@ -542,6 +568,54 @@ private fun MainActivity.maybeRememberName(name: String) {
         .setPositiveButton("Add") { _, _ ->
             settings.memory = if (settings.memory.isBlank()) "The user's name is $name"
             else settings.memory.trimEnd() + "\n- The user's name is $name"
+            toast("Added to memory")
+        }
+        .setNegativeButton("No", null)
+        .show()
+}
+
+// v8.5.3: self-description facts - class, city, school - offered like
+// the name: an explicit dialog, stored only on Add, never re-offered
+// once present in memory.
+private val FACT_CLASS = Regex("(?i)\\bclass\\s+(\\d{1,2})\\b")
+private val FACT_CITY = Regex("(?i)\\b(?:lives?|living)\\s+in\\s+([a-z]{2,}(?:\\s+[a-z]{2,}){0,2})")
+private val FACT_SCHOOL = Regex("(?i)\\b(?:stud(?:y|ies|ying)|reads?)\\s+(?:in|at)\\s+([a-z0-9' ]{4,60}?(?:school|college|academy|vidyalaya|institute))")
+
+private fun MainActivity.maybeRememberFacts(text: String) {
+    // only self-descriptions, never third-person study text
+    if (text.length > 220) return
+    if (!Regex("(?i)(?:^|\\s)(?:i|im|i'm|i am|my|me)(?:\\s|'|,|\\.|$)").containsMatchIn(text)) return
+    val facts = ArrayList<String>()
+    FACT_CLASS.find(text)?.let { m ->
+        val f = "The user is in class " + m.groupValues[1]
+        if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
+    }
+    FACT_CITY.find(text)?.let { m ->
+        val words = m.groupValues[1].trim().split(" ")
+        val stop = setOf("and", "i", "im", "am", "studies", "studying", "studing",
+            "reads", "reading", "want", "wants", "with", "from", "my", "to", "who")
+        val cut = words.indexOfFirst { it in stop }
+        val city = (if (cut >= 0) words.subList(0, cut) else words)
+            .joinToString(" ").trim()
+        if (city.length > 2) {
+            val f = "The user lives in " + city.replaceFirstChar { it.uppercase() }
+            if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
+        }
+    }
+    FACT_SCHOOL.find(text)?.let { m ->
+        val school = m.groupValues[1].trim().trim(',', '.')
+        if (school.length > 5) {
+            val f = "The user studies at " + school.replaceFirstChar { it.uppercase() }
+            if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
+        }
+    }
+    if (facts.isEmpty()) return
+    android.app.AlertDialog.Builder(this)
+        .setTitle("Add to NOVA's memory?")
+        .setMessage(facts.joinToString("\n"))
+        .setPositiveButton("Add") { _, _ ->
+            settings.memory = if (settings.memory.isBlank()) facts.joinToString("\n")
+            else settings.memory.trimEnd() + "\n" + facts.joinToString("\n")
             toast("Added to memory")
         }
         .setNegativeButton("No", null)
