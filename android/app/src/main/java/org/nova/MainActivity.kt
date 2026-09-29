@@ -638,6 +638,10 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Fetches", R.drawable.ic_globe) {
             startActivity(Intent(this, FetchLogActivity::class.java))
         })
+        // v8.7.0: the whole local state, saved to and restored from a zip
+        drawerPane.addView(drawerRow("Backup", R.drawable.ic_copy) {
+            startActivity(Intent(this, BackupActivity::class.java))
+        })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",

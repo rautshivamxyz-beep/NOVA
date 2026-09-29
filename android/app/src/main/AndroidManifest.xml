@@ -68,6 +68,9 @@
         <activity android:name=".PlannerActivity" android:exported="false" />
         <activity android:name=".FetchLogActivity" android:exported="false" />
 
+        <!-- v8.7.0: save/restore NOVA's full local state, from the drawer -->
+        <activity android:name=".BackupActivity" android:exported="false" />
+
         <service
             android:name=".NotifBrain"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
