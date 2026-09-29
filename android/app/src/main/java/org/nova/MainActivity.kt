@@ -4,15 +4,14 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
@@ -66,9 +65,6 @@ class MainActivity : Activity() {
     private lateinit var emptyView: View
     internal lateinit var input: EditText
     private lateinit var sendBtn: Button
-    // v9.0.0 "Voice": the always-visible tap-to-talk mic next to the
-    // smart button (which is itself a mic only while the input is empty)
-    private lateinit var voiceBtn: Button
     private lateinit var symRow: android.widget.HorizontalScrollView
     internal val adapter = MessageAdapter()
 
@@ -231,8 +227,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // v9.0.0 "Voice": release the recognizer and the shared engine
-        endListen()
+        // v9.0.0 "Voice": release the shared engine
         NcieVoice.stop()
         NcieVoice.shutdown(this)
     }
@@ -532,16 +527,6 @@ class MainActivity : Activity() {
             })
             setOnClickListener { send() }
         }
-        // v9.0.0 "Voice": tap-to-talk mic - always available next to
-        // the smart button (which only morphs into a mic while the
-        // input is empty; this one works mid-sentence too)
-        voiceBtn = roundButton("", textDim).apply {
-            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_mic, accent), null, null, null)
-            setOnClickListener { startSpeech() }
-        }
-        pill.addView(voiceBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
-            rightMargin = dp(4)
-        })
         // v7.9.3: one smart button on the right - mic when the input
         // is empty, send when there is text (see updateSendLook)
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
@@ -816,39 +801,20 @@ class MainActivity : Activity() {
                 if (id != null && id != currentChat.id) openChat(id)
             }
         }
-        if (requestCode == REQ_SPEECH) {
+        // v9.2.1: the phone's voice input app returned the recognized
+        // text - put it in the input and send it through the SAME send
+        // path the send button uses. RESULT_CANCELED (user backed out
+        // of the voice dialog) does nothing.
+        if (requestCode == VOICE_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                val heard = results?.firstOrNull()
+                val heard = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()?.trim()
                 if (!heard.isNullOrBlank()) {
-                    val said = heard.trim()
-                    val sendNow = settings.autoListen || said.endsWith(" send", ignoreCase = true)
-                    if (sendNow) {
-                        input.setText(
-                            if (said.endsWith(" send", ignoreCase = true)) said.dropLast(4).trim()
-                            else said)
-                        send()
-                    } else {
-                        input.setText(heard)
-                        input.setSelection(heard.length)
-                    }
+                    input.setText(heard)
+                    input.setSelection(heard.length)
+                    send()
                 }
             }
-        }
-    }
-
-    // v9.0.0 "Voice": the RECORD_AUDIO runtime permission result -
-    // granted means start listening right away (the tap that asked
-    // for the permission is completed here)
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_MIC) {
-            if (grantResults.isNotEmpty() &&
-                grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) listenNow()
-            else toast("Microphone permission needed for voice input")
         }
     }
 
@@ -2758,12 +2724,6 @@ Study:
         displayChatMessages()
     }
 
-    override fun onPause() {
-        super.onPause()
-        // v9.0.0 "Voice": never keep the mic open in the background
-        endListen()
-    }
-
     override fun onResume() {
         super.onResume()
         // v9.1.0: the PIN gate - covers launch (onCreate is always
@@ -2806,90 +2766,23 @@ Study:
         }
     }
 
-    /** v9.0.0 "Voice": tap-to-talk state - the in-app recognizer and
-     *  whether it is mid-listen (the mic button is disabled while it
-     *  runs, re-enabled the moment results or an error arrive). */
-    private var voiceRecognizer: SpeechRecognizer? = null
-    private var listening = false
-
-    /** v9.0.0 "Voice": tap-to-talk via android.speech.SpeechRecognizer.
-     *  Recognition runs in-app (no external dialog, fully local), the
-     *  best match lands in the input box and goes through the SAME
-     *  send path as the send button. RECORD_AUDIO is requested at
-     *  runtime first (first tap only). */
+    /** v9.2.1 "Voice": tap-to-talk hands off to the phone's own voice
+     *  input app via ACTION_RECOGNIZE_SPEECH. Works on ROMs with no
+     *  bundled SpeechRecognizer service, needs no RECORD_AUDIO
+     *  permission from NOVA (the external app holds the mic), and
+     *  stays fully local - the recognized text lands in the input and
+     *  goes through the SAME send path as the send button. */
     private fun startSpeech() {
         if (generating) return
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            toast("Speech recognition not available on this device")
-            return
-        }
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQ_MIC)
-            return
-        }
-        listenNow()
-    }
-
-    private fun listenNow() {
-        if (listening) return
-        val recognizer = try {
-            SpeechRecognizer.createSpeechRecognizer(this)
-        } catch (e: Exception) { null }
-        if (recognizer == null) {
-            toast("Speech recognition not available on this device")
-            return
-        }
-        voiceRecognizer = recognizer
-        listening = true
-        voiceBtn.isEnabled = false
-        voiceBtn.alpha = 0.4f
-        val listenIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-        }
-        recognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onResults(results: Bundle) {
-                endListen()
-                val heard = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.trim()
-                if (heard.isNullOrBlank()) { toast("Didn't catch that"); return }
-                input.setText(heard)
-                input.setSelection(heard.length)
-                send()
-            }
-            override fun onError(error: Int) {
-                endListen()
-                toast(if (error == SpeechRecognizer.ERROR_NO_MATCH ||
-                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
-                    "Didn't catch that" else "Speech error")
-            }
-            override fun onRmsChanged(rmsdB: Float) { }
-            override fun onBeginningOfSpeech() { }
-            override fun onBufferReceived(buffer: ByteArray) { }
-            override fun onEndOfSpeech() { }
-            override fun onEvent(eventType: Int, params: Bundle?) { }
-            override fun onPartialResults(partialResults: Bundle?) { }
-            override fun onReadyForSpeech(params: Bundle?) { }
-        })
         try {
-            recognizer.startListening(listenIntent)
-        } catch (e: Exception) {
-            endListen()
-            toast("Speech error")
+            startActivityForResult(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to NOVA")
+            }, VOICE_REQUEST_CODE)
+        } catch (e: ActivityNotFoundException) {
+            toast("No voice input app found on this phone")
         }
-    }
-
-    private fun endListen() {
-        listening = false
-        if (this::voiceBtn.isInitialized) {
-            voiceBtn.isEnabled = true
-            voiceBtn.alpha = 1f
-        }
-        try { voiceRecognizer?.destroy() } catch (e: Exception) { }
-        voiceRecognizer = null
     }
 
     // ------------------------------------------------------- share-in
@@ -3366,9 +3259,11 @@ Study:
     } catch (e: Exception) { toast("No clock app found"); false }
 
     companion object {
-        private const val REQ_SPEECH = 4251
         private const val REQ_CHATS = 4252
-        private const val REQ_MIC = 4254
+        // v9.2.1: fresh code for the ACTION_RECOGNIZE_SPEECH handoff -
+        // 4251 (old intent flow) and 4254 (RECORD_AUDIO) retired with
+        // the direct-SpeechRecognizer code; 4261 collides with nothing
+        private const val VOICE_REQUEST_CODE = 4261
         private var crashHandlerInstalled = false
         // v9.1.0 "Automation I": the app lock - pin.txt holds only the
         // salted SHA-256 hex of the PIN (never the PIN), and the
