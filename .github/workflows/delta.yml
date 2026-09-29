@@ -26,6 +26,6 @@ jobs:
           echo "building delta patch from $PREV to $CUR"
           gh release download "$PREV" --repo "$REPO" --pattern '*.apk' --output old.apk
           gh release download "$CUR" --repo "$REPO" --pattern '*.apk' --output new.apk
-          python -c "import bsdiff4; bsdiff4.file_write('old.apk','new.apk','NOVA-delta-${PREV}-to-${CUR}.patch')"
+          python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-${CUR}.patch')"
           gh release upload "$CUR" --repo "$REPO" "NOVA-delta-${PREV}-to-${CUR}.patch" --clobber
           echo "delta patch attached: NOVA-delta-${PREV}-to-${CUR}.patch ($(du -m "NOVA-delta-${PREV}-to-${CUR}.patch" | cut -f1) MB)"

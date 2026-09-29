@@ -130,6 +130,6 @@ jobs:
           gh release download "$PREV" --pattern '*.apk' --output old.apk
           pip install bsdiff4
           gh release download "v${VER}" --pattern '*.apk' --output new.apk
-          python -c "import bsdiff4; bsdiff4.file_write('old.apk','new.apk','NOVA-delta-${PREV}-to-v${VER}.patch')"
+          python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-v${VER}.patch')"
           gh release upload "v${VER}" "NOVA-delta-${PREV}-to-v${VER}.patch" --clobber
           echo "delta patch attached: NOVA-delta-${PREV}-to-v${VER}.patch ($(du -m "NOVA-delta-${PREV}-to-v${VER}.patch" | cut -f1) MB)"
