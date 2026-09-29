@@ -2,6 +2,7 @@ package org.nova.ncie.android
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.nova.CHIP_PROMPTS
 import org.nova.ChatStore
 import org.nova.docStop
@@ -133,6 +134,13 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // they work before any model is loaded.
         if (answerBriefing(text)) { input.setText(""); return }
         if (answerStudy(text)) { input.setText(""); return }
+        // v9.2.0 "Rolling Chat Summary": two deterministic commands over
+        // filesDir/chat_summary.txt - "summarize our conversation" reads
+        // it, "forget our conversation" deletes it and clears the
+        // history. Like the routines above: no model call, no network,
+        // they work before any model is loaded at all.
+        if (answerSummary(text)) { input.setText(""); return }
+        if (answerForget(text)) { input.setText(""); return }
         // v7.6: keep the typed text when we are NOT proceeding - it was
         // cleared here before, losing messages during compaction or when
         // no model is loaded yet
@@ -556,6 +564,14 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             lastSkillMatched = skill.name
             skillPart = "(" + skill.render(text) + ")\n\n"
         } else lastSkillMatched = null
+        // v9.2.0 "Rolling Chat Summary": the folded start of the
+        // conversation rides along as a preamble on every normal turn,
+        // so a long chat never loses its beginning. Skills keep their
+        // own instruction wrapper; the docPart logic above is untouched.
+        if (skill == null) {
+            val chatSumm = NcieSummary.read(this)
+            if (chatSumm != null) prompt = "Conversation so far (summary): $chatSumm\n\n" + prompt
+        }
         // v8.5.3: a study question with NOTHING local behind it must not be
         // answered from imagination - the model invented chapter contents
         // and even a TV-series biography for the user's own name. Be
@@ -602,7 +618,32 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         if (NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
-        startGeneration(prompt, text)
+        // v9.2.0 "Rolling Chat Summary": once 12 user messages (and
+        // their replies) have completed since the stored summary, fold
+        // the conversation into filesDir/chat_summary.txt through the
+        // local engine - Dispatchers.IO, NcieTutor's generate pattern.
+        // The reply to the 12th message is complete the moment the
+        // user sends the next one, which is exactly when this fires.
+        // The roll finishes BEFORE this turn's generation starts (they
+        // share the native engine), and the `compacting` gate keeps a
+        // second send out while it runs, exactly like auto-compaction.
+        if (NcieSummary.due(this)) {
+            val turnPrompt = prompt
+            val chatAtRoll = currentChat
+            val snap = ArrayList(chatAtRoll.messages)
+            compacting = true
+            scope.launch {
+                val rolled = withContext(Dispatchers.IO) { NcieSummary.roll(act, snap) }
+                if (rolled) NcieSummary.trimHistory(act, chatAtRoll)
+                NcieSummary.reset(act)
+                NcieSummary.bump(act)
+                compacting = false
+                startGeneration(turnPrompt, text)
+            }
+        } else {
+            NcieSummary.bump(this)
+            startGeneration(prompt, text)
+        }
     }
 
 // v7.8.1: short self-introductions - "im Shivam", "hi i'm Shivam",
@@ -865,6 +906,61 @@ private fun MainActivity.answerStudy(text: String): Boolean {
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
     val routReply = Msg(Role.ASSISTANT, NcieRoutines.startStudy(this, this))
     currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
+// v9.2.0 "Rolling Chat Summary": "summarize our conversation" / "what
+// were we talking about" / "conversation summary" - the rolling summary
+// read straight from filesDir/chat_summary.txt, deterministically.
+// Like BRIEFING_Q: no model call, no network, works with no model
+// loaded at all.
+private val SUMMARY_Q = Regex(
+    "(?i)^\\s*(?:summarize|summarise)\\s+our\\s+conversation\\s*[.!?]*\\s*$" +
+        "|\\bwhat\\s+were\\s+we\\s+talking\\s+about\\b" +
+        "|\\bconversation\\s+summary\\b")
+
+private fun MainActivity.answerSummary(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - these commands are always short and typed
+    if (text.length > 80 || !SUMMARY_Q.containsMatchIn(text)) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val sumBody = NcieSummary.read(this)
+    val sumReply = Msg(Role.ASSISTANT,
+        if (sumBody != null) "Here's what I remember of our conversation so far:\n\n$sumBody"
+        else "No summary yet — it builds automatically as we talk.")
+    currentChat.messages.add(sumReply); adapter.add(sumReply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
+
+// v9.2.0: "forget our conversation" / "forget what we talked about" -
+// deletes filesDir/chat_summary.txt and its counter and clears the
+// history the way the app's own new-conversation action does. Like
+// BRIEFING_Q: no model call, no network.
+private val FORGET_Q = Regex(
+    "(?i)^\\s*forget\\s+(?:our\\s+conversation|what\\s+we\\s+talked\\s+about)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerForget(text: String): Boolean {
+    if (text.length > 80 || !FORGET_Q.containsMatchIn(text)) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    NcieSummary.clear(this)
+    currentChat.messages.clear()
+    adapter.clear()
+    needsContextCarry = false
+    compactSummary = null
+    if (NovaEngine.isModelLoaded)
+        NovaEngine.resetConversationAsync(this, settings.systemPrompt)
+    val forgReply = Msg(Role.ASSISTANT, "Done — conversation cleared.")
+    currentChat.messages.add(forgReply); adapter.add(forgReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
         try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
     }
