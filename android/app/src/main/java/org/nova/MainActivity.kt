@@ -33,6 +33,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
+import org.nova.ncie.android.NcieSkills
 import org.nova.ncie.android.NovaEngineAdapter
 import org.nova.ncie.android.ncieSend
 import io.noties.markwon.Markwon
