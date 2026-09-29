@@ -67,6 +67,10 @@ object NcieKnowledge {
         this.planner = p
     }
 
+    /** v8.4.0 (stage 1): the question's significant terms - the kernel
+     *  analyzer's keywords. The ONLY thing the online fetch ever sends. */
+    fun keyTerms(text: String): List<String> = analyzer.analyze(text).keywords
+
     /** The kernel-routed notes search for chat: analyze → plan → search,
      *  then the relevance gate. Returns Knowledge.Chunk so every existing
      *  consumer (follow-up carry, citations, study rewrap) is unchanged. */

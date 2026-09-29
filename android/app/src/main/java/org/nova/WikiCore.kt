@@ -169,6 +169,29 @@ object WikiCore {
         }
     }
 
+    /** v8.4.0 (stage 1): an online-fetched article joins the store. One
+     *  articles.txt line (title + paragraphs) is appended and the in-memory
+     *  index + prepared form are refreshed; a same-title article replaces
+     *  its old copy. The article is offline forever after this call. */
+    fun appendArticle(ctx: Context, title: String, text: String): Boolean {
+        if (!isReady(ctx)) return false
+        // one line per article: stray newlines would corrupt the format
+        val paras = text.split("\n\n").map { it.replace("\n", " ").trim() }
+            .filter { it.isNotEmpty() }
+        if (paras.isEmpty()) return false
+        val line = title + paras.joinToString("") { "\u241F$it" } + "\n"
+        val f = articlesFile(ctx)
+        val off = f.length()
+        try { f.appendText(line) } catch (e: Exception) { return false }
+        val cur = index ?: return true   // warmUp() will pick it up
+        val ix = cur.toMutableList()
+        ix.removeAll { it.first.equals(title, ignoreCase = true) }
+        ix.add(title to off)
+        index = ix
+        prepared = wikiStore.prepare(ix)
+        return true
+    }
+
     /** Finds the most relevant stored articles for a question. */
     fun search(ctx: Context, query: String, maxResults: Int = 2): List<Hit> {
         if (!isReady(ctx)) return emptyList()

@@ -62,6 +62,15 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_WIKI, true)
         set(value) = prefs.edit().putBoolean(KEY_WIKI, value).apply()
 
+    /** v8.4.0 (stage 1): learn online - when a study question has nothing
+     *  local behind it, ASK, then fetch the Wikipedia article (keywords
+     *  only - nothing personal ever leaves the phone) and keep it offline
+     *  forever. Off by default: the phone answers 100% offline until the
+     *  user opts in. */
+    var onlineLearning: Boolean
+        get() = prefs.getBoolean(KEY_ONLINE_LEARN, false)
+        set(value) = prefs.edit().putBoolean(KEY_ONLINE_LEARN, value).apply()
+
     /** v5.5.0: strict mode - refuse instead of inventing when the
      *  answer is not in the user's notes or offline Wikipedia. */
     var strictMode: Boolean
@@ -93,6 +102,7 @@ class Settings(context: Context) {
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
         private const val KEY_WIKI = "wiki_enabled"
+        private const val KEY_ONLINE_LEARN = "online_learning"
         private const val KEY_STRICT = "strict_mode"
         private const val KEY_SPEC = "spec_decoding"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
