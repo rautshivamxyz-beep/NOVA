@@ -479,7 +479,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                           else lastNotesDoc
                 if (doc == null && (wantsSumm || summNoun || wholeTeach))
                     doc = withContext(Dispatchers.IO) {
-                        NcieGround.bestSummaryDoc(this@MainActivity, qtext) }
+                        NcieGround.bestSummaryDoc(act, qtext) }
                 if (doc != null) {
                     lastNotesDoc = doc
                     // "summarise sst notes" NAMES the document -> the user
