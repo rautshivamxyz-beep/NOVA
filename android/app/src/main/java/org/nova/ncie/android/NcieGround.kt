@@ -136,6 +136,28 @@ object NcieGround {
      *  NO keyword matches (different wording, same meaning). Sources
      *  with more than 40 chunks skip the full semantic pass and embed
      *  only their top keyword candidates, to bound latency. */
+    /** v9.13.2 "Small Model Honesty": the best KNOWLEDGE document for a
+     *  summarise request whose topic lives in the CONTENT, not the name
+     *  ("summarise anne frank" -> the PDF holding the Anne Frank
+     *  chapter). Reuses the same retrieval scoring "from my notes"
+     *  runs (keyword + semantic, top chunks per source); the document
+     *  owning the most of the top retrieved chunks wins. A weak best
+     *  match (fewer than 2 of the top chunks) is a miss: null, and the
+     *  caller keeps its current behavior. Wiki articles do not count -
+     *  the summarizers read knowledge.json only. */
+    fun bestSummaryDoc(ctx: Context, question: String): String? {
+        val terms = questionTerms(question)
+        if (terms.isEmpty()) return null
+        val kdocs = NcieKnowledge.docs(ctx).map { it.first }.toHashSet()
+        if (kdocs.isEmpty()) return null
+        val hits = retrieve(ctx, question)
+        val byDoc = HashMap<String, Int>()
+        for ((name, _) in hits) if (name in kdocs) byDoc[name] = (byDoc[name] ?: 0) + 1
+        val best = byDoc.maxByOrNull { it.value } ?: return null
+        if (best.value < 2) return null
+        return best.key
+    }
+
     fun retrieve(ctx: Context, question: String): List<Pair<String, String>> {
         val terms = questionTerms(question)
         if (terms.isEmpty()) return emptyList()

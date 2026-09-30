@@ -50,7 +50,56 @@ object NcieChat {
      *  interleave with the first. send() and the fetch flow's completion
      *  turns check it before launching. */
     @Volatile var routing = false
+
+    // v9.13.2 "Small Model Honesty": the 230M-class detector's cache -
+    //  keyed on the model FILE name, so switching models re-evaluates
+    //  it while repeated asks in the same chat stay free.
+    @Volatile private var tinyFor: String = ""
+    @Volatile private var tinyVal: Boolean = false
+
+    /** v9.13.2 "Small Model Honesty": true when [fileName] belongs to
+     *  a 230M-class tiny model - it matches "230m", "135m", "360m",
+     *  "0.2b" or "0.3b" (which also covers "lfm" followed by any of
+     *  those), or contains "lfm2" together with "230"/"135" (the
+     *  LFM 2.5 230M daily driver - its label carries no standalone
+     *  size token the v8.3.1 parser knows). Default false: Qwen 1.5B
+     *  and every other size are unaffected. */
+    fun tinyModelFile(fileName: String?): Boolean {
+        if (fileName == null || fileName.isEmpty()) return false
+        if (fileName != tinyFor) {
+            val n = fileName.lowercase()
+            tinyVal = "230m" in n || "135m" in n || "360m" in n ||
+                "0.2b" in n || "0.3b" in n ||
+                ("lfm2" in n && ("230" in n || "135" in n))
+            tinyFor = fileName
+        }
+        return tinyVal
+    }
 }
+
+/** v9.13.2 "Small Model Honesty": is the ACTIVE model a 230M-class
+ *  tiny model (LFM 2.5 230M and friends)? The app tracks the active
+ *  model's file name (NcieTune.currentModel - the loaded model when
+ *  the engine is warm, the last active one otherwise); the verdict is
+ *  cached in NcieChat and re-evaluated when the model changes. */
+internal fun MainActivity.tinyModel(): Boolean =
+    NcieChat.tinyModelFile(NcieTune.currentModel(this)?.first)
+
+/** v9.13.2 "Small Model Honesty": creative asks always generate, even
+ *  on a tiny model - the honesty gate is for factual answers only. */
+private val CREATIVE_WORDS = listOf("story", "poem", "joke", "write me", "imagine")
+private fun creativeRequest(text: String): Boolean {
+    val q = text.lowercase()
+    return CREATIVE_WORDS.any { it in q }
+}
+
+/** v9.13.2 "Small Model Honesty": comparison questions - "compare X
+ *  and Y", "difference between X and Y", "X vs Y". Knowledge
+ *  questions whose weak-local answers used to go unchallenged; they
+ *  join the who-is/bio pattern in the offer gate and the seek
+ *  detection below. */
+private val COMPARE_Q = Regex("(?i)\\bcompare\\b|\\bdifference\\s+between\\b|\\bvs\\b")
+private fun compareQuestion(text: String): Boolean = COMPARE_Q.containsMatchIn(text)
 
 /** v9.13.0 "Audit Fixes": the fetch flow's completion turns (dialog
  *  buttons, the post-fetch ncieSend) - launched through the same
@@ -349,8 +398,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             }
             // "summarise this" -> the full section-by-section summary with
             // live progress (one-shot only covered the first pages)
+            // v9.13.2: the ask rides along - a topic named in it
+            // ("summarise anne frank") scopes the attached document's
+            // sections in summarizeDoc
             if (asksSummary && !isChip) {
-                summarizeDoc()
+                summarizeDoc(text)
                 return
             }
         }
@@ -414,13 +466,34 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 // "summarise it notes" - "it" means the IT notes here,
                 // not the pronoun the tokenizer throws away
                 val qtext = text.replace(" it notes", " IT Revision notes", ignoreCase = true)
-                val doc = if (wantsSumm || summNoun || wholeTeach) NcieKnowledge.bestDocName(this, qtext)
+                // v9.13.2 "Small Model Honesty": document resolution
+                // widened - a topic-only query ("summarise anne frank")
+                // used to need the topic in the document NAME; when the
+                // name-based match misses, the content top-chunks count
+                // too (NcieGround retrieval scoring - the same scoring
+                // "from my notes" uses), off the main thread like the
+                // other embedder gates. A weak best match returns null
+                // and falls back to the current behavior - the honest
+                // docs listing below.
+                var doc = if (wantsSumm || summNoun || wholeTeach) NcieKnowledge.bestDocName(this, qtext)
                           else lastNotesDoc
+                if (doc == null && (wantsSumm || summNoun || wholeTeach))
+                    doc = withContext(Dispatchers.IO) {
+                        NcieGround.bestSummaryDoc(this@MainActivity, qtext) }
                 if (doc != null) {
                     lastNotesDoc = doc
                     // "summarise sst notes" NAMES the document -> the user
                     // wants the whole doc, not just the first 18 chunks
-                    val whole = wholeTeach || !wantsSumm || NcieKnowledge.nameOnlyQuery(qtext, doc)
+                    // v9.13.2 "Small Model Honesty": and a query that
+                    // names a TOPIC inside the doc ("summary a baker
+                    // from goa", "summarise anne frank" - summNoun asks
+                    // count now too, not just -is/-ize verbs) scopes the
+                    // map-reduce to that topic's sections in
+                    // summarizeNotes; only a bare docname (or an explicit
+                    // whole/full ask) still runs the whole document.
+                    val summAsk = wantsSumm || summNoun
+                    val whole = wholeTeach || followUp || !summAsk ||
+                        NcieKnowledge.nameOnlyQuery(qtext, doc)
                     summarizeNotes(doc, text, fullDoc = whole)
                     return
                 }
@@ -665,7 +738,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // with that noise - the screenshot bug.
         val seek = studyQ || text.contains("?") ||
             Regex("(?i)^(?:how|why|when|where|which|who|what|does|do|is|are|can|define|describe|compare)\\b")
-                .containsMatchIn(text)
+                .containsMatchIn(text) ||
+            // v9.13.2 "Small Model Honesty": comparison questions are
+            // knowledge-seeking too - "difference between X and Y" and
+            // "bmw vs bugatti" name no question word at the start
+            compareQuestion(text)
         if (settings.wikiEnabled && seek && WikiCore.isReady(this)) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             // v8.5.3: the same Coverage gate that guards fetched articles
@@ -836,18 +913,46 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // strength gate, or the question is a who-is/biographical one
         // (the case where a hallucinated local answer went unchallenged).
         // A strong local match still answers locally, no dialog at all.
-        // v9.13.0 "Audit Fixes" (HIGH 7): a STRONG wiki match now
+        // v9.13.0 "Audit Fixes" (HIGH 7): a STRONG wiki match still
         // suppresses the offer regardless of the bio pattern - the
         // v9.12.1 `|| bioQuestion(text)` fired the dialog on questions
         // the offline wiki already answered well. Weak/empty wiki still
         // offers, which covers the who-is case that motivated the bio
         // override in the first place.
+        // v9.13.2 "Small Model Honesty" (THE AUTO-OFFER FIX): the
+        // `WikiCore.isReady(this)` gate is GONE - it required the
+        // OFFLINE wiki store's done marker to exist, so on any install
+        // without offline Wikipedia articles the ONLINE offer could
+        // never fire at all, and who-is questions fell straight to the
+        // model (the hallucinated "dhullu mahato" / "Modi's wife"
+        // answers). The bio pattern returns as an OR-term - a weak
+        // local match on a who-is question still offers - now joined
+        // by comparison questions ("compare X and Y", "difference
+        // between", "X vs Y") with weak-local material.
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
-            lastSkillMatched == null && WikiCore.isReady(this) &&
-            knowledgePart.isEmpty() &&
-            (wikiPart.isEmpty() || !wikiStrong)
+            lastSkillMatched == null && knowledgePart.isEmpty() &&
+            (wikiPart.isEmpty() || !wikiStrong ||
+                bioQuestion(text) || compareQuestion(text))
         ) {
             offerOnlineFetch(act, text)
+            return
+        }
+        // v9.13.2 "Small Model Honesty" (the honesty gate): a 230M-class
+        // tiny model must not answer an ungrounded general question at
+        // all - its confident word salad is worse than no answer. In
+        // the normal-answer path (no skill, no document, no notes, no
+        // strong wiki - all the strength gates above have run), a
+        // factual ask is NOT generated: the online-fetch offer is
+        // invoked directly instead (OnlineFetch.honestOffer - the same
+        // ask-first flow the auto-offer uses). Declining it (the
+        // existing decline path, or the completion turn after a fetch)
+        // re-enters with offered=true and generates normally - the
+        // user explicitly accepts the model's best guess. Creative asks
+        // still generate.
+        if (!offered && skill == null && tinyModel() && docPart.isEmpty() &&
+            knowledgePart.isEmpty() && !wikiStrong && !creativeRequest(text)
+        ) {
+            OnlineFetch.honestOffer(act, text)
             return
         }
         // v5.4.7: show when the answer is grounded in the user's notes
@@ -1602,23 +1707,35 @@ private fun offerOnlineFetch(act: MainActivity, text: String) {
 }
 
 /** v9.7.0 "Quiet Fetch": parse the manual online-lookup command.
- *  "look it up online: <q>" / "look it up online <q>" /
- *  "search online for <q>" -> q; the bare "look it up online" -> the
- *  last question in this chat ("" when there is none, so the caller can
- *  explain itself). Null = not the command at all. */
+ *  v9.13.2 "Small Model Honesty": the phrase list is broad now - the
+ *  old two-form regex silently missed how the user actually types it
+ *  ("look up at online: compare bmw vs buggati" fell through to the
+ *  model and hallucinated). Accepted, case-insensitive, each with an
+ *  optional trailing colon: "look it up online", "look up online",
+ *  "look up at online", "look it up on the internet", "look online",
+ *  "search online", "search the web", "find it online", "google it",
+ *  "search the internet". The rest of the message is the query; a
+ *  bare form (or an empty rest) re-runs the last question in this
+ *  chat ("" when there is none, so the caller can explain itself).
+ *  Null = not the command at all. */
+private val LOOKUP_PREFIXES = listOf(
+    "look it up online", "look up online", "look up at online",
+    "look it up on the internet", "look online", "search online",
+    "search the web", "find it online", "google it", "search the internet"
+)
+
 private fun MainActivity.onlineLookupQ(text: String): String? {
     val lower = text.lowercase()
-    val prefix = when {
-        lower == "look it up online" -> 0
-        lower.startsWith("look it up online") -> "look it up online".length
-        lower.startsWith("search online for") -> "search online for".length
-        else -> return null
+    for (p in LOOKUP_PREFIXES) {
+        if (!lower.startsWith(p)) continue
+        var q = text.substring(p.length).trim(' ', ':')
+        if (q.lowercase().startsWith("for ")) q = q.substring(4)
+        q = q.trim()
+        if (q.isEmpty()) {
+            val last = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
+            return last?.trim() ?: ""
+        }
+        return q
     }
-    if (prefix == 0) {
-        val last = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
-        return last?.trim() ?: ""
-    }
-    var q = text.substring(prefix).trim(' ', ':')
-    if (q.lowercase().startsWith("for ")) q = q.substring(4)
-    return q.trim()
+    return null
 }

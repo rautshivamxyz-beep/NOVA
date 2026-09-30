@@ -100,7 +100,32 @@ object OnlineFetch {
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
-            .setNegativeButton(noBtn) { _, _ -> act.launchNcieSend(text, offered = true) }
+        .setNegativeButton(noBtn) { _, _ -> act.launchNcieSend(text, offered = true) }
+        .setOnCancelListener { act.launchNcieSend(text, offered = true) }
+        .show()
+    }
+
+    /** v9.13.2 "Small Model Honesty": the tiny-model honesty gate's
+     *  offer - a 230M-class model was asked a factual question nothing
+     *  local backs, so instead of generating confident word salad the
+     *  chat turn routes here. Same ask-first flow and same fetch as the
+     *  quiet offer, different honest wording; declining (or cancelling)
+     *  sends the turn back through ncieSend with offered=true, which
+     *  skips the gate and generates the model's best guess - the user
+     *  explicitly accepted that. */
+    fun honestOffer(act: MainActivity, text: String) {
+        val kws = NcieKnowledge.keyTerms(text).take(6)
+        if (kws.isEmpty()) { act.launchNcieSend(text, offered = true); return }
+        val q = kws.joinToString(" ")
+        AlertDialog.Builder(act)
+            .setTitle("Look it up online?")
+            .setMessage("I don't know this well enough with this model — " +
+                "look it up online?\n\nQuestion: \"" + text.take(200) + "\"\n\nNOVA will search " +
+                "Wikipedia and, if that is not enough, the open web for:\n\"" + q + "\"\n\n" +
+                "Nothing else leaves your phone. Whatever it finds stays " +
+                "offline forever.")
+            .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
+            .setNegativeButton("Answer anyway") { _, _ -> act.launchNcieSend(text, offered = true) }
             .setOnCancelListener { act.launchNcieSend(text, offered = true) }
             .show()
     }

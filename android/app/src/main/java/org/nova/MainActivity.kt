@@ -34,6 +34,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieChat
 import org.nova.ncie.android.NcieEngines
+import org.nova.ncie.android.NcieGround
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
@@ -1545,7 +1546,7 @@ class MainActivity : Activity() {
      * are cached per document, so asking again for the same file is
      * instant.
      */
-    internal fun summarizeDoc() {
+    internal fun summarizeDoc(query: String? = null) {
         if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
@@ -1572,6 +1573,13 @@ class MainActivity : Activity() {
         // overview" shortcut here - they now go through the full section
         // pipeline like every other document (1-2 sections, still fast)
         var chunks = docChunks(doc, 6500)
+        // v9.13.2 "Small Model Honesty": a topic named in the ask
+        // scopes the ATTACHED document's sections too - "summarise
+        // anne frank" over the open PDF stays on the Anne Frank chapter
+        // instead of mixing in monks, Coorg and tea. Top 3 sections or
+        // 40% of the document, whichever is smaller (topicChunks); a
+        // bare "summarise" with no scoring topic keeps the whole doc.
+        if (query != null) chunks = topicChunks(query, chunks).ifEmpty { chunks }
         // skip table-of-contents / references / index pages: faster, cleaner
         val real = chunks.filter { !isJunkChunkText(it) }
         var skipped = 0
@@ -1728,8 +1736,16 @@ class MainActivity : Activity() {
         if (compacting) { toast("Compressing older messages \u2014 one moment"); return }
         if (generating) { toast("Wait for the current reply to finish"); return }
         if (!ensureModelReady()) return
-        val chunks = if (fullDoc) NcieKnowledge.docChunks(this, doc)
-                      else NcieKnowledge.bestChunks(this, userText)
+        val all = NcieKnowledge.docChunks(this, doc)
+        // v9.13.2 "Small Model Honesty": a topic named in the query
+        // scopes the map-reduce to the sections that score best against
+        // its terms (top 3 sections or 40% of the document, whichever is
+        // smaller - topicChunks) - "summary a baker from goa" no longer
+        // drags monks, Coorg and tea into the baker summary. A bare
+        // "summarise <docname>" keeps the whole document (fullDoc).
+        val chunks = if (fullDoc) all
+                     else topicChunks(userText, all).ifEmpty {
+                         NcieKnowledge.bestChunks(this, userText) }
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
         val totalLen = chunks.sumOf { it.length }
         // cached from last time? -> instant
@@ -1910,6 +1926,32 @@ class MainActivity : Activity() {
                 updateSendLook()
             }
         }
+    }
+
+    /** v9.13.2 "Small Model Honesty": the sections of a document that
+     *  score best against the query's terms - top 3 sections or 40% of
+     *  the document, whichever is smaller, kept in document order so
+     *  the map-reduce reads coherently. A section scores when a query
+     *  term appears in it whole-word (the same normalized matching the
+     *  retrieval layer uses). Empty when no section scores at all - the
+     *  caller then keeps its previous behavior. */
+    private fun topicChunks(query: String, all: List<String>): List<String> {
+        if (all.isEmpty()) return emptyList()
+        val terms = NcieGround.questionTerms(query)
+        if (terms.isEmpty()) return emptyList()
+        val scored = ArrayList<Pair<Int, Int>>()   // (score, chunk index)
+        for ((i, c) in all.withIndex()) {
+            val norm = " " + c.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+            var s = 0
+            for (t in terms) if (norm.contains(" " + t + " ")) s++
+            if (s > 0) scored.add(s to i)
+        }
+        if (scored.isEmpty()) return emptyList()
+        // ceil(40%) of the document, capped at 3 sections, at least 1
+        val k = minOf(3, (all.size * 2 + 4) / 5).coerceAtLeast(1)
+        return scored.sortedWith(
+            compareByDescending<Pair<Int, Int>> { it.first }.thenBy { it.second })
+            .take(k).sortedBy { it.second }.map { all[it.second] }
     }
 
     /** Splits a document into ~size-char chunks, breaking at headings

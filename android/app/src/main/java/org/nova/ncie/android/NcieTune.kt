@@ -84,6 +84,11 @@ object NcieTune {
     const val CONTEXT_WINDOW_CHARS = 16000
     const val CONTEXT_BUDGET_CHARS = 6400
 
+    /** v9.13.2 "Small Model Honesty": a 230M-class tiny model trims at
+     *  HALF the regular budget - garbage replayed from recent history
+     *  (a hallucination a few turns back) hurts tiny models most. */
+    const val TINY_CONTEXT_BUDGET_CHARS = 3200
+
     /** The family a model file belongs to (case-insensitive substring). */
     fun familyOf(modelFile: String): String {
         val n = modelFile.lowercase(Locale.US)
@@ -306,12 +311,17 @@ object NcieTune {
      */
     fun trimContext(act: MainActivity, chat: Chat): Boolean {
         val msgs = chat.messages
+        // v9.13.2 "Small Model Honesty": the tiny-model history diet -
+        // a 230M-class model trims at 3200 chars (20%) instead of 6400
+        // (40%): its recent history is the first thing that poisons it.
+        val budget = if (NcieChat.tinyModelFile(currentModel(act)?.first ?: ""))
+            TINY_CONTEXT_BUDGET_CHARS else CONTEXT_BUDGET_CHARS
         var total = 0
         for (m in msgs) total += m.text.length
-        if (total <= CONTEXT_BUDGET_CHARS || msgs.size <= 2) return false
+        if (total <= budget || msgs.size <= 2) return false
         var t = total
         var drop = 0
-        while (t > CONTEXT_BUDGET_CHARS && msgs.size - drop > 2) {
+        while (t > budget && msgs.size - drop > 2) {
             // whole pairs: a leading USER plus its ASSISTANT reply; a
             // leading orphan (an interrupted turn) goes alone
             val step = if (msgs[drop].role == Role.USER && msgs.size - drop > 3) 2 else 1
