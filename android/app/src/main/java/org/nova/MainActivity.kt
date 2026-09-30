@@ -124,6 +124,13 @@ class MainActivity : Activity() {
     /** Notes document the user last summarized - "gimme the whole summary" returns to it. */
     internal var lastNotesDoc: String? = null
 
+    /** v9.13.0 "Audit Fixes": the question the online fetch flow already
+     *  showed and persisted (OnlineFetch.fetch), or null. The fetch's
+     *  completion turn matches on the exact text, so a DIFFERENT message
+     *  sent mid-fetch never consumes it, and the flag survives until its
+     *  own completion turn runs. */
+    internal var offeredQuestionShown: String? = null
+
     /** Set while a flashcard-generating reply is running. */
     internal var pendingCards = false
     private var pendingAutosend: String? = null
@@ -228,8 +235,11 @@ class MainActivity : Activity() {
             }
             // v9.8.0: scheduled texts ride the same re-arm pass - one that
             // came due while NOVA was dead fires now, the nearest future
-            // one is re-armed (mirrors what BootReceiver does on boot)
-            ScheduledSends.fireDue(this)
+            // one is re-armed (mirrors what BootReceiver does on boot).
+            // v9.13.0 "Audit Fixes": foreground = true - the startup pass
+            // runs from a visible Activity, the one caller allowed to open
+            // the messaging draft directly (background receivers notify).
+            ScheduledSends.fireDue(this, foreground = true)
         } catch (e: Exception) { }
 
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
@@ -1000,7 +1010,17 @@ class MainActivity : Activity() {
         // - pre-model gates, notes branches, study cards, prompt assembly
         // with memory/exam/notes/wiki injection - lives behind the kernel
         // boundary now: ncie/android/NcieChat.kt (MainActivity.ncieSend).
-        ncieSend()
+        // v9.13.0 "Audit Fixes": ncieSend is a SUSPEND function now - its
+        // strength-gate embeds hop to Dispatchers.IO (the ONNX embedder,
+        // and its 23 MB session init, never runs on the main thread). The
+        // body still runs on the main dispatcher (scope), so all UI work
+        // is unchanged; the routing flag keeps a second rapid send out
+        // while the first is between suspension points.
+        if (NcieChat.routing) return
+        NcieChat.routing = true
+        scope.launch {
+            try { ncieSend() } finally { NcieChat.routing = false }
+        }
     }
 
     /**
@@ -1303,20 +1323,32 @@ class MainActivity : Activity() {
                             adapter.setLastText(replyMsg.text)
                         }
                     }
-                    if (pendingQaKey != null && newBubble && userText != null) {
-                        val qaAns = stripThinking(replyMsg.text).trim()
-                        if (qaAns.length > 30) try {
-                            File(File(filesDir, "summary_cache").apply { mkdirs() },
-                                pendingQaKey!!).writeText(qaAns)
-                        } catch (e: Exception) { }
-                        pendingQaKey = null
-                    }
                     needsContextCarry = false
                     // show chips the moment the reply ends - before anything
                     // that could fail (storage, voice) gets a chance to skip it
                     val willContinue = newBubble && !speechCancelled &&
                         autoContinueCount < 2 &&
                         shouldAutoContinue(replyMsg.text)
+                    // v9.13.0 "Audit Fixes" (HIGH 3): the study-Q cache write
+                    // now runs ONLY on the FINAL segment - after willContinue
+                    // is known. It used to run before it was computed, so a
+                    // token-cap-truncated first segment was cached verbatim
+                    // and every re-ask replayed the stub forever, early-
+                    // returning before any repair could happen. A turn that
+                    // continues is simply never cached (the assembled text
+                    // lives on in the chat, and the next fresh ask rewrites
+                    // the entry).
+                    if (pendingQaKey != null) {
+                        val qaKey = pendingQaKey!!
+                        pendingQaKey = null
+                        if (newBubble && userText != null && !willContinue) {
+                            val qaAns = stripThinking(replyMsg.text).trim()
+                            if (qaAns.length > 30) try {
+                                File(File(filesDir, "summary_cache").apply { mkdirs() },
+                                    qaKey).writeText(qaAns)
+                            } catch (e: Exception) { }
+                        }
+                    }
                     // v9.6.0 "Engine Pack": the Predictive Cache write -
                     // the completed turn's final answer under its exact
                     // question (capped, > 4000 chars never stored). Only
@@ -1945,6 +1977,20 @@ class MainActivity : Activity() {
         // v9.6.0: regenerating bypasses the Predictive Cache read (this
         // path never consults it) and refreshes its entry at completion.
         pendingAnswerQ = lastUser.text
+        // v9.13.0 "Audit Fixes" (HIGH 2): a rejected answer must never
+        // replay verbatim on the repeat. The Experience Engine was
+        // already logged by regenerateLast (which keeps the study-Q
+        // cache and the kernel recall off this question now too); the
+        // stale entries themselves are dropped here alongside the
+        // Predictive Cache refresh - the study-Q cache file, and the
+        // learned answer (fact + cached answer, memory and disk) via
+        // the surgical memoryForget.
+        try {
+            val qaKey = "qa_" + Integer.toHexString(lastUser.text.lowercase().hashCode()) + "_" +
+                Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
+            File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey).delete()
+        } catch (e: Exception) { }
+        NcieLearn.memoryForget(lastUser.text)
         val recent = currentChat.messages.dropLast(1).takeLast(6)
             .joinToString("\n") { m ->
                 (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
@@ -2065,9 +2111,27 @@ class MainActivity : Activity() {
     /** v6.3.0: photo of a question -> on-device OCR -> editable text in the
      *  input box. Printed textbook questions read well; the user can fix
      *  any garbled math symbols in the box before sending. */
+    /** v9.13.0 "Audit Fixes" (re-derived): decode a picked image bounded
+     *  to ~2048px on its longest edge before ML Kit reads it. A full-
+     *  resolution phone photo (up to ~50 MP) used to be decoded whole
+     *  inside the recognizer - an easy OOM. inSampleSize halves until
+     *  the image fits, which keeps textbook-size print readable. */
+    private fun decodeBounded(uri: android.net.Uri, maxDim: Int = 2048): android.graphics.Bitmap? = try {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (bounds.outWidth / sample > maxDim || bounds.outHeight / sample > maxDim) sample *= 2
+        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        contentResolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, opts) }
+    } catch (e: Exception) { null }
+
     private fun ocrImage(uri: android.net.Uri) {
         try {
-            val img = com.google.mlkit.vision.common.InputImage.fromFilePath(this, uri)
+            val bmp = decodeBounded(uri)
+            if (bmp == null) { toast("Couldn't open image"); return }
+            val img = com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)
             val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
                 com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
             rec.process(img)
@@ -2116,7 +2180,9 @@ class MainActivity : Activity() {
      *  The user corrects OCR mistakes before anything is saved. */
     private fun scanNotesImage(uri: Uri) {
         try {
-            val img = com.google.mlkit.vision.common.InputImage.fromFilePath(this, uri)
+            val bmp = decodeBounded(uri)
+            if (bmp == null) { toast("Text recognition failed on this image."); return }
+            val img = com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)
             val rec = com.google.mlkit.vision.text.TextRecognition.getClient(
                 com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
             rec.process(img)
@@ -3132,6 +3198,11 @@ Study:
     /** Auto-compact: summarize old turns so the engine context stays small. */
     private fun compactOldTurns() {
         compacting = true
+        // v9.13.0 "Audit Fixes" (HIGH 6): the compaction stream is a real
+        // generation - mirror the process-wide flag here (the other five
+        // MainActivity sites already do) so the embedder's pause logic
+        // and the sampling deferral are accurate while it runs.
+        NcieChat.generating = true
         toast("Compressing older messages to keep replies fast…")
         scope.launch {
             // v7.6: remember which chat this compaction belongs to
@@ -3161,6 +3232,7 @@ Study:
                 // failed - keep full context, retry next turn
             }
             compacting = false
+            NcieChat.generating = false
         }
     }
 

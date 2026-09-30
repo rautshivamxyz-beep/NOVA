@@ -370,8 +370,12 @@ object NcieTutor {
             val (srcName, srcText) = found
             // v9.4.0: chunk 0 - a source longer than 3000 chars is
             // quizzed window by window until the chapter is covered
-            val reply = NovaEngineAdapter.generate(
+            // v9.13.0 "Audit Fixes" (HIGH 6): question writing is a real
+            // generation - flag it, so the embedder's pause logic is accurate.
+            NcieChat.generating = true
+            val reply = try { NovaEngineAdapter.generate(
                 quizPrompt(t, chunkOf(srcText, 0)), act.settings.predictLength)
+            } finally { NcieChat.generating = false }
             val pairs = parseQuiz(reply)
             if (pairs.isEmpty()) {
                 postReplyOnMain(act, "Could not build questions from that text.")
@@ -441,8 +445,12 @@ object NcieTutor {
         // v9.4.0: grade against the chunk the question came from
         val src = quizSource?.let { chunkOf(it, quizChunk) } ?: ""
         act.scope.launch(Dispatchers.IO) {
-            val verdict = NovaEngineAdapter.generate(
+            // v9.13.0 "Audit Fixes" (HIGH 6): grading is a real generation
+            // too - same process-wide flag as the question writing above.
+            NcieChat.generating = true
+            val verdict = try { NovaEngineAdapter.generate(
                 checkPrompt(src, q, a, userAnswer), 16)
+            } finally { NcieChat.generating = false }
             val trimmed = verdict.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("[engine")) {
                 postReplyOnMain(act, "Couldn't grade that — say your answer again.")
@@ -514,8 +522,12 @@ object NcieTutor {
                 postReplyOnMain(act, "Compressing older messages — one moment")
                 return@launch
             }
-            val reply = NovaEngineAdapter.generate(
+            // v9.13.0 "Audit Fixes" (HIGH 6): the next window's questions
+            // are a real generation too - flag it like the first one.
+            NcieChat.generating = true
+            val reply = try { NovaEngineAdapter.generate(
                 quizPrompt(quizTopic, chunkOf(src, next)), act.settings.predictLength)
+            } finally { NcieChat.generating = false }
             val pairs = parseQuiz(reply)
             if (pairs.isEmpty()) {
                 postReplyOnMain(act, "Could not build questions from that text.")

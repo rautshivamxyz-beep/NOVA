@@ -293,7 +293,13 @@ class BackupActivity : ListActivity() {
                     if (f.name == "cache" || f.name == "code_cache") continue
                     wipe(f)
                     f.delete()
-                } else f.delete()
+                } else if (
+                    // v9.13.0 "Audit Fixes" (MEDIUM 8): the notification log
+                    // and its pause flag are runtime-private and EXCLUDED
+                    // from every backup (v9.3.0 privacy) - the restore wipe
+                    // must not delete what the backup never contained. The
+                    // live log stays exactly as it is.
+                    f.name != "notif_log.txt" && f.name != "notif_pause.txt") f.delete()
             }
         }
         wipe(filesDir)

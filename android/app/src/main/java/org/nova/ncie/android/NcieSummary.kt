@@ -110,7 +110,12 @@ object NcieSummary {
             "(max 200 words) keeping: user facts, decisions made, open " +
             "threads, important names/numbers. OLD SUMMARY: $old. " +
             "RECENT: $recent"
-        val reply = try { NovaEngineAdapter.generate(prompt, 300) } catch (e: Exception) { "" }
+        // v9.13.0 "Audit Fixes" (HIGH 6): the roll is a real generation
+        // (it shares the native engine with the chat turn) - flag it so
+        // the embedder's pause logic is accurate while it runs.
+        NcieChat.generating = true
+        val reply = try { NovaEngineAdapter.generate(prompt, 300)
+            } catch (e: Exception) { "" } finally { NcieChat.generating = false }
         val clean = reply.trim()
         if (clean.isEmpty() || clean.startsWith("[engine")) return false
         return try { summaryFile(c, id).writeText(clean); true } catch (e: Exception) { false }

@@ -156,6 +156,15 @@ object NcieTune {
     var activeModel: String = ""
         private set
 
+    /** v9.13.0 "Audit Fixes" (HIGH 5): the last sampling set the live
+     *  engine actually accepted (null until the first success this
+     *  engine session). An identical set is never re-pushed - identical
+     *  values used to rebuild the sampler EVERY turn. Cleared when the
+     *  active model changes: the new engine instance starts at default
+     *  sampling, so the profile must be pushed again. */
+    @Volatile
+    private var lastPushed: Map<String, Double>? = null
+
     /**
      * v9.11.0: called at generation start (once per turn, from
      * ncieSend, after ensureModelReady). Resolves the active model's
@@ -168,17 +177,33 @@ object NcieTune {
      */
     fun applyProfile(act: MainActivity) {
         val m = currentModel(act) ?: return
+        // v9.13.0 "Audit Fixes" (HIGH 5a): the model changed - its fresh
+        // sampler starts at defaults, so the last-pushed set no longer holds
+        if (m.first != activeModel) lastPushed = null
         val (values, _) = effective(act, m.first)
         active = values
         activeModel = m.first
+        // v9.13.0 (HIGH 5a): skip the push entirely when the effective
+        // values are the set already pushed - identical values rebuilt
+        // the sampler every single turn before
+        if (lastPushed == values) return
         if (!NovaEngineAdapter.samplingBroken) {
             act.scope.launch(Dispatchers.IO) {
-                NovaEngineAdapter.setSampling(
-                    values.getValue("temperature").toFloat(),
-                    values.getValue("top_p").toFloat(),
-                    values.getValue("top_k").toInt(),
-                    values.getValue("min_p").toFloat(),
-                    values.getValue("repeat_penalty").toFloat())
+                // v9.13.0 (HIGH 5b): never push while a generation is in
+                // flight - an async push landing mid-generation is exactly
+                // what could throw against the live sampler. Defer to the
+                // next turn (lastPushed is still unset, so the next
+                // applyProfile retries). Re-check the values too: another
+                // push may have landed first.
+                if (NcieChat.generating) return@launch
+                if (lastPushed == values) return@launch
+                if (NovaEngineAdapter.setSampling(
+                        values.getValue("temperature").toFloat(),
+                        values.getValue("top_p").toFloat(),
+                        values.getValue("top_k").toInt(),
+                        values.getValue("min_p").toFloat(),
+                        values.getValue("repeat_penalty").toFloat()))
+                    lastPushed = values
             }
         }
     }

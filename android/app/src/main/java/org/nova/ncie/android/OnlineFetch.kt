@@ -75,7 +75,7 @@ object OnlineFetch {
                 honestNotSearchable(act, text)
                 return
             }
-            act.ncieSend(text, offered = true); return
+            act.launchNcieSend(text, offered = true); return
         }
         val q = kws.joinToString(" ")
         val title: String; val message: String; val noBtn: String
@@ -100,12 +100,29 @@ object OnlineFetch {
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
-            .setNegativeButton(noBtn) { _, _ -> act.ncieSend(text, offered = true) }
-            .setOnCancelListener { act.ncieSend(text, offered = true) }
+            .setNegativeButton(noBtn) { _, _ -> act.launchNcieSend(text, offered = true) }
+            .setOnCancelListener { act.launchNcieSend(text, offered = true) }
             .show()
     }
 
     private fun fetch(act: MainActivity, text: String, q: String) {
+        // v9.13.0 "Audit Fixes" (re-derived d, deferred since v9.4.0): the
+        // question is shown and persisted BEFORE the fetch starts. The
+        // fetch path bypasses the normal send persistence (the completion
+        // turn's startGeneration is what used to persist it), so an app
+        // close mid-fetch made the question vanish from the chat entirely.
+        // The completion turn sees the flag and neither adds nor persists
+        // it a second time (ncieSend's preShown).
+        if (act.offeredQuestionShown == null) {
+            act.offeredQuestionShown = text
+            val um = Msg(Role.USER, text)
+            act.currentChat.messages.add(um)
+            act.adapter.add(um)
+            act.scrollToEnd()
+            act.scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            }
+        }
         act.scope.launch(Dispatchers.IO) {
             // 1. Wikipedia first - curated, clean, no page parsing needed
             val wiki = try { fetchWiki(q) } catch (e: Exception) { null }
@@ -138,7 +155,7 @@ object OnlineFetch {
                 } else {
                     act.toast("Couldn't find anything good - answering without it")
                 }
-                act.ncieSend(text, offered = true)
+                act.launchNcieSend(text, offered = true)
             }
         }
     }

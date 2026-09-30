@@ -43,6 +43,27 @@ private const val PREAMBLE_BUDGET_CHARS = 9000
  *  best-effort, the next indexUpdate call picks it up). */
 object NcieChat {
     @Volatile var generating = false
+
+    /** v9.13.0 "Audit Fixes": true while a send's routing body (ncieSend)
+     *  is between suspension points - the strength-gate embeds hop to
+     *  Dispatchers.IO now, so a second rapid send could otherwise
+     *  interleave with the first. send() and the fetch flow's completion
+     *  turns check it before launching. */
+    @Volatile var routing = false
+}
+
+/** v9.13.0 "Audit Fixes": the fetch flow's completion turns (dialog
+ *  buttons, the post-fetch ncieSend) - launched through the same
+ *  routing guard send() uses, so a turn resumed after an online fetch
+ *  never interleaves with a fresh send at the embedder gates'
+ *  suspension points. ncieSend is suspend now, so its non-coroutine
+ *  callers go through here. */
+fun MainActivity.launchNcieSend(raw: String?, offered: Boolean = false) {
+    if (NcieChat.routing) return
+    NcieChat.routing = true
+    scope.launch {
+        try { ncieSend(raw, offered) } finally { NcieChat.routing = false }
+    }
 }
 
 /**
@@ -69,8 +90,15 @@ object NcieChat {
  *    relocation, not a redesign. send() went from 391 lines to a stub;
  *    the intelligence now lives behind the NCIE boundary.
  */
-fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
+suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
     val act = this
+    // v9.13.0 "Audit Fixes" (HIGH 4): this routing body SUSPENDS now -
+    // the v9.12.1 strength gates (docPart / notes RAG / wiki) embed
+    // synchronously through NcieGround.strongMatch, and the first gated
+    // send could lazily init the embedder's 23 MB ONNX session on the
+    // MAIN thread, freezing the UI. The gates run on Dispatchers.IO now
+    // (NcieGround.strongMatchIo); every caller launches this function on
+    // the main dispatcher (scope), so all other work is unchanged.
     // v8.2.0: per-turn grounding sources — filled when the notes are
     // assembled below, consumed by the LEARN record at turn completion
     lastAnswerSources = emptyList()
@@ -84,6 +112,14 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         }
         val text = (raw ?: input.text.toString()).trim()
         if (text.isEmpty()) return
+        // v9.13.0 "Audit Fixes" (re-derived d): the online fetch flow
+        // already showed and persisted this question (OnlineFetch.fetch)
+        // - this completion turn must not add or persist it a second
+        // time, and skips the caches so the fresh material shapes a
+        // fresh answer. Matched on the exact text: a different message
+        // sent mid-fetch never consumes the flag.
+        val preShown = offeredQuestionShown == text
+        if (preShown) offeredQuestionShown = null
         val isChip = CHIP_PROMPTS.contains(text)
         // v8.9.0: Tutor Mode's stateful continuation - while a quiz
         // answer, a flashcard flip or a right/wrong verdict is pending,
@@ -251,10 +287,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 needsContextCarry = false
                 scope.launch {
                     NovaEngine.resetConversation(act, settings.systemPrompt)
-                    startGeneration(greetPrompt, text, plain = true)
+                    startGeneration(greetPrompt, if (preShown) null else text, plain = true)
                 }
             } else {
-                startGeneration(greetPrompt, text, plain = true)
+                startGeneration(greetPrompt, if (preShown) null else text, plain = true)
             }
             return
         }
@@ -275,10 +311,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 needsContextCarry = false
                 scope.launch {
                     NovaEngine.resetConversation(act, settings.systemPrompt)
-                    startGeneration(introPrompt, text, plain = true)
+                    startGeneration(introPrompt, if (preShown) null else text, plain = true)
                 }
             } else {
-                startGeneration(introPrompt, text, plain = true)
+                startGeneration(introPrompt, if (preShown) null else text, plain = true)
             }
             return
         }
@@ -470,7 +506,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 // honestly. The explicit "from my notes:" grounding path
                 // (answerGrounded) is NOT affected - it always injects
                 // its retrieved chunks.
-                overlap < 3 && !NcieGround.strongMatch(this, text, win) -> {
+                overlap < 3 && !NcieGround.strongMatchIo(this, text, win) -> {
                     val wasInjected = docInjected
                     docInjected = false
                     if (wasInjected)
@@ -535,6 +571,12 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             }
         }
 
+        // v9.13.0 "Audit Fixes" (HIGH 2): the Experience Engine gate runs
+        // BEFORE every cache that could replay a rejected answer - the
+        // study-Q cache below and the kernel recall further down get the
+        // same exclusion the Predictive Cache already had, so an answer
+        // the user regenerated never comes back verbatim on the repeat.
+        val experienced = NcieEngines.isExperienced(this, text)
         // knowledge base (offline RAG): relevant notes from the user's documents
         var knowledgePart = ""
         var hits: List<Knowledge.Chunk> = emptyList()
@@ -548,7 +590,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             qLow.contains(" teach me ") || qLow.contains(" what is ")
         if (settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             // v5.4: cached answer from last time? -> instant, no model run
-            if (studyQ && !isChip && docPart.isEmpty()) {
+            if (studyQ && !isChip && docPart.isEmpty() && !experienced && !preShown) {
                 val qaKey = "qa_" + Integer.toHexString(qLow.hashCode()) + "_" +
                     Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
                 val qaFile = File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey)
@@ -584,7 +626,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             // drifting into an unrelated textbook chunk. The follow-up
             // carry below still works - it reuses hits that already
             // passed this gate on their own turn.
-            if (hits.isNotEmpty() && !NcieGround.strongMatch(this, text, hits.first().text)) {
+            if (hits.isNotEmpty() && !NcieGround.strongMatchIo(this, text, hits.first().text)) {
                 hits = emptyList()
             }
             // v7.6: relevance gate - one shared word (e.g. just "bose")
@@ -634,7 +676,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             // dropped, not injected.
             if (wikiHits.isNotEmpty() &&
                 Coverage.ratio(text, wikiHits.joinToString(" ") { it.text }) >= 0.3) {
-                wikiStrong = NcieGround.strongMatch(this, text, wikiHits.first().text)
+                wikiStrong = NcieGround.strongMatchIo(this, text, wikiHits.first().text)
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 // v7.5: wiki is background only - halve it so the model reads
                 // less before the first word; notes (the quality driver) stay
@@ -719,8 +761,8 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // old "the user was not satisfied" wording induced
         // meta-commentary on the 1.5B model ("I'd be happy to greet you
         // warmly..."). The match itself stays exact-question-only
-        // (NcieEngines.isExperienced is a case-insensitive trim match).
-        val experienced = NcieEngines.isExperienced(this, text)
+        // (NcieEngines.isExperienced is a case-insensitive trim match;
+        // v9.13.0 moved the val up, above the caches it now gates).
         var experiencePart = if (experienced)
             "(Answer the question directly and completely. Do not describe what you will say.)\n\n"
         else ""
@@ -794,10 +836,16 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // strength gate, or the question is a who-is/biographical one
         // (the case where a hallucinated local answer went unchallenged).
         // A strong local match still answers locally, no dialog at all.
+        // v9.13.0 "Audit Fixes" (HIGH 7): a STRONG wiki match now
+        // suppresses the offer regardless of the bio pattern - the
+        // v9.12.1 `|| bioQuestion(text)` fired the dialog on questions
+        // the offline wiki already answered well. Weak/empty wiki still
+        // offers, which covers the who-is case that motivated the bio
+        // override in the first place.
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
             lastSkillMatched == null && WikiCore.isReady(this) &&
             knowledgePart.isEmpty() &&
-            (wikiPart.isEmpty() || !wikiStrong || bioQuestion(text))
+            (wikiPart.isEmpty() || !wikiStrong)
         ) {
             offerOnlineFetch(act, text)
             return
@@ -812,7 +860,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // v9.12.1: the better-answer instruction is the de-meta'd
         // experiencePart in the budget block above; only the cache skip
         // remains here.
-        if (!experienced && skill == null) {
+        // v9.13.0 (re-derived d): a post-fetch completion turn skips the
+        // caches too - the question is already shown and persisted, and
+        // the just-fetched material should shape a fresh answer.
+        if (!experienced && skill == null && !preShown) {
             // v9.6.0: the Predictive Cache - an exact repeat of a normal
             // chat question is answered instantly, verbatim, before any
             // generation. Regenerating bypasses this and refreshes the
@@ -837,7 +888,11 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // disk-backed cache. An exact repeat of an already-answered model
         // turn is served instantly, zero tokens - the study-Q cache's
         // idea, generalized to every turn by the kernel.
-        if (NcieLearn.recall(this, text)) return
+        // v9.13.0 "Audit Fixes" (HIGH 2): the recall is behind the
+        // Experience gate now too (a regenerated answer must not replay
+        // verbatim from the learned cache), and a post-fetch completion
+        // turn (preShown) skips it - the fetch just brought new material.
+        if (!experienced && !preShown && NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
         // v9.6.0: the Predictive Cache write happens at turn completion
@@ -864,7 +919,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 NcieSummary.reset(act, chatAtRoll.id)
                 NcieSummary.bump(act, chatAtRoll.id)
                 compacting = false
-                startGeneration(turnPrompt, text)
+                startGeneration(turnPrompt, if (preShown) null else text)
             }
         } else {
             NcieSummary.bump(this, currentChat.id)
@@ -875,10 +930,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 // prompt already carries the summary + recent pairs.
                 scope.launch {
                     NovaEngine.resetConversation(act, settings.systemPrompt)
-                    startGeneration(prompt, text)
+                    startGeneration(prompt, if (preShown) null else text)
                 }
             } else {
-                startGeneration(prompt, text)
+                startGeneration(prompt, if (preShown) null else text)
             }
         }
     }
@@ -1504,11 +1559,37 @@ private fun MainActivity.answerConnections(text: String): Boolean {
 private val BIO_Q = Regex(
     "(?i)\\b(?:who\\s+(?:is|was|are|were)|when\\s+(?:did|was|were|is|will)|how\\s+(?:did|do))\\b")
 
+/** v9.13.0 "Audit Fixes" (HIGH 7): the words that are NEVER a name -
+ *  question words, app words and study words. The v9.12.1 fallback
+ *  treated ANY 4-letter word as a name ("when did the exam start" ->
+ *  "exam"). */
+private val BIO_STOPWORDS = setOf(
+    "you", "this", "that", "when", "how", "what", "who", "why", "where",
+    "nova", "chat", "exam", "exams", "notes", "note", "the", "and", "was",
+    "were", "is", "are", "did", "does", "do", "from", "with", "about",
+    "tell", "explain", "describe", "define", "start", "startt", "begin",
+    "first", "last", "next", "then", "there", "here", "your", "my")
+
 private fun bioQuestion(text: String): Boolean {
     if (!BIO_Q.containsMatchIn(text)) return false
-    if (Regex("\\b[A-Z][a-z]{2,}\\b").containsMatchIn(text)) return true
-    // lowercase typing: a name-like word after the phrase
-    return text.split(Regex("\\s+")).any { it.length >= 4 && it.none { c -> c.isDigit() } }
+    // v9.13.0 "Audit Fixes" (HIGH 7): a name is a capitalized token of
+    // length >= 3 that is not a stopword (or two consecutive capitalized
+    // tokens - "Rahul Gandhi" typed with capitals). The old lowercase
+    // fallback treated any 4-letter word as a name; it is gone. This
+    // helper no longer overrides a STRONG wiki match (the offer gate
+    // above checks wikiStrong first) - it only shapes what counts as a
+    // biographical question where it is still consulted.
+    val toks = text.split(Regex("\\s+"))
+        .map { it.trim('\'', '\"', ',', '.', '?', '!', ':', ';') }
+    var prevCap = false
+    for (t in toks) {
+        val cap2 = t.length >= 2 && t[0].isUpperCase() &&
+            t.none { it.isDigit() } &&
+            t.lowercase() !in BIO_STOPWORDS
+        if (cap2 && (t.length >= 3 || prevCap)) return true
+        prevCap = cap2
+    }
+    return false
 }
 
 /** v9.7.0 "Quiet Fetch": the single entry into the online fetch flow.

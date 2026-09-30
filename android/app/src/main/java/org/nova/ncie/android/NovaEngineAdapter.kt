@@ -52,6 +52,11 @@ object NovaEngineAdapter : StreamLlmEngine(
      * the app. The engine impl is suspend, ModelReady-guarded and does
      * its own off-main-thread hop, so this is safe to call from the UI
      * scope.
+     * v9.13.0 "Audit Fixes" (HIGH 5c): the latch is no longer one-shot.
+     * A single mid-generation failure just retries on the next turn;
+     * only 3 CONSECUTIVE failures mark the bridge broken for the
+     * session. Returns true when the engine accepted the set, so
+     * NcieTune knows whether to record it as pushed.
      */
     @Volatile
     var samplingBroken: Boolean = false
@@ -62,14 +67,21 @@ object NovaEngineAdapter : StreamLlmEngine(
     var samplingLive: Boolean = false
         private set
 
+    /** Consecutive setSampling failures (reset by any success). */
+    @Volatile
+    private var samplingFails = 0
+
     suspend fun setSampling(temperature: Float, topP: Float, topK: Int,
-                            minP: Float, repeatPenalty: Float) {
-        if (samplingBroken) return
-        try {
+                            minP: Float, repeatPenalty: Float): Boolean {
+        if (samplingBroken) return false
+        return try {
             NovaEngine.setSampling(temperature, topP, topK, minP, repeatPenalty)
             samplingLive = true
+            samplingFails = 0
+            true
         } catch (t: Throwable) {
-            samplingBroken = true
+            if (++samplingFails >= 3) samplingBroken = true
+            false
         }
     }
 }

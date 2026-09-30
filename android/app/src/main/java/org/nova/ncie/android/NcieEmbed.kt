@@ -50,9 +50,16 @@ object NcieEmbed {
     private val initLock = Any()
 
     /** One-time lazy init: load the model bytes and the vocab. Sets
-     *  [broken] (permanent keyword-only fallback) on any failure. */
+     *  [broken] (permanent keyword-only fallback) on any failure.
+     *  v9.13.0 "Audit Fixes" (HIGH 4): init NEVER runs on the main
+     *  thread - a call from it returns untouched (the caller's embed
+     *  then sees no session and falls back to keyword scoring, the same
+     *  graceful degradation as a missing model), so the 23 MB session
+     *  can never again freeze the UI thread. The chat turn's gates hop
+     *  to Dispatchers.IO (NcieGround.strongMatchIo) before embedding. */
     fun ensure(ctx: Context) {
         if (broken || initDone) return
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return
         synchronized(initLock) {
             if (broken || initDone) return
             try {

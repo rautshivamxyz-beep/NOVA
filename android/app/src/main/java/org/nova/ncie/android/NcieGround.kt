@@ -1,6 +1,8 @@
 package org.nova.ncie.android
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.nova.WikiCore
 import java.io.File
 
@@ -91,6 +93,14 @@ object NcieGround {
         val cv = NcieEmbed.embed(ctx, candidate.take(1500)) ?: return false
         return NcieEmbed.cosine(qv, cv) >= 0.45f
     }
+
+    /** v9.13.0 "Audit Fixes" (HIGH 4): the chat turn's strength gate, OFF
+     *  the main thread. ncieSend suspends here (Dispatchers.IO) so the
+     *  ONNX embedder never runs - and its 23 MB session is never lazily
+     *  initialized - on the main thread; a UI freeze on the first gated
+     *  send after a cold start. Same result, different dispatcher. */
+    suspend fun strongMatchIo(ctx: Context, question: String, candidate: String): Boolean =
+        withContext(Dispatchers.IO) { strongMatch(ctx, question, candidate) }
 
     /** All knowledge documents + wiki articles the user has, names only,
      *  in store order (Knowledge first, then wiki). */

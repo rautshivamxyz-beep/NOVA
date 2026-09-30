@@ -31,6 +31,14 @@ object NcieEngines {
     private const val CAP = 200
     private const val SEP = '\u241F'   // unit separator, like the other stores
 
+    /** v9.13.0 "Audit Fixes" (re-derived a): the engine stores' shared
+     *  lock - experience.txt and answer_cache.txt are read on the main
+     *  thread (isExperienced / cachedAnswer in the chat turn) while
+     *  logExperience / cacheAnswer read-modify-write them on IO at turn
+     *  completion; overlapping calls could drop an entry or read a
+     *  half-written file. Tiny, private, no dependency. */
+    private val storeLock = Any()
+
     private fun experienceFile(ctx: Context) = File(ctx.filesDir, "experience.txt")
     private fun answerFile(ctx: Context) = File(ctx.filesDir, "answer_cache.txt")
 
@@ -48,10 +56,12 @@ object NcieEngines {
         try {
             val q = question.trim().replace("\n", " ")
             if (q.isEmpty()) return
-            val lines = readLines(experienceFile(ctx)).toMutableList()
-            lines.add(System.currentTimeMillis().toString() + "\t" + q)
-            while (lines.size > CAP) lines.removeAt(0)
-            experienceFile(ctx).writeText(lines.joinToString("\n") + "\n")
+            synchronized(storeLock) {
+                val lines = readLines(experienceFile(ctx)).toMutableList()
+                lines.add(System.currentTimeMillis().toString() + "\t" + q)
+                while (lines.size > CAP) lines.removeAt(0)
+                experienceFile(ctx).writeText(lines.joinToString("\n") + "\n")
+            }
         } catch (e: Exception) { }
     }
 
@@ -60,8 +70,10 @@ object NcieEngines {
     fun isExperienced(ctx: Context, question: String): Boolean {
         val q = question.trim().lowercase()
         if (q.isEmpty()) return false
-        for (l in readLines(experienceFile(ctx)))
-            if (l.substringAfter('\t', "").trim().lowercase() == q) return true
+        synchronized(storeLock) {
+            for (l in readLines(experienceFile(ctx)))
+                if (l.substringAfter('\t', "").trim().lowercase() == q) return true
+        }
         return false
     }
 
@@ -78,11 +90,13 @@ object NcieEngines {
     fun cachedAnswer(ctx: Context, question: String): String? {
         val q = question.trim().lowercase()
         if (q.isEmpty()) return null
-        for (l in readLines(answerFile(ctx))) {
-            val i = l.indexOf(SEP)
-            if (i < 1) continue
-            if (l.substring(0, i).trim().lowercase() == q)
-                return unescape(l.substring(i + 1))
+        synchronized(storeLock) {
+            for (l in readLines(answerFile(ctx))) {
+                val i = l.indexOf(SEP)
+                if (i < 1) continue
+                if (l.substring(0, i).trim().lowercase() == q)
+                    return unescape(l.substring(i + 1))
+            }
         }
         return null
     }
@@ -96,11 +110,13 @@ object NcieEngines {
             val q = question.trim().replace("\n", " ")
             val a = answer.trim()
             if (q.isEmpty() || a.isEmpty() || a.length > 4000) return
-            val lines = readLines(answerFile(ctx)).toMutableList()
-            lines.removeAll { it.substringBefore(SEP).trim().lowercase() == q.lowercase() }
-            lines.add(escape(q) + SEP + escape(a))
-            while (lines.size > CAP) lines.removeAt(0)
-            answerFile(ctx).writeText(lines.joinToString("\n") + "\n")
+            synchronized(storeLock) {
+                val lines = readLines(answerFile(ctx)).toMutableList()
+                lines.removeAll { it.substringBefore(SEP).trim().lowercase() == q.lowercase() }
+                lines.add(escape(q) + SEP + escape(a))
+                while (lines.size > CAP) lines.removeAt(0)
+                answerFile(ctx).writeText(lines.joinToString("\n") + "\n")
+            }
         } catch (e: Exception) { }
     }
 
