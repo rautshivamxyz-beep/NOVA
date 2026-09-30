@@ -5,7 +5,7 @@ plugins {
 
 android {
     androidResources {
-        noCompress += ["gguf"]
+        noCompress += ["gguf", "onnx"]
     }
     namespace 'org.nova'
     compileSdk 35
@@ -40,8 +40,9 @@ android {
         // v9.6.0 "Engine Pack": experience, cache, flashmap, knowledge graph
         // v9.7.0 "Delta Updates + Quiet Fetch": on-device delta patches, offer only when nothing is local
         // v9.8.0 "Scheduled Sends + OCR Notes": scheduled texts via AlarmManager, scan-my-notes photo import
-        versionCode 91
-        versionName '9.8.0'
+        // v9.9.0 "Semantic RAG": on-device MiniLM embeddings, hybrid semantic+keyword retrieval
+        versionCode 92
+        versionName '9.9.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -113,6 +114,10 @@ dependencies {
     // delta patches NcieDelta applies on device (pure Java, only its
     // bzip2 compressor classes are used)
     implementation 'org.apache.commons:commons-compress:1.27.1'
+
+    // v9.9.0 "Semantic RAG": ONNX Runtime for the on-device
+    // all-MiniLM-L6-v2 int8 embedder (fully local inference, no network)
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
 }
 
 configurations.all {

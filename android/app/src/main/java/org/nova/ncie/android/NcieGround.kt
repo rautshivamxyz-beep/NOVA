@@ -38,6 +38,16 @@ import java.io.File
  *  - Knowledge Graph ([connections] / [related]): deterministic
  *    cross-document links - source pairs sharing at least 3 key terms.
  *
+ * v9.9.0 "Semantic RAG" adds hybrid retrieval: every source also gets
+ * pre-computed chunk embeddings at index time (NcieEmbed - the bundled
+ * on-device all-MiniLM-L6-v2 int8 ONNX model, fully local), and
+ * [retrieve] combines semantic cosine scores with the keyword scores
+ * (final = max of the two, each normalized to 0..1). A chunk whose
+ * WORDING differs from the question ("photosynthesis" vs "how do
+ * plants make food") now scores. The embedder is best-effort: when the
+ * model is missing or fails, every source simply uses keyword-only
+ * scoring exactly as before - graceful fallback, never a crash.
+ *
  * Fully local and deterministic, no new dependency: retrieval and the
  * engines are pure string work over files the app already owns, and the
  * LLM (already loaded in-app) is only used for the final grounded
@@ -79,19 +89,32 @@ object NcieGround {
     } catch (e: Exception) { emptyList() }
 
     /** Deep-read retrieval: the top (sourceName, chunkText) pairs for a
-     *  question - top 2 keyword-matching chunks per source, top 4 across
+     *  question - top 2 matching chunks per source, top 4 across
      *  sources, best score first. Empty when nothing matches at all.
      *
      *  v9.6.0 FlashMap: the in-memory name->chunks cache is validated
      *  against ground_index.txt, so unchanged sources are not re-read
-     *  or re-split each query; a missing/stale index is rebuilt here. */
+     *  or re-split each query; a missing/stale index is rebuilt here.
+     *
+     *  v9.9.0 Semantic RAG: the question is embedded ONCE (NcieEmbed -
+     *  null when the embedder is broken, then everything below is
+     *  keyword-only as before) and scored by cosine against each
+     *  source's pre-computed chunk embeddings; final score per chunk is
+     *  max(semantic, keyword/termCount) - a simple, robust union. A
+     *  semantic-only hit above the 0.30 noise floor counts even when
+     *  NO keyword matches (different wording, same meaning). Sources
+     *  with more than 40 chunks skip the full semantic pass and embed
+     *  only their top keyword candidates, to bound latency. */
     fun retrieve(ctx: Context, question: String): List<Pair<String, String>> {
         val terms = questionTerms(question)
         if (terms.isEmpty()) return emptyList()
         val names = docsList(ctx)
         val idx = readIndex(ctx)
         var dirty = idx == null || idx.size != names.size
-        val best = ArrayList<Triple<Int, String, String>>()   // score, source, chunk
+        // the question's semantic vector, computed once per query;
+        // null = embedder broken/failed -> keyword-only for everything
+        val qVec = NcieEmbed.embed(ctx, question)
+        val best = ArrayList<Triple<Float, String, String>>()   // score, source, chunk
         for (name in names) {
             val cached = flashChunks[name]
             val chunks: List<String>
@@ -107,16 +130,47 @@ object NcieGround {
                 chunks = if (t.isBlank()) emptyList() else chunksOf(t)
                 flashChunks[name] = chunks
                 dirty = true
+                // v9.9.0: keep this source's embedding index in step with
+                // the chunks too (fire-and-forget, stale-guarded).
+                reindexEmbeddings(ctx, name, chunks)
             }
             if (chunks.isEmpty()) continue
-            val perSource = ArrayList<Pair<Int, String>>()
-            for (chunk in chunks) {
-                // the notes search's normalization, verbatim: lowercase,
-                // non-alphanumerics collapsed to spaces, whole-word match
-                val norm = " " + chunk.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+            // keyword scores first (whole-word, the notes search's
+            // normalization, verbatim as before)
+            val kw = IntArray(chunks.size)
+            for (i in chunks.indices) {
+                val norm = " " + chunks[i].lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
                 var score = 0
                 for (t in terms) if (norm.contains(" " + t + " ")) score++
-                if (score > 0) perSource.add(score to chunk)
+                kw[i] = score
+            }
+            // semantic scores per chunk index. Only when the question
+            // embedded AND the source has an .emb index; sources with
+            // >40 chunks embed only their top keyword candidates.
+            val sem = HashMap<Int, Float>()
+            if (qVec != null) {
+                if (chunks.size <= 40 && NcieEmbed.hasIndex(ctx, name)) {
+                    for ((i, s) in NcieEmbed.search(ctx, name, qVec, chunks.size))
+                        if (s > 0f) sem[i] = s
+                } else if (chunks.size > 40) {
+                    val topKw = chunks.indices.sortedByDescending { kw[it] }.take(5)
+                    for (i in topKw) {
+                        if (kw[i] <= 0) continue
+                        val cv = NcieEmbed.embed(ctx, chunks[i]) ?: continue
+                        val s = NcieEmbed.cosine(qVec, cv)
+                        if (s > 0f) sem[i] = s
+                    }
+                }
+            }
+            val perSource = ArrayList<Pair<Float, String>>()
+            val denom = maxOf(1, terms.size).toFloat()
+            for (i in chunks.indices) {
+                val s = sem[i] ?: 0f
+                val f = maxOf(kw[i] / denom, s)
+                // a keyword hit counts as before; a semantic-only hit
+                // counts above the noise floor (wording differs from
+                // the question, meaning is the same)
+                if (kw[i] > 0 || s >= 0.30f) perSource.add(f to chunks[i])
             }
             perSource.sortByDescending { it.first }
             for (i in 0 until minOf(2, perSource.size))
@@ -233,6 +287,9 @@ object NcieGround {
             else map[name] = flashChunks[name]!!.size
             f.writeText(map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
         } catch (e: Exception) { }
+        // v9.9.0: keep the semantic chunk embeddings in step with this
+        // write (fire-and-forget; deleteIndex when the source is gone).
+        reindexEmbeddings(ctx, name, if (text == null) null else flashChunks[name])
     }
 
     /** The whole wiki store was replaced (WikiCore download): drop the
@@ -242,6 +299,41 @@ object NcieGround {
         graphTerms = null
         flashChunks.clear()
         try { indexFile(ctx).delete() } catch (e: Exception) { }
+        // v9.9.0: the whole source set changed - drop every embedding
+        // index too; retrieve rebuilds them as sources come back.
+        NcieEmbed.resetIndexes(ctx)
+    }
+
+    // --------------------------------------------- v9.9.0: semantic index
+
+    /** The per-source embedding re-index workers in flight - the simple
+     *  guard so one source is never embedded twice concurrently. */
+    private val embeddingInFlight = HashSet<String>()
+
+    /** Fire-and-forget: bring a source's chunk embeddings (NcieEmbed's
+     *  filesDir/embeddings/<name>.emb) in step with its chunks. Runs on
+     *  a plain background thread, skips when the index is already
+     *  current (chunk count matches), deletes the index when the source
+     *  is gone. Failures are logged, never fatal - that source simply
+     *  stays keyword-only. */
+    private fun reindexEmbeddings(ctx: Context, name: String, chunks: List<String>?) {
+        val appCtx = ctx.applicationContext
+        synchronized(embeddingInFlight) {
+            if (embeddingInFlight.contains(name)) return
+            embeddingInFlight.add(name)
+        }
+        Thread {
+            try {
+                if (chunks == null || chunks.isEmpty())
+                    NcieEmbed.deleteIndex(appCtx, name)
+                else if (NcieEmbed.indexSize(appCtx, name) != chunks.size)
+                    NcieEmbed.indexChunks(appCtx, name, chunks)
+            } catch (e: Exception) {
+                android.util.Log.w("NcieGround", "embedding index failed for " + name, e)
+            } finally {
+                synchronized(embeddingInFlight) { embeddingInFlight.remove(name) }
+            }
+        }.start()
     }
 
     // --------------------------------------------- v9.6.0: knowledge graph

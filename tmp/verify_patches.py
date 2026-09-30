@@ -206,8 +206,8 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
       nc.count("Never invent chapter contents") == 1)
 
 # ---- v8.6.0: online discovery for any question ----
-check("v9.8.0: version bumped for scheduled sends and OCR",
-      bg.count("versionName '9.8.0'") == 1 and bg.count("versionCode 91") == 1)
+check("v9.9.0: version bumped for semantic rag",
+      bg.count("versionName '9.9.0'") == 1 and bg.count("versionCode 92") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
       nc.count("lastSkillMatched == null") == 1 and
       nc.count("OnlineFetch.offer(act, text,") == 1)
