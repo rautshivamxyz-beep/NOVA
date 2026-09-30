@@ -126,6 +126,20 @@ object NcieRoutines {
             }
         } catch (e: Exception) { }
         sb.append(if (cards > 0) "flashcards: $cards" else "flashcards: none yet").append('\n')
+        // v9.10.0 "Revision Planner": the exam countdown and today's
+        // revision topic, when an exam date is set. The topic is the
+        // plan line whose dd-MMM date is TODAY (deterministic: first
+        // match); a day with no plan line (or no plan at all) simply
+        // omits the revision line.
+        try {
+            val examDays = NcieExam.daysLeft(ctx)
+            if (examDays != null) {
+                sb.append("days to exam: ").append(examDays).append('\n')
+                NcieExam.todayTopic(ctx)?.let {
+                    sb.append("revision today: ").append(it).append('\n')
+                }
+            }
+        } catch (e: Exception) { }
         sb.append("```")
         return sb.toString()
     }

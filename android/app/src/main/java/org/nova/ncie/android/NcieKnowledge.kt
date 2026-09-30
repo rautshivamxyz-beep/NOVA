@@ -48,6 +48,15 @@ object NcieKnowledge {
 
     @Volatile private var lastMtime = -1L
 
+    /** v9.10.0 hardening: KnowledgeStore's rebuilds are internally
+     *  synchronized, but its READS (search / bestDocName / bestChunks /
+     *  docs / chunkCount) are not - a refresh() rebuild on one thread
+     *  while another thread is mid-search could hit a chunk list that
+     *  is being swapped underneath it. This lock makes every
+     *  refresh+read pair below atomic: rebuild and search never
+     *  interleave. */
+    private val storeLock = Any()
+
     /** Parse knowledge.json once, off the main thread (send() would
      *  otherwise pay for it on the first message). Call alongside
      *  Knowledge.warmUp at startup. */
@@ -78,19 +87,29 @@ object NcieKnowledge {
         // ① ANALYZE ② PLAN — the request's context budget.
         val analysis = analyzer.analyze(text)
         val budget = planner.plan(analysis, cacheHit = false).contextBudgetChars
-        check(budget >= 0)
-        refresh(ctx)
-        store.setExcluded(Settings(ctx).knowledgeExcluded)
-        var hits = store.search(text, maxResults = 4)
-        // v7.6 relevance gate, verbatim: significant query terms must
-        // appear in the matched chunks.
-        if (hits.isNotEmpty()) {
-            val sigTerms = store.tokenize(text).filter { it.length > 3 }.distinct()
-            val hitText = hits.joinToString(" ") { it.text }.lowercase()
-            val matched = sigTerms.count { hitText.contains(it) }
-            if (matched == 0 || (sigTerms.size >= 2 && matched < 2)) hits = emptyList()
+        // v9.10.0 hardening: this was a throwing assertion on the budget
+        // (budget >= 0), which crashed the whole chat turn the moment a
+        // planner returned a negative budget. A bad budget now logs and
+        // the turn continues (the relevance gate and the caller's own
+        // caps still bound what gets injected) - the answer still comes
+        // out, it is never a crash.
+        if (budget < 0)
+            android.util.Log.w("NcieKnowledge",
+                "planner budget " + budget + " < 0 - soft-fail, continuing")
+        synchronized(storeLock) {
+            refresh(ctx)
+            store.setExcluded(Settings(ctx).knowledgeExcluded)
+            var hits = store.search(text, maxResults = 4)
+            // v7.6 relevance gate, verbatim: significant query terms must
+            // appear in the matched chunks.
+            if (hits.isNotEmpty()) {
+                val sigTerms = store.tokenize(text).filter { it.length > 3 }.distinct()
+                val hitText = hits.joinToString(" ") { it.text }.lowercase()
+                val matched = sigTerms.count { hitText.contains(it) }
+                if (matched == 0 || (sigTerms.size >= 2 && matched < 2)) hits = emptyList()
+            }
+            return hits.map { Knowledge.Chunk(it.doc, it.text, it.text.lowercase(), normOf(it.text)) }
         }
-        return hits.map { Knowledge.Chunk(it.doc, it.text, it.text.lowercase(), normOf(it.text)) }
     }
 
     /** The kernel's context-budget verdict for a chat turn: true when the
@@ -120,31 +139,39 @@ object NcieKnowledge {
     /** Does the knowledge base have any documents? (Parity with
      *  Knowledge.hasDocs — no exclusion filtering.) */
     fun hasDocs(ctx: Context): Boolean {
-        refresh(ctx)
-        return store.chunkCount > 0
+        synchronized(storeLock) {
+            refresh(ctx)
+            return store.chunkCount > 0
+        }
     }
 
     /** The best-matching document name for a query, or null. (Parity with
      *  Knowledge.bestDocName — exclusion-filtered, x2 name bonus.) */
     fun bestDocName(ctx: Context, query: String): String? {
-        refresh(ctx)
-        store.setExcluded(Settings(ctx).knowledgeExcluded)
-        return store.bestDocName(query)
+        synchronized(storeLock) {
+            refresh(ctx)
+            store.setExcluded(Settings(ctx).knowledgeExcluded)
+            return store.bestDocName(query)
+        }
     }
 
     /** Contiguous chapter chunks for a summary request. (Parity with
      *  Knowledge.bestChunks — the whole topic, never mixed fragments.) */
     fun bestChunks(ctx: Context, query: String, maxChunks: Int = 18): List<String> {
-        refresh(ctx)
-        store.setExcluded(Settings(ctx).knowledgeExcluded)
-        return store.bestChunks(query, maxChunks)
+        synchronized(storeLock) {
+            refresh(ctx)
+            store.setExcluded(Settings(ctx).knowledgeExcluded)
+            return store.bestChunks(query, maxChunks)
+        }
     }
 
     /** Doc name -> chunk count, in insertion order. (Parity with
      *  Knowledge.docs — no exclusion filtering.) */
     fun docs(ctx: Context): List<Pair<String, Int>> {
-        refresh(ctx)
-        return store.docs()
+        synchronized(storeLock) {
+            refresh(ctx)
+            return store.docs()
+        }
     }
 
     /** True when every query term hits the document NAME — the user means

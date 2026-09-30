@@ -206,8 +206,22 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
       nc.count("Never invent chapter contents") == 1)
 
 # ---- v8.6.0: online discovery for any question ----
-check("v9.9.0: version bumped for semantic rag",
-      bg.count("versionName '9.9.0'") == 1 and bg.count("versionCode 92") == 1)
+# ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
+check("v9.10.0: version bumped for revision planner",
+      bg.count("versionName '9.10.0'") == 1 and bg.count("versionCode 93") == 1)
+ne = load("ncie/android/NcieExam.kt")
+nr = load("ncie/android/NcieRoutines.kt")
+check("v9.10.0: the exam planner ships (date file, countdown, plan, today's topic)",
+      ne.count("fun setExamDate(") == 1 and ne.count("fun buildPlan(") == 1 and
+      ne.count("fun daysLeft(") == 1 and ne.count("fun todayTopic(") == 1 and
+      ne.count("exam_date.txt") == 2 and ne.count("revision_plan.txt") == 2 and
+      ne.count("tutor_miss.txt") == 3)
+check("v9.10.0: exam commands intercepted in the chat + briefing lines",
+      nc.count("EXAM_SET") == 3 and nc.count("NcieExam.") == 5 and
+      nr.count("days to exam") == 1 and nr.count("NcieExam.") == 2)
+check("v9.10.0: hardening - planner soft-fail, store lock, save-on-send",
+      nk.count("check(") == 0 and nk.count("synchronized(storeLock)") == 5 and
+      ma.count("persist the question IMMEDIATELY") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
       nc.count("lastSkillMatched == null") == 1 and
       nc.count("OnlineFetch.offer(act, text,") == 1)
@@ -414,7 +428,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

@@ -41,8 +41,9 @@ android {
         // v9.7.0 "Delta Updates + Quiet Fetch": on-device delta patches, offer only when nothing is local
         // v9.8.0 "Scheduled Sends + OCR Notes": scheduled texts via AlarmManager, scan-my-notes photo import
         // v9.9.0 "Semantic RAG": on-device MiniLM embeddings, hybrid semantic+keyword retrieval
-        versionCode 92
-        versionName '9.9.0'
+        // v9.10.0 "Revision Planner + Hardening": exam countdown, deterministic revision plan, store locking
+        versionCode 93
+        versionName '9.10.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

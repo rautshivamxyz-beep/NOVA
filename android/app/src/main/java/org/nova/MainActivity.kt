@@ -1108,6 +1108,15 @@ class MainActivity : Activity() {
             val userMsg = Msg(Role.USER, userText)
             currentChat.messages.add(userMsg)
             adapter.add(userMsg)
+            // v9.10.0 hardening: persist the question IMMEDIATELY on
+            // send. The save used to happen only in the turn-end finally
+            // block, so an app kill mid-answer lost the question itself
+            // - it was in the UI but never on disk. The turn-end save
+            // still runs (it also stores the answer); this one is the
+            // parachute.
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(this@MainActivity, genChat) } catch (e: Exception) { }
+            }
         }
         val replyMsg: Msg
         if (newBubble) {

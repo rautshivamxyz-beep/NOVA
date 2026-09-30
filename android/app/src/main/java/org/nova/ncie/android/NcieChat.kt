@@ -138,6 +138,20 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // they work before any model is loaded.
         if (answerBriefing(text)) { input.setText(""); return }
         if (answerStudy(text)) { input.setText(""); return }
+        // v9.10.0 "Revision Planner": exam date tracking with countdown
+        // and a deterministic revision plan (due weak areas first, sources
+        // spread over the remaining days - NcieExam). Like the routines
+        // above: no model call, no network, works with no model loaded.
+        val examSet = EXAM_SET.find(text)
+        if (examSet != null && text.length <= 80) {
+            input.setText("")
+            NcieExam.setExamDate(this, text, examSet.groupValues[1].trim())
+            return
+        }
+        if (EXAM_CLEAR.containsMatchIn(text)) { input.setText(""); NcieExam.clear(this); return }
+        if (EXAM_SHOW.containsMatchIn(text)) { input.setText(""); NcieExam.showPlan(this); return }
+        if (EXAM_PLAN.containsMatchIn(text)) { input.setText(""); NcieExam.buildPlan(this); return }
+        if (EXAM_COUNT.containsMatchIn(text)) { input.setText(""); NcieExam.countdown(this); return }
         // v9.2.0 "Rolling Chat Summary": two deterministic commands over
         // filesDir/chat_summary.txt - "summarize our conversation" reads
         // it, "forget our conversation" deletes it and clears the
@@ -910,6 +924,21 @@ private fun MainActivity.answerNotifCmd(text: String): Boolean {
     }
     return true
 }
+
+// v9.10.0 "Revision Planner": the exam commands. EXAM_SET is the open
+// capture (length-gated in the routing above); the rest are anchored
+// short commands like the tutor/routine ones, so OCR'd chapter pastes
+// never fall into them.
+private val EXAM_SET = Regex(
+    "(?i)\\b(?:my\\s+exam\\s+is\\s+on|set\\s+exam\\s+date(?:\\s+(?:to|for))?|my\\s+boards\\s+start\\s+on|boards\\s+on)\\s+(.{2,40})")
+private val EXAM_PLAN = Regex(
+    "(?i)^\\s*plan\\s+my\\s+revision\\s*[.!?]*\\s*$")
+private val EXAM_SHOW = Regex(
+    "(?i)^\\s*show\\s+(?:my\\s+)?revision\\s+plan\\s*[.!?]*\\s*$")
+private val EXAM_CLEAR = Regex(
+    "(?i)^\\s*(?:clear\\s+exam\\s+date|exam\\s+done|exam\\s+is\\s+over)\\s*[.!?]*\\s*$")
+private val EXAM_COUNT = Regex(
+    "(?i)^\\s*(?:exam\\s+countdown|days\\s+to\\s+my\\s+exam)\\s*[.!?]*\\s*$")
 
 // v8.9.0: Tutor Mode's entry phrases. Anchored short commands (study,
 // weak areas, flashcards) so OCR'd chapter pastes never fall into them;
