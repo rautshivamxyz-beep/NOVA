@@ -207,7 +207,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.0: version bumped for audit fixes", bg.count("versionName '9.13.0'") == 1 and bg.count("versionCode 97") == 1)
+check("v9.13.1: version bumped for honest summaries", bg.count("versionName '9.13.1'") == 1 and bg.count("versionCode 98") == 1)
+# ---- v9.13.1 "Honest Summaries": verification pass, meta strip, facts-only prompt ----
+check("v9.13.1: honest summaries - deterministic fact verification (MainActivity)",
+      ma.count("fun verifySummaryFacts(") == 1 and
+      ma.count("(unverified)") == 1 and
+      ma.count("could not be matched to your notes") == 1)
+check("v9.13.1: meta stripper + facts-only prompt on both summarizers (MainActivity)",
+      ma.count("fun stripSummaryMeta(") == 1 and
+      ma.count("verifySummaryFacts(stripSummaryMeta(") == 4 and
+      ma.count("Use only facts that appear in the TEXT") == 2)
 ne = load("ncie/android/NcieExam.kt")
 nr = load("ncie/android/NcieRoutines.kt")
 # ---- v9.11.0 "Inference Quality": sampling profiles, base prompt, context budget ----

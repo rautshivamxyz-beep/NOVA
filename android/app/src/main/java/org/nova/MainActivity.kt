@@ -1559,7 +1559,8 @@ class MainActivity : Activity() {
                 if (cached.length > 50) {
                     val um = Msg(Role.USER, "Summarize ${docName ?: "document"}")
                     currentChat.messages.add(um); adapter.add(um)
-                    val reply = Msg(Role.ASSISTANT, cached)
+                    val reply = Msg(Role.ASSISTANT,
+                        verifySummaryFacts(stripSummaryMeta(cached), doc))
                     currentChat.messages.add(reply); adapter.add(reply)
                     scrollToEnd()
                     toast("Summary (cached from last time)")
@@ -1667,7 +1668,7 @@ class MainActivity : Activity() {
                         "starting with \"- \") in full sentences with its names, dates, numbers " +
                         "and terms. Every bullet must be a complete sentence containing " +
                         "at least one date, name, number or term - never a single word. " +
-                        "Do not skip any topic. Use only the information given:" +
+                        "Do not skip any topic. Use only the information given. Use only facts that appear in the TEXT. If you are not sure a fact is in the TEXT, leave it out. Do not add any commentary about the summary itself:" +
                         "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
                 ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
@@ -1676,6 +1677,10 @@ class MainActivity : Activity() {
                 if (looksDerailed(finalText, sectionSummaries.toString()))
                     finalText = dedupeLines(sectionSummaries.toString()).trim()
                 else finalText = dedupeLines(finalText)
+                // v9.13.1: verify every date/number line against the source
+                // chunks, and drop trailing model meta-commentary
+                finalText = verifySummaryFacts(stripSummaryMeta(finalText),
+                    chunks.joinToString("\n\n"))
                 reply.text = finalText
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -1735,7 +1740,8 @@ class MainActivity : Activity() {
             if (cached.length > 50) {
                 val um = Msg(Role.USER, userText)
                 currentChat.messages.add(um); adapter.add(um)
-                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\n\n$cached")
+                val reply = Msg(Role.ASSISTANT, "(summary of $doc, cached)\n\n" +
+                    verifySummaryFacts(stripSummaryMeta(cached), chunks.joinToString("\n\n")))
                 currentChat.messages.add(reply); adapter.add(reply)
                 scrollToEnd()
                 return
@@ -1866,7 +1872,7 @@ class MainActivity : Activity() {
                         "the summaries say. Every bullet must be a complete sentence " +
                         "containing at least one date, name, number or term - never a " +
                         "single word. Copy key terms exactly as written, do not add " +
-                        "outside knowledge or invent terms.$antiCot\n\n" +
+                        "outside knowledge or invent terms. Use only facts that appear in the TEXT. If you are not sure a fact is in the TEXT, leave it out. Do not add any commentary about the summary itself.$antiCot\n\n" +
                         dedupeLines(sectionSummaries.toString()).take(11000), 1500
                 ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
@@ -1875,6 +1881,10 @@ class MainActivity : Activity() {
                 if (looksDerailed(finalText, sectionSummaries.toString()))
                     finalText = dedupeLines(sectionSummaries.toString()).trim()
                 else finalText = dedupeLines(finalText)
+                // v9.13.1: verify every date/number line against the source
+                // sections, and drop trailing model meta-commentary
+                finalText = verifySummaryFacts(stripSummaryMeta(finalText),
+                    sections.joinToString("\n\n"))
                 reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
@@ -3851,6 +3861,85 @@ private fun looksDerailed(t: String, source: String): Boolean {
     val hit = out.count { it in src }
     return hit * 10 < out.size * 3
 }
+
+/**
+ * v9.13.1 "Honest Summaries": deterministic fact verification for study
+ * summaries. The LLM only generates - the checks are pure code, fully
+ * local, no new dependencies. Every line carrying a factual marker (a
+ * 4-digit year, a "June 12"/"12 June" style date, or digits with a unit)
+ * is checked against the SOURCE text the summary was built from: the
+ * exact marker string must appear there. Unmatched lines are KEPT but
+ * flagged as unverified - nothing is silently deleted and the summary
+ * is never rewritten by another model pass. If more than half of the
+ * marker lines are unverifiable, one warning line is prepended.
+ */
+private fun verifySummaryFacts(summary: String, source: String): String {
+    val ordRe = Regex("(?i)(?<=\\d)(st|nd|rd|th)\\b")
+    fun norm(s: String) =
+        ordRe.replace(s.lowercase(), "").replace(Regex("\\s+"), " ")
+    val src = norm(source)
+    val dateRe = Regex("(?i)\\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\\s+\\d{1,2}\\b|\\b\\d{1,2}\\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\\b")
+    val yearRe = Regex("\\b(?:1[0-9]{3}|20[0-9]{2})\\b")
+    val unitRe = Regex("\\b\\d+(?:\\.\\d+)?\\s*(?:%|percent|km|cm|mm|kg|mg|ml|million|billion|thousand|crore|lakh|years?|days?|hours?|minutes?|seconds?|people|students|feet|foot|metres?|meters?|inches?|months?|weeks?)\\b")
+    // exact-token containment: the marker must appear in the source
+    // with no digit glued to either end, so "august 1" does NOT match
+    // inside "august 1944" and "1944" does not match inside "21944"
+    fun inSrc(mark: String): Boolean {
+        var i = src.indexOf(mark)
+        while (i >= 0) {
+            val beforeOk = i == 0 || !src[i - 1].isDigit()
+            val after = i + mark.length
+            val afterOk = after >= src.length || !src[after].isDigit()
+            if (beforeOk && afterOk) return true
+            i = src.indexOf(mark, i + 1)
+        }
+        return false
+    }
+    val out = ArrayList<String>()
+    var markerLines = 0
+    var unverified = 0
+    for (line in summary.lines()) {
+        val marks = ArrayList<String>()
+        for (m in dateRe.findAll(line)) marks.add(m.value)
+        for (m in yearRe.findAll(line)) marks.add(m.value)
+        for (m in unitRe.findAll(line)) marks.add(m.value)
+        if (marks.isEmpty()) { out.add(line); continue }
+        markerLines++
+        if (marks.all { inSrc(norm(it)) }) out.add(line)
+        else { unverified++; out.add(line.trimEnd() + " (unverified)") }
+    }
+    var res = out.joinToString("\n")
+    if (markerLines > 0 && unverified * 2 > markerLines)
+        res = "Warning: many details in this summary could not be matched to your notes \u2014 treat with care.\n\n" + res
+    return res
+}
+
+/**
+ * v9.13.1 "Honest Summaries": deterministic meta-commentary stripper.
+ * Tiny models close their study summaries with lines ABOUT the summary
+ * ("This summary covers all the key information...", "Note: ...").
+ * TRAILING blank/meta lines are dropped, and a leading "(from ...)"
+ * label the model echoed is dropped too (the caller adds the real
+ * source label). Pure string matching - no model involved, and the
+ * "(from <file>)" label itself is kept.
+ */
+private fun stripSummaryMeta(text: String): String {
+    val metaRe = Regex("(?i)this summary covers|providing a comprehensive overview|in summary, this|covers all the key|the summary above")
+    val leadRe = Regex("(?i)^\\s*(note|disclaimer)\\s*:")
+    val lines = text.lines().toMutableList()
+    while (lines.isNotEmpty()) {
+        val last = lines[lines.size - 1].trim()
+        if (last.isNotEmpty() && !metaRe.containsMatchIn(last) &&
+            !leadRe.containsMatchIn(last)) break
+        lines.removeAt(lines.size - 1)
+    }
+    var out = lines.joinToString("\n").trim()
+    // a leading "(from ...)" the model echoed - the caller is about to
+    // add the real source label, so drop the duplicate
+    out = Regex("(?i)^\\(from[^)]*\\)\\s*(?:\\r?\\n)+").replace(out, "")
+    return out
+}
+
 
 /**
  * Removes repeated lines from a summary - tiny 1B models often restate
