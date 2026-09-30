@@ -76,11 +76,13 @@ object NcieTune {
     /**
      * v9.11.0: the app-side context budget. The engine API does not
      * expose the loaded model's context size (llama_n_ctx lives behind
-     * the AAR), so the default window is 4096 tokens ~= 16000 chars
-     * and the trim fires at 60% of that.
+     * the AAR), so the default window is 4096 tokens ~= 16000 chars.
+     * v9.12.1 "Context Diet": the trim now fires at 40% of that (was
+     * 60%) - the extra KV headroom is what the prompt-budget work on
+     * the prefill side needs to keep the writing speed up.
      */
     const val CONTEXT_WINDOW_CHARS = 16000
-    const val CONTEXT_BUDGET_CHARS = 9600
+    const val CONTEXT_BUDGET_CHARS = 6400
 
     /** The family a model file belongs to (case-insensitive substring). */
     fun familyOf(modelFile: String): String {
@@ -268,7 +270,7 @@ object NcieTune {
      * v9.11.0: token-budget-aware context trimming, called at
      * generation start. [chat].messages is the in-memory mirror of the
      * conversation the engine holds in its KV cache; once its total
-     * text exceeds [CONTEXT_BUDGET_CHARS] (60% of the assumed window),
+     * text exceeds [CONTEXT_BUDGET_CHARS] (40% of the assumed window),
      * the OLDEST messages go first, always in whole user+assistant
      * pairs - never the current question, which is not in the list yet
      * (startGeneration adds it after this runs), and never the most

@@ -108,16 +108,19 @@ class Settings(context: Context) {
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
-        // (under 60 words) replaces the old 7-rule stack - the small
+        // (under 70 words) replaces the old 7-rule stack - the small
         // on-device models follow it noticeably better, and every
         // preamble part (docPart, memory carry, rolling summary) is
         // injected AFTER it, unchanged. NovaEngine falls back to this
-        // same text when the stored prompt is blank.
+        // same text when the stored prompt is blank. v9.12.1 "Context
+        // Diet": one directness sentence added - the 1.5B model kept
+        // narrating what it was about to write.
         const val DEFAULT_SYSTEM_PROMPT =
             "You are NOVA, a private offline assistant running entirely on Shivam's phone - " +
                 "nothing you say ever leaves the device.\n" +
                 "Be concise and direct. If you are not sure, say so instead of guessing. " +
                 "Do not invent facts, numbers, quotes or sources.\n" +
+                "Always answer directly - never narrate what you are about to write.\n" +
                 "Reply in the language the user writes in. When notes or documents are " +
                 "provided, prefer them over your own memory."
 

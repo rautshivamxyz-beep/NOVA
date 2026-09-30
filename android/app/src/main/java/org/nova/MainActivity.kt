@@ -32,6 +32,7 @@ import org.json.JSONArray
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.nova.ncie.android.NcieArithmetic
+import org.nova.ncie.android.NcieChat
 import org.nova.ncie.android.NcieEngines
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
@@ -1136,6 +1137,7 @@ class MainActivity : Activity() {
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
         generating = true
+        NcieChat.generating = true
         setStatus()
 
         generationJob = scope.launch {
@@ -1207,6 +1209,7 @@ class MainActivity : Activity() {
                         // its UI or state; save the partial turn into ITS
                         // chat and stop here
                         generating = false
+                        NcieChat.generating = false
                         updateSendLook()
                         setStatus()
                         try {
@@ -1215,6 +1218,7 @@ class MainActivity : Activity() {
                         return@withContext
                     }
                     generating = false
+                    NcieChat.generating = false
                     updateSendLook()
                     setStatus()
                     // drop the duplicated tail the model often repeats when a
@@ -1560,6 +1564,7 @@ class MainActivity : Activity() {
             "Reading ${chunks.size} sections ($skipped index/reference pages skipped)\u2026"
         else "Reading ${chunks.size} sections\u2026")
         generating = true
+        NcieChat.generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
         setStatus()
@@ -1662,6 +1667,7 @@ class MainActivity : Activity() {
                 toast("Summary failed - try again")
             } finally {
                 generating = false
+                NcieChat.generating = false
                 setStatus()
                 updateSendLook()
             }
@@ -1737,6 +1743,7 @@ class MainActivity : Activity() {
         scrollToEnd()
         adapter.setLastText("Reading ${sections.size} sections of $doc\u2026")
         generating = true
+        NcieChat.generating = true
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
         setStatus()
@@ -1856,6 +1863,7 @@ class MainActivity : Activity() {
                 toast("Summary failed - try again")
             } finally {
                 generating = false
+                NcieChat.generating = false
                 setStatus()
                 updateSendLook()
             }

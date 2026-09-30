@@ -27,6 +27,24 @@ import java.io.File
  *  parseable size (a custom file name) stays a big model, as before. */
 private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
 
+/** v9.12.1 "Context Diet": the cap on the assembled non-skill preamble
+ *  (docPart + notes + wiki + rolling summary + experience line) - about
+ *  1500 words / 9000 chars. Overflow truncates the lowest-priority part
+ *  first; see the budget block in ncieSend. The current question, the
+ *  base system prompt and the memory carry stay outside it. */
+private const val PREAMBLE_BUDGET_CHARS = 9000
+
+/** v9.12.1 "Context Diet": the process-wide generation signal.
+ *  MainActivity's own `generating` flag is private and lives on the
+ *  activity, but the embedder's background workers (NcieEmbed.indexChunks)
+ *  need a static one - background indexing must never contend with a
+ *  live generation for the CPU. MainActivity mirrors all generation
+ *  sites' flags here; the index workers check it and defer (indexing is
+ *  best-effort, the next indexUpdate call picks it up). */
+object NcieChat {
+    @Volatile var generating = false
+}
+
 /**
  * NCIE Stage 5 (#1): the collapsed send(). The chat turn's entire routing
  * body - pre-model gates (calculator, phone commands, model-ready), the
@@ -443,6 +461,22 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                         "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
                     } else ""
                 }
+                // v9.12.1 "Context Diet": the doc relevance gate - a weak
+                // match (fewer than 3 matched question terms AND semantic
+                // cosine below 0.45) injects NO document window at all.
+                // The NCERT textbook used to ride one shared word into
+                // every unrelated question ("what is naruto" -> Goan
+                // society); now the model answers from general knowledge
+                // honestly. The explicit "from my notes:" grounding path
+                // (answerGrounded) is NOT affected - it always injects
+                // its retrieved chunks.
+                overlap < 3 && !NcieGround.strongMatch(this, text, win) -> {
+                    val wasInjected = docInjected
+                    docInjected = false
+                    if (wasInjected)
+                        "(The document restriction from earlier is lifted - answer from your own knowledge.)\n\n"
+                    else ""
+                }
                 else -> {
                     docInjected = true
                     docInjectedText = win
@@ -542,6 +576,17 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 pendingQaKey = qaKey
             }
             hits = NcieKnowledge.search(this, text)
+            // v9.12.1 "Context Diet": the same strength gate for the
+            // notes RAG - chunks back the question ONLY on a STRONG match
+            // (>= 3 matched terms or semantic cosine >= 0.45, see
+            // NcieGround.strongMatch). Weak matches inject nothing at
+            // all: the model answers from general knowledge instead of
+            // drifting into an unrelated textbook chunk. The follow-up
+            // carry below still works - it reuses hits that already
+            // passed this gate on their own turn.
+            if (hits.isNotEmpty() && !NcieGround.strongMatch(this, text, hits.first().text)) {
+                hits = emptyList()
+            }
             // v7.6: relevance gate - one shared word (e.g. just "bose")
             // matched junk notes and the model answered from them with a
             // confident-looking citation. The gate (significant query
@@ -567,6 +612,11 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         }
         // offline Wikipedia: matching articles as background facts
         var wikiPart = ""
+        // v9.12.1 "Context Diet": does the wiki top match pass the same
+        // strength gate as the documents? The online offer below needs
+        // to know whether weak wiki background really covers the
+        // question or is just existing-but-irrelevant noise.
+        var wikiStrong = false
         // v8.5.0: wiki background only on knowledge-seeking turns. Chat
         // and personal questions used to pull in junk articles ("what you
         // know about me" matched random titles) and the model answered
@@ -584,6 +634,7 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             // dropped, not injected.
             if (wikiHits.isNotEmpty() &&
                 Coverage.ratio(text, wikiHits.joinToString(" ") { it.text }) >= 0.3) {
+                wikiStrong = NcieGround.strongMatch(this, text, wikiHits.first().text)
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 // v7.5: wiki is background only - halve it so the model reads
                 // less before the first word; notes (the quality driver) stay
@@ -637,9 +688,17 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // conversation rides along as a preamble on every normal turn,
         // so a long chat never loses its beginning. Skills keep their
         // own instruction wrapper; the docPart logic above is untouched.
+        var summaryPart = ""
         if (skill == null) {
-            val chatSumm = NcieSummary.read(this, currentChat.id)
-            if (chatSumm != null) prompt = "Conversation so far (summary): $chatSumm\n\n" + prompt
+            // v9.12.1 "Context Diet": the summary sanitizer - the
+            // summarizer sometimes preserves the meta markers of the
+            // prompts it was fed ("New message:", "Nova:", "Answer:",
+            // "(Reply", "— end"), and the model then mimics them in its
+            // replies. NcieSummary.sanitize drops those lines before
+            // the summary rides along as a preamble.
+            val chatSumm = NcieSummary.sanitize(NcieSummary.read(this, currentChat.id))
+            if (chatSumm.isNotEmpty())
+                summaryPart = "Conversation so far (summary): $chatSumm\n\n"
         }
         // v8.5.3: a study question with NOTHING local behind it must not be
         // answered from imagination - the model invented chapter contents
@@ -656,9 +715,60 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
                 "Suggest adding the chapter to Knowledge, or looking it up " +
                 "online if that is allowed.)\n\n" + prompt
         }
-        // one background source for tiny models, both for bigger ones
-        prompt = skillPart + (if (tiny) (if (knowledgePart.isNotEmpty()) knowledgePart else wikiPart)
-                  else knowledgePart + wikiPart) + prompt
+        // v9.12.1 "Context Diet": the experience line, reworded - the
+        // old "the user was not satisfied" wording induced
+        // meta-commentary on the 1.5B model ("I'd be happy to greet you
+        // warmly..."). The match itself stays exact-question-only
+        // (NcieEngines.isExperienced is a case-insensitive trim match).
+        val experienced = NcieEngines.isExperienced(this, text)
+        var experiencePart = if (experienced)
+            "(Answer the question directly and completely. Do not describe what you will say.)\n\n"
+        else ""
+        // one background source for tiny models, both for bigger ones -
+        // the source a tiny model drops stays out of the budget math too
+        if (tiny) {
+            if (knowledgePart.isNotEmpty()) wikiPart = "" else knowledgePart = ""
+        }
+        // v9.12.1 "Context Diet": the prompt budget - about 1500 words /
+        // 9000 chars over the non-skill preamble, in priority order:
+        // docPart first (it passed the strength gate above), then the
+        // notes, then wiki, then the rolling summary. Overflow truncates
+        // the LOWEST-priority part first (the experience line, then the
+        // summary, then wiki, then the notes); the document window is
+        // only ever cut when everything else is already gone, and NEVER
+        // the current question, the base system prompt or the memory
+        // carry (already capped at 500 chars).
+        var over = docPart.length + knowledgePart.length + wikiPart.length +
+            summaryPart.length + experiencePart.length - PREAMBLE_BUDGET_CHARS
+        if (over > 0) {
+            if (experiencePart.length > over) {
+                experiencePart = experiencePart.substring(0, experiencePart.length - over) + "…"
+                over = 0
+            } else { over -= experiencePart.length; experiencePart = "" }
+        }
+        if (over > 0) {
+            if (summaryPart.length > over) {
+                summaryPart = summaryPart.substring(0, summaryPart.length - over) + "…"
+                over = 0
+            } else { over -= summaryPart.length; summaryPart = "" }
+        }
+        if (over > 0) {
+            if (wikiPart.length > over) {
+                wikiPart = wikiPart.substring(0, wikiPart.length - over) + "…"
+                over = 0
+            } else { over -= wikiPart.length; wikiPart = "" }
+        }
+        if (over > 0) {
+            if (knowledgePart.length > over) {
+                knowledgePart = knowledgePart.substring(0, knowledgePart.length - over) + "…"
+                over = 0
+            } else { over -= knowledgePart.length; knowledgePart = "" }
+        }
+        if (over > 0 && docPart.isNotEmpty() && docPart.length > over) {
+            prompt = prompt.replaceFirst(
+                docPart, docPart.substring(0, docPart.length - over) + "…\n\n")
+        }
+        prompt = skillPart + knowledgePart + wikiPart + experiencePart + summaryPart + prompt
 
         // v8.2.0: the notes that grounded THIS answer — handed to LEARN
         // so the quality gate scores the answer against what it was built
@@ -677,9 +787,17 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // hits, no wiki coverage. When notes or wiki already cover it,
         // NOVA answers locally with NO dialog at all; "look it up
         // online" is the manual way in.
+        // v9.12.1: the offer is restored for weak-local questions.
+        // docPart is already absent after the relevance gate, so the
+        // v9.7.0 blocker was existing-but-WEAK local material: the offer
+        // now fires when the wiki background is empty or fails the same
+        // strength gate, or the question is a who-is/biographical one
+        // (the case where a hallucinated local answer went unchallenged).
+        // A strong local match still answers locally, no dialog at all.
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
             lastSkillMatched == null && WikiCore.isReady(this) &&
-            knowledgePart.isEmpty() && wikiPart.isEmpty()
+            knowledgePart.isEmpty() &&
+            (wikiPart.isEmpty() || !wikiStrong || bioQuestion(text))
         ) {
             offerOnlineFetch(act, text)
             return
@@ -691,11 +809,10 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         // better-answer instruction, and never touches the answer cache
         // while it stays logged (so the engine keeps informing the next
         // answer instead of the cache replaying the old one).
-        val experienced = NcieEngines.isExperienced(this, text)
-        if (experienced) {
-            prompt = "(The user previously asked this and was not satisfied " +
-                "with the answer. Try a better, clearer answer this time.)\n\n" + prompt
-        } else if (skill == null) {
+        // v9.12.1: the better-answer instruction is the de-meta'd
+        // experiencePart in the budget block above; only the cache skip
+        // remains here.
+        if (!experienced && skill == null) {
             // v9.6.0: the Predictive Cache - an exact repeat of a normal
             // chat question is answered instantly, verbatim, before any
             // generation. Regenerating bypasses this and refreshes the
@@ -1237,8 +1354,15 @@ private fun MainActivity.answerGrounded(text: String): Boolean {
             }
             return@launch
         }
-        val groundReply = NovaEngineAdapter.generate(
-            NcieGround.groundPrompt(question, chunks), activity.settings.predictLength)
+        // v9.12.1 "Context Diet": signal the generation so the embedder's
+        // background index workers (spawned by retrieve above) stand down
+        // while the LLM runs - the same static flag MainActivity mirrors
+        // at its generation sites.
+        NcieChat.generating = true
+        val groundReply = try {
+            NovaEngineAdapter.generate(
+                NcieGround.groundPrompt(question, chunks), activity.settings.predictLength)
+        } finally { NcieChat.generating = false }
         // v9.6.0 "Engine Pack": the truth check - deterministic answer-
         // vs-source keyword verification. A grounded answer whose content
         // words do not overlap the retrieved chunks is flagged below,
@@ -1370,6 +1494,22 @@ private fun MainActivity.answerConnections(text: String): Boolean {
 // ---------------------------------------------------------------------
 // v9.7.0 "Quiet Fetch"
 // ---------------------------------------------------------------------
+
+// v9.12.1 "Context Diet": biographical questions - "who is <Name>",
+// "who was", "when did", "how did" (+ a capitalized name token, or a
+// name-like word when the user types lowercase, e.g. "who is rahul
+// gandhi"). These are exactly the questions whose wrong local answers
+// went unchallenged, so the online offer returns for them even when
+// weak local material exists.
+private val BIO_Q = Regex(
+    "(?i)\\b(?:who\\s+(?:is|was|are|were)|when\\s+(?:did|was|were|is|will)|how\\s+(?:did|do))\\b")
+
+private fun bioQuestion(text: String): Boolean {
+    if (!BIO_Q.containsMatchIn(text)) return false
+    if (Regex("\\b[A-Z][a-z]{2,}\\b").containsMatchIn(text)) return true
+    // lowercase typing: a name-like word after the phrase
+    return text.split(Regex("\\s+")).any { it.length >= 4 && it.none { c -> c.isDigit() } }
+}
 
 /** v9.7.0 "Quiet Fetch": the single entry into the online fetch flow.
  *  Both the quiet offer (only when NO local material backs the question)

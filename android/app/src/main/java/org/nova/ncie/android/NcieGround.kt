@@ -71,6 +71,27 @@ object NcieGround {
     internal fun questionTerms(question: String): List<String> =
         NcieKnowledge.keyTerms(question).filter { it !in STOP }
 
+    /** v9.12.1 "Context Diet": the retrieval STRENGTH gate shared by the
+     *  chat turn's injection points (the attached-document window and
+     *  the notes RAG in NcieChat). A match is STRONG when at least 3 of
+     *  the question's significant terms appear in the candidate
+     *  (whole-word), or the semantic cosine between the question and the
+     *  candidate (NcieEmbed, when the embedder is alive) is >= 0.45.
+     *  Weak matches inject nothing at all - the model answers from
+     *  general knowledge honestly instead of drifting into an unrelated
+     *  chunk. The explicit "from my notes:" path (retrieve) is NOT gated
+     *  by this - the user asked for it. */
+    fun strongMatch(ctx: Context, question: String, candidate: String): Boolean {
+        val terms = questionTerms(question)
+        val norm = " " + candidate.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        var matched = 0
+        for (t in terms) if (norm.contains(" " + t + " ")) matched++
+        if (matched >= 3) return true
+        val qv = NcieEmbed.embed(ctx, question) ?: return false
+        val cv = NcieEmbed.embed(ctx, candidate.take(1500)) ?: return false
+        return NcieEmbed.cosine(qv, cv) >= 0.45f
+    }
+
     /** All knowledge documents + wiki articles the user has, names only,
      *  in store order (Knowledge first, then wiki). */
     fun docsList(ctx: Context): List<String> {

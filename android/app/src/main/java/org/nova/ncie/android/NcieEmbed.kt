@@ -209,6 +209,12 @@ object NcieEmbed {
      *  + 384 LE floats per chunk). Any failure deletes the stale file so
      *  retrieval degrades to keyword-only. Off the main thread only. */
     fun indexChunks(ctx: Context, name: String, texts: List<String>) {
+        // v9.12.1 "Context Diet": never run the embedder while a
+        // generation is in flight - the ONNX model and the LLM fight for
+        // the same CPU cores and the chat's token rate collapsed to a
+        // third. Indexing is best-effort: skip now, the next
+        // indexUpdate call picks it up.
+        if (NcieChat.generating) return
         val f = indexFile(ctx, name)
         try {
             if (broken) { f.delete(); return }
@@ -217,6 +223,7 @@ object NcieEmbed {
             if (texts.isEmpty()) { f.delete(); return }
             val vecs = ArrayList<FloatArray>(texts.size)
             for (t in texts) {
+                if (NcieChat.generating) return   // abort - the next indexUpdate retries
                 val e = embed(ctx, t)
                 if (e == null || e.size != DIM) { f.delete(); return }
                 vecs.add(e)

@@ -55,6 +55,26 @@ object NcieSummary {
         if (s.isNullOrEmpty()) null else s
     } catch (e: Exception) { null }
 
+    /** v9.12.1 "Context Diet": the summary sanitizer. The summarizer
+     *  sometimes preserves the meta markers of the prompts it was fed
+     *  ("New message:", "Answer:", "(Reply", "— end", "Nova:"), and the
+     *  model then mimics them in its replies ("New message: ..." instead
+     *  of an answer). Lines carrying any of those markers are dropped
+     *  (case-insensitive, trimmed-line match) before the summary is
+     *  injected into the preamble. Returns "" when nothing survives. */
+    fun sanitize(s: String?): String {
+        if (s == null) return ""
+        val sb = StringBuilder()
+        for (l in s.lines()) {
+            val low = l.trim().lowercase()
+            if (low.contains("new message") || low.contains("answer:") ||
+                low.contains("(reply") || low.contains("— end") ||
+                low.contains("nova:")) continue
+            sb.append(l).append('\n')
+        }
+        return sb.toString().trim()
+    }
+
     /** True once EVERY user messages have completed since the last roll. */
     fun due(c: Context, id: String): Boolean = count(c, id) >= EVERY
 
