@@ -152,6 +152,12 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
         if (EXAM_SHOW.containsMatchIn(text)) { input.setText(""); NcieExam.showPlan(this); return }
         if (EXAM_PLAN.containsMatchIn(text)) { input.setText(""); NcieExam.buildPlan(this); return }
         if (EXAM_COUNT.containsMatchIn(text)) { input.setText(""); NcieExam.countdown(this); return }
+        // v9.11.0 "Inference Quality": per-model sampling profiles -
+        // "set temperature 0.7" (also top p / top k / min p / repeat
+        // penalty), "model settings" and "reset model settings".
+        // Deterministic like the exam commands above: no model call,
+        // no network, works with no model loaded at all.
+        if (answerTune(text)) { input.setText(""); return }
         // v9.2.0 "Rolling Chat Summary": two deterministic commands over
         // filesDir/chat_summary.txt - "summarize our conversation" reads
         // it, "forget our conversation" deletes it and clears the
@@ -198,6 +204,21 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             return
         }
         input.setText("")
+        // v9.11.0 "Inference Quality": token-budget-aware context
+        // trimming. The engine keeps the whole conversation in its KV
+        // cache and currentChat.messages is the app-side mirror of
+        // what it holds; once that mirror exceeds the budget, the oldest
+        // whole user+assistant pairs are dropped (the rolling summary
+        // already preserves the gist), the history is marked as
+        // not-in-engine-context so this turn's prompt carries the
+        // summary + recent pairs, and the engine is reset in the
+        // dispatch below so the freed KV is actually freed.
+        val ctxTrimmed = NcieTune.trimContext(this, currentChat)
+        if (ctxTrimmed) needsContextCarry = true
+        // v9.11.0: resolve the active model's sampling profile at
+        // generation start (see NcieTune - the engine boundary itself
+        // is read-only for sampling; the kernel follow-up wires here).
+        NcieTune.applyProfile(this)
         // v7.3: greetings get a clean tiny prompt - no notes/wiki/maths
         // wrapper, so the model chats instead of summarizing
         if (SMALLTALK_REGEX.containsMatchIn(text)) {
@@ -730,7 +751,18 @@ fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false) {
             }
         } else {
             NcieSummary.bump(this, currentChat.id)
-            startGeneration(prompt, text)
+            if (ctxTrimmed && NovaEngine.contextDirty) {
+                // v9.11.0: the dropped turns are still in the engine's
+                // KV - reset first (the same suspend-then-generate shape
+                // as the greeting path above), then generate; this turn's
+                // prompt already carries the summary + recent pairs.
+                scope.launch {
+                    NovaEngine.resetConversation(act, settings.systemPrompt)
+                    startGeneration(prompt, text)
+                }
+            } else {
+                startGeneration(prompt, text)
+            }
         }
     }
 
@@ -940,6 +972,15 @@ private val EXAM_CLEAR = Regex(
 private val EXAM_COUNT = Regex(
     "(?i)^\\s*(?:exam\\s+countdown|days\\s+to\\s+my\\s+exam)\\s*[.!?]*\\s*$")
 
+// v9.11.0 "Inference Quality": the tuning commands. TUNE_SET_Q is the
+// open capture pair (knob, value); the show/reset ones are anchored
+// short commands like the exam ones, so OCR'd chapter pastes never
+// fall into them.
+private val TUNE_SET_Q = Regex(
+    "(?i)^\\s*set\\s+(temperature|temp|top[\\s-]?p|top[\\s-]?k|min[\\s-]?p|repeat(?:[\\s-]?penalty)?)\\s+([0-9]*\\.?\\d+)\\s*[.!?]*\\s*$")
+private val TUNE_SHOW_Q = Regex("(?i)^\\s*model\\s+settings\\s*[.!?]*\\s*$")
+private val TUNE_RESET_Q = Regex("(?i)^\\s*reset\\s+model\\s+settings\\s*[.!?]*\\s*$")
+
 // v8.9.0: Tutor Mode's entry phrases. Anchored short commands (study,
 // weak areas, flashcards) so OCR'd chapter pastes never fall into them;
 // quiz-me-on keeps the open topic capture but is length-gated in the
@@ -951,6 +992,46 @@ private val TUTOR_WEAK = Regex(
 private val FLASH_ADD = Regex("(?i)^\\s*add\\s+flashcards?\\b\\s*(.*)$")
 private val FLASH_LIST = Regex("(?i)^\\s*my\\s+flashcards\\s*[.!?]*\\s*$")
 private val FLASH_QUIZ = Regex("(?i)^\\s*(?:quiz\\s+my\\s+flashcards|flashcards)\\s*[.!?]*\\s*$")
+
+// v9.11.0 "Inference Quality": the tuning command intercept - "set
+// temperature 0.7" (variants: temp, top p / top-p, top k / topk, min p,
+// repeat penalty), "model settings" (the current model's effective
+// profile, monospace, with each value's origin) and "reset model
+// settings" (delete the override file, back to family defaults).
+// Invalid values get an honest usage reply. NcieTune owns the logic.
+private fun MainActivity.answerTune(text: String): Boolean {
+    // long/OCR'd text is a study question that merely contains the
+    // phrase - these commands are always short and typed
+    if (text.length > 80) return false
+    val m = TUNE_SET_Q.find(text)
+    val show = TUNE_SHOW_Q.containsMatchIn(text)
+    val reset = TUNE_RESET_Q.containsMatchIn(text)
+    if (m == null && !show && !reset) return false
+    val activity = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    val body: String = when {
+        m != null -> {
+            val knob = m.groupValues[1].lowercase().replace("-", " ")
+            val key = when (knob) {
+                "temperature", "temp" -> "temperature"
+                "top p", "topp" -> "top_p"
+                "top k", "topk" -> "top_k"
+                "min p", "minp" -> "min_p"
+                else -> "repeat_penalty"
+            }
+            NcieTune.setCommand(activity, key, m.groupValues[2])
+        }
+        reset -> NcieTune.resetCommand(activity)
+        else -> NcieTune.showCommand(activity)
+    }
+    val reply = Msg(Role.ASSISTANT, body)
+    currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+    activity.scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+    }
+    return true
+}
 
 // v8.8.0: "any messages from X" / "did X message me" / "anything from
 // X" - a deterministic search of NovaListener's log for X (the one to

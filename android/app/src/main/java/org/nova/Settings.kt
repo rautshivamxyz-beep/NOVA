@@ -107,16 +107,19 @@ class Settings(context: Context) {
         private const val KEY_SPEC = "spec_decoding"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
+        // v9.11.0 "Inference Quality": a strong, concise base prompt
+        // (under 60 words) replaces the old 7-rule stack - the small
+        // on-device models follow it noticeably better, and every
+        // preamble part (docPart, memory carry, rolling summary) is
+        // injected AFTER it, unchanged. NovaEngine falls back to this
+        // same text when the stored prompt is blank.
         const val DEFAULT_SYSTEM_PROMPT =
-            "You are NOVA, a helpful AI assistant running fully offline on this phone.\n" +
-                "Rules:\n" +
-                "1. Be direct and confident about things you know — science, maths, history, public figures and general knowledge. Do not refuse just because a person or topic is mentioned.\n" +
-                "2. If you truly do not know something or might confuse details, say so plainly — never invent facts, numbers, quotes or sources.\n" +
-                "3. For maths, science or reasoning problems, work through it step by step before the final answer.\n" +
-                "4. Keep answers clear and concise; use markdown when it helps.\n" +
-                "5. Reply in the language the user writes in.\n" +
-                "6. When notes from the user's documents are provided, prefer them over your own memory.\n" +
-                "7. Answer directly. Never describe what you are about to write, never repeat instructions back, and never end with commentary about the reply itself.\n"
+            "You are NOVA, a private offline assistant running entirely on Shivam's phone - " +
+                "nothing you say ever leaves the device.\n" +
+                "Be concise and direct. If you are not sure, say so instead of guessing. " +
+                "Do not invent facts, numbers, quotes or sources.\n" +
+                "Reply in the language the user writes in. When notes or documents are " +
+                "provided, prefer them over your own memory."
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }

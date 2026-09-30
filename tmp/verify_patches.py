@@ -207,10 +207,26 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.10.0: version bumped for revision planner",
-      bg.count("versionName '9.10.0'") == 1 and bg.count("versionCode 93") == 1)
+check("v9.11.0: version bumped for inference quality",
+      bg.count("versionName '9.11.0'") == 1 and bg.count("versionCode 94") == 1)
 ne = load("ncie/android/NcieExam.kt")
 nr = load("ncie/android/NcieRoutines.kt")
+# ---- v9.11.0 "Inference Quality": sampling profiles, base prompt, context budget ----
+# (variable names tun/nev/st: nt stays NovaTheme below, ne stays NcieExam)
+tun = load("ncie/android/NcieTune.kt")
+nev = load("NovaEngine.kt")
+st = load("Settings.kt")
+check("v9.11.0: per-model sampling profiles ship (NcieTune)",
+      tun.count("model_settings") >= 2 and tun.count("QWEN_DEFAULTS") == 2 and
+      tun.count("LFM_DEFAULTS") == 2 and tun.count("OTHER_DEFAULTS") == 2 and
+      tun.count("CONTEXT_BUDGET_CHARS") >= 2 and tun.count("CONTEXT_WINDOW_CHARS") == 1)
+check("v9.11.0: tuning commands + context trimming wired into the chat turn (NcieChat)",
+      nc.count("answerTune(text)") == 1 and nc.count("NcieTune.trimContext(") == 1 and
+      nc.count("NcieTune.applyProfile(") == 1 and nc.count("TUNE_SET_Q") == 3)
+check("v9.11.0: strong concise base system prompt (Settings default + NovaEngine fallback)",
+      st.count("Be concise and direct. If you are not sure, say so instead of guessing") == 1 and
+      st.count("Do not invent facts") == 1 and
+      nev.count("ifBlank { Settings.DEFAULT_SYSTEM_PROMPT }") == 2)
 check("v9.10.0: the exam planner ships (date file, countdown, plan, today's topic)",
       ne.count("fun setExamDate(") == 1 and ne.count("fun buildPlan(") == 1 and
       ne.count("fun daysLeft(") == 1 and ne.count("fun todayTopic(") == 1 and
@@ -428,7 +444,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

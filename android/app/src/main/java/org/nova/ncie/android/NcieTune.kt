@@ -1,0 +1,293 @@
+package org.nova.ncie.android
+
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.nova.Chat
+import org.nova.ChatStore
+import org.nova.MainActivity
+import org.nova.Msg
+import org.nova.NovaEngine
+import org.nova.Role
+import org.nova.Settings
+import java.io.File
+import java.util.Locale
+
+/**
+ * v9.11.0 "Inference Quality": per-model sampling profiles + the
+ * token-budget-aware context trim. Fully local, app-side only - the
+ * NCIE kernel (libs/llama-release.aar, com.arm.aichat) is NOT touched.
+ *
+ * ENGINE BOUNDARY FINDING (do not lose this): the InferenceEngine the
+ * app talks to exposes exactly loadModel(path), setSystemPrompt(text),
+ * sendUserPrompt(prompt, maxTokens), bench(...), cleanUp() and
+ * destroy() - there are NO sampling setters (verified against the
+ * compiled class dump in inference.txt and the JNI exports of
+ * libai-chat.so). The native side DOES run a sampler
+ * (common_sampler_init with a default common_params_sampling), so the
+ * knobs exist kernel-side but cannot be reached from the app. Everything
+ * this object manages - the defaults table, the per-model override
+ * files, the chat commands - is therefore the complete app-side half of
+ * the feature; applying the values to the live sampler needs a kernel
+ * follow-up (setters on InferenceEngineImpl plumbed into
+ * common_params_sampling). applyProfile() stages the effective values
+ * at every generation start so that follow-up has exactly one call
+ * site to wire.
+ *
+ * Storage: filesDir/model_settings/<modelFileName>.txt, lines of
+ * "key=value" for temperature, top_p, top_k, min_p, repeat_penalty.
+ * An absent file means "use the family defaults".
+ */
+object NcieTune {
+
+    /** The five sampling knobs this object manages, in display order. */
+    val KEYS = listOf("temperature", "top_p", "top_k", "min_p", "repeat_penalty")
+
+    /** Friendly names for the chat replies ("repeat_penalty" reads badly). */
+    val DISPLAY = mapOf(
+        "temperature" to "temperature",
+        "top_p" to "top p",
+        "top_k" to "top k",
+        "min_p" to "min p",
+        "repeat_penalty" to "repeat penalty")
+
+    /** Valid ranges - "set temperature 5" gets an honest usage reply. */
+    val RANGES: Map<String, ClosedFloatingPointRange<Double>> = mapOf(
+        "temperature" to 0.0..2.0,
+        "top_p" to 0.0..1.0,
+        "top_k" to 0.0..100.0,
+        "min_p" to 0.0..0.3,
+        "repeat_penalty" to 1.0..2.0)
+
+    /**
+     * v9.11.0 family defaults, matched case-insensitively as substrings
+     * of the model FILE NAME. "qwen" -> the ChatML family tuned for
+     * tight, on-point answers; "lfm" -> Liquid's recommended chat
+     * sampling; llama / gemma / everything else -> the conservative
+     * conversational default.
+     */
+    val QWEN_DEFAULTS: Map<String, Double> = mapOf(
+        "temperature" to 0.7, "top_p" to 0.8, "top_k" to 20.0,
+        "min_p" to 0.0, "repeat_penalty" to 1.05)
+    val LFM_DEFAULTS: Map<String, Double> = mapOf(
+        "temperature" to 0.6, "top_p" to 0.9, "top_k" to 40.0,
+        "min_p" to 0.05, "repeat_penalty" to 1.1)
+    val OTHER_DEFAULTS: Map<String, Double> = mapOf(
+        "temperature" to 0.8, "top_p" to 0.9, "top_k" to 40.0,
+        "min_p" to 0.05, "repeat_penalty" to 1.1)
+
+    /**
+     * v9.11.0: the app-side context budget. The engine API does not
+     * expose the loaded model's context size (llama_n_ctx lives behind
+     * the AAR), so the default window is 4096 tokens ~= 16000 chars
+     * and the trim fires at 60% of that.
+     */
+    const val CONTEXT_WINDOW_CHARS = 16000
+    const val CONTEXT_BUDGET_CHARS = 9600
+
+    /** The family a model file belongs to (case-insensitive substring). */
+    fun familyOf(modelFile: String): String {
+        val n = modelFile.lowercase(Locale.US)
+        return when {
+            "qwen" in n -> "qwen"
+            "lfm" in n -> "lfm"
+            else -> "default"
+        }
+    }
+
+    fun defaultsFor(family: String): Map<String, Double> = when (family) {
+        "qwen" -> QWEN_DEFAULTS
+        "lfm" -> LFM_DEFAULTS
+        else -> OTHER_DEFAULTS
+    }
+
+    private fun dir(c: Context): File =
+        File(c.filesDir, "model_settings").apply { mkdirs() }
+
+    private fun fileFor(c: Context, modelFile: String): File =
+        File(dir(c), modelFile + ".txt")
+
+    /**
+     * The current model as (fileName, label) - the loaded one when the
+     * engine is warm, else the last one the user had active. Null when
+     * NOVA has never had a model at all.
+     */
+    fun currentModel(c: Context): Pair<String, String>? {
+        NovaEngine.activeModelPath?.let { p ->
+            return Pair(p.substringAfterLast('/'),
+                NovaEngine.activeModelLabel.ifBlank { p.substringAfterLast('/') })
+        }
+        val s = Settings(c)
+        val p = s.lastModelPath ?: return null
+        return Pair(p.substringAfterLast('/'),
+            s.lastModelLabel.ifBlank { p.substringAfterLast('/') })
+    }
+
+    /**
+     * Effective profile for [modelFile]: the per-model override file's
+     * values over the family defaults. Returns the five effective
+     * values plus the set of keys that came from the override file
+     * (for the "model settings" origin display).
+     */
+    fun effective(c: Context, modelFile: String): Pair<Map<String, Double>, Set<String>> {
+        val custom = HashMap<String, Double>()
+        try {
+            val f = fileFor(c, modelFile)
+            if (f.exists()) for (l in f.readText().lines()) {
+                val i = l.indexOf('=')
+                if (i <= 0) continue
+                val k = l.substring(0, i).trim()
+                val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
+                if (k in KEYS) custom[k] = v
+            }
+        } catch (e: Exception) { }
+        val fam = defaultsFor(familyOf(modelFile))
+        val values = LinkedHashMap<String, Double>()
+        for (k in KEYS) values[k] = custom[k] ?: fam.getValue(k)
+        return Pair(values, custom.keys)
+    }
+
+    /** The profile resolved for the model of the in-flight generation. */
+    @Volatile
+    var active: Map<String, Double> = emptyMap()
+        private set
+
+    /** The model file [active] belongs to ("" when none resolved yet). */
+    @Volatile
+    var activeModel: String = ""
+        private set
+
+    /**
+     * v9.11.0: called at generation start (once per turn, from
+     * ncieSend). Resolves the active model's effective profile and
+     * stages it in [active]. The engine boundary exposes no sampling
+     * setters (see the class doc), so nothing about the live sampler
+     * changes yet - this is the single wiring point for the kernel
+     * follow-up, and the values are already persisted in
+     * filesDir/model_settings/ for it to read.
+     */
+    fun applyProfile(act: MainActivity) {
+        val m = currentModel(act) ?: return
+        val (values, _) = effective(act, m.first)
+        active = values
+        activeModel = m.first
+    }
+
+    // ------------------------------------------------ chat commands
+
+    /** The "set <knob> <value>" reply, or the honest usage reply when
+     *  the value is out of range / unparseable. */
+    fun setCommand(c: Context, key: String, raw: String): String {
+        val m = currentModel(c)
+            ?: return "No model yet - download one from the Models screen first."
+        val v = raw.toDoubleOrNull()
+        val range = RANGES[key]
+        if (v == null || range == null || v < range.start || v > range.endInclusive)
+            return usage()
+        val vals = readOverrides(c, m.first)
+        vals[key] = v
+        try {
+            val sb = StringBuilder()
+            for (k in KEYS) if (k in vals) sb.append(k).append('=').append(fmt(vals.getValue(k))).append('\n')
+            fileFor(c, m.first).writeText(sb.toString())
+        } catch (e: Exception) {
+            return "Could not save the setting (storage error)."
+        }
+        return DISPLAY.getValue(key) + " set to " + fmt(v) + " for " + m.second
+    }
+
+    /** The "model settings" listing: monospace, with each value's origin. */
+    fun showCommand(c: Context): String {
+        val m = currentModel(c)
+            ?: return "No model yet - download one from the Models screen first."
+        val (values, custom) = effective(c, m.first)
+        val fam = familyOf(m.first)
+        val sb = StringBuilder("```\nModel: " + m.second + "  (" + m.first + ")\n")
+        for (k in KEYS) {
+            sb.append("  ").append(k).append(" = ").append(fmt(values.getValue(k)))
+            sb.append("   (").append(if (k in custom) "custom" else "family default: " + fam)
+            sb.append(")\n")
+        }
+        sb.append("```")
+        return sb.toString()
+    }
+
+    /** The "reset model settings" reply - deletes the override file. */
+    fun resetCommand(c: Context): String {
+        val m = currentModel(c)
+            ?: return "No model yet - download one from the Models screen first."
+        try { fileFor(c, m.first).delete() } catch (e: Exception) { }
+        return "Model settings reset to " + familyOf(m.first) +
+            " family defaults for " + m.second
+    }
+
+    private fun usage(): String =
+        "Usage:\n" +
+            "set temperature 0-2\n" +
+            "set top p 0-1\n" +
+            "set top k 0-100\n" +
+            "set min p 0-0.3\n" +
+            "set repeat penalty 1-2\n" +
+            "Also: model settings, reset model settings"
+
+    private fun readOverrides(c: Context, modelFile: String): HashMap<String, Double> {
+        val vals = HashMap<String, Double>()
+        try {
+            val f = fileFor(c, modelFile)
+            if (f.exists()) for (l in f.readText().lines()) {
+                val i = l.indexOf('=')
+                if (i <= 0) continue
+                val k = l.substring(0, i).trim()
+                val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
+                if (k in KEYS) vals[k] = v
+            }
+        } catch (e: Exception) { }
+        return vals
+    }
+
+    /** 20.0 -> "20", 0.70 -> "0.7" - values read back the way they read in. */
+    private fun fmt(v: Double): String =
+        if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
+
+    // ------------------------------------------------ context trimming
+
+    /**
+     * v9.11.0: token-budget-aware context trimming, called at
+     * generation start. [chat].messages is the in-memory mirror of the
+     * conversation the engine holds in its KV cache; once its total
+     * text exceeds [CONTEXT_BUDGET_CHARS] (60% of the assumed window),
+     * the OLDEST messages go first, always in whole user+assistant
+     * pairs - never the current question, which is not in the list yet
+     * (startGeneration adds it after this runs), and never the most
+     * recent pair. The rolling summary (NcieSummary) already preserves
+     * the gist of what is dropped; the caller sets needsContextCarry
+     * and resets the engine so the freed KV is actually freed.
+     * Deterministic, no LLM. Returns true when something was dropped.
+     */
+    fun trimContext(act: MainActivity, chat: Chat): Boolean {
+        val msgs = chat.messages
+        var total = 0
+        for (m in msgs) total += m.text.length
+        if (total <= CONTEXT_BUDGET_CHARS || msgs.size <= 2) return false
+        var t = total
+        var drop = 0
+        while (t > CONTEXT_BUDGET_CHARS && msgs.size - drop > 2) {
+            // whole pairs: a leading USER plus its ASSISTANT reply; a
+            // leading orphan (an interrupted turn) goes alone
+            val step = if (msgs[drop].role == Role.USER && msgs.size - drop > 3) 2 else 1
+            for (k in 0 until step) {
+                t -= msgs[drop].text.length
+                drop++
+            }
+        }
+        if (drop == 0) return false
+        val keep = ArrayList<Msg>(msgs.size - drop)
+        for (i in drop until msgs.size) keep.add(msgs[i])
+        msgs.clear()
+        msgs.addAll(keep)
+        act.scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(act, chat) } catch (e: Exception) { }
+        }
+        return true
+    }
+}

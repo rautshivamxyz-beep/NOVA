@@ -135,7 +135,11 @@ object NovaEngine {
         val engine = get(context)
         ensureReady(engine)
         engine.loadModel(path)
-        val prompt = systemPrompt + thinkingHint(path, label)
+        // v9.11.0 "Inference Quality": a blank prompt (the user cleared
+        // it in Settings) falls back to the strong concise base prompt -
+        // the model always gets a system turn.
+        val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
+            thinkingHint(path, label)
         if (prompt.isNotBlank()) {
             try {
                 engine.setSystemPrompt(prompt)
@@ -224,9 +228,11 @@ object NovaEngine {
             // never fight an in-flight generation - wait, like reloadAsync
             val t0 = SystemClock.elapsedRealtime()
             while (isGenerating && SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
-            val prompt = systemPrompt +
+            // v9.11.0 "Inference Quality": same fallback as load() - a
+            // blank prompt never wipes the base prompt off the engine.
+            val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
                 thinkingHint(activeModelPath ?: "", activeModelLabel)
-            engine.setSystemPrompt(prompt.ifBlank { " " })
+            engine.setSystemPrompt(prompt)
             contextDirty = false
             return true
         } catch (e: CancellationException) {
