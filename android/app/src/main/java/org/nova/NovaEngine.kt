@@ -274,6 +274,19 @@ object NovaEngine {
         return engine.sendUserPrompt(message, predictLength)
     }
 
+    /**
+     * v9.12.0 "Live Tuning": the v8.0 engine AAR exposes live sampling
+     * setters (com.arm.aichat.InferenceEngine.setSampling - suspend,
+     * ModelReady-guarded, off the main thread inside the impl). Thin
+     * pass-through; a missing engine is a silent no-op, and the one-way
+     * broken-flag failure policy lives one level up in NovaEngineAdapter.
+     */
+    suspend fun setSampling(temperature: Float, topP: Float, topK: Int,
+                            minP: Float, repeatPenalty: Float) {
+        val engine = engineRef ?: return
+        engine.setSampling(temperature, topP, topK, minP, repeatPenalty)
+    }
+
     val isModelLoaded: Boolean
         get() {
             val engine = engineRef ?: return false

@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.collect
  *   - [loaded]     : is a model resident in RAM
  *   - [send]       : (prompt, maxTokens) → cold Flow of token chunks
  *
+ * v9.12.0: the class is open so the app adapter can grow engine-specific
+ * ports on top of it (NOVA's adapter adds the live setSampling bridge).
+ *
  * generate() blocks the calling thread until the stream completes — call
  * it from a worker thread (Dispatchers.IO on Android). stream() is the
  * non-blocking counterpart for callers that want the Flow itself (a chat
@@ -29,7 +32,7 @@ import kotlinx.coroutines.flow.collect
  * partial answer is returned, and the model stays loaded — the same
  * semantics the NOVA chat's stop button has.
  */
-class StreamLlmEngine(
+open class StreamLlmEngine(
     private val engineName: () -> String,
     private val loaded: () -> Boolean,
     private val send: (prompt: String, maxTokens: Int) -> Flow<String>,

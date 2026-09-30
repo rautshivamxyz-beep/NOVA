@@ -31,9 +31,45 @@ import org.nova.ncie.execute.StreamLlmEngine
  *    and keeps the model loaded — identical to the current stop behavior.
  *  - The predictLength setting maps 1:1 to the kernel's thinking budget
  *    (maxTokens); NCIE just decides it per-request instead of globally.
+ *
+ * v9.12.0 "Live Tuning": this is an object now (the base class is open) so
+ * it can carry engine-specific ports on top of the three kernel ports -
+ * setSampling(...) below pushes the NcieTune profile into the live
+ * sampler of engine v8.0 (com.arm.aichat.InferenceEngine.setSampling).
  */
-val NovaEngineAdapter: StreamLlmEngine = StreamLlmEngine(
+object NovaEngineAdapter : StreamLlmEngine(
     engineName = { NovaEngine.activeModelLabel.ifBlank { "llama.cpp" } },
     loaded = { NovaEngine.isModelLoaded },
     send = { prompt, maxTokens -> NovaEngine.send(prompt, maxTokens) },
-)
+) {
+
+    /**
+     * v9.12.0 "Live Tuning": engine v8.0 (llama.cpp 6e60f35 + the
+     * v5.3..v8.0 patch chain) exposes suspend sampling setters on the
+     * live sampler. One-way failure policy: the first Throwable marks
+     * the bridge broken for the rest of the session and it is never
+     * retried - a tuning knob must never crash a generation or wedge
+     * the app. The engine impl is suspend, ModelReady-guarded and does
+     * its own off-main-thread hop, so this is safe to call from the UI
+     * scope.
+     */
+    @Volatile
+    var samplingBroken: Boolean = false
+        private set
+
+    /** True once a setSampling call has succeeded this session. */
+    @Volatile
+    var samplingLive: Boolean = false
+        private set
+
+    suspend fun setSampling(temperature: Float, topP: Float, topK: Int,
+                            minP: Float, repeatPenalty: Float) {
+        if (samplingBroken) return
+        try {
+            NovaEngine.setSampling(temperature, topP, topK, minP, repeatPenalty)
+            samplingLive = true
+        } catch (t: Throwable) {
+            samplingBroken = true
+        }
+    }
+}

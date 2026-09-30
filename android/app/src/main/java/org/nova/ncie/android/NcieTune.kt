@@ -18,21 +18,18 @@ import java.util.Locale
  * token-budget-aware context trim. Fully local, app-side only - the
  * NCIE kernel (libs/llama-release.aar, com.arm.aichat) is NOT touched.
  *
- * ENGINE BOUNDARY FINDING (do not lose this): the InferenceEngine the
- * app talks to exposes exactly loadModel(path), setSystemPrompt(text),
- * sendUserPrompt(prompt, maxTokens), bench(...), cleanUp() and
- * destroy() - there are NO sampling setters (verified against the
- * compiled class dump in inference.txt and the JNI exports of
- * libai-chat.so). The native side DOES run a sampler
- * (common_sampler_init with a default common_params_sampling), so the
- * knobs exist kernel-side but cannot be reached from the app. Everything
- * this object manages - the defaults table, the per-model override
- * files, the chat commands - is therefore the complete app-side half of
- * the feature; applying the values to the live sampler needs a kernel
- * follow-up (setters on InferenceEngineImpl plumbed into
- * common_params_sampling). applyProfile() stages the effective values
- * at every generation start so that follow-up has exactly one call
- * site to wire.
+ * ENGINE BOUNDARY, v9.12.0 UPDATE (supersedes the v9.11.0 finding
+ * that there were NO sampling setters): engine v8.0 (llama.cpp
+ * 6e60f35 + the v5.3..v8.0 patch chain, the v8.0 swap commit)
+ * exposes suspend setSampling(temperature, topP, topK, minP,
+ * repeatPenalty) on com.arm.aichat.InferenceEngine - the kernel
+ * follow-up happened. applyProfile() now pushes the effective values
+ * to the live sampler through NovaEngineAdapter at every generation
+ * start (the one call site the v9.11.0 staging left for it), and the
+ * "model settings" reply honestly reports whether the push is live
+ * or still staged. The failure policy is one-way: the first
+ * setSampling Throwable disables the bridge for the session, and it
+ * is never retried - a tuning knob must never crash a generation.
  *
  * Storage: filesDir/model_settings/<modelFileName>.txt, lines of
  * "key=value" for temperature, top_p, top_k, min_p, repeat_penalty.
@@ -159,18 +156,29 @@ object NcieTune {
 
     /**
      * v9.11.0: called at generation start (once per turn, from
-     * ncieSend). Resolves the active model's effective profile and
-     * stages it in [active]. The engine boundary exposes no sampling
-     * setters (see the class doc), so nothing about the live sampler
-     * changes yet - this is the single wiring point for the kernel
-     * follow-up, and the values are already persisted in
-     * filesDir/model_settings/ for it to read.
+     * ncieSend, after ensureModelReady). Resolves the active model's
+     * effective profile and stages it in [active].
+     * v9.12.0 "Live Tuning": also pushes the effective values to the
+     * live engine sampler via NovaEngineAdapter.setSampling (the v8.0
+     * engine setters). Guarded by the one-way broken flag, launched off
+     * the main thread, and a failure only demotes the "model settings"
+     * status reply to "staged" - it never blocks or crashes the turn.
      */
     fun applyProfile(act: MainActivity) {
         val m = currentModel(act) ?: return
         val (values, _) = effective(act, m.first)
         active = values
         activeModel = m.first
+        if (!NovaEngineAdapter.samplingBroken) {
+            act.scope.launch(Dispatchers.IO) {
+                NovaEngineAdapter.setSampling(
+                    values.getValue("temperature").toFloat(),
+                    values.getValue("top_p").toFloat(),
+                    values.getValue("top_k").toInt(),
+                    values.getValue("min_p").toFloat(),
+                    values.getValue("repeat_penalty").toFloat())
+            }
+        }
     }
 
     // ------------------------------------------------ chat commands
@@ -209,6 +217,11 @@ object NcieTune {
             sb.append(")\n")
         }
         sb.append("```")
+        // v9.12.0 "Live Tuning": honest, deterministic status - "(live)"
+        // only once a setSampling call has actually succeeded this
+        // session; otherwise the values are staged, not applied.
+        sb.append(if (NovaEngineAdapter.samplingLive) " (live)"
+                  else " (staged - engine not updated)")
         return sb.toString()
     }
 
