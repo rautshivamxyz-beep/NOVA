@@ -1,4 +1,4 @@
-name: Update llama.cpp engine (v7.2 speed pack)
+name: Update llama.cpp engine (v8.0 live sampling)
 on:
   workflow_dispatch:
 
@@ -54,6 +54,10 @@ jobs:
         run: |
           python3 tmp/patch_engine71.py llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
           grep -n "NOVA v7.5" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+      - name: Patch engine v8.0 (live sampling setters)
+        run: |
+          python3 tmp/patch_engine80.py llama.cpp/examples/llama.android
+          grep -n "NOVA v8.0" llama.cpp/examples/llama.android/lib/src/main/cpp/ai_chat.cpp | head -3
       - name: Build the binding
         working-directory: llama.cpp/examples/llama.android
         run: |
@@ -66,5 +70,5 @@ jobs:
           git config user.name "rautshivamxyz-beep"
           git config user.email "rautshivamxyz@gmail.com"
           git add android/app/libs/llama-release.aar android/app/src/main/java/org/nova/ android/app/build.gradle
-          git commit -m "engine: v7.5.0 prefill speed pack - all-core batch decode + 6-thread generation (llama.cpp 6e60f35 + v5.3..v7.5 patches)"
+          git commit -m "engine: v8.0.0 live sampling - setSampling setters for temp/top_p/top_k/min_p/repeat_penalty (llama.cpp 6e60f35 + v5.3..v8.0 patches)"
           git push
