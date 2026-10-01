@@ -3777,13 +3777,6 @@ fun isJunkChunkText(c: String): Boolean {
 
 // ---------------------------------------------------------------- adapter
 
-/**
- * Removes hidden model "thinking" blocks (e.g. Qwen3) so only the actual
- * answer is shown, spoken and saved. While a block is still open (streaming),
- * everything from the opening tag on is hidden.
- */
-private val THINK_OPEN = "<" + "think" + ">"
-
 /** v5.4.5: follow-up questions with no keywords of their own - they mean
  *  "the same notes again", so the last grounded notes are carried forward. */
 internal val FOLLOW_UP_Q = Regex("(?i)\\b(explain (it|that|this)|in more detail|more detail|tell me more|explain more|elaborate|go on)\\b")
@@ -3802,14 +3795,28 @@ internal val CHIP_PROMPTS = setOf(
     "Quiz me on this topic with 3 questions, one at a time.",
     "Summarize that in exactly 3 short bullet points."
 )
-private val THINK_CLOSE = "<" + "/" + "think" + ">"
+/**
+ * Removes hidden model "thinking" blocks so only the actual answer is shown,
+ * spoken and saved. While a block is still open (streaming), everything from
+ * the opening tag on is hidden.
+ *
+ * v9.13.4 "Thinking Tags Hardened": every tag variant a GGUF may use for
+ * hidden reasoning is stripped - Qwen3 / MiniCPM use  thinking, some models
+ * use <thinking> - so no chain-of-thought can ever leak into the reply.
+ */
+private val THINK_TAGS = listOf("think", "thinking")
 
 fun stripThinking(s: String): String {
-    var out = s.replace(
-        Regex("(?s)" + java.util.regex.Pattern.quote(THINK_OPEN) +
-            ".*?" + java.util.regex.Pattern.quote(THINK_CLOSE)), "")
-    val open = out.indexOf(THINK_OPEN)
-    if (open >= 0) out = out.substring(0, open)
+    var out = s
+    for (tag in THINK_TAGS) {
+        val open = "<" + tag + ">"
+        val close = "</" + tag + ">"
+        out = out.replace(
+            Regex("(?s)" + java.util.regex.Pattern.quote(open) +
+                ".*?" + java.util.regex.Pattern.quote(close)), "")
+        val i = out.indexOf(open)
+        if (i >= 0) out = out.substring(0, i)
+    }
     return out
 }
 private val CODE_BLOCK = Regex("(?s)```[a-zA-Z0-9+#.-]*\\n?(.*?)```")

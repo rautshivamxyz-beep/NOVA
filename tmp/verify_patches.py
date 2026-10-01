@@ -207,7 +207,11 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.3: version bumped for no-thinking 1B+", bg.count("versionName '9.13.3'") == 1 and bg.count("versionCode 100") == 1)
+check("v9.13.4: version bumped for thinking-tag hardening", bg.count("versionName '9.13.4'") == 1 and bg.count("versionCode 101") == 1)
+# ---- v9.13.4 "Thinking Tags Hardened": all thinking-tag variants stripped ----
+check("v9.13.4: every thinking-tag variant is stripped (MainActivity)",
+      ma.count('THINK_TAGS = listOf("think", "thinking")') == 1 and
+      ma.count("fun stripThinking(s: String): String") == 1)
 # ---- v9.13.1 "Honest Summaries": verification pass, meta strip, facts-only prompt ----
 check("v9.13.1: honest summaries - deterministic fact verification (MainActivity)",
       ma.count("fun verifySummaryFacts(") == 1 and
