@@ -23,6 +23,11 @@ import kotlinx.coroutines.launch
  * screen or rotating the phone never cancels a load halfway through
  * (that was the "job cancelled" bug). UIs observe [loadState].
  */
+/** v9.13.3 "No-Thinking for 1B+": the model's parameter count, parsed from
+ *  its label / file name (the same rule as NcieChat.MODEL_PARAMS). A model
+ *  whose size is 1B or larger gets the no-thinking system hint below. */
+private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
+
 object NovaEngine {
 
     /** Lifecycle of a model load, for the UI to observe. */
@@ -177,13 +182,27 @@ object NovaEngine {
     }
 
     /**
-     * Reasoning models (Qwen3 / LFM Thinking) burn most of their response
-     * time generating hidden thinking chains - often hundreds of tokens on
-     * trivial questions. Tell them to keep it short so answers arrive fast.
+     * Reasoning models (Qwen3 / LFM Thinking / MiniCPM) burn most of their
+     * response time generating hidden thinking chains - often hundreds of
+     * tokens on trivial questions.
+     *
+     * v9.13.3 "No-Thinking for 1B+": the thinking is removed from every model
+     * 1B or larger - those models are told to skip hidden reasoning entirely
+     * and answer directly, which is both cleaner and much faster. Sub-1B
+     * reasoning models keep the older "think briefly" nudge: their chains are
+     * short and still help on hard maths.
      */
     private fun thinkingHint(path: String, label: String): String {
         val n = (label + " " + path.substringAfterLast('/')).lowercase()
-        if ("think" !in n && "minicpm" !in n) return ""
+        val reasoning = "think" in n || "minicpm" in n
+        val params = MODEL_PARAMS.find(n)?.groupValues?.get(1)?.toDoubleOrNull()
+        val big = params != null && params >= 1.0
+        if (!reasoning && !big) return ""
+        if (big) {
+            return "\n\n(Do NOT produce any thinking, reasoning or planning - " +
+                "no hidden chain-of-thought, no scratchpad. Answer the user " +
+                "directly and concisely, starting with the answer itself.)"
+        }
         return "\n\n(You are a reasoning model. THINK BRIEFLY: at most ONE short " +
             "sentence of planning for routine questions; save step-by-step " +
             "reasoning for genuinely hard math or logic only. Never repeat the " +

@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.2: version bumped for small model honesty", bg.count("versionName '9.13.2'") == 1 and bg.count("versionCode 99") == 1)
+check("v9.13.3: version bumped for no-thinking 1B+", bg.count("versionName '9.13.3'") == 1 and bg.count("versionCode 100") == 1)
 # ---- v9.13.1 "Honest Summaries": verification pass, meta strip, facts-only prompt ----
 check("v9.13.1: honest summaries - deterministic fact verification (MainActivity)",
       ma.count("fun verifySummaryFacts(") == 1 and
@@ -223,6 +223,11 @@ nr = load("ncie/android/NcieRoutines.kt")
 # (variable names tun/nev/st: nt stays NovaTheme below, ne stays NcieExam)
 tun = load("ncie/android/NcieTune.kt")
 nev = load("NovaEngine.kt")
+# ---- v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking ----
+check("v9.13.3: 1B+ models are told to skip hidden thinking (NovaEngine)",
+      nev.count("Do NOT produce any thinking") == 1 and
+      nev.count("val big = params != null && params >= 1.0") == 1 and
+      nev.count("MODEL_PARAMS.find(n)") == 1)
 st = load("Settings.kt")
 check("v9.11.0: per-model sampling profiles ship (NcieTune)",
       tun.count("model_settings") >= 2 and tun.count("QWEN_DEFAULTS") == 2 and

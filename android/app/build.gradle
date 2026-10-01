@@ -46,8 +46,9 @@ android {
         // v9.12.0 "Live Tuning": engine v8.0 live sampling setters wired into the tuning profiles
         // v9.12.1 "Context Diet": relevance-gated document injection, prompt budget cap, honest online offer
         // v9.13.0 "Audit Fixes": background scheduled sends, cache honesty, embedder threading, offer gates
-        versionCode 99
-        versionName '9.13.2'
+        // v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking
+        versionCode 100
+        versionName '9.13.3'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
