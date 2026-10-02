@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- v9.15.0 "Camera": the in-app camera screen. Approved by the user;
+         optional feature so the app still installs on camera-less devices. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application android:icon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
@@ -64,6 +68,12 @@
         <activity android:name=".SettingsActivity" android:exported="false" />
 
         <activity android:name=".KnowledgeActivity" android:exported="false" />
+
+        <!-- v9.15.0 "Camera": live preview + shutter, reached from the drawer -->
+        <activity
+            android:name=".CameraActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <activity android:name=".ExamsActivity" android:exported="false" />
 

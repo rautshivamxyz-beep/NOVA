@@ -207,7 +207,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.14.1: version bumped for the speed restore", bg.count("versionName '9.14.1'") == 1 and bg.count("versionCode 108") == 1)
+check("v9.15.0: version bumped for the camera", bg.count("versionName '9.15.0'") == 1 and bg.count("versionCode 109") == 1)
+# ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
+mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+check("v9.15.0: the camera permission is declared (AndroidManifest)",
+      mf.count('android.permission.CAMERA') == 1 and
+      mf.count('android:name=".CameraActivity"') == 1)
+cam = load("CameraActivity.kt")
+check("v9.15.0: the camera screen ships (preview + shutter + capture)",
+      cam.count("PreviewView") >= 1 and cam.count("takePicture(") == 1 and
+      cam.count("bindToLifecycle(") == 1)
+check("v9.15.0: the camera row + result wiring are in MainActivity",
+      ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
+      ma.count("REQ_CAMERA") == 4)
 # ---- v9.14.0 "Sharp Memory": learn each context source's value; skip the dead ones ----
 nval = load("ncie/android/NcieValue.kt")
 check("v9.14.0: the adaptive context value tracker ships (NcieValue)",

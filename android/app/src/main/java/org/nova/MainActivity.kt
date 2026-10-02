@@ -701,6 +701,8 @@ class MainActivity : Activity() {
         // v9.8.0 "OCR Notes": scan a photo of handwritten notes, fix the
         // recognized text, save it as a Knowledge document - all on-device
         drawerPane.addView(drawerRow("Scan notes", R.drawable.ic_doc) { scanNotes() })
+        // v9.15.0 "Camera": live preview + shutter -> on-device OCR -> chat
+        drawerPane.addView(drawerRow("Camera", R.drawable.ic_camera) { openCamera() })
         // v8.8.0: the eyes - notification access; NovaListener logs
         // notifications locally for "what did I miss" and "messages from X"
         drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
@@ -856,6 +858,12 @@ class MainActivity : Activity() {
         // v9.8.0: "Scan notes" - a photo picked for the OCR notes import
         if (requestCode == 7800 && resultCode == RESULT_OK) {
             data?.data?.let { uri -> scanNotesImage(uri) }
+            return
+        }
+        // v9.15.0 "Camera": a photo taken in the in-app camera -> the same
+        // on-device OCR -> editable text / "Solve it" in the chat
+        if (requestCode == REQ_CAMERA && resultCode == RESULT_OK) {
+            data?.data?.let { uri -> ocrImage(uri) }
             return
         }
         if (requestCode == REQ_CHATS && resultCode == Activity.RESULT_OK && data != null) {
@@ -2232,6 +2240,15 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             toast("Couldn't open image")
         }
+    }
+
+    /** v9.15.0 "Camera": the in-app camera screen (live preview +
+     *  shutter). The captured photo comes back through onActivityResult
+     *  (REQ_CAMERA) and runs the same on-device OCR the attach flow uses. */
+    private fun openCamera() {
+        try {
+            startActivityForResult(Intent(this, CameraActivity::class.java), REQ_CAMERA)
+        } catch (e: Exception) { toast("Camera unavailable") }
     }
 
     /** v9.8.0 "Scan notes": pick a photo from the gallery (SAF - no
@@ -3660,6 +3677,7 @@ Study:
 
     companion object {
         private const val REQ_CHATS = 4252
+        private const val REQ_CAMERA = 7900
         // v9.2.1: fresh code for the ACTION_RECOGNIZE_SPEECH handoff -
         // 4251 (old intent flow) and 4254 (RECORD_AUDIO) retired with
         // the direct-SpeechRecognizer code; 4261 collides with nothing
