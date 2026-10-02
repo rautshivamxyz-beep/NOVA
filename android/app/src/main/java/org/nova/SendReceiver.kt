@@ -63,6 +63,25 @@ object NovaSms {
         c.startActivity(i)
         true
     } catch (e: Exception) { false }
+
+    /** v9.16.5: true when NOVA may send the text itself (SEND_SMS granted). */
+    fun canSendDirect(c: Context): Boolean =
+        c.checkSelfPermission(android.Manifest.permission.SEND_SMS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /**
+     * v9.16.5 "Direct SMS": send the text ourselves through SmsManager - no
+     * messaging app opens, and it works from the background (the alarm
+     * receiver), unlike a startActivity draft which Android 10+ blocks.
+     * Returns false on any failure so the caller can fall back to the
+     * draft / notification path.
+     */
+    fun sendDirect(c: Context, number: String, message: String): Boolean = try {
+        @Suppress("DEPRECATION")
+        val sms = android.telephony.SmsManager.getDefault()
+        sms.sendMultipartTextMessage(number, null, sms.divideMessage(message), null, null)
+        true
+    } catch (e: Exception) { false }
 }
 
 /** Pending scheduled sends, persisted so they survive reboots. */
@@ -205,6 +224,9 @@ object ScheduledSends {
             when {
                 number == null ->
                     Toast.makeText(ctx, "Couldn't find '${s.name}' in contacts - scheduled text not sent",
+                        Toast.LENGTH_LONG).show()
+                NovaSms.canSendDirect(ctx) && NovaSms.sendDirect(ctx, number, s.message) ->
+                    Toast.makeText(ctx, "NOVA sent: ${s.message} to ${s.name}",
                         Toast.LENGTH_LONG).show()
                 !foreground -> {
                     // background (alarm / boot): the launch would be blocked

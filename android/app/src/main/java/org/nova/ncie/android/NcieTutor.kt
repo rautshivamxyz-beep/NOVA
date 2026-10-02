@@ -347,8 +347,14 @@ object NcieTutor {
     // ------------------------------------------------------ the quiz
 
     private fun beginQuiz(act: MainActivity, topic: String, viaStudy: Boolean = false) {
-        val t = topic.trim()
-        if (t.length < 2) {
+        // v9.16.4 "Quiz routing fix": strip the trailing instruction
+        // clauses users (and NOVA's own "Quiz me" chip) append, so
+        // "quiz me on this topic with 3 questions, one at a time." quizzes
+        // on "this topic" - not on a topic literally named that. A bare
+        // "quiz me" (empty topic) falls back to the open document below.
+        val t = cleanQuizTopic(topic)
+        val attached = if (viaStudy) null else act.docContext
+        if (t.length < 2 && attached.isNullOrBlank()) {
             postReply(act, "Name a topic - e.g. 'quiz me on federalism'.")
             return
         }
@@ -361,7 +367,7 @@ object NcieTutor {
         // main thread, before the source hunt goes to IO
         sessionChatId = act.currentChat.id
         act.scope.launch(Dispatchers.IO) {
-            val found = findSource(act, t)
+            val found = quizSourceFor(act, t, allowAttached = !viaStudy)
             if (found == null) {
                 postReplyOnMain(act, "I don't have notes on $t. Paste the chapter " +
                     "into Knowledge or fetch it online first.")
@@ -388,9 +394,10 @@ object NcieTutor {
             quizChunk = 0
             studySession = viaStudy
             val parts = chunkCount(srcText)
+            val label = if (isDeictic(t)) srcName else t
             val head = if (viaStudy)
                 "Revision time — this one gave you trouble before.\n\n"
-            else "Quiz on $t (from $srcName) — ${pairs.size} questions" +
+            else "Quiz on $label (from $srcName) — ${pairs.size} questions" +
                 (if (parts > 1) ", part 1 of $parts" else "") + ". " +
                 "Answer each one in your own words.\n\n"
             postReplyOnMain(act, head + "Q1: " + pairs[0].first)
@@ -668,6 +675,27 @@ object NcieTutor {
         return null
     }
 
+    /**
+     * v9.16.4 "Quiz routing fix": resolve the quiz source for a topic.
+     * The Knowledge + wiki stores first (findSource); then, for a deictic
+     * topic ("this topic", "it", ... - what "quiz me on this topic"
+     * actually means) or a bare "quiz me", the document the user has
+     * open, or the most recently added notes. This is what makes NOVA's
+     * own "Quiz me" chip work instead of answering "I don't have notes
+     * on this topic with 3 questions, one at a time."
+     */
+    private fun quizSourceFor(act: MainActivity, topic: String,
+                              allowAttached: Boolean): Pair<String, String>? {
+        val found = findSource(act, topic)
+        if (found != null) return found
+        if (!allowAttached || !isDeictic(topic)) return null
+        val doc = act.docContext
+        if (!doc.isNullOrBlank()) return (act.docName ?: "this document") to doc
+        val last = NcieKnowledge.docs(act).lastOrNull() ?: return null
+        val txt = NcieKnowledge.docText(act, last.first)
+        return if (txt.isNotBlank()) last.first to txt else null
+    }
+
     // ------------------------------------------------------ chat plumbing
 
     private fun showUser(act: MainActivity, text: String) {
@@ -690,4 +718,48 @@ object NcieTutor {
     private suspend fun postReplyOnMain(act: MainActivity, body: String) {
         withContext(Dispatchers.Main) { postReply(act, body) }
     }
+}
+
+
+// ---------------------------------------------------------------------
+// v9.16.4 "Quiz routing fix": shared quiz-topic helpers.
+// ---------------------------------------------------------------------
+
+/** Trailing instruction clauses a quiz command may carry - "with 3
+ *  questions", "one at a time", "please", "and answers". Stripped so the
+ *  topic is the topic, not the whole sentence (NOVA's own "Quiz me" chip
+ *  used to append "with 3 questions, one at a time."). */
+private val QUIZ_TOPIC_CUTTERS = listOf(
+    Regex("(?i)[,;]?\\s+with\\s+\\d*\\s*questions?\\b.*$"),
+    Regex("(?i)[,;]?\\s+\\d+\\s*questions?\\b.*$"),
+    Regex("(?i)[,;]?\\s+one\\s+at\\s+a\\s+time\\b.*$"),
+    Regex("(?i)[,;]?\\s+one\\s+by\\s+one\\b.*$"),
+    Regex("(?i)[,;]\\s*(?:and\\s+)?answers?\\b.*$"),
+    Regex("(?i)[,;]?\\s+please\\b.*$")
+)
+
+/** The bare topic out of a quiz command: instruction clauses removed and
+ *  trailing punctuation trimmed. "power sharing" is unchanged; "this
+ *  topic with 3 questions, one at a time." becomes "this topic". */
+internal fun cleanQuizTopic(raw: String): String {
+    var t = raw.trim()
+    for (c in QUIZ_TOPIC_CUTTERS) t = c.replace(t, "")
+    return t.trim().trimEnd('.', '!', '?', ',', ';', ':').trim()
+}
+
+/** Topics that point at "the thing we are looking at" rather than naming
+ *  a document - "this topic", "it", "the above", or nothing at all. */
+private val DEICTIC_TOPICS = setOf(
+    "", "this", "it", "that", "this topic", "the topic", "that topic",
+    "this one", "the one", "this chapter", "the chapter", "this document",
+    "the document", "this doc", "the doc", "the above", "above",
+    "the notes", "my notes", "these notes", "this pdf", "the pdf",
+    "this text", "the text", "this material", "the material"
+)
+
+/** True when [topic] is a deictic reference (or blank), i.e. it names no
+ *  document and means "the one we are looking at". */
+private fun isDeictic(topic: String): Boolean {
+    val t = topic.trim().lowercase().trimEnd('.', '!', '?', ',', ';', ':').trim()
+    return t in DEICTIC_TOPICS
 }
