@@ -90,6 +90,14 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_SPEC, false)
         set(value) = prefs.edit().putBoolean(KEY_SPEC, value).apply()
 
+    /** v9.14.0 "Sharp Memory": a context source that has been injected
+     *  many times and never contributed is skipped, so the prompt shrinks
+     *  (faster prefill) with no loss to answers. Default ON; off means
+     *  every source is always injected, exactly as before. */
+    var adaptiveContext: Boolean
+        get() = prefs.getBoolean(KEY_ADAPTIVE_CTX, true)
+        set(value) = prefs.edit().putBoolean(KEY_ADAPTIVE_CTX, value).apply()
+
     /** v5.4.6: documents excluded from Knowledge search via the Notes
      *  filter drawer row - "English only" during an English exam. */
     var knowledgeExcluded: MutableSet<String>
@@ -111,6 +119,7 @@ class Settings(context: Context) {
         private const val KEY_ONLINE_LEARN = "online_learning"
         private const val KEY_STRICT = "strict_mode"
         private const val KEY_SPEC = "spec_decoding"
+        private const val KEY_ADAPTIVE_CTX = "adaptive_context"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt

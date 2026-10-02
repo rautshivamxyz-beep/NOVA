@@ -743,7 +743,8 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // knowledge-seeking too - "difference between X and Y" and
             // "bmw vs bugatti" name no question word at the start
             compareQuestion(text)
-        if (settings.wikiEnabled && seek && WikiCore.isReady(this)) {
+        if (settings.wikiEnabled && seek && WikiCore.isReady(this) &&
+            (!settings.adaptiveContext || NcieValue.allow(this, "wiki"))) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             // v8.5.3: the same Coverage gate that guards fetched articles
             // now guards wiki background. "Teach me footprints without feet
@@ -760,6 +761,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 val cap = if (lean) 900 else 1200
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(Wikipedia background - use it to answer, ignore if not relevant:\n$facts)\n\n"
+                lastWikiText = facts   // v9.14.0 "Sharp Memory": measured at turn end
             }
         }
         // v5.4: study questions - rewrap the notes as STRICT instructions,

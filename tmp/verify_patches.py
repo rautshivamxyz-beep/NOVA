@@ -207,7 +207,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.9: version bumped for no dropped turns", bg.count("versionName '9.13.9'") == 1 and bg.count("versionCode 106") == 1)
+check("v9.14.0: version bumped for Sharp Memory", bg.count("versionName '9.14.0'") == 1 and bg.count("versionCode 107") == 1)
+# ---- v9.14.0 "Sharp Memory": learn each context source's value; skip the dead ones ----
+nval = load("ncie/android/NcieValue.kt")
+check("v9.14.0: the adaptive context value tracker ships (NcieValue)",
+      nval.count("fun allow(") == 1 and nval.count("fun note(") == 1 and
+      nval.count("fun summary(") == 1 and nval.count("fun reset(") == 1)
+check("v9.14.0: the wiki source is gated by its learned value (NcieChat)",
+      nc.count('NcieValue.allow(this, "wiki")') == 1)
+check("v9.14.0: the wiki source's value is measured at turn end (MainActivity)",
+      ma.count("NcieValue.note(this@MainActivity, \"wiki\",") == 1)
 # ---- v9.13.8 "Lean turn": one question embedding per turn; no embedder without docs ----
 ng = load("ncie/android/NcieGround.kt")
 check("v9.13.8: the question embedding is computed once per turn (NcieGround)",

@@ -39,7 +39,9 @@ import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
 import org.nova.ncie.android.NcieSummary
+import org.nova.ncie.android.NcieValue
 import org.nova.ncie.android.NovaEngineAdapter
+import org.nova.ncie.verify.Coverage
 import org.nova.ncie.android.ncieSend
 import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
@@ -101,6 +103,10 @@ class MainActivity : Activity() {
      *  ncieSend when the prompt is assembled, read by the LEARN record
      *  when the turn completes. */
     internal var lastAnswerSources: List<String> = emptyList()
+    /** v9.14.0 "Sharp Memory": the wiki text injected this turn (empty if
+     *  none), measured against the finished answer to learn the wiki
+     *  source's real value. */
+    internal var lastWikiText: String = ""
     /** v8.4.0 (stage 3): the skill that shaped the current answer, if
      *  any - set by ncieSend at prompt assembly, read by the generation
      *  budget and the LEARN record at turn completion. */
@@ -1410,6 +1416,15 @@ class MainActivity : Activity() {
                         // plate replies and internal prompts never enter the
                         // cache) and writes asynchronously; nothing blocks here.
                         NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)
+                        // v9.14.0 "Sharp Memory": did the injected wiki
+                        // background actually contribute? Learn it, so a
+                        // source that never helps stops costing prompt
+                        // tokens (faster prefill, same answers).
+                        if (settings.adaptiveContext && lastWikiText.isNotEmpty()) {
+                            NcieValue.note(this@MainActivity, "wiki",
+                                Coverage.ratio(replyMsg.text, lastWikiText) >= 0.3)
+                            lastWikiText = ""
+                        }
                         // auto-compact: compress old turns once the chat grows
                         if (!speechCancelled && !compacting &&
                             currentChat.messages.size > 20 &&

@@ -173,6 +173,9 @@ class SettingsActivity : Activity() {
             // v5.5.0: answers cached under the other mode must not be served
             Knowledge.clearQaCache(this)
         })
+        answers.addView(switchRow("Adaptive context (skip sources that never help)", settings.adaptiveContext) {
+            settings.adaptiveContext = it
+        })
         answers.addView(switchRow("Speculative decoding (Qwen3 only)", settings.specDecoding) {
             settings.specDecoding = it
             // takes effect the next time a model loads

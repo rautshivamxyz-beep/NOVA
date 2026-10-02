@@ -53,8 +53,9 @@ android {
         // v9.13.7 "LFM 2.5 230M + wider speculation": draft matcher covers Qwen + LFM
         // v9.13.8 "Lean turn": one question embedding per turn, no embedder without docs
         // v9.13.9 "No dropped turns": never fire a prompt into a busy engine; spec decoding off
-        versionCode 106
-        versionName '9.13.9'
+        // v9.14.0 "Sharp Memory": learn each context source's value; skip the ones that never help
+        versionCode 107
+        versionName '9.14.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
