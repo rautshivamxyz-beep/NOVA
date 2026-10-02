@@ -207,7 +207,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.7: version bumped for wider speculation", bg.count("versionName '9.13.7'") == 1 and bg.count("versionCode 104") == 1)
+check("v9.13.8: version bumped for lean turns", bg.count("versionName '9.13.8'") == 1 and bg.count("versionCode 105") == 1)
+# ---- v9.13.8 "Lean turn": one question embedding per turn; no embedder without docs ----
+ng = load("ncie/android/NcieGround.kt")
+check("v9.13.8: the question embedding is computed once per turn (NcieGround)",
+      ng.count("fun queryVector(") == 1 and
+      ng.count("queryVector(ctx, question)") == 2 and
+      ng.count("NcieEmbed.embed(ctx, question)") == 1)
+check("v9.13.8: the semantic pass is skipped when there are no documents",
+      ng.count("if (!NcieKnowledge.hasDocs(ctx)) return false") == 1)
 # ---- v9.13.7 "LFM 2.5 230M + wider speculation": catalog entry + draft matcher ----
 mcat = load("ModelCatalog.kt")
 check("v9.13.7: LFM 2.5 230M is in the model catalog",

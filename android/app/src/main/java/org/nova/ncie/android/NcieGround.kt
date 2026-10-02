@@ -89,7 +89,13 @@ object NcieGround {
         var matched = 0
         for (t in terms) if (norm.contains(" " + t + " ")) matched++
         if (matched >= 3) return true
-        val qv = NcieEmbed.embed(ctx, question) ?: return false
+        // v9.13.8 "Lean turn": semantic matching exists to find the user's
+        // OWN material under different wording. With no imported documents
+        // there is nothing of theirs to match - the candidates are wiki
+        // background, where keyword matching is enough - so skip the
+        // embedder (and its 23 MB ONNX session) on a doc-less install.
+        if (!NcieKnowledge.hasDocs(ctx)) return false
+        val qv = queryVector(ctx, question) ?: return false
         val cv = NcieEmbed.embed(ctx, candidate.take(1500)) ?: return false
         return NcieEmbed.cosine(qv, cv) >= 0.45f
     }
@@ -101,6 +107,21 @@ object NcieGround {
      *  send after a cold start. Same result, different dispatcher. */
     suspend fun strongMatchIo(ctx: Context, question: String, candidate: String): Boolean =
         withContext(Dispatchers.IO) { strongMatch(ctx, question, candidate) }
+
+    /** v9.13.8 "Lean turn": the question's semantic vector, computed ONCE
+     *  and reused by every strength gate in the same turn - the knowledge,
+     *  wiki and overlap checks all pass the SAME question string, so the
+     *  old code embedded it up to three times per turn. Keyed on the
+     *  string (single-entry cache). null = embedder broken/failed. */
+    @Volatile private var qVecKey: String? = null
+    @Volatile private var qVecVal: FloatArray? = null
+    private fun queryVector(ctx: Context, question: String): FloatArray? {
+        if (qVecKey != null && question == qVecKey) return qVecVal
+        val v = NcieEmbed.embed(ctx, question)
+        qVecKey = question
+        qVecVal = v
+        return v
+    }
 
     /** All knowledge documents + wiki articles the user has, names only,
      *  in store order (Knowledge first, then wiki). */
@@ -166,7 +187,7 @@ object NcieGround {
         var dirty = idx == null || idx.size != names.size
         // the question's semantic vector, computed once per query;
         // null = embedder broken/failed -> keyword-only for everything
-        val qVec = NcieEmbed.embed(ctx, question)
+        val qVec = queryVector(ctx, question)
         val best = ArrayList<Triple<Float, String, String>>()   // score, source, chunk
         for (name in names) {
             val cached = flashChunks[name]

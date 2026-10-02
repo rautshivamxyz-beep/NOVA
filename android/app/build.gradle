@@ -51,8 +51,9 @@ android {
         // v9.13.5 "Full CPU kernels": ship every per-chip ggml variant for max speed
         // v9.13.6 "Faster Qwen3": speculative decoding on by default (identical output)
         // v9.13.7 "LFM 2.5 230M + wider speculation": draft matcher covers Qwen + LFM
-        versionCode 104
-        versionName '9.13.7'
+        // v9.13.8 "Lean turn": one question embedding per turn, no embedder without docs
+        versionCode 105
+        versionName '9.13.8'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
