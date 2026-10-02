@@ -327,7 +327,10 @@ object NovaEngine {
             val s = engine.state.value
             if (s !is InferenceEngine.State.ProcessingUserPrompt &&
                 s !is InferenceEngine.State.ProcessingSystemPrompt) return
-            if (SystemClock.elapsedRealtime() - start > 90_000L) return
+            // v9.14.1: was 90s - a wedged/lingering engine state could stall
+            // every turn for a minute and a half. 5s is plenty for a normal
+            // hand-off and can never be felt as a hang.
+            if (SystemClock.elapsedRealtime() - start > 5_000L) return
             delay(120)
         }
     }

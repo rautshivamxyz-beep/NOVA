@@ -13,13 +13,16 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging true
-            // v9.13.5 "Full CPU kernels": ship EVERY per-chip ggml CPU
-            // variant again. libggml.so dlopens the fastest variant the
-            // device's CPU actually supports, so a flagship now runs its
-            // v8.6 / v9.x kernels instead of falling back to the armv8.2
-            // build. The old v5.4.7 excludes saved a few MB but cost real
-            // tokens/sec on capable phones. Older phones are unaffected -
-            // the loader still picks the best variant they can run.
+            // v9.14.1: REVERTED the v9.13.5 "ship every kernel" change. The
+            // extra armv8.6 / v9.x variants could change which ggml CPU
+            // kernel the loader picks, and the device reported a slowdown
+            // right after that release. Back to the v5.4.7 set (armv8.0 +
+            // armv8.2 only) - exactly what ran fine before. libggml.so still
+            // picks the best of the shipped variants.
+            excludes += ['lib/**/libggml-cpu-android_armv8.6_1.so',
+                         'lib/**/libggml-cpu-android_armv9.0_1.so',
+                         'lib/**/libggml-cpu-android_armv9.2_1.so',
+                         'lib/**/libggml-cpu-android_armv9.2_2.so']
         }
     }
 
@@ -54,8 +57,9 @@ android {
         // v9.13.8 "Lean turn": one question embedding per turn, no embedder without docs
         // v9.13.9 "No dropped turns": never fire a prompt into a busy engine; spec decoding off
         // v9.14.0 "Sharp Memory": learn each context source's value; skip the ones that never help
-        versionCode 107
-        versionName '9.14.0'
+        // v9.14.1: restore speed - revert the extra-kernel change; soften the engine wait
+        versionCode 108
+        versionName '9.14.1'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
