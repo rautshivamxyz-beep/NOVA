@@ -153,24 +153,33 @@ class BackupActivity : ListActivity() {
      * it backs up memory, wiki, knowledge, chats, skills, the fetch
      * log and anything added later, without a per-store checklist.
      */
-    private fun collectFiles(): List<File> {
-        val out = mutableListOf<File>()
-        fun walk(d: File) {
-            val kids = d.listFiles() ?: return
-            for (f in kids) {
-                if (f.isDirectory) {
-                    if (f.name == "cache" || f.name == "code_cache") continue
-                    walk(f)
-                } else if (f.isFile && !f.name.endsWith(".tmp") &&
-                    // v9.3.0 "Audit Fixes I": the notification log is
-                    // private - it must not leave the phone in a backup
-                    f.name != "notif_log.txt" && f.name != "notif_pause.txt") {
-                    out.add(f)
+    private fun collectFiles(): List<Pair<File, String>> {
+        val out = mutableListOf<Pair<File, String>>()
+        fun walk(root: File, prefix: String) {
+            fun rec(d: File) {
+                val kids = d.listFiles() ?: return
+                for (f in kids) {
+                    if (f.isDirectory) {
+                        if (f.name == "cache" || f.name == "code_cache") continue
+                        rec(f)
+                    } else if (f.isFile && !f.name.endsWith(".tmp") &&
+                        // v9.3.0 "Audit Fixes I": the notification log is
+                        // private - it must not leave the phone in a backup
+                        f.name != "notif_log.txt" && f.name != "notif_pause.txt") {
+                        out.add(f to (prefix + f.relativeTo(root).path
+                            .replace(File.separatorChar, '/')))
+                    }
                 }
             }
+            rec(root)
         }
-        walk(filesDir)
-        out.sortBy { it.path }
+        walk(filesDir, "")
+        // v9.16.3: the app's SharedPreferences (system prompt, memory, theme,
+        // proxy...) live in shared_prefs, NOT filesDir - a backup used to
+        // silently drop every setting. Include them now.
+        val sp = File(filesDir.parentFile, "shared_prefs")
+        if (sp.isDirectory) walk(sp, "shared_prefs/")
+        out.sortBy { it.second }
         return out
     }
 
@@ -183,9 +192,7 @@ class BackupActivity : ListActivity() {
                 val files = collectFiles()
                 contentResolver.openOutputStream(uri, "w")?.use { os ->
                     ZipOutputStream(BufferedOutputStream(os)).use { zos ->
-                        for (f in files) {
-                            val rel = f.relativeTo(filesDir).path
-                                .replace(File.separatorChar, '/')
+                        for ((f, rel) in files) {
                             val ze = ZipEntry(rel)
                             ze.time = f.lastModified()
                             zos.putNextEntry(ze)
@@ -303,6 +310,9 @@ class BackupActivity : ListActivity() {
             }
         }
         wipe(filesDir)
+        // v9.16.3: a true replace also clears the settings store
+        val sp = File(filesDir.parentFile, "shared_prefs")
+        if (sp.isDirectory) sp.listFiles()?.forEach { it.delete() }
     }
 
     private fun restoreBackup(uri: Uri) {
@@ -310,7 +320,7 @@ class BackupActivity : ListActivity() {
             var restored = 0
             var ok = false
             try {
-                val root = filesDir.canonicalFile
+                val root = filesDir.parentFile.canonicalFile
                 // the true replace: current state goes first, then the zip
                 wipeFilesDir()
                 contentResolver.openInputStream(uri)?.use { ins ->
@@ -318,8 +328,11 @@ class BackupActivity : ListActivity() {
                         var ze: ZipEntry? = zis.nextEntry
                         while (ze != null) {
                             if (!ze.isDirectory) {
-                                val target = File(filesDir, ze.name)
-                                // a crafted zip must not escape filesDir
+                                // shared_prefs/ entries restore beside filesDir
+                                val target = if (ze.name.startsWith("shared_prefs/"))
+                                    File(filesDir.parentFile, ze.name)
+                                else File(filesDir, ze.name)
+                                // a crafted zip must not escape the app data dir
                                 if (target.canonicalFile.path
                                         .startsWith(root.path + File.separator)) {
                                     target.parentFile?.mkdirs()

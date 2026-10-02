@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.2: version bumped for the working-buttons pass", bg.count("versionName '9.16.2'") == 1 and bg.count("versionCode 112") == 1)
+check("v9.16.3: version bumped for the fixes + automation pass", bg.count("versionName '9.16.3'") == 1 and bg.count("versionCode 113") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
@@ -220,6 +220,20 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
 check("v9.15.0: the camera row + result wiring are in MainActivity",
       ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
+# ---- v9.16.3 "Fixes + Automation" ----
+_vamf3 = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+_bak = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/BackupActivity.kt"), encoding="utf-8").read()
+check("v9.16.3: launcher visibility for 'open <app>' (AndroidManifest)",
+      _vamf3.count("<queries>") == 1 and _vamf3.count("android.intent.category.LAUNCHER") == 2)
+check("v9.16.3: backups include settings (shared_prefs)",
+      _bak.count("shared_prefs") >= 3)
+check("v9.16.3: offline Wikipedia dataset points at the public repo (WikiCore)",
+      wc.count("NOVA-APK/main/wiki/articles-v1.txt") == 1)
+check("v9.16.3: update check reads the public release API (MainActivity)",
+      ma.count("NOVA-APK/releases/latest") == 1)
+_nex3 = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieExam.kt"), encoding="utf-8").read()
+check("v9.16.3: chat exam also lands in the Exams store (NcieExam)",
+      _nex3.count("Exams.add(act, \"Exam\", ms)") == 1)
 # ---- v9.16.2 "Working buttons" ----
 check("v9.16.2: the stop button cancels the generation (MainActivity)",
       ma.count("if (generationJob?.isActive == true) generationJob?.cancel()") == 4)
@@ -411,7 +425,7 @@ check("v8.1.0: single prepared WikiStore in the app (WikiCore.kt)",
 amf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v7.9.0: memory screen in the drawer, not the launcher (AndroidManifest.xml)",
       amf.count("NOVA Memory") == 1 and
-      amf.count("android.intent.category.LAUNCHER") == 1)
+      amf.count("android.intent.category.LAUNCHER") == 2)
 check("v7.9.0: memory row in the chat drawer (MainActivity.kt)",
       ma.count('drawerRow("Memory"') == 1)
 wf = open(os.path.join(ROOT, ".github/workflows/nova-apk.yml"), encoding="utf-8").read()
