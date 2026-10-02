@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.0: version bumped for the SOCKS proxy fetch", bg.count("versionName '9.16.0'") == 1 and bg.count("versionCode 110") == 1)
+check("v9.16.1: version bumped for the thin prompt + hardening", bg.count("versionName '9.16.1'") == 1 and bg.count("versionCode 111") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
@@ -220,6 +220,18 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
 check("v9.15.0: the camera row + result wiring are in MainActivity",
       ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
+# ---- v9.16.1 "Thin Prompt + Hardening" ----
+check("v9.16.1: thin base system prompt (Settings)",
+      st.count("nothing you say leaves the device") == 1 and
+      st.count("Be concise and direct. If you are not sure, say so instead of guessing") == 1 and
+      st.count("Do not invent facts") == 1)
+check("v9.16.1: PIN uses PBKDF2 + a throttle (MainActivity)",
+      ma.count("PBKDF2WithHmacSHA256") == 1 and ma.count("pinLockUntil") == 3 and
+      ma.count("MessageDigest.isEqual") == 2)
+check("v9.16.1: context is delimited as data (NcieChat)",
+      nc.count("CONTEXT (reference data") == 1)
+check("v9.16.1: ONNX embedding run is serialized (NcieEmbed)",
+      load("ncie/android/NcieEmbed.kt").count("@Synchronized") == 1)
 # ---- v9.16.0 "Private Fetch": SOCKS proxy + https-only online lookup ----
 nnf = load("NovaNet.kt")
 check("v9.16.0: the SOCKS proxy helper ships (NovaNet)",

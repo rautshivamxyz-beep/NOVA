@@ -219,7 +219,11 @@ object WikiCore {
         val kept = lines.filter { !it.substringBefore('\u241F').equals(title, ignoreCase = true) }
         if (kept.size == lines.size) return false
         try {
-            f.writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
+            // v9.16.1: atomic rewrite - a crash mid-write can no longer
+            // truncate the whole wiki store
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { return false }
         val ix = buildIndex(ctx)
         index = ix

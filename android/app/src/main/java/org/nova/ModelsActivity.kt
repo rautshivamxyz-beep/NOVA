@@ -399,16 +399,19 @@ class ModelsActivity : Activity() {
             return
         }
         toast("Loading ${f.name}…")
-        NovaEngine.scope.launch {
-            try {
-                NovaEngine.load(this@ModelsActivity, f.absolutePath, ModelCatalog.labelFor(f), settings.systemPrompt)
+        // v9.16.1: go through loadAsync - it sets the engine's loading
+        // guard (so a second Load tap can't double-load) and reports the
+        // outcome via the callback.
+        NovaEngine.loadAsync(this, f.absolutePath, ModelCatalog.labelFor(f),
+            settings.systemPrompt) { ok ->
+            if (ok) {
                 settings.lastModelPath = f.absolutePath
                 settings.lastModelLabel = ModelCatalog.labelFor(f)
                 toast("Model ready")
                 setResult(Activity.RESULT_OK)
                 finish()
-            } catch (e: Exception) {
-                toast("Failed to load: ${e.message ?: "unknown error"}")
+            } else {
+                toast("Failed to load ${f.name}")
             }
         }
     }

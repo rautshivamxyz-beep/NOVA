@@ -124,7 +124,10 @@ class NovaListener : NotificationListenerService() {
                         val t = l.substringBefore('\t').toLongOrNull()
                         t != null && t >= cutoff
                     }.takeLast(2000)
-                    f.writeText(kept.joinToString("\n") + "\n")
+                    // v9.16.1: atomic rewrite of the trimmed log
+                    val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+                    tmp.writeText(kept.joinToString("\n") + "\n")
+                    if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
                 }
             }
         }
