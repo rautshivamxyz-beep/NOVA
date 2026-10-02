@@ -207,7 +207,11 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.6: version bumped for faster Qwen3", bg.count("versionName '9.13.6'") == 1 and bg.count("versionCode 103") == 1)
+check("v9.13.7: version bumped for wider speculation", bg.count("versionName '9.13.7'") == 1 and bg.count("versionCode 104") == 1)
+# ---- v9.13.7 "LFM 2.5 230M + wider speculation": catalog entry + draft matcher ----
+mcat = load("ModelCatalog.kt")
+check("v9.13.7: LFM 2.5 230M is in the model catalog",
+      mcat.count('"lfm25-230m"') == 1 and mcat.count("LFM2.5-230M-Q4_K_M.gguf") == 1)
 # ---- v9.13.5 "Full CPU kernels": every per-chip ggml variant ships in the APK ----
 check("v9.13.5: no ggml CPU variant is excluded from the APK (build.gradle)",
       bg.count("libggml-cpu-android_armv9.2") == 0 and
@@ -231,6 +235,8 @@ nr = load("ncie/android/NcieRoutines.kt")
 # (variable names tun/nev/st: nt stays NovaTheme below, ne stays NcieExam)
 tun = load("ncie/android/NcieTune.kt")
 nev = load("NovaEngine.kt")
+check("v9.13.7: draft matcher covers Qwen and LFM families (NovaEngine)",
+      nev.count('"qwen" in target') == 1 and nev.count('"lfm" in target') == 1)
 # ---- v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking ----
 check("v9.13.3: 1B+ models are told to skip hidden thinking (NovaEngine)",
       nev.count("Do NOT produce any thinking") == 1 and

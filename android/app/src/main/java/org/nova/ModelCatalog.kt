@@ -23,6 +23,12 @@ object ModelCatalog {
 
     val entries = listOf(
         Entry(
+            "lfm25-230m", "LFM 2.5 230M", "Liquid AI", "0.23B", "Q4_K_M",
+            153_000_000L /* ~0.15 GB */, 2,
+            "The fastest model here - tiny and near-instant on any phone. A great quick everyday companion to the bigger Qwen models, and the draft that speeds up LFM 2.5 1.2B. English + 9 more languages. Not for hard maths or long writing.",
+            "https://huggingface.co/LiquidAI/LFM2.5-230M-GGUF/resolve/main/LFM2.5-230M-Q4_K_M.gguf"
+        ),
+        Entry(
             "qwen3-0.6b", "Qwen 3 0.6B", "Alibaba", "0.6B", "Q4_K_M",
             396705472L /* ~0.38 GB */, 2,
             "Fastest chat model — roughly 3x faster than 1.7B. Best for quick everyday questions.",

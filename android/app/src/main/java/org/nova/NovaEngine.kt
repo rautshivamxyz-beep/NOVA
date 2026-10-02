@@ -172,13 +172,27 @@ object NovaEngine {
         } catch (e: Exception) { }
     }
 
-    /** v5.7.0: the Qwen3 0.6B file, when a Qwen3 target is active. */
+    /**
+     * v5.7.0 / v9.13.7: the draft model for speculative decoding. A draft MUST
+     * share the target's tokenizer - the target verifies every proposed token,
+     * so the output is unchanged, only faster. Two families qualify:
+     *  - Qwen (Qwen 2.5 / 3 share the Qwen tokenizer): draft with Qwen3 0.6B
+     *  - LFM 2.5: draft with the tiny LFM 2.5 230M
+     * A target never drafts with itself, and an absent draft is simply a no-op
+     * (the engine unloads any draft), so this can only help, never regress.
+     */
     private fun findDraftModel(ctx: Context): java.io.File? {
         val target = (activeModelLabel + " " + (activeModelPath ?: "")).lowercase()
-        if (!target.contains("qwen3")) return null
-        return ModelCatalog.modelsDir(ctx).listFiles { f: java.io.File ->
-            f.extension == "gguf" && f.name.lowercase().contains("qwen3-0.6b")
-        }?.firstOrNull()
+        val files = ModelCatalog.modelsDir(ctx).listFiles { f: java.io.File ->
+            f.extension == "gguf"
+        } ?: return null
+        return when {
+            "qwen" in target && "0.6b" !in target ->
+                files.firstOrNull { "qwen3-0.6b" in it.name.lowercase() }
+            "lfm" in target && "230m" !in target ->
+                files.firstOrNull { "230m" in it.name.lowercase() }
+            else -> null
+        }
     }
 
     /**
