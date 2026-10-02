@@ -221,12 +221,13 @@ check("v9.15.0: the camera row + result wiring are in MainActivity",
       ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
 # ---- v9.16.1 "Thin Prompt + Hardening" ----
+_vst = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/Settings.kt"), encoding="utf-8").read()
 check("v9.16.1: thin base system prompt (Settings)",
-      st.count("nothing you say leaves the device") == 1 and
-      st.count("Be concise and direct. If you are not sure, say so instead of guessing") == 1 and
-      st.count("Do not invent facts") == 1)
+      _vst.count("nothing you say leaves the device") == 1 and
+      _vst.count("Be concise and direct. If you are not sure, say so instead of guessing") == 1 and
+      _vst.count("Do not invent facts") == 1)
 check("v9.16.1: PIN uses PBKDF2 + a throttle (MainActivity)",
-      ma.count("PBKDF2WithHmacSHA256") == 1 and ma.count("pinLockUntil") == 3 and
+      ma.count("PBKDF2WithHmacSHA256") == 1 and ma.count("pinLockUntil") == 4 and
       ma.count("MessageDigest.isEqual") == 2)
 check("v9.16.1: context is delimited as data (NcieChat)",
       nc.count("CONTEXT (reference data") == 1)
