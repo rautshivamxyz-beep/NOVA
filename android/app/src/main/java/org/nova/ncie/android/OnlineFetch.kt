@@ -8,6 +8,7 @@ import org.json.JSONObject
 import org.nova.ChatStore
 import org.nova.MainActivity
 import org.nova.Msg
+import org.nova.NovaNet
 import org.nova.Role
 import org.nova.WikiCore
 import org.nova.ncie.knowledge.HtmlText
@@ -150,7 +151,7 @@ object OnlineFetch {
         }
         act.scope.launch(Dispatchers.IO) {
             // 1. Wikipedia first - curated, clean, no page parsing needed
-            val wiki = try { fetchWiki(q) } catch (e: Exception) { null }
+            val wiki = try { fetchWiki(act, q) } catch (e: Exception) { null }
             var saved: String? = null
             if (wiki != null && Coverage.ratio(text, wiki.second) >= 0.3) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
@@ -160,7 +161,7 @@ object OnlineFetch {
             }
             // 2. the open web - only when Wikipedia had nothing usable
             if (saved == null) {
-                val page = try { fetchWeb(q) } catch (e: Exception) { null }
+                val page = try { fetchWeb(act, q) } catch (e: Exception) { null }
                 if (page != null) {
                     // code blocks ride along verbatim, so fetched examples
                     // land exactly as written
@@ -188,14 +189,14 @@ object OnlineFetch {
     /** (title, intro extract) from Wikipedia, or null. Two requests:
      *  the search API for the best title, then the extract API for its
      *  intro paragraphs. */
-    private fun fetchWiki(q: String): Pair<String, String>? {
-        val search = http("https://en.wikipedia.org/w/api.php?action=query&format=json" +
+    private fun fetchWiki(act: MainActivity, q: String): Pair<String, String>? {
+        val search = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
             "&list=search&srlimit=1&srsearch=" + URLEncoder.encode(q, "UTF-8"))
         val title = try {
             JSONObject(search).getJSONObject("query").getJSONArray("search")
                 .getJSONObject(0).getString("title")
         } catch (e: Exception) { return null }
-        val page = http("https://en.wikipedia.org/w/api.php?action=query&format=json" +
+        val page = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
             "&prop=extracts&explaintext=1&exintro=1&redirects=1&titles=" +
             URLEncoder.encode(title, "UTF-8"))
         val extract = try {
@@ -215,11 +216,11 @@ object OnlineFetch {
      *  DuckDuckGo's no-JS endpoint for the links, then the kernel's
      *  HtmlText for the clean text - up to 3 candidates, first one
      *  with real content wins. */
-    private fun fetchWeb(q: String): WebPage? {
-        val html = http("https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(q, "UTF-8"))
+    private fun fetchWeb(act: MainActivity, q: String): WebPage? {
+        val html = http(act, "https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(q, "UTF-8"))
         val links = parseDdgLinks(html)
         for ((url, title) in links.take(3)) {
-            val pageHtml = try { http(url) } catch (e: Exception) { continue }
+            val pageHtml = try { http(act, url) } catch (e: Exception) { continue }
             val text = HtmlText.toText(pageHtml)
             if (text.length < 200) continue
             return WebPage(title, text, HtmlText.codeBlocks(pageHtml), url)
@@ -244,7 +245,7 @@ object OnlineFetch {
                 Regex("(?s)<[^>]*>").replace(m.groupValues[2], " ")).trim()
             // keep only real result pages: external http(s), not ads, with
             // a real title - the rest is the engine's own chrome
-            if (url.startsWith("http") && !url.contains("duckduckgo.com") &&
+            if (url.startsWith("https") && !url.contains("duckduckgo.com") &&
                 title.length > 3) out.add(url to title)
         }
         return out.distinctBy { it.first }
@@ -266,29 +267,17 @@ object OnlineFetch {
         } catch (e: Exception) { }
     }
 
-    /** v9.4.0 "Audit Fixes II" (audit: plain-http links failed for
-     *  good): one raw request. */
-    private fun httpOnce(url: String): String {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 10000
-        conn.readTimeout = 20000
-        conn.setRequestProperty("User-Agent", "NOVA-local-assistant/1.0 (offline study)")
-        try {
-            return conn.inputStream.bufferedReader().readText()
-        } finally {
-            conn.disconnect()
-        }
-    }
+    /** v9.15.0 "Private Fetch": one raw request, routed through the
+     *  configured SOCKS proxy (Orbot/Tor or a user proxy) when one is on. */
+    private fun httpOnce(act: MainActivity, url: String): String =
+        NovaNet.getText(act, url, connectMs = 10000, readMs = 20000)
 
-    /** v9.4.0 "Audit Fixes II" (audit: an http URL that fails or
-     *  redirects was a dead end): a plain-http URL that fails (or
-     *  redirects to https, which HttpURLConnection will not follow
-     *  across protocols) is retried once over https. */
-    private fun http(url: String): String = try {
-        httpOnce(url)
-    } catch (e: Exception) {
-        if (url.startsWith("http://"))
-            httpOnce("https://" + url.substring("http://".length))
-        else throw e
+    /** v9.15.0 "Private Fetch": https only. A plain-http URL is upgraded
+     *  to https outright and never sent in the clear - if the upgrade
+     *  fails the fetch fails honestly, instead of leaking the query. */
+    private fun http(act: MainActivity, url: String): String {
+        val secure = if (url.startsWith("http://"))
+            "https://" + url.substring("http://".length) else url
+        return httpOnce(act, secure)
     }
 }

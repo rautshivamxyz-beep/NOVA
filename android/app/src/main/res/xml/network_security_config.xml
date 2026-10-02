@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v9.15.0 "Private Fetch": no cleartext anywhere. Every online lookup
+     must be https, so a query is never sent in the clear. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
