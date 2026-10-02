@@ -153,7 +153,7 @@ object OnlineFetch {
             // 1. Wikipedia first - curated, clean, no page parsing needed
             val wiki = try { fetchWiki(act, q) } catch (e: Exception) { null }
             var saved: String? = null
-            if (wiki != null && Coverage.ratio(text, wiki.second) >= 0.3) {
+            if (wiki != null && Coverage.ratio(q, wiki.second) >= 0.2) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
@@ -168,7 +168,7 @@ object OnlineFetch {
                     val body = page.text + (if (page.code.isNotEmpty())
                         "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
                         else "")
-                    if (Coverage.ratio(text, body) >= 0.3 &&
+                    if (Coverage.ratio(q, body) >= 0.2 &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
@@ -190,22 +190,27 @@ object OnlineFetch {
      *  the search API for the best title, then the extract API for its
      *  intro paragraphs. */
     private fun fetchWiki(act: MainActivity, q: String): Pair<String, String>? {
+        // v9.16.2: try the top few search hits and keep the FIRST with a
+        // real intro - the old code only looked at hit #1, so a
+        // disambiguation or stub page meant "nothing good found".
         val search = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
-            "&list=search&srlimit=1&srsearch=" + URLEncoder.encode(q, "UTF-8"))
-        val title = try {
-            JSONObject(search).getJSONObject("query").getJSONArray("search")
-                .getJSONObject(0).getString("title")
+            "&list=search&srlimit=3&srsearch=" + URLEncoder.encode(q, "UTF-8"))
+        val titles = try {
+            val arr = JSONObject(search).getJSONObject("query").getJSONArray("search")
+            (0 until arr.length()).map { arr.getJSONObject(it).getString("title") }
         } catch (e: Exception) { return null }
-        val page = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
-            "&prop=extracts&explaintext=1&exintro=1&redirects=1&titles=" +
-            URLEncoder.encode(title, "UTF-8"))
-        val extract = try {
-            val pages = JSONObject(page).getJSONObject("query").getJSONObject("pages")
-            val k = pages.keys().next()
-            pages.getJSONObject(k).getString("extract")
-        } catch (e: Exception) { return null }
-        if (extract.length < 80) return null
-        return title to extract
+        for (title in titles) {
+            val extract = try {
+                val page = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
+                    "&prop=extracts&explaintext=1&exintro=1&redirects=1&titles=" +
+                    URLEncoder.encode(title, "UTF-8"))
+                val pages = JSONObject(page).getJSONObject("query").getJSONObject("pages")
+                val k = pages.keys().next()
+                pages.getJSONObject(k).getString("extract")
+            } catch (e: Exception) { null }
+            if (extract != null && extract.length >= 80) return title to extract
+        }
+        return null
     }
 
     /** A fetched web page: title, reading text, verbatim code blocks. */

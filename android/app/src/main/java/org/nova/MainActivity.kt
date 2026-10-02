@@ -543,6 +543,18 @@ class MainActivity : Activity() {
         pill.addView(symBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
             rightMargin = dp(4)
         })
+        // v9.16.2: a camera button on the typing row (it was only in the
+        // drawer) - snap a page and send it to OCR without leaving the chat
+        pill.addView(Button(this).apply {
+            text = ""
+            isAllCaps = false
+            background = null
+            minWidth = 0; minimumWidth = 0
+            setPadding(0, 0, 0, 0)
+            setCompoundDrawablesWithIntrinsicBounds(
+                icon(R.drawable.ic_camera, textDim), null, null, null)
+            setOnClickListener { openCamera() }
+        }, LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(4) })
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
@@ -1171,6 +1183,14 @@ class MainActivity : Activity() {
 
         sendBtn.setCompoundDrawablesWithIntrinsicBounds(
             icon(R.drawable.ic_stop, stopColor), null, null, null)
+        // v9.16.2: the stop button actually stops. It used to only change
+        // the icon - the click still ran send()/startSpeech(), so tapping
+        // it never cancelled the reply. Now it cancels the running
+        // generation (token collection is cancellation-cooperative; the
+        // model stays loaded).
+        sendBtn.setOnClickListener {
+            if (generationJob?.isActive == true) generationJob?.cancel()
+        }
         generating = true
         NcieChat.generating = true
         setStatus()
@@ -1657,12 +1677,9 @@ class MainActivity : Activity() {
                             // v7.5: dense fact bullets instead of long sentences - half the
                             // writing time, MORE facts for the final combine to organize
                             "Extract the key facts from this part of a " +
-                                "document as a bullet list. One fact per " +
-                                "line, short lines. Keep every name, number, " +
-                                "date and term exactly as written. No full " +
-                                "sentences, no commentary. Only use facts " +
-                                "present in the text - never invent:" +
-                                "\n-----\n$c2\n-----", 280
+                                "document as short bullet lines. Keep names, " +
+                                "numbers and dates exact. Only use facts " +
+                                "present - never invent:\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n", sb) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1692,14 +1709,9 @@ class MainActivity : Activity() {
                 }
                 val sb2 = StringBuilder()
                 NovaEngineAdapter.stream(
-                    "These are summaries of " +
-                        (if (strided) "the main sections of a long document" else "the sections of a document") +
-                        ". Write a DETAILED final summary organized topic by topic: for each topic " +
-                        "start with a short bold heading line, then 2-4 bullet points (lines " +
-                        "starting with \"- \") in full sentences with its names, dates, numbers " +
-                        "and terms. Every bullet must be a complete sentence containing " +
-                        "at least one date, name, number or term - never a single word. " +
-                        "Do not skip any topic. Use only the information given. Use only facts that appear in the TEXT. If you are not sure a fact is in the TEXT, leave it out. Do not add any commentary about the summary itself:" +
+                    "Combine these section notes into one topic-by-topic summary. " +
+                        "For each topic: a short heading line, then 2-4 bullet points " +
+                        "(lines starting with \"- \"). Use only facts that appear in the TEXT:" +
                         "\n\n${dedupeLines(sectionSummaries.toString()).take(11000)}", 1500
                 ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
@@ -1865,9 +1877,8 @@ class MainActivity : Activity() {
                         NovaEngineAdapter.stream(
                             // v7.5: dense fact bullets - see summarizeDoc
                             "Extract the key facts from this part of the notes " +
-                                "as a bullet list. One fact per line, short lines. " +
-                                "Keep every date, name, number, term and fact " +
-                                "stated in the text. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
+                                "as short bullet lines. Keep dates, names and " +
+                                "numbers exact. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${sections.size}\u2026\n\n", sb) }
                     } catch (e: Exception) { }
                     val s = stripThinking(sb.toString()).trim()
@@ -1903,15 +1914,9 @@ class MainActivity : Activity() {
                 }
                 val sb2 = StringBuilder()
                 NovaEngineAdapter.stream(
-                    "These are section summaries from the notes \"$doc\". Write a DETAILED " +
-                        "final study summary. Organize it topic by topic: for each topic " +
-                        "start with a short bold heading line, then 2-4 bullet points " +
-                        "(lines starting with \"- \") in full sentences with that topic's " +
-                        "dates, names, numbers and terms. Cover EVERY topic. Use ONLY what " +
-                        "the summaries say. Every bullet must be a complete sentence " +
-                        "containing at least one date, name, number or term - never a " +
-                        "single word. Copy key terms exactly as written, do not add " +
-                        "outside knowledge or invent terms. Use only facts that appear in the TEXT. If you are not sure a fact is in the TEXT, leave it out. Do not add any commentary about the summary itself.$antiCot\n\n" +
+                    "Combine these section notes from \"$doc\" into one topic-by-topic " +
+                        "study summary. For each topic: a short heading line, then 2-4 " +
+                        "bullet points (lines starting with \"- \"). Use only facts that appear in the TEXT.$antiCot\n\n" +
                         dedupeLines(sectionSummaries.toString()).take(11000), 1500
                 ).collect { sb2.append(it); uiProgress("Writing the final summary\u2026\n\n", sb2) }
                 var finalText = stripThinking(sb2.toString()).trim()
