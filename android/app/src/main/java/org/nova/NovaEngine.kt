@@ -11,6 +11,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -304,7 +306,30 @@ object NovaEngine {
     fun send(message: String, predictLength: Int): Flow<String> {
         val engine = requireNotNull(engineRef) { "No model loaded" }
         contextDirty = true   // the conversation context now holds this prompt
-        return engine.sendUserPrompt(message, predictLength)
+        // v9.13.9 "No dropped turns": the engine DISCARDS a prompt that
+        // arrives while it is still processing the previous one - the user
+        // sees "[error: User prompt discarded due to: ProcessingUserPrompt]"
+        // and the turn is lost. Wait for the engine to leave the processing
+        // states before issuing the prompt, so a retry or continuation can
+        // never be dropped.
+        return flow {
+            awaitEngineReady(engine)
+            emitAll(engine.sendUserPrompt(message, predictLength))
+        }
+    }
+
+    /** v9.13.9 "No dropped turns": suspend until the engine is no longer
+     *  mid-processing a prompt (the states that make it discard the next
+     *  one). Bounded, so a wedged engine can never hang the caller. */
+    private suspend fun awaitEngineReady(engine: InferenceEngine) {
+        val start = SystemClock.elapsedRealtime()
+        while (true) {
+            val s = engine.state.value
+            if (s !is InferenceEngine.State.ProcessingUserPrompt &&
+                s !is InferenceEngine.State.ProcessingSystemPrompt) return
+            if (SystemClock.elapsedRealtime() - start > 90_000L) return
+            delay(120)
+        }
     }
 
     /**

@@ -80,13 +80,14 @@ class Settings(context: Context) {
     /** v5.7.0: speculative decoding - the Qwen3 0.6B draft proposes tokens
      *  that the main model verifies in batches.
      *
-     *  v9.13.6 "Faster Qwen3": ON by default now. The target model checks
-     *  every proposed token, so the answer is IDENTICAL - only faster. It
-     *  engages only for a Qwen3 target with the 0.6B draft downloaded;
-     *  otherwise it is a no-op (the engine unloads any draft). The Settings
-     *  toggle still turns it off if a device ever measures it slower. */
+     *  v9.13.6 "Faster Qwen3" made this ON by default; v9.13.9 turns it back
+     *  OFF. The draft model costs RAM, and on a 4 GB phone that extra
+     *  pressure can make generation fail and wedge the engine - the exact
+     *  "User prompt discarded" failure seen on the Narzo 50A. The feature is
+     *  unchanged and lossless; turn it ON in Settings on a phone with RAM to
+     *  spare (a Qwen model + the Qwen3 0.6B draft). */
     var specDecoding: Boolean
-        get() = prefs.getBoolean(KEY_SPEC, true)
+        get() = prefs.getBoolean(KEY_SPEC, false)
         set(value) = prefs.edit().putBoolean(KEY_SPEC, value).apply()
 
     /** v5.4.6: documents excluded from Knowledge search via the Notes

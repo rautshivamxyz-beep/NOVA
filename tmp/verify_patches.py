@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.8: version bumped for lean turns", bg.count("versionName '9.13.8'") == 1 and bg.count("versionCode 105") == 1)
+check("v9.13.9: version bumped for no dropped turns", bg.count("versionName '9.13.9'") == 1 and bg.count("versionCode 106") == 1)
 # ---- v9.13.8 "Lean turn": one question embedding per turn; no embedder without docs ----
 ng = load("ncie/android/NcieGround.kt")
 check("v9.13.8: the question embedding is computed once per turn (NcieGround)",
@@ -243,6 +243,10 @@ nr = load("ncie/android/NcieRoutines.kt")
 # (variable names tun/nev/st: nt stays NovaTheme below, ne stays NcieExam)
 tun = load("ncie/android/NcieTune.kt")
 nev = load("NovaEngine.kt")
+check("v9.13.9: a prompt is never fired into a busy engine (NovaEngine)",
+      nev.count("private suspend fun awaitEngineReady(") == 1 and
+      nev.count("awaitEngineReady(engine)") == 1 and
+      nev.count("emitAll(engine.sendUserPrompt(") == 1)
 check("v9.13.7: draft matcher covers Qwen and LFM families (NovaEngine)",
       nev.count('"qwen" in target') == 1 and nev.count('"lfm" in target') == 1)
 # ---- v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking ----
@@ -253,7 +257,7 @@ check("v9.13.3: 1B+ models are told to skip hidden thinking (NovaEngine)",
 st = load("Settings.kt")
 # ---- v9.13.6 "Faster Qwen3": speculative decoding on by default (lossless) ----
 check("v9.13.6: speculative decoding defaults ON (Settings)",
-      st.count("prefs.getBoolean(KEY_SPEC, true)") == 1)
+      st.count("prefs.getBoolean(KEY_SPEC, false)") == 1)
 check("v9.11.0: per-model sampling profiles ship (NcieTune)",
       tun.count("model_settings") >= 2 and tun.count("QWEN_DEFAULTS") == 2 and
       tun.count("LFM_DEFAULTS") == 2 and tun.count("OTHER_DEFAULTS") == 2 and
