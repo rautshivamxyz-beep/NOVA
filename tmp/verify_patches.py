@@ -207,7 +207,21 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.3: version bumped for the fixes + automation pass", bg.count("versionName '9.16.3'") == 1 and bg.count("versionCode 113") == 1)
+check("v9.16.5: version bumped for the direct call + SMS fix", bg.count("versionName '9.16.5'") == 1 and bg.count("versionCode 115") == 1)
+# ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
+#      routes to the tutor, and a deictic topic falls back to the open doc ----
+check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
+      nc.count("cleanQuizTopic") == 2 and nc.count("TUTOR_QUIZ_BARE") == 2)
+check("v9.16.4: deictic quiz falls back to the open document (NcieTutor)",
+      load("ncie/android/NcieTutor.kt").count("quizSourceFor") == 2)
+# ---- v9.16.5 "Direct call + SMS": do it ourselves, no dialer/messaging app ----
+_mf5 = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+check("v9.16.5: call + SMS permissions declared (AndroidManifest)",
+      _mf5.count("android.permission.CALL_PHONE") == 1 and
+      _mf5.count("android.permission.SEND_SMS") == 1)
+check("v9.16.5: direct call + direct SMS wired (MainActivity + NovaSms)",
+      ma.count("Intent.ACTION_CALL") == 1 and ma.count("NovaSms.sendDirect") == 2 and
+      load("SendReceiver.kt").count("NovaSms.sendDirect") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",

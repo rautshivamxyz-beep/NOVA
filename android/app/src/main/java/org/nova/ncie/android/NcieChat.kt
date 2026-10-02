@@ -206,7 +206,16 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         val tutorTopic = TUTOR_QUIZ.find(text)
         if (tutorTopic != null && text.length <= 120) {
             input.setText("")
-            NcieTutor.startQuiz(this, text, tutorTopic.groupValues[1].trim())
+            NcieTutor.startQuiz(this, text, cleanQuizTopic(tutorTopic.groupValues[1]))
+            return
+        }
+        // v9.16.4 "Quiz routing fix": bare "quiz me" / "test me" (no
+        // "on <topic>" tail). Previously this fell through to normal
+        // answering and never started a quiz; now it quizzes on the
+        // document the user has open, or the most recent notes.
+        if (TUTOR_QUIZ_BARE.matches(text)) {
+            input.setText("")
+            NcieTutor.startQuiz(this, text, "")
             return
         }
         if (TUTOR_STUDY.containsMatchIn(text)) {
@@ -519,7 +528,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (docContext == null && settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             val quizMe = Regex("(?i)\\b(?:quiz|test) me on\\b").find(text)
             if (quizMe != null) {
-                val topic = text.substringAfter(quizMe.value).trim()
+                val topic = cleanQuizTopic(text.substringAfter(quizMe.value))
                 val parts = NcieKnowledge.bestChunks(this, if (topic.length > 2) topic else text, 10)
                 if (parts.isNotEmpty()) {
                     val um = Msg(Role.USER, text)
@@ -1273,6 +1282,9 @@ private val TUNE_RESET_Q = Regex("(?i)^\\s*reset\\s+model\\s+settings\\s*[.!?]*\
 // quiz-me-on keeps the open topic capture but is length-gated in the
 // routing above.
 private val TUTOR_QUIZ = Regex("(?i)\\b(?:quiz|test)\\s+me\\s+on\\s+(.{2,80})")
+// v9.16.4: bare "quiz me" / "test me" - the command with no topic tail.
+// Routes to the tutor, which quizzes on the current document / notes.
+private val TUTOR_QUIZ_BARE = Regex("(?i)\\s*(?:quiz|test)\\s+me\\s*[.!?]*\\s*")
 private val TUTOR_STUDY = Regex("(?i)^\\s*study(?:\\s+my\\s+weak\\s+areas)?\\s*[.!?]*\\s*$")
 private val TUTOR_WEAK = Regex(
     "(?i)^\\s*(?:my\\s+weak\\s+areas|what\\s+am\\s+i\\s+weak\\s+in|weak\\s+areas)\\s*[.!?]*\\s*$")

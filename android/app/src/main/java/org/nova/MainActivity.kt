@@ -2347,7 +2347,7 @@ class MainActivity : Activity() {
         val picks = listOf(
             "Explain simply" to "Explain that more simply, like I am 12 years old.",
             "Give an example" to "Give me one clear real-life example of that.",
-            "Quiz me" to "Quiz me on this topic with 3 questions, one at a time.",
+            "Quiz me" to "Quiz me on this topic.",
             "3-point summary" to "Summarize that in exactly 3 short bullet points."
         )
         for ((label, prompt) in picks) {
@@ -2587,7 +2587,12 @@ Study:
                 }
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
-                else {
+                else if (!viaWhatsapp && !canSms()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 4256)
+                    toast("Allow sending SMS in the prompt, then say it again")
+                } else if (!viaWhatsapp && NovaSms.sendDirect(this, number, msg)) {
+                    toast("Message sent to $who")
+                } else {
                     val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
                         if (viaWhatsapp) setPackage("com.whatsapp")
                         putExtra("sms_body", msg)
@@ -2614,8 +2619,16 @@ Study:
                 }
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
-                else {
-                    startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
+                else if (!canCall()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.CALL_PHONE), 4255)
+                    toast("Allow phone calls in the prompt, then say it again")
+                } else {
+                    try {
+                        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
+                    } catch (e: Exception) {
+                        try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }
+                        catch (x: Exception) { toast("Couldn't place the call") }
+                    }
                     toast("Calling $who…")
                 }
                 return true
@@ -2630,11 +2643,14 @@ Study:
                 }
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
-                else {
-                    // v9.8.0: the send itself moved to NovaSms.openDraft -
-                    // the SAME draft path SendReceiver fires scheduled
-                    // texts through
-                    if (NovaSms.openDraft(this, number, msg))
+                else if (!canSms()) {
+                    requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 4256)
+                    toast("Allow sending SMS in the prompt, then say it again")
+                } else {
+                    // v9.16.5: send it ourselves - no messaging app in the way
+                    if (NovaSms.sendDirect(this, number, msg))
+                        toast("Message sent to $who")
+                    else if (NovaSms.openDraft(this, number, msg))
                         toast("Message ready for $who - press send")
                     else toast("No messaging app")
                 }
@@ -2734,6 +2750,15 @@ Study:
 
     private fun hasContacts(): Boolean =
         checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** v9.16.5: can we place the call / send the text ourselves? */
+    private fun canCall(): Boolean =
+        checkSelfPermission(android.Manifest.permission.CALL_PHONE) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun canSms(): Boolean =
+        checkSelfPermission(android.Manifest.permission.SEND_SMS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
 
     private fun lookupContact(name: String): String? = try {
@@ -3879,7 +3904,7 @@ internal val SMALLTALK_REGEX = Regex(
 internal val CHIP_PROMPTS = setOf(
     "Explain that more simply, like I am 12 years old.",
     "Give me one clear real-life example of that.",
-    "Quiz me on this topic with 3 questions, one at a time.",
+    "Quiz me on this topic.",
     "Summarize that in exactly 3 short bullet points."
 )
 /**
