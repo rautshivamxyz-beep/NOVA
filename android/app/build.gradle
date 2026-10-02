@@ -49,8 +49,9 @@ android {
         // v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking
         // v9.13.4 "Thinking Tags Hardened": strip <thinking> and every tag variant too
         // v9.13.5 "Full CPU kernels": ship every per-chip ggml variant for max speed
-        versionCode 102
-        versionName '9.13.5'
+        // v9.13.6 "Faster Qwen3": speculative decoding on by default (identical output)
+        versionCode 103
+        versionName '9.13.6'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

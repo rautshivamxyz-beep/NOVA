@@ -77,11 +77,16 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_STRICT, false)
         set(value) = prefs.edit().putBoolean(KEY_STRICT, value).apply()
 
-    /** v5.7.0: speculative decoding - Qwen3 0.6B drafts tokens that the
-     *  main model verifies in batches. Off by default: measure with the
-     *  built-in speed timers before trusting it. */
+    /** v5.7.0: speculative decoding - the Qwen3 0.6B draft proposes tokens
+     *  that the main model verifies in batches.
+     *
+     *  v9.13.6 "Faster Qwen3": ON by default now. The target model checks
+     *  every proposed token, so the answer is IDENTICAL - only faster. It
+     *  engages only for a Qwen3 target with the 0.6B draft downloaded;
+     *  otherwise it is a no-op (the engine unloads any draft). The Settings
+     *  toggle still turns it off if a device ever measures it slower. */
     var specDecoding: Boolean
-        get() = prefs.getBoolean(KEY_SPEC, false)
+        get() = prefs.getBoolean(KEY_SPEC, true)
         set(value) = prefs.edit().putBoolean(KEY_SPEC, value).apply()
 
     /** v5.4.6: documents excluded from Knowledge search via the Notes

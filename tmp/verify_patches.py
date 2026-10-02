@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.5: version bumped for full CPU kernels", bg.count("versionName '9.13.5'") == 1 and bg.count("versionCode 102") == 1)
+check("v9.13.6: version bumped for faster Qwen3", bg.count("versionName '9.13.6'") == 1 and bg.count("versionCode 103") == 1)
 # ---- v9.13.5 "Full CPU kernels": every per-chip ggml variant ships in the APK ----
 check("v9.13.5: no ggml CPU variant is excluded from the APK (build.gradle)",
       bg.count("libggml-cpu-android_armv9.2") == 0 and
@@ -237,6 +237,9 @@ check("v9.13.3: 1B+ models are told to skip hidden thinking (NovaEngine)",
       nev.count("val big = params != null && params >= 1.0") == 1 and
       nev.count("MODEL_PARAMS.find(n)") == 1)
 st = load("Settings.kt")
+# ---- v9.13.6 "Faster Qwen3": speculative decoding on by default (lossless) ----
+check("v9.13.6: speculative decoding defaults ON (Settings)",
+      st.count("prefs.getBoolean(KEY_SPEC, true)") == 1)
 check("v9.11.0: per-model sampling profiles ship (NcieTune)",
       tun.count("model_settings") >= 2 and tun.count("QWEN_DEFAULTS") == 2 and
       tun.count("LFM_DEFAULTS") == 2 and tun.count("OTHER_DEFAULTS") == 2 and
