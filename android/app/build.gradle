@@ -59,8 +59,9 @@ android {
         // v9.14.0 "Sharp Memory": learn each context source's value; skip the ones that never help
         // v9.14.1: restore speed - revert the extra-kernel change; soften the engine wait
         // v9.15.0 "Camera": in-app camera screen (preview + shutter) -> on-device OCR -> chat
-        versionCode 109
-        versionName '9.15.0'
+        // v9.16.0 "Private Fetch": route online lookups through a SOCKS proxy (Orbot/Tor); https-only
+        versionCode 110
+        versionName '9.16.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

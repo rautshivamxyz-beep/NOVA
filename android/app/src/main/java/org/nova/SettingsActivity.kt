@@ -211,6 +211,28 @@ class SettingsActivity : Activity() {
         })
         col.addView(answers)
 
+        // Privacy - v9.15.0 "Private Fetch"
+        val privacy = card("PRIVACY")
+        privacy.addView(TextView(this).apply {
+            text = "Route online lookups through a SOCKS proxy (Orbot/Tor) so " +
+                "the sites NOVA reads never see this phone's IP. Turn Orbot on first."
+            textSize = 12f; setTextColor(NovaTheme.dim)
+            setPadding(0, dp(8), 0, dp(6))
+        })
+        privacy.addView(switchRow("Route fetches through a SOCKS proxy", settings.proxyEnabled) {
+            settings.proxyEnabled = it
+        })
+        privacy.addView(editField(settings.proxyHost + ":" + settings.proxyPort,
+            "Proxy host:port (Orbot = 127.0.0.1:9050)") { v ->
+            if (v.contains(':')) {
+                val host = v.substringBeforeLast(':').trim()
+                val port = v.substringAfterLast(':').trim().toIntOrNull()
+                if (host.isNotEmpty()) settings.proxyHost = host
+                if (port != null && port in 1..65535) settings.proxyPort = port
+            }
+        })
+        col.addView(privacy)
+
         // Appearance
         val looks = card("APPEARANCE")
         looks.addView(switchRow("Light theme", settings.theme == "light") {

@@ -98,6 +98,24 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_ADAPTIVE_CTX, true)
         set(value) = prefs.edit().putBoolean(KEY_ADAPTIVE_CTX, value).apply()
 
+    /** v9.15.0 "Private Fetch": route every online lookup through a SOCKS
+     *  proxy - Orbot/Tor, or a proxy the user controls - so the sites
+     *  NOVA reads never see this phone's IP. Off by default: with it off,
+     *  requests go direct, exactly as before. */
+    var proxyEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PROXY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_PROXY_ENABLED, value).apply()
+
+    /** SOCKS proxy host (Orbot's default is 127.0.0.1). */
+    var proxyHost: String
+        get() = prefs.getString(KEY_PROXY_HOST, "127.0.0.1") ?: "127.0.0.1"
+        set(value) = prefs.edit().putString(KEY_PROXY_HOST, value).apply()
+
+    /** SOCKS proxy port (Orbot's default is 9050). */
+    var proxyPort: Int
+        get() = prefs.getInt(KEY_PROXY_PORT, 9050)
+        set(value) = prefs.edit().putInt(KEY_PROXY_PORT, value).apply()
+
     /** v5.4.6: documents excluded from Knowledge search via the Notes
      *  filter drawer row - "English only" during an English exam. */
     var knowledgeExcluded: MutableSet<String>
@@ -120,6 +138,9 @@ class Settings(context: Context) {
         private const val KEY_STRICT = "strict_mode"
         private const val KEY_SPEC = "spec_decoding"
         private const val KEY_ADAPTIVE_CTX = "adaptive_context"
+        private const val KEY_PROXY_ENABLED = "proxy_enabled"
+        private const val KEY_PROXY_HOST = "proxy_host"
+        private const val KEY_PROXY_PORT = "proxy_port"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt

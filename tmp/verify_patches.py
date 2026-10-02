@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.15.0: version bumped for the camera", bg.count("versionName '9.15.0'") == 1 and bg.count("versionCode 109") == 1)
+check("v9.16.0: version bumped for the SOCKS proxy fetch", bg.count("versionName '9.16.0'") == 1 and bg.count("versionCode 110") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
@@ -220,6 +220,17 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
 check("v9.15.0: the camera row + result wiring are in MainActivity",
       ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
+# ---- v9.16.0 "Private Fetch": SOCKS proxy + https-only online lookup ----
+nnf = load("NovaNet.kt")
+check("v9.16.0: the SOCKS proxy helper ships (NovaNet)",
+      nnf.count("Proxy.Type.SOCKS") == 1 and nnf.count("fun getText(") == 1)
+check("v9.16.0: the proxy toggle is in settings (SettingsActivity)",
+      sa.count("proxyEnabled") == 2)
+check("v9.16.0: online fetch goes through the proxy helper (OnlineFetch)",
+      of_.count("NovaNet") == 2 and of_.count('startsWith("https")') == 1)
+_vamf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+check("v9.16.0: cleartext is off in the manifest (AndroidManifest.xml)",
+      _vamf.count('android:usesCleartextTraffic="false"') == 1)
 # ---- v9.14.0 "Sharp Memory": learn each context source's value; skip the dead ones ----
 nval = load("ncie/android/NcieValue.kt")
 check("v9.14.0: the adaptive context value tracker ships (NcieValue)",

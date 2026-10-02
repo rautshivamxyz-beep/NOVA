@@ -110,6 +110,10 @@ object ModelDownloader {
                 } ?: throw IOException("cannot open selected file")
                 if (copied < 16) throw IOException("selected file is not a valid GGUF")
                 if (!part.renameTo(dest)) throw IOException("rename failed")
+                if (!looksLikeGguf(dest)) {
+                    dest.delete()
+                    throw IOException("selected file is not a valid GGUF")
+                }
                 _state.value = State.Done(dest)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // v7.6: delete the REAL partial file - with a uniquified
@@ -178,11 +182,23 @@ object ModelDownloader {
                 part.copyTo(dest, overwrite = true)
                 part.delete()
             }
+            if (!looksLikeGguf(dest)) {
+                dest.delete()
+                throw IOException("downloaded file is not a GGUF model")
+            }
             State.Done(dest)
         } finally {
             conn?.disconnect()
         }
     }
+
+    /** v9.16.0: a GGUF file starts with the ASCII magic "GGUF". Cheap
+     *  sanity check so a truncated or wrong file never lands as a model. */
+    private fun looksLikeGguf(file: File): Boolean = try {
+        val head = ByteArray(4)
+        java.io.FileInputStream(file).use { it.read(head) }
+        String(head, Charsets.US_ASCII) == "GGUF"
+    } catch (e: Exception) { false }
 
     private fun uniqueFile(target: File): File {
         if (!target.exists()) return target
