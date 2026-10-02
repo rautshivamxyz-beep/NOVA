@@ -83,7 +83,7 @@ object NovaEngine {
             val timeout = when (engine.state.value) {
                 is InferenceEngine.State.Uninitialized,
                 is InferenceEngine.State.Initializing -> 60_000L
-                else -> 600_000L
+                else -> 120_000L
             }
             if (SystemClock.elapsedRealtime() - start > timeout) {
                 throw IllegalStateException("engine busy or init timed out")
@@ -115,8 +115,12 @@ object NovaEngine {
      * Starts loading a model in the app scope (survives navigation).
      * Observe [loadState] for the result.
      */
-    fun loadAsync(context: Context, path: String, label: String, systemPrompt: String) {
-        if (loading) return
+    fun loadAsync(context: Context, path: String, label: String, systemPrompt: String,
+                  onDone: ((Boolean) -> Unit)? = null) {
+        // v9.16.1: a caller that needs the outcome (the Models screen) can
+        // now get it - and the loading guard always trips, so a second
+        // load can never start concurrently.
+        if (loading) { onDone?.invoke(false); return }
         loading = true
         _loadState.value = LoadState.Loading(label)
         val appContext = context.applicationContext
@@ -128,10 +132,13 @@ object NovaEngine {
                     it.lastModelLabel = label
                 }
                 _loadState.value = LoadState.Ready
+                onDone?.invoke(true)
             } catch (e: CancellationException) {
                 _loadState.value = LoadState.Failed(label, "cancelled")
+                onDone?.invoke(false)
             } catch (e: Exception) {
                 _loadState.value = LoadState.Failed(label, e.message ?: "unknown error")
+                onDone?.invoke(false)
             } finally {
                 loading = false
             }
@@ -292,6 +299,7 @@ object NovaEngine {
     suspend fun unload(context: Context) {
         activeModelPath = null
         activeModelLabel = ""
+        contextDirty = false   // v9.16.1: no model = no context
         val engine = engineRef ?: return
         val s = engine.state.value
         if (s is InferenceEngine.State.ModelReady || s is InferenceEngine.State.Error) {

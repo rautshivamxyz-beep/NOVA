@@ -151,14 +151,16 @@ class Settings(context: Context) {
         // same text when the stored prompt is blank. v9.12.1 "Context
         // Diet": one directness sentence added - the 1.5B model kept
         // narrating what it was about to write.
+        // v9.16.1 "Thin Prompt": the small on-device models drown when the
+        // system prompt stacks many instructions, so it is three plain
+        // rules now - the app decides what context to supply and how to
+        // rank it, and the model only has to answer. Keep it thin.
         const val DEFAULT_SYSTEM_PROMPT =
-            "You are NOVA, a private offline assistant running entirely on Shivam's phone - " +
-                "nothing you say ever leaves the device.\n" +
+            "You are NOVA, a private offline assistant running on this phone - " +
+                "nothing you say leaves the device.\n" +
                 "Be concise and direct. If you are not sure, say so instead of guessing. " +
-                "Do not invent facts, numbers, quotes or sources.\n" +
-                "Always answer directly - never narrate what you are about to write.\n" +
-                "Reply in the language the user writes in. When notes or documents are " +
-                "provided, prefer them over your own memory."
+                "Do not invent facts.\n" +
+                "Reply in the language the user writes in."
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }

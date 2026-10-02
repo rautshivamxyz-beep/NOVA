@@ -75,7 +75,12 @@ object PdfDoc {
             }
         }
         val text = extract(context, uri, maxChars, onProgress)
-        if (text.isNotBlank()) try { cache.writeText(text) } catch (e: Exception) { }
+        if (text.isNotBlank()) try {
+            // v9.16.1: atomic - a crash mid-write cannot leave a torn cache
+            val tmp = File(cache.parentFile, cache.name + ".tmp")
+            tmp.writeText(text)
+            if (!tmp.renameTo(cache)) { cache.delete(); tmp.renameTo(cache) }
+        } catch (e: Exception) { }
         if (text.length > maxChars)
             text.substring(0, maxChars) + "\n[...document truncated]" else text
     }

@@ -3562,13 +3562,24 @@ Study:
 
     // ------------------------------------------- v9.1.0: the app lock
 
-    /** pin.txt - one line, the salted SHA-256 hex of the PIN. */
+    /** pin.txt - one line: the v9.16.1 record
+     *  "pbkdf2$<iterations>$<saltHex>$<hashHex>", or a legacy salted
+     *  SHA-256 hex from before v9.16.1 (still accepted). The PIN itself
+     *  is never stored. */
     private fun pinFile(): File = File(filesDir, "pin.txt")
 
     private fun pinSet(): Boolean = try { pinFile().exists() } catch (e: Exception) { false }
 
     private fun pinHashMatches(pin: String): Boolean = try {
-        pinFile().readText().trim() == pinHash(pin)
+        // v9.16.1: constant-time verify with a 5-try / 30s throttle
+        val now = System.currentTimeMillis()
+        if (now < pinLockUntil) return false
+        val ok = verifyPin(pinFile().readText().trim(), pin)
+        if (ok) { pinFails = 0; pinLockUntil = 0L } else {
+            pinFails++
+            if (pinFails >= 5) { pinLockUntil = now + 30_000L; pinFails = 0 }
+        }
+        ok
     } catch (e: Exception) { false }
 
     /** The launch gate: a blocking dialog while a PIN is set and this
@@ -3687,16 +3698,41 @@ Study:
         // salted SHA-256 hex of the PIN (never the PIN), and the
         // process-unlocked latch keeps the launch gate from re-asking
         // inside one session.
-        private const val PIN_SALT = "a7f3d09b2e6c4158"
+        // v9.16.1: the app lock - a per-install random salt, PBKDF2, a
+        // constant-time compare, and a 5-try/30s throttle. The old static
+        // salt + single SHA-256 made a 4-digit PIN trivially crackable.
+        private const val PIN_SALT = "a7f3d09b2e6c4158"   // legacy records only
+        private const val PIN_ITER = 120_000
         @Volatile private var pinUnlocked = false
+        @Volatile private var pinFails = 0
+        @Volatile private var pinLockUntil = 0L
 
-        private fun pinHash(pin: String): String {
-            val md = java.security.MessageDigest.getInstance("SHA-256")
-            val bytes = md.digest((PIN_SALT + pin).toByteArray(Charsets.UTF_8))
-            val hex = StringBuilder()
-            for (b in bytes) hex.append(String.format("%02x", b))
-            return hex.toString()
+        private fun hex(b: ByteArray) = b.joinToString("") { String.format("%02x", it) }
+        private fun unhex(s: String) = ByteArray(s.length / 2) {
+            ((Character.digit(s[it * 2], 16) shl 4) + Character.digit(s[it * 2 + 1], 16)).toByte()
         }
+        private fun pbkdf2(pin: String, salt: ByteArray, iters: Int): ByteArray {
+            val spec = javax.crypto.spec.PBEKeySpec(pin.toCharArray(), salt, iters, 256)
+            return javax.crypto.SecretKeyFactory
+                .getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        }
+        /** New record for a freshly set PIN. */
+        private fun pinHash(pin: String): String {
+            val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+            return "pbkdf2$" + PIN_ITER + "$" + hex(salt) + "$" + hex(pbkdf2(pin, salt, PIN_ITER))
+        }
+        /** Constant-time verify; accepts the legacy SHA-256 record too. */
+        private fun verifyPin(stored: String, pin: String): Boolean = try {
+            val p = stored.split('$')
+            if (p.size == 4 && p[0] == "pbkdf2") {
+                java.security.MessageDigest.isEqual(unhex(p[3]), pbkdf2(pin, unhex(p[2]), p[1].toInt()))
+            } else {
+                val md = java.security.MessageDigest.getInstance("SHA-256")
+                val legacy = md.digest((PIN_SALT + pin).toByteArray(Charsets.UTF_8))
+                java.security.MessageDigest.isEqual(stored.toByteArray(Charsets.UTF_8),
+                    hex(legacy).toByteArray(Charsets.UTF_8))
+            }
+        } catch (e: Exception) { false }
     }
 }
 

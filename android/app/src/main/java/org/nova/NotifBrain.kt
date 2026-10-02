@@ -36,7 +36,10 @@ class NotifBrain : NotificationListenerService() {
                 f.appendText(line)
                 if (f.length() > 400_000) {
                     val lines = f.readLines().takeLast(400)
-                    f.writeText(lines.joinToString("\n") + "\n")
+                    // v9.16.1: atomic rewrite of the trimmed log
+                    val tmp = File(f.parentFile, f.name + ".tmp")
+                    tmp.writeText(lines.joinToString("\n") + "\n")
+                    if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
                 }
             }
         } catch (e: Exception) { }

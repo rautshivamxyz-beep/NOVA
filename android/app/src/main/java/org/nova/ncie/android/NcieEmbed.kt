@@ -136,6 +136,7 @@ object NcieEmbed {
      *  broken/uninitialized or the run fails - callers fall back to
      *  keyword scoring. Every ONNX call is wrapped; a RAG failure must
      *  never crash the app. */
+    @Synchronized
     fun embed(ctx: Context, text: String): FloatArray? {
         if (broken) return null
         ensure(ctx)
