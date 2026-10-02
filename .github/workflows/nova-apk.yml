@@ -6,7 +6,7 @@ on:
       - main
 concurrency:
   group: nova-apk
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
