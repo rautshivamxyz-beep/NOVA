@@ -13,13 +13,13 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging true
-            // v5.4.7: smaller APK - drop CPU variants this phone can never
-            // use (v8.6/v9.x are for flagship chips; x86_64 is emulator only
-            // and already excluded by abiFilters below)
-            excludes += ['lib/**/libggml-cpu-android_armv8.6_1.so',
-                         'lib/**/libggml-cpu-android_armv9.0_1.so',
-                         'lib/**/libggml-cpu-android_armv9.2_1.so',
-                         'lib/**/libggml-cpu-android_armv9.2_2.so']
+            // v9.13.5 "Full CPU kernels": ship EVERY per-chip ggml CPU
+            // variant again. libggml.so dlopens the fastest variant the
+            // device's CPU actually supports, so a flagship now runs its
+            // v8.6 / v9.x kernels instead of falling back to the armv8.2
+            // build. The old v5.4.7 excludes saved a few MB but cost real
+            // tokens/sec on capable phones. Older phones are unaffected -
+            // the loader still picks the best variant they can run.
         }
     }
 
@@ -48,8 +48,9 @@ android {
         // v9.13.0 "Audit Fixes": background scheduled sends, cache honesty, embedder threading, offer gates
         // v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking
         // v9.13.4 "Thinking Tags Hardened": strip <thinking> and every tag variant too
-        versionCode 101
-        versionName '9.13.4'
+        // v9.13.5 "Full CPU kernels": ship every per-chip ggml variant for max speed
+        versionCode 102
+        versionName '9.13.5'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

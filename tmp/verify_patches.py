@@ -207,7 +207,11 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.13.4: version bumped for thinking-tag hardening", bg.count("versionName '9.13.4'") == 1 and bg.count("versionCode 101") == 1)
+check("v9.13.5: version bumped for full CPU kernels", bg.count("versionName '9.13.5'") == 1 and bg.count("versionCode 102") == 1)
+# ---- v9.13.5 "Full CPU kernels": every per-chip ggml variant ships in the APK ----
+check("v9.13.5: no ggml CPU variant is excluded from the APK (build.gradle)",
+      bg.count("libggml-cpu-android_armv9.2") == 0 and
+      bg.count("excludes += ['lib/**/libggml-cpu") == 0)
 # ---- v9.13.4 "Thinking Tags Hardened": all thinking-tag variants stripped ----
 check("v9.13.4: every thinking-tag variant is stripped (MainActivity)",
       ma.count('THINK_TAGS = listOf("think", "thinking")') == 1 and
