@@ -2887,19 +2887,32 @@ Study:
 
     /** Latest published version from the public download repo, as (version, apkUrl). */
     private fun fetchLatestRelease(): Pair<String, String>? {
+        // v9.16.3: read the PUBLIC NOVA-APK repo's latest release through the
+        // GitHub API. The old code read a version.txt frozen at 8.5.3 and
+        // downloaded NOVA-latest.apk, which never existed (404) - so the
+        // check always claimed "up to date". The APK is now published to
+        // NOVA-APK by CI (see nova-apk.yml's mirror step).
         val conn = java.net.URL(
-            "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/version.txt"
+            "https://api.github.com/repos/rautshivamxyz-beep/NOVA-APK/releases/latest"
         ).openConnection() as java.net.HttpURLConnection
         conn.connectTimeout = 10000
         conn.readTimeout = 15000
+        conn.setRequestProperty("User-Agent", "NOVA-Android")
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
         try {
             if (conn.responseCode != 200) throw RuntimeException("HTTP " + conn.responseCode)
-            val tag = conn.inputStream.bufferedReader().readText().trim().removePrefix("v")
-            if (tag.isEmpty()) return null
-            return Pair(
-                tag,
-                "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/NOVA-latest.apk"
-            )
+            val json = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+            val tag = json.optString("tag_name").trim().removePrefix("v")
+            val assets = json.optJSONArray("assets")
+            var apk: String? = null
+            if (assets != null) for (i in 0 until assets.length()) {
+                val a = assets.getJSONObject(i)
+                if (a.optString("name").endsWith(".apk")) {
+                    apk = a.optString("browser_download_url"); break
+                }
+            }
+            if (tag.isEmpty() || apk.isNullOrEmpty()) return null
+            return Pair(tag, apk)
         } finally {
             conn.disconnect()
         }

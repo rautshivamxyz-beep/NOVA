@@ -76,7 +76,7 @@ object WikiCore {
         val d = dir(ctx)
         try {
             _state.value = Pair(0.04f, "downloading Wikipedia data")
-            val url = "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA/main/wiki/articles-v1.txt"
+            val url = "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/wiki/articles-v1.txt"
             val text = http(url)
             val lines = text.split("\n").filter { it.contains("\u241F") }
             if (lines.size < 100) {

@@ -165,6 +165,10 @@ object NcieExam {
             postReply(act, "Could not save the exam date.")
             return
         }
+        // v9.16.3: also record it in the Exams store (exams.json) so the
+        // Exams screen shows it AND the model's exam line (Exams.promptLine)
+        // includes it - the two stores used to be disconnected.
+        try { Exams.add(act, "Exam", ms) } catch (e: Exception) { }
         val fmt = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(ms))
         val d = daysLeft(act) ?: 0
         postReply(act, "Exam date set: $fmt. $d days to go.")

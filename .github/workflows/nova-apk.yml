@@ -145,3 +145,23 @@ jobs:
           python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-v${VER}.patch')"
           gh release upload "v${VER}" "NOVA-delta-${PREV}-to-v${VER}.patch" --clobber
           echo "delta patch attached: NOVA-delta-${PREV}-to-v${VER}.patch ($(du -m "NOVA-delta-${PREV}-to-v${VER}.patch" | cut -f1) MB)"
+      # v9.16.3: publish a public release on NOVA-APK so the in-app update
+      # check can find it. Needs a PAT with repo scope on NOVA-APK stored as
+      # the secret NOVA_APK_TOKEN; without it this step is skipped.
+      - name: Mirror the release to the public NOVA-APK repo
+        continue-on-error: true
+        env:
+          NOVA_APK_TOKEN: ${{ secrets.NOVA_APK_TOKEN }}
+        run: |
+          if [ -z "$NOVA_APK_TOKEN" ]; then
+            echo "NOVA_APK_TOKEN not set - skipping the public update mirror"
+            exit 0
+          fi
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          GH_TOKEN="$NOVA_APK_TOKEN" gh release create "v${VER}" \
+            "$RUNNER_TEMP/apk-arm64/app-release.apk#NOVA-v${VER}.apk" \
+            --repo rautshivamxyz-beep/NOVA-APK \
+            --title "NOVA v${VER}" --notes "NOVA v${VER}" --latest || \
+          GH_TOKEN="$NOVA_APK_TOKEN" gh release upload "v${VER}" \
+            "$RUNNER_TEMP/apk-arm64/app-release.apk#NOVA-v${VER}.apk" \
+            --repo rautshivamxyz-beep/NOVA-APK --clobber
