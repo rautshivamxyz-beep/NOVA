@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.1: version bumped for the thin prompt + hardening", bg.count("versionName '9.16.1'") == 1 and bg.count("versionCode 111") == 1)
+check("v9.16.2: version bumped for the working-buttons pass", bg.count("versionName '9.16.2'") == 1 and bg.count("versionCode 112") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
@@ -220,6 +220,15 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
 check("v9.15.0: the camera row + result wiring are in MainActivity",
       ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
+# ---- v9.16.2 "Working buttons" ----
+check("v9.16.2: the stop button cancels the generation (MainActivity)",
+      ma.count("if (generationJob?.isActive == true) generationJob?.cancel()") == 4)
+check("v9.16.2: a camera button on the typing row (MainActivity)",
+      ma.count("R.drawable.ic_camera") == 2 and ma.count("setOnClickListener { openCamera() }") == 1)
+check("v9.16.2: summariser prompts thinned (MainActivity)",
+      ma.count("Combine these section notes") == 2)
+check("v9.16.2: online fetch tries several Wikipedia hits + looser gate (OnlineFetch)",
+      of_.count("srlimit=3") == 1 and of_.count("Coverage.ratio(q,") == 2)
 # ---- v9.16.1 "Thin Prompt + Hardening" ----
 _vst = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/Settings.kt"), encoding="utf-8").read()
 check("v9.16.1: thin base system prompt (Settings)",
