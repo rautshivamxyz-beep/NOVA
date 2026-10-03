@@ -227,8 +227,10 @@ check("v9.16.6: robust contact lookup (NovaSms)",
       load("SendReceiver.kt").count("numberForContact") == 2 and
       load("SendReceiver.kt").count("filterNumber") == 2)
 # ---- v9.16.7 "Smaller-model quality + WhatsApp" ----
-check("v9.16.7: tiny-model sampling profile (NcieTune)", tun.count("TINY_DEFAULTS") == 2)
-check("v9.16.7: tiny-model reply cap (NovaEngine)", nev.count("minOf(predictLength, 256)") == 1)
+check("v9.16.7: tiny-model sampling profile (NcieTune)",
+      load("ncie/android/NcieTune.kt").count("TINY_DEFAULTS") == 2)
+check("v9.16.7: tiny-model reply cap (NovaEngine)",
+      load("NovaEngine.kt").count("minOf(predictLength, 256)") == 1)
 check("v9.16.7: WhatsApp uses the wa.me deep link (MainActivity)", ma.count("wa.me/") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
