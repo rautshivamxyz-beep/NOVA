@@ -96,6 +96,12 @@ object NcieDream {
             }
         } catch (e: Exception) { }
 
+        // v9.19.0 "Polish": the leftover state (expiring docs, reminders,
+        // promises, guardian) joins the dream report.
+        try {
+            val digest = NcieLeftovers.dailyDigest(ctx)
+            if (digest.isNotBlank()) sb.append(digest)
+        } catch (e: Exception) { }
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
         try { reportPath(ctx).writeText(text) } catch (e: Exception) { }
