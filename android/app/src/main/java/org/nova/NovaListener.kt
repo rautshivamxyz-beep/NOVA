@@ -48,6 +48,22 @@ class NovaListener : NotificationListenerService() {
                 if (pkg == packageName) return@execute
                 // tab/newline-free fields keep one line = one notification
                 val cleanTitle = title.replace('\n', ' ').replace('\t', ' ')
+                // v9.16.8 "Silent reply": remember the notification's own
+                // direct-reply action (RemoteInput) so NOVA can answer it from
+                // the shade - the same mechanism auto-responder apps use, with
+                // no app opening.
+                val repAction = sbn.notification.actions?.firstOrNull {
+                    it.remoteInputs?.isNotEmpty() == true
+                }
+                if (repAction != null && repAction.remoteInputs != null) {
+                    synchronized(lock) {
+                        recentReplies[sbn.key] =
+                            ReplyTarget(pkg, cleanTitle, sbn.postTime, repAction,
+                                repAction.remoteInputs!!)
+                        while (recentReplies.size > 30)
+                            recentReplies.remove(recentReplies.keys.first())
+                    }
+                }
                 val cleanText = text.replace('\n', ' ').replace('\t', ' ').take(200)
                 val now = sbn.postTime
                 val key = pkg + "\t" + cleanTitle + "\t" + cleanText
@@ -71,6 +87,57 @@ class NovaListener : NotificationListenerService() {
         /** v9.4.0 "Audit Fixes II": the one shared background executor
          *  every notification is handled on. */
         private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+        /** v9.16.8 "Silent reply": the apps whose notifications can be answered. */
+        private fun isMessaging(pkg: String): Boolean =
+            pkg == "com.whatsapp" || pkg.contains("messaging") ||
+            pkg.contains("mms") || pkg.contains("sms") ||
+            pkg.contains("telegram") || pkg.contains("signal") ||
+            pkg.contains("wire")
+
+        /** One replyable notification: its sender and the action to fire. */
+        private class ReplyTarget(
+            val pkg: String, val title: String, val time: Long,
+            val action: android.app.Notification.Action,
+            val remoteInputs: Array<android.app.RemoteInput>)
+
+        /** The most recent replyable notifications, newest kept. */
+        private val recentReplies = LinkedHashMap<String, ReplyTarget>()
+
+        /**
+         * v9.16.8 "Silent reply": answer [who]'s most recent chat message
+         * through the notification's OWN direct-reply action (RemoteInput) -
+         * nothing opens; the same mechanism auto-responder apps use. Returns
+         * false when there is no replyable notification from them, so the
+         * caller can fall back to opening the app.
+         */
+        fun silentReply(ctx: Context, who: String, message: String): Boolean {
+            val q = who.trim().lowercase()
+            val targets = synchronized(lock) {
+                recentReplies.values.sortedByDescending { it.time }
+            }
+            for (t in targets) {
+                if (!isMessaging(t.pkg)) continue
+                if (q.isNotEmpty() && !t.title.lowercase().contains(q)) continue
+                if (fire(ctx, t, message)) return true
+            }
+            return false
+        }
+
+        private fun fire(ctx: Context, t: ReplyTarget, message: String): Boolean = try {
+            val intent = android.content.Intent()
+            val bundle = android.os.Bundle()
+            for (ri in t.remoteInputs) bundle.putCharSequence(ri.resultKey, message)
+            android.app.RemoteInput.addResultsToIntent(t.remoteInputs, intent, bundle)
+            t.action.actionIntent.send(ctx, 0, intent)
+            true
+        } catch (e: Exception) { false }
+
+        /** The sender of the newest replyable notification. */
+        fun latestSender(ctx: Context): String? = synchronized(lock) {
+            recentReplies.values.filter { isMessaging(it.pkg) }
+                .maxByOrNull { it.time }?.title
+        }
 
         fun logPath(ctx: Context): File = File(ctx.filesDir, "notif_log.txt")
 
