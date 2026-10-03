@@ -1437,8 +1437,11 @@ private fun MainActivity.answerBriefing(text: String): Boolean {
     val activity = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
-    val routReply = Msg(Role.ASSISTANT, NcieRoutines.morningBriefing(this))
+    val briefText = NcieRoutines.morningBriefing(this)
+    val routReply = Msg(Role.ASSISTANT, briefText)
     currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
+    // v9.16.15 "Voice briefing": speak it aloud when TTS is ready.
+    speakNow(briefText)
     activity.scope.launch(Dispatchers.IO) {
         try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
     }
