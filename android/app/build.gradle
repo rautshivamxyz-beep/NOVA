@@ -69,8 +69,10 @@ android {
         // v9.16.5 "Direct call + SMS": place the call / send the text ourselves
         // (ACTION_CALL + SmsManager), no dialer or messaging app in the middle;
         // scheduled texts now send in the background
-        versionCode 115
-        versionName '9.16.5'
+        // v9.16.6 "Contact lookup + graceful fallback": find a contact by name
+        // prefix, contacts-filter and a contains scan; call/text never dead-end
+        versionCode 116
+        versionName '9.16.6'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

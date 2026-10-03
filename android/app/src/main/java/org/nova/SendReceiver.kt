@@ -36,13 +36,63 @@ import java.io.File
  */
 object NovaSms {
 
-    /** Contact resolution, shared by the chat command and the receiver. */
-    fun lookupContact(c: Context, name: String): String? = try {
-        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI
-            .buildUpon().appendPath(name).build()
-        c.contentResolver.query(uri, arrayOf(
-            ContactsContract.CommonDataKinds.Phone.NUMBER),
+    /**
+     * Contact resolution, shared by the chat command and the receiver.
+     * v9.16.6: three strategies, because the single CONTENT_FILTER_URI
+     * prefix lookup missed contacts the user clearly has ("call mom"
+     * answered "Couldn't find 'mom' in contacts"):
+     *   1. the phone filter (a name prefix or a number) - the fast path;
+     *   2. the contacts filter, then the number for the matched contact id;
+     *   3. a case-insensitive "contains" scan over every phone contact.
+     */
+    fun lookupContact(c: Context, name: String): String? {
+        val q = name.trim().trimEnd('.', '!', '?', ',', ' ').trim()
+        if (q.isEmpty()) return null
+        // 1. fast: the phone filter matches a name prefix or a number
+        filterNumber(c, ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, q)?.let { return it }
+        // 2. the contacts filter resolves names the phone filter can miss
+        try {
+            c.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(q).build(),
+                arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { cur ->
+                while (cur.moveToNext()) {
+                    numberForContact(c, cur.getString(0))?.let { return it }
+                }
+            }
+        } catch (e: Exception) { }
+        // 3. last resort: a case-insensitive contains scan over the contacts
+        try {
+            val ql = q.lowercase()
+            c.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER),
+                null, null, null)?.use { cur ->
+                while (cur.moveToNext()) {
+                    val dn = cur.getString(0) ?: continue
+                    if (dn.lowercase().contains(ql)) return cur.getString(1)
+                }
+            }
+        } catch (e: Exception) { }
+        return null
+    }
+
+    /** First phone number matching [q] in the given filter [base] URI. */
+    private fun filterNumber(c: Context, base: android.net.Uri, q: String): String? = try {
+        c.contentResolver.query(base.buildUpon().appendPath(q).build(),
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
             null, null, null)?.use { cur ->
+            if (cur.moveToFirst()) cur.getString(0) else null
+        }
+    } catch (e: Exception) { null }
+
+    /** The first phone number for a contact id. */
+    private fun numberForContact(c: Context, id: String): String? = try {
+        c.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?", arrayOf(id),
+            null)?.use { cur ->
             if (cur.moveToFirst()) cur.getString(0) else null
         }
     } catch (e: Exception) { null }
