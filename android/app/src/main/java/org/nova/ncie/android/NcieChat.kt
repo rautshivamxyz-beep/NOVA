@@ -205,11 +205,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             val fq = findQ.groupValues[1].trim()
             val fum = Msg(Role.USER, text)
             currentChat.messages.add(fum); adapter.add(fum)
-            val freply = Msg(Role.ASSISTANT, NcieTimeMachine.search(this, fq))
+            val freply = Msg(Role.ASSISTANT, NcieTimeMachine.search(act, fq))
             currentChat.messages.add(freply); adapter.add(freply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
             }
             return
         }
