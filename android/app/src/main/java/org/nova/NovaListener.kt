@@ -62,6 +62,22 @@ class NovaListener : NotificationListenerService() {
                                 repAction.remoteInputs!!)
                         while (recentReplies.size > 30)
                             recentReplies.remove(recentReplies.keys.first())
+                        // v9.16.9 "Auto-responder": opt-in silent auto-reply
+                        // while you are busy - the SAME reply action as the
+                        // manual silent reply, once per sender per 5 minutes
+                        // so a chatty thread cannot loop.
+                        if (Settings(this).autoReply && isMessaging(pkg) &&
+                            cleanTitle.isNotBlank()) {
+                            val now2 = System.currentTimeMillis()
+                            val last = autoReplied[cleanTitle.lowercase()] ?: 0L
+                            if (now2 - last > 5 * 60 * 1000L) {
+                                val autoMsg = Settings(this).autoReplyMsg
+                                if (autoMsg.isNotBlank() &&
+                                    fire(this, ReplyTarget(pkg, cleanTitle, sbn.postTime,
+                                        repAction, repAction.remoteInputs!!), autoMsg))
+                                    autoReplied[cleanTitle.lowercase()] = now2
+                            }
+                        }
                     }
                 }
                 val cleanText = text.replace('\n', ' ').replace('\t', ' ').take(200)
@@ -103,6 +119,9 @@ class NovaListener : NotificationListenerService() {
 
         /** The most recent replyable notifications, newest kept. */
         private val recentReplies = LinkedHashMap<String, ReplyTarget>()
+
+        /** v9.16.9 "Auto-responder": last auto-reply time per sender. */
+        private val autoReplied = HashMap<String, Long>()
 
         /**
          * v9.16.8 "Silent reply": answer [who]'s most recent chat message

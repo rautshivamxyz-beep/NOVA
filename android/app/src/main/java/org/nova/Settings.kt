@@ -122,6 +122,20 @@ class Settings(context: Context) {
         get() = prefs.getStringSet(KEY_KNOWLEDGE_EXCL, emptySet())?.toMutableSet() ?: mutableSetOf()
         set(value) = prefs.edit().putStringSet(KEY_KNOWLEDGE_EXCL, value.toSet()).apply()
 
+    /** v9.16.9 "Auto-responder": opt-in silent auto-reply to incoming chat
+     *  messages (WhatsApp / SMS / etc.) while you are busy. Off by default -
+     *  NOVA never answers for you until you turn it on. */
+    var autoReply: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_REPLY, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_REPLY, value).apply()
+
+    /** The line the auto-responder sends. */
+    var autoReplyMsg: String
+        get() = prefs.getString(KEY_AUTO_REPLY_MSG,
+            "I'm busy right now - I'll get back to you soon.")
+            ?: "I'm busy right now - I'll get back to you soon."
+        set(value) = prefs.edit().putString(KEY_AUTO_REPLY_MSG, value).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -142,6 +156,8 @@ class Settings(context: Context) {
         private const val KEY_PROXY_HOST = "proxy_host"
         private const val KEY_PROXY_PORT = "proxy_port"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
+        private const val KEY_AUTO_REPLY = "auto_reply"
+        private const val KEY_AUTO_REPLY_MSG = "auto_reply_msg"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small
