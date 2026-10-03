@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.5: version bumped for the direct call + SMS fix", bg.count("versionName '9.16.5'") == 1 and bg.count("versionCode 115") == 1)
+check("v9.16.6: version bumped for the contact-lookup fix", bg.count("versionName '9.16.6'") == 1 and bg.count("versionCode 116") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -222,6 +222,10 @@ check("v9.16.5: call + SMS permissions declared (AndroidManifest)",
 check("v9.16.5: direct call + direct SMS wired (MainActivity + NovaSms)",
       ma.count("Intent.ACTION_CALL") == 1 and ma.count("NovaSms.sendDirect") == 2 and
       load("SendReceiver.kt").count("NovaSms.sendDirect") == 1)
+# ---- v9.16.6 "Contact lookup": multi-strategy resolution ----
+check("v9.16.6: robust contact lookup (NovaSms)",
+      load("SendReceiver.kt").count("numberForContact") == 2 and
+      load("SendReceiver.kt").count("filterNumber") == 2)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",

@@ -2588,8 +2588,13 @@ Study:
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else if (!viaWhatsapp && !canSms()) {
+                    // v9.16.6: ask, but fall back to the draft so it still works
                     requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 4256)
-                    toast("Allow sending SMS in the prompt, then say it again")
+                    try {
+                        startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))
+                            .apply { putExtra("sms_body", msg) })
+                        toast("Allow SMS to send directly - ready for $who, press send")
+                    } catch (x: Exception) { toast("No messaging app") }
                 } else if (!viaWhatsapp && NovaSms.sendDirect(this, number, msg)) {
                     toast("Message sent to $who")
                 } else {
@@ -2620,8 +2625,11 @@ Study:
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else if (!canCall()) {
+                    // v9.16.6: ask, but never dead-end - open the dialer now
                     requestPermissions(arrayOf(android.Manifest.permission.CALL_PHONE), 4255)
-                    toast("Allow phone calls in the prompt, then say it again")
+                    toast("Allow phone calls to call directly - opening the dialer")
+                    try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }
+                    catch (x: Exception) { toast("Couldn't open the dialer") }
                 } else {
                     try {
                         startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
@@ -2644,8 +2652,11 @@ Study:
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else if (!canSms()) {
+                    // v9.16.6: ask, but fall back to the draft so it still works
                     requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 4256)
-                    toast("Allow sending SMS in the prompt, then say it again")
+                    if (NovaSms.openDraft(this, number, msg))
+                        toast("Allow SMS to send directly - ready for $who, press send")
+                    else toast("No messaging app")
                 } else {
                     // v9.16.5: send it ourselves - no messaging app in the way
                     if (NovaSms.sendDirect(this, number, msg))
@@ -2761,15 +2772,8 @@ Study:
         checkSelfPermission(android.Manifest.permission.SEND_SMS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
 
-    private fun lookupContact(name: String): String? = try {
-        val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI
-            .buildUpon().appendPath(name).build()
-        contentResolver.query(uri, arrayOf(
-            android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
-            null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getString(0) else null
-        }
-    } catch (e: Exception) { null }
+    // v9.16.6: the shared, multi-strategy lookup (see NovaSms.lookupContact).
+    private fun lookupContact(name: String): String? = NovaSms.lookupContact(this, name)
 
     // ---------- notification digest ----------
 
