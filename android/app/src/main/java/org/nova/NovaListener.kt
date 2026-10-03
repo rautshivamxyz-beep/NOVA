@@ -67,7 +67,8 @@ class NovaListener : NotificationListenerService() {
                         // manual silent reply, once per sender per 5 minutes
                         // so a chatty thread cannot loop.
                         if (Settings(this).autoReply && isMessaging(pkg) &&
-                            cleanTitle.isNotBlank()) {
+                            cleanTitle.isNotBlank() &&
+                            !org.nova.ncie.android.NcieLeftovers.isQuietNow(this)) {
                             val now2 = System.currentTimeMillis()
                             val last = autoReplied[cleanTitle.lowercase()] ?: 0L
                             if (now2 - last > 5 * 60 * 1000L) {
