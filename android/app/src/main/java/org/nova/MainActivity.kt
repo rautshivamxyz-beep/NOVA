@@ -2466,6 +2466,9 @@ class MainActivity : Activity() {
             ?: Regex("(?i)^whatsapp\\s+(.+?)\\s+to\\s+([a-z]+)\\s*$").find(t2)
         val call = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:please\\s+)?(?:call|phone|dial)\\s+(.+)$").find(t2)
         val textCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:text|whatsapp|message)\\s+(\\S+)\\s+(.+)$").find(t2)
+        // v9.16.8 "Silent reply": "reply to <name> <msg>" answers the latest
+        // chat notification from them through its own reply action.
+        val replyCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:reply|respond)\\s+(?:to\\s+)?(\\S+)\\s*[:,-]?\\s+(.+)$").find(t2)
         // v9.8.0: "text <name> at <time>: <message>" - the scheduled send.
         // The time is matched structurally ("in 20 minutes" / "6pm" /
         // "18:30" / "tomorrow 9am") so the message after it is free text.
@@ -2497,6 +2500,7 @@ Phone:
 - volume up / volume down / volume 50 / volume mute
 - wifi on / bluetooth off (opens the panel)
 - call mom, text john <message>, whatsapp tannu <message>
+- reply to mom <message> (silent, from her latest message)
 - email dad about the trip (drafts it, you review and send)
 
 Study:
@@ -2593,20 +2597,25 @@ Study:
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
                 else if (viaWhatsapp) {
-                    // v9.16.7: WhatsApp has no silent-send API, and it ignores
-                    // an smsto: SMS intent - which is why "whatsapp <name>"
-                    // never worked. Use the official wa.me deep link: it opens
-                    // the chat with the message already typed; you tap send.
-                    val digits = number.filter { it.isDigit() }
-                    if (digits.length >= 10) {
-                        val url = "https://wa.me/" + digits + "?text=" +
-                            java.net.URLEncoder.encode(msg, "UTF-8")
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            toast("WhatsApp open for $who - press send")
-                        } catch (x: Exception) { toast("WhatsApp isn't installed") }
+                    // v9.16.8: if they have messaged us, answer through the
+                    // notification's own direct-reply action - silent, nothing
+                    // opens (the path auto-responder apps use). Otherwise fall
+                    // back to the wa.me deep link, which opens the chat with the
+                    // message already typed.
+                    if (NovaListener.silentReply(this, who, msg)) {
+                        toast("Replied to $who silently")
                     } else {
-                        toast("Save '$who' with a country code to use WhatsApp")
+                        val digits = number.filter { it.isDigit() }
+                        if (digits.length >= 10) {
+                            val url = "https://wa.me/" + digits + "?text=" +
+                                java.net.URLEncoder.encode(msg, "UTF-8")
+                            try {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                toast("WhatsApp open for $who - press send")
+                            } catch (x: Exception) { toast("WhatsApp isn't installed") }
+                        } else {
+                            toast("Save '$who' with a country code to use WhatsApp")
+                        }
                     }
                 } else if (!canSms()) {
                     // v9.16.6: ask, but fall back to the draft so it still works
@@ -2625,6 +2634,20 @@ Study:
                     try { startActivity(send) } catch (x: Exception) { toast("No messaging app") }
                     toast("Message ready for $who - press send")
                 }
+                return true
+            }
+            replyCmd != null -> {
+                // v9.16.8 "Silent reply": answer the latest chat notification
+                // from <name> through its own reply action - nothing opens.
+                val who = replyCmd.groupValues[1].trim()
+                val msg = replyCmd.groupValues[2].trim()
+                if (!NovaListener.isEnabled(this)) {
+                    toast("Grant notification access (drawer - Notifications) to reply silently")
+                    return true
+                }
+                if (NovaListener.silentReply(this, who, msg))
+                    toast("Replied to $who silently")
+                else toast("No recent message from '$who' to reply to")
                 return true
             }
             call != null -> {
