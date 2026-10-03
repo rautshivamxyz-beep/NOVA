@@ -10,6 +10,7 @@ import org.nova.MainActivity
 import org.nova.Msg
 import org.nova.NovaNet
 import org.nova.Role
+import org.nova.Settings
 import org.nova.WikiCore
 import org.nova.ncie.knowledge.HtmlText
 import org.nova.ncie.verify.Coverage
@@ -175,15 +176,38 @@ object OnlineFetch {
                     }
                 }
             }
+            // v9.17.1: diagnose the failure on the IO thread (a proxy
+            // reachability probe must never block the UI)
+            val failMsg = if (saved == null) diagnose(act) else null
             withContext(Dispatchers.Main) {
                 if (saved != null) {
                     act.toast("Saved \"$saved\" - now offline forever")
                 } else {
-                    act.toast("Couldn't find anything good - answering without it")
+                    act.toast(failMsg ?: "Couldn't find anything good")
                 }
                 act.launchNcieSend(text, offered = true)
             }
         }
+    }
+
+    /** v9.17.1: when a lookup finds nothing, say WHY. The commonest cause
+     *  is Private Fetch pointing at a proxy that is not running (Orbot off
+     *  at 127.0.0.1:9050) - then every request fails and the result looked
+     *  identical to "the web had nothing". Probed on the IO thread. */
+    private fun diagnose(act: MainActivity): String {
+        val s = Settings(act)
+        if (s.proxyEnabled) {
+            val host = s.proxyHost.ifBlank { "127.0.0.1" }
+            val port = if (s.proxyPort in 1..65535) s.proxyPort else 9050
+            val up = try {
+                val sock = java.net.Socket()
+                try { sock.connect(java.net.InetSocketAddress(host, port), 1500); true }
+                finally { sock.close() }
+            } catch (e: Exception) { false }
+            if (!up) return "Private Fetch is on but nothing is listening at " +
+                host + ":" + port + " - start Orbot or turn Private Fetch off in Settings"
+        }
+        return "Couldn't find anything good - check your internet, then try again"
     }
 
     /** (title, intro extract) from Wikipedia, or null. Two requests:

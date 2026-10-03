@@ -210,7 +210,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.17.0: version bumped for the leftovers batch", bg.count("versionName '9.17.0'") == 1 and bg.count("versionCode 127") == 1)
+check("v9.17.1: version bumped for the audit fixes", bg.count("versionName '9.17.1'") == 1 and bg.count("versionCode 128") == 1)
+# ---- v9.17.1 "Audit fixes" ----
+check("v9.17.1: 'i'm fine' is chat unless a guardian is armed",
+      lo.count("Settings(ctx).guardianUntil > System.currentTimeMillis()") == 1)
+check("v9.17.1: bare 'silence' no longer means quiet hours",
+      lo.count("|silence|dnd)(?:") == 0 and lo.count("silence\\\\s+status") == 1)
+check("v9.17.1: a failed lookup explains why (proxy probe)",
+      load("ncie/android/OnlineFetch.kt").count("fun diagnose(") == 1)
 # ---- v9.17.0 "Leftovers": the rest of the backlog in one dispatcher ----
 check("v9.17.0: leftover dispatcher ships (NcieLeftovers)",
       lo.count("object NcieLeftovers") == 1 and nc.count("NcieLeftovers.handle(act, text)") == 1)
