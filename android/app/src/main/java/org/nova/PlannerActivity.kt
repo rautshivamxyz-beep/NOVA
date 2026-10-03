@@ -50,24 +50,9 @@ class PlannerActivity : Activity() {
             color, android.graphics.PorterDuff.Mode.SRC_IN)
     }
 
-    private fun card(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(16), dp(12), dp(16), dp(12))
-        background = GradientDrawable().apply {
-            setColor(NovaTheme.pill)
-            cornerRadius = dp(14).toFloat()
-            setStroke(dp(1), NovaTheme.border)
-        }
-    }
+    private fun card(): LinearLayout = NovaUi.card(this)
 
-    private fun sectionLabel(text: String): View = TextView(this).apply {
-        this.text = text
-        textSize = 11f
-        letterSpacing = 0.12f
-        setTypeface(typeface, Typeface.BOLD)
-        setTextColor(NovaTheme.dim)
-        setPadding(dp(4), dp(18), dp(4), dp(8))
-    }
+    private fun sectionLabel(text: String): View = NovaUi.sectionLabel(this, text)
 
     private fun build(): View {
         val scroll = ScrollView(this)

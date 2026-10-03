@@ -74,7 +74,7 @@ class MemoryActivity : ListActivity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#101418"))
+            setBackgroundColor(NovaTheme.bg)
         }
 
         val title = TextView(this).apply {
@@ -169,11 +169,8 @@ class MemoryActivity : ListActivity() {
             orientation = LinearLayout.VERTICAL
             // v8.0.0: learned facts live in cards now
             setPadding(pad(16), pad(12), pad(16), pad(12))
-            background = GradientDrawable().apply {
-                setColor(NovaTheme.pill)
-                cornerRadius = pad(14).toFloat()
-                setStroke(pad(1), NovaTheme.border)
-            }
+            background = NovaUi.shape(this@MemoryActivity, NovaTheme.surface,
+                NovaTheme.RADIUS_CARD, 1, NovaTheme.border)
         }
         val q = TextView(this).apply {
             textSize = 15f

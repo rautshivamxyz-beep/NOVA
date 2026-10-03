@@ -304,14 +304,11 @@ class ChatsActivity : Activity() {
 
     private fun smallButton(label: String, color: Int): Button = Button(this).apply {
         text = label
-        textSize = 13f
+        textSize = NovaTheme.T_SMALL
         isAllCaps = false
         setTextColor(color)
-        background = GradientDrawable().apply {
-            setColor(Color.TRANSPARENT)
-            setStroke(dp(1), color)
-            cornerRadius = dp(20).toFloat()
-        }
+        background = NovaUi.shape(this@ChatsActivity, Color.TRANSPARENT,
+            NovaTheme.RADIUS_PILL, 1, color)
         setPadding(dp(14), dp(6), dp(14), dp(6))
     }
 

@@ -2,13 +2,9 @@ package org.nova
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
-import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -20,7 +16,7 @@ import java.util.Locale
 
 /**
  * Exam countdown screen: add exams (name + date), see days remaining,
- * long-press to delete.
+ * long-press to delete. v9.18.0 "Redesign": rebuilt on the NovaUi kit.
  */
 class ExamsActivity : Activity() {
 
@@ -36,138 +32,80 @@ class ExamsActivity : Activity() {
         setContentView(build())
     }
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int): Int = NovaUi.dp(this, v)
 
     private fun build(): View {
         val scroll = ScrollView(this)
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val col = NovaUi.column(this).apply {
             setBackgroundColor(NovaTheme.bg)
-            setPadding(dp(14), dp(28), dp(14), dp(30))
+            setPadding(dp(16), dp(20), dp(16), dp(32))
         }
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(6))
-        }
-        header.addView(Button(this).apply {
-            isAllCaps = false
-            setCompoundDrawablesWithIntrinsicBounds(
-                tinted(R.drawable.ic_back, NovaTheme.text), null, null, null)
-            background = null
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
-        header.addView(TextView(this).apply {
-            text = "Exams"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(NovaTheme.text)
-        })
-        col.addView(header)
-
-        col.addView(TextView(this).apply {
-            text = "NOVA counts down for you and keeps them in mind when you chat."
-            textSize = 12f; setTextColor(NovaTheme.dim)
-            setPadding(dp(4), dp(6), dp(4), dp(10))
-        })
-
-        col.addView(Button(this).apply {
-            text = "Add exam"
-            isAllCaps = false
-            textSize = 14f
-            setTextColor(NovaTheme.text)
-            background = GradientDrawable().apply {
-                setColor(NovaTheme.pill)
-                cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), NovaTheme.border)
-            }
-            setOnClickListener { showAdd() }
-        })
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(NovaUi.header(this, "Exams") { finish() })
+        col.addView(NovaUi.small(this,
+            "NOVA counts down for you and keeps them in mind when you chat.")
+            .apply { setPadding(dp(4), 0, dp(4), dp(12)) })
+        col.addView(NovaUi.primaryButton(this, "Add exam") { showAdd() })
+        list = NovaUi.column(this)
         col.addView(list)
         rebuild()
-
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         return scroll
-    }
-
-    private fun tinted(res: Int, color: Int) = getDrawable(res)!!.mutate().apply {
-        colorFilter = android.graphics.PorterDuffColorFilter(
-            color, android.graphics.PorterDuff.Mode.SRC_IN)
     }
 
     private fun rebuild() {
         list.removeAllViews()
         val exams = Exams.load(this).sortedBy { it.dateMs }
         if (exams.isEmpty()) {
-            list.addView(TextView(this).apply {
-                text = "No exams yet."
-                textSize = 13f; setTextColor(NovaTheme.dim)
-                setPadding(dp(4), dp(14), dp(4), dp(4))
-            })
+            list.addView(NovaUi.empty(this, "No exams yet.\nAdd one and NOVA keeps the countdown."))
             return
         }
         for (e in exams) {
             val days = Exams.daysLeft(e.dateMs)
             val dateStr = SimpleDateFormat("EEE, d MMM yyyy", Locale.US).format(Date(e.dateMs))
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(16), dp(12), dp(16), dp(12))
-                background = GradientDrawable().apply {
-                    setColor(NovaTheme.pill)
-                    cornerRadius = dp(14).toFloat()
-                    setStroke(dp(1), NovaTheme.border)
-                }
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(10) }
-                setOnLongClickListener {
-                    AlertDialog.Builder(this@ExamsActivity)
-                        .setTitle("Delete '${e.name}'?")
-                        .setPositiveButton("Delete") { _, _ ->
-                            Exams.save(this@ExamsActivity,
-                                Exams.load(this@ExamsActivity).filter { it != e })
-                            rebuild()
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                    true
-                }
-            }
-            row.addView(TextView(this).apply {
-                text = e.name
-                textSize = 16f; setTextColor(NovaTheme.text)
-                setTypeface(typeface, Typeface.BOLD)
-            })
+            val row = NovaUi.card(this)
+            row.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) }
+            row.addView(NovaUi.heading(this, e.name))
             row.addView(TextView(this).apply {
                 text = when {
-                    days < 0 -> "done — $dateStr"
+                    days < 0 -> "done - $dateStr"
                     days == 0 -> "TODAY"
-                    days == 1 -> "tomorrow — $dateStr"
-                    else -> "in $days days — $dateStr"
+                    days == 1 -> "tomorrow - $dateStr"
+                    else -> "in $days days - $dateStr"
                 }
-                textSize = 13f
+                textSize = NovaTheme.T_SMALL
                 setTextColor(if (days in 0..3) NovaTheme.accent else NovaTheme.dim)
                 setPadding(0, dp(2), 0, 0)
             })
+            row.setOnLongClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Delete '${e.name}'?")
+                    .setPositiveButton("Delete") { _, _ ->
+                        Exams.save(this, Exams.load(this).filter { it != e })
+                        rebuild()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                true
+            }
             list.addView(row)
         }
     }
 
     private fun showAdd() {
         val name = EditText(this).apply {
-            hint = "Subject (e.g. Physics)"; setHintTextColor(NovaTheme.dim)
-            setTextColor(NovaTheme.text); textSize = 14f
+            hint = "Subject (e.g. Physics)"; setHintTextColor(NovaTheme.faint)
+            setTextColor(NovaTheme.text); textSize = NovaTheme.T_BODY
         }
         val date = EditText(this).apply {
-            hint = "Date (e.g. 14/5/2026)"; setHintTextColor(NovaTheme.dim)
-            setTextColor(NovaTheme.text); textSize = 14f
+            hint = "Date (e.g. 14/5/2026)"; setHintTextColor(NovaTheme.faint)
+            setTextColor(NovaTheme.text); textSize = NovaTheme.T_BODY
             inputType = InputType.TYPE_CLASS_TEXT
         }
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(4))
+        val box = NovaUi.column(this).apply {
+            setPadding(dp(8), dp(4), dp(8), dp(4))
             addView(name); addView(date)
         }
         AlertDialog.Builder(this)

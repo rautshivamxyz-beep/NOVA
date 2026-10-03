@@ -52,23 +52,7 @@ class KnowledgeActivity : Activity() {
         }
 
         // header
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(6))
-        }
-        header.addView(Button(this).apply {
-            isAllCaps = false
-            setCompoundDrawablesWithIntrinsicBounds(
-                tinted(R.drawable.ic_back, NovaTheme.text), null, null, null)
-            background = null
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
-        header.addView(TextView(this).apply {
-            text = "Knowledge"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(NovaTheme.text)
-        })
-        col.addView(header)
+        col.addView(NovaUi.header(this, "Knowledge") { finish() })
 
         // switch
         val row = LinearLayout(this).apply {

@@ -25,15 +25,13 @@ import java.io.File
 
 /**
  * v9.15.0 "Camera": NOVA's in-app camera - a live preview with a shutter.
+ * v9.18.0 "Redesign": the shutter ring and close control use the design
+ * system's accent so the screen matches the rest of the app.
  *
  * The photo is written to cache/camera/capture.jpg and handed back to
  * MainActivity as a FileProvider content URI; MainActivity runs the SAME
  * on-device ML Kit OCR the "attach photo" flow uses, so the recognised
  * text lands in the chat. No network, nothing leaves the device.
- *
- * The CAMERA permission is requested at runtime (approved by the user);
- * if it is refused the screen closes with an honest message. A device
- * with no camera gets the same honest failure rather than a crash.
  */
 class CameraActivity : ComponentActivity() {
 
@@ -48,7 +46,7 @@ class CameraActivity : ComponentActivity() {
 
     private fun buildUi() {
         val root = FrameLayout(this)
-        root.setBackgroundColor(Color.parseColor("#0A0B0E"))
+        root.setBackgroundColor(NovaTheme.bg)
 
         val pv = PreviewView(this)
         pv.layoutParams = FrameLayout.LayoutParams(
@@ -69,7 +67,7 @@ class CameraActivity : ComponentActivity() {
 
         val sh = Button(this)
         sh.text = "\u25C9"
-        sh.setTextColor(Color.parseColor("#7C87FF"))
+        sh.setTextColor(NovaTheme.accent)
         sh.textSize = 34f
         sh.background = ring()
         sh.setOnClickListener { capture() }
@@ -158,10 +156,10 @@ class CameraActivity : ComponentActivity() {
     private fun ring(): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
         setColor(Color.WHITE)
-        setStroke(dp(4), Color.parseColor("#7C87FF"))
+        setStroke(dp(4), NovaTheme.accent)
     }
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int): Int = NovaUi.dp(this, v)
 
     private companion object { const val REQ_PERM = 61 }
 }

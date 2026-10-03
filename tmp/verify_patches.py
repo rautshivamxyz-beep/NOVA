@@ -210,7 +210,22 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.17.1: version bumped for the audit fixes", bg.count("versionName '9.17.1'") == 1 and bg.count("versionCode 128") == 1)
+check("v9.18.0: version bumped for the redesign", bg.count("versionName '9.18.0'") == 1 and bg.count("versionCode 129") == 1)
+# ---- v9.18.0 "Redesign": the design system + the screens on it ----
+check("v9.18.0: the design system ships (NovaUi kit)",
+      load("NovaUi.kt").count("object NovaUi") == 1 and
+      load("NovaUi.kt").count("fun card(") == 1 and
+      load("NovaUi.kt").count("fun switchRow(") == 1)
+check("v9.18.0: the theme carries the new tokens",
+      load("NovaTheme.kt").count("RADIUS_CARD") == 1 and
+      load("NovaTheme.kt").count("accentSoft") >= 1)
+check("v9.18.0: the screens build on the kit",
+      load("SettingsActivity.kt").count("NovaUi.") >= 5 and
+      load("ExamsActivity.kt").count("NovaUi.") >= 3 and
+      load("ModelsActivity.kt").count("NovaUi.") >= 2 and
+      load("PlannerActivity.kt").count("NovaUi.") >= 2 and
+      load("MemoryActivity.kt").count("NovaUi.") >= 1 and
+      load("KnowledgeActivity.kt").count("NovaUi.") >= 1)
 # ---- v9.17.1 "Audit fixes" ----
 check("v9.17.1: 'i'm fine' is chat unless a guardian is armed",
       lo.count("Settings(ctx).guardianUntil > System.currentTimeMillis()") == 1)
@@ -547,7 +562,7 @@ check("v7.9.3: smart button morphs between mic and send",
 
 # ---- v8.0.0: UI overhaul - midnight palette + cards everywhere ----
 check("v8.0.0: midnight palette in NovaTheme (init + dark apply)",
-      nt.count("#12141D") == 2 and nt.count("#6C9CFF") == 2)
+      nt.count("#151821") == 2 and nt.count("#5B8DEF") == 2)
 check("v8.0.0: replies live in cards (surface + hairline border)",
       ma.count("replies live in cards now") == 1 and
       ma.count("setCornerRadius(dp(ctx, 18).toFloat())") == 1)
@@ -563,14 +578,14 @@ check("v8.0.0: chats and memory rows are cards",
 sty = open(os.path.join(ROOT, "android/app/src/main/res/values/styles.xml"), encoding="utf-8").read()
 nt = load("NovaTheme.kt")
 check("v7.7.0: Inter applied app-wide via the theme", sty.count("@font/inter") == 1)
-check("v7.7.0: theme chrome matches graphite dark", sty.count("#0A0B0E") == 3)
+check("v7.7.0: theme chrome matches graphite dark", sty.count("#0B0D12") == 3)
 fam = open(os.path.join(ROOT, "android/app/src/main/res/font/inter.xml"), encoding="utf-8").read()
 check("v7.7.0: font family ships 4 weights", fam.count("inter_") == 4)
 for w in ("inter_regular", "inter_medium", "inter_semibold", "inter_bold"):
     check("v7.7.0: %s.ttf present" % w,
           os.path.exists(os.path.join(ROOT, "android/app/src/main/res/font", w + ".ttf")))
 check("v8.0.0: midnight palette installed (was graphite + iris)",
-      nt.count("#6C9CFF") == 2 and nt.count("#06070B") == 2)
+      nt.count("#5B8DEF") == 2 and nt.count("#0B0D12") == 2)
 check("v7.7.0: old navy accent gone from the palette",
       nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
 check("v7.7.0/v8.0.0: send button + user bubble are gradients",
@@ -642,7 +657,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
