@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.13: version bumped for the Time Machine", bg.count("versionName '9.16.13'") == 1 and bg.count("versionCode 123") == 1)
+check("v9.16.14: version bumped for away/back modes", bg.count("versionName '9.16.14'") == 1 and bg.count("versionCode 124") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -258,6 +258,10 @@ check("v9.16.12: the nightly Dream receiver ships",
 check("v9.16.13: the Time Machine ships (NcieTimeMachine + find)",
       load("ncie/android/NcieTimeMachine.kt").count("fun search(") == 1 and
       nc.count("NcieTimeMachine.search(") == 1)
+# ---- v9.16.14 "Jarvis: away / back" ----
+check("v9.16.14: away/back modes ship (NcieModes + router)",
+      load("ncie/android/NcieModes.kt").count("fun away(") == 1 and
+      nc.count("NcieModes.away(") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",

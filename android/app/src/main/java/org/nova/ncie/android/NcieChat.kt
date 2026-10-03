@@ -213,6 +213,22 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             }
             return
         }
+        // v9.16.14 "Jarvis": one-phrase modes - "away" turns the auto-responder
+        // on and the phone to vibrate; "i'm back" undoes both.
+        val awayCmd = Regex("(?i)^\\s*(?:away|away mode|i'?m busy|busy mode)\\s*[.!]?\\s*$").matches(text)
+        val backCmd = Regex("(?i)^\\s*(?:i'?m back|away off|back to normal)\\s*[.!]?\\s*$").matches(text)
+        if (awayCmd || backCmd) {
+            input.setText("")
+            val mum = Msg(Role.USER, text)
+            currentChat.messages.add(mum); adapter.add(mum)
+            val mreply = Msg(Role.ASSISTANT, if (awayCmd) NcieModes.away(act) else NcieModes.back(act))
+            currentChat.messages.add(mreply); adapter.add(mreply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+            }
+            return
+        }
         // v8.9.0: Tutor Mode - quiz me on X with two-pass LLM answer
         // checking, weak areas with 1-day spaced repetition, flashcards.
         // The deterministic paths (weak-area list, flashcard storage and
