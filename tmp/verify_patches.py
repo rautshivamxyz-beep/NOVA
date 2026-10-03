@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.15: version bumped for the voice briefing", bg.count("versionName '9.16.15'") == 1 and bg.count("versionCode 125") == 1)
+check("v9.16.16: version bumped for doc-aware honesty", bg.count("versionName '9.16.16'") == 1 and bg.count("versionCode 126") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -266,6 +266,10 @@ check("v9.16.14: away/back modes ship (NcieModes + router)",
 check("v9.16.15: voice briefing ships (speakNow + briefing)",
       ma.count("fun speakNow(") == 1 and
       nc.count("speakNow(briefText)") == 1)
+# ---- v9.16.16 "Doc-aware honesty" ----
+check("v9.16.16: deictic doc reference asks for the document",
+      nc.count("DOC_DEICTIC_Q.containsMatchIn(text)") == 1 and
+      nc.count("won't guess at what's inside") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
