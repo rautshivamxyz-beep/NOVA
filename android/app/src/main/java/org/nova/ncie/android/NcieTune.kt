@@ -74,6 +74,16 @@ object NcieTune {
         "min_p" to 0.05, "repeat_penalty" to 1.1)
 
     /**
+     * v9.16.7 "Smaller-model quality": a 230M-class model at the LFM default
+     * temperature (0.6) rambles and invents facts. This profile is calmer and
+     * more focused - lower temperature, a tighter top-k and a stronger repeat
+     * penalty - so the tiny models stay on point. Overridable per model.
+     */
+    val TINY_DEFAULTS: Map<String, Double> = mapOf(
+        "temperature" to 0.3, "top_p" to 0.9, "top_k" to 32.0,
+        "min_p" to 0.05, "repeat_penalty" to 1.15)
+
+    /**
      * v9.11.0: the app-side context budget. The engine API does not
      * expose the loaded model's context size (llama_n_ctx lives behind
      * the AAR), so the default window is 4096 tokens ~= 16000 chars.
@@ -99,9 +109,10 @@ object NcieTune {
         }
     }
 
-    fun defaultsFor(family: String): Map<String, Double> = when (family) {
-        "qwen" -> QWEN_DEFAULTS
-        "lfm" -> LFM_DEFAULTS
+    fun defaultsFor(family: String, tiny: Boolean = false): Map<String, Double> = when {
+        tiny -> TINY_DEFAULTS
+        family == "qwen" -> QWEN_DEFAULTS
+        family == "lfm" -> LFM_DEFAULTS
         else -> OTHER_DEFAULTS
     }
 
@@ -145,7 +156,7 @@ object NcieTune {
                 if (k in KEYS) custom[k] = v
             }
         } catch (e: Exception) { }
-        val fam = defaultsFor(familyOf(modelFile))
+        val fam = defaultsFor(familyOf(modelFile), NcieChat.tinyModelFile(modelFile))
         val values = LinkedHashMap<String, Double>()
         for (k in KEYS) values[k] = custom[k] ?: fam.getValue(k)
         return Pair(values, custom.keys)
@@ -241,7 +252,7 @@ object NcieTune {
         val m = currentModel(c)
             ?: return "No model yet - download one from the Models screen first."
         val (values, custom) = effective(c, m.first)
-        val fam = familyOf(m.first)
+        val fam = if (NcieChat.tinyModelFile(m.first)) "tiny" else familyOf(m.first)
         val sb = StringBuilder("```\nModel: " + m.second + "  (" + m.first + ")\n")
         for (k in KEYS) {
             sb.append("  ").append(k).append(" = ").append(fmt(values.getValue(k)))

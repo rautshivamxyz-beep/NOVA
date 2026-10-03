@@ -71,8 +71,10 @@ android {
         // scheduled texts now send in the background
         // v9.16.6 "Contact lookup + graceful fallback": find a contact by name
         // prefix, contacts-filter and a contains scan; call/text never dead-end
-        versionCode 116
-        versionName '9.16.6'
+        // v9.16.7 "Smaller-model quality + WhatsApp": a tiny-model sampling
+        // profile + reply cap + prompt hint, and a real WhatsApp deep link
+        versionCode 117
+        versionName '9.16.7'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

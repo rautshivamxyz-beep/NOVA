@@ -153,7 +153,7 @@ object NovaEngine {
         // it in Settings) falls back to the strong concise base prompt -
         // the model always gets a system turn.
         val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
-            thinkingHint(path, label)
+            thinkingHint(path, label) + tinyHint(path, label)
         if (prompt.isNotBlank()) {
             try {
                 engine.setSystemPrompt(prompt)
@@ -233,6 +233,20 @@ object NovaEngine {
             "answer immediately after thinking.)"
     }
 
+    /**
+     * v9.16.7 "Smaller-model quality": a sub-1B model follows one short rule
+     * far better than a stack of them. This adds a single brevity + grounding
+     * rule for the tiny models only, on top of the thin base prompt.
+     */
+    private fun tinyHint(path: String, label: String): String {
+        val n = (label + " " + path.substringAfterLast('/')).lowercase()
+        val tiny = "230m" in n || "135m" in n || "360m" in n ||
+            ("lfm2" in n && ("230" in n || "135" in n))
+        if (!tiny) return ""
+        return "\n\n(Keep answers to one or two short sentences. When a CONTEXT " +
+            "block is provided, answer only from it - do not add outside facts.)"
+    }
+
     /** Reloads the active model, starting a fresh conversation. */
     fun reloadAsync(context: Context, systemPrompt: String) {
         val path = activeModelPath ?: return
@@ -273,7 +287,8 @@ object NovaEngine {
             // v9.11.0 "Inference Quality": same fallback as load() - a
             // blank prompt never wipes the base prompt off the engine.
             val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
-                thinkingHint(activeModelPath ?: "", activeModelLabel)
+                thinkingHint(activeModelPath ?: "", activeModelLabel) +
+                tinyHint(activeModelPath ?: "", activeModelLabel)
             engine.setSystemPrompt(prompt)
             contextDirty = false
             return true
@@ -314,6 +329,11 @@ object NovaEngine {
     fun send(message: String, predictLength: Int): Flow<String> {
         val engine = requireNotNull(engineRef) { "No model loaded" }
         contextDirty = true   // the conversation context now holds this prompt
+        // v9.16.7 "Smaller-model quality": a 230M-class model fills a long
+        // budget with filler. Cap its reply so answers stay tight.
+        val budget = if (org.nova.ncie.android.NcieChat.tinyModelFile(
+                activeModelPath?.substringAfterLast('/')))
+            minOf(predictLength, 256) else predictLength
         // v9.13.9 "No dropped turns": the engine DISCARDS a prompt that
         // arrives while it is still processing the previous one - the user
         // sees "[error: User prompt discarded due to: ProcessingUserPrompt]"
@@ -322,7 +342,7 @@ object NovaEngine {
         // never be dropped.
         return flow {
             awaitEngineReady(engine)
-            emitAll(engine.sendUserPrompt(message, predictLength))
+            emitAll(engine.sendUserPrompt(message, budget))
         }
     }
 
