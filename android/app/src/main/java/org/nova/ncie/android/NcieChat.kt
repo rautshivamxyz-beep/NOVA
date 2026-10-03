@@ -197,6 +197,22 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // v9.3.0 "Audit Fixes I": notification log privacy commands -
         // clear / pause / resume, deterministic like MISSED_Q
         if (answerNotifCmd(text)) { input.setText(""); return }
+        // v9.16.13 "Time Machine": find <query> searches the notification log,
+        // your chats and your notes - deterministic, no model.
+        val findQ = Regex("(?i)^\\s*find\\s+(.{2,})$").find(text)
+        if (findQ != null) {
+            input.setText("")
+            val fq = findQ.groupValues[1].trim()
+            val fum = Msg(Role.USER, text)
+            currentChat.messages.add(fum); adapter.add(fum)
+            val freply = Msg(Role.ASSISTANT, NcieTimeMachine.search(this, fq))
+            currentChat.messages.add(freply); adapter.add(freply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+            }
+            return
+        }
         // v8.9.0: Tutor Mode - quiz me on X with two-pass LLM answer
         // checking, weak areas with 1-day spaced repetition, flashcards.
         // The deterministic paths (weak-area list, flashcard storage and
