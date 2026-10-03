@@ -183,7 +183,7 @@ class BackupActivity : ListActivity() {
         return out
     }
 
-    private fun saveBackup(uri: Uri) {
+    private fun saveBackup(uri: Uri, password: String) {
         Thread {
             var count = 0
             var bytes = 0L
@@ -191,7 +191,12 @@ class BackupActivity : ListActivity() {
             try {
                 val files = collectFiles()
                 contentResolver.openOutputStream(uri, "w")?.use { os ->
-                    ZipOutputStream(BufferedOutputStream(os)).use { zos ->
+                    // v9.16.10: a password wraps the zip in AES-GCM, so a
+                    // backup kept in the cloud or on a laptop is unreadable
+                    // without it. Blank password = plain zip, as before.
+                    val sink: java.io.OutputStream =
+                        if (password.isNotBlank()) wrapOut(os, password) else os
+                    ZipOutputStream(BufferedOutputStream(sink)).use { zos ->
                         for ((f, rel) in files) {
                             val ze = ZipEntry(rel)
                             ze.time = f.lastModified()
@@ -235,12 +240,14 @@ class BackupActivity : ListActivity() {
         }
     }
 
-    private fun inspectBackup(uri: Uri) {
+    private fun inspectBackup(uri: Uri, password: String?) {
         Thread {
             val loaded = mutableListOf<Entry>()
             try {
                 contentResolver.openInputStream(uri)?.use { ins ->
-                    ZipInputStream(BufferedInputStream(ins)).use { zis ->
+                    val bin = BufferedInputStream(ins)
+                    val zin = if (password != null) wrapIn(bin, password) else bin
+                    ZipInputStream(zin).use { zis ->
                         var ze: ZipEntry? = zis.nextEntry
                         while (ze != null) {
                             if (!ze.isDirectory) {
@@ -269,20 +276,20 @@ class BackupActivity : ListActivity() {
                 } else {
                     hint?.text = loaded.size.toString() + " files in this backup.\n" +
                         "Restore replaces what is on the phone now."
-                    confirmRestore(uri)
+                    confirmRestore(uri, password)
                 }
             }
         }.start()
     }
 
-    private fun confirmRestore(uri: Uri) {
+    private fun confirmRestore(uri: Uri, password: String?) {
         AlertDialog.Builder(this)
             .setTitle("Restore this backup?")
             // v9.4.0 "Audit Fixes II": the restore is a true replace now -
             // the warning must say exactly what that means
             .setMessage("This wipes NOVA's current memory, wiki, knowledge, " +
                 "chats and settings and restores the backup exactly.")
-            .setPositiveButton("Restore") { _, _ -> restoreBackup(uri) }
+            .setPositiveButton("Restore") { _, _ -> restoreBackup(uri, password) }
             .setNegativeButton("Cancel", null)
             .show()
     }
@@ -315,7 +322,7 @@ class BackupActivity : ListActivity() {
         if (sp.isDirectory) sp.listFiles()?.forEach { it.delete() }
     }
 
-    private fun restoreBackup(uri: Uri) {
+    private fun restoreBackup(uri: Uri, password: String?) {
         Thread {
             var restored = 0
             var ok = false
@@ -324,7 +331,9 @@ class BackupActivity : ListActivity() {
                 // the true replace: current state goes first, then the zip
                 wipeFilesDir()
                 contentResolver.openInputStream(uri)?.use { ins ->
-                    ZipInputStream(BufferedInputStream(ins)).use { zis ->
+                    val bin = BufferedInputStream(ins)
+                    val zin = if (password != null) wrapIn(bin, password) else bin
+                    ZipInputStream(zin).use { zis ->
                         var ze: ZipEntry? = zis.nextEntry
                         while (ze != null) {
                             if (!ze.isDirectory) {
@@ -374,13 +383,92 @@ class BackupActivity : ListActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        if (requestCode == REQ_SAVE) saveBackup(uri)
-        else if (requestCode == REQ_RESTORE) inspectBackup(uri)
+        if (requestCode == REQ_SAVE) askPasswordForSave(uri)
+        else if (requestCode == REQ_RESTORE) {
+            if (isEncrypted(uri)) askPasswordForRestore(uri) else inspectBackup(uri, null)
+        }
+    }
+
+    // ---- v9.16.10 "Encrypted backup": optional password ----------------
+
+    private fun askPasswordForSave(uri: Uri) {
+        val box = android.widget.EditText(this)
+        box.hint = "leave blank for a plain zip"
+        AlertDialog.Builder(this)
+            .setTitle("Backup password (optional)")
+            .setMessage("Set a password to ENCRYPT this backup (AES-256). " +
+                "Leave it blank to save a plain zip.")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ -> saveBackup(uri, box.text.toString().trim()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun askPasswordForRestore(uri: Uri) {
+        val box = android.widget.EditText(this)
+        box.hint = "the password you set"
+        AlertDialog.Builder(this)
+            .setTitle("Encrypted backup")
+            .setMessage("This backup is encrypted - enter its password to open it.")
+            .setView(box)
+            .setPositiveButton("Open") { _, _ -> inspectBackup(uri, box.text.toString().trim()) }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // ------------------------------------------------------------------
     // helpers
     // ------------------------------------------------------------------
+
+    // ---- v9.16.10 "Encrypted backup": AES-GCM + PBKDF2 ----------------
+
+    private fun deriveKey(password: String, salt: ByteArray): javax.crypto.SecretKey {
+        val spec = javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 120_000, 256)
+        val f = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        return javax.crypto.spec.SecretKeySpec(f.generateSecret(spec).encoded, "AES")
+    }
+
+    /** Writes the MAGIC + salt + iv header, then an AES-GCM stream. */
+    private fun wrapOut(os: java.io.OutputStream, password: String): java.io.OutputStream {
+        val salt = ByteArray(16); java.security.SecureRandom().nextBytes(salt)
+        val iv = ByteArray(12); java.security.SecureRandom().nextBytes(iv)
+        os.write(MAGIC.toByteArray(Charsets.US_ASCII))
+        os.write(salt); os.write(iv)
+        val c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(javax.crypto.Cipher.ENCRYPT_MODE, deriveKey(password, salt),
+            javax.crypto.spec.GCMParameterSpec(128, iv))
+        return javax.crypto.CipherOutputStream(os, c)
+    }
+
+    /** Reads the header and returns an AES-GCM decrypting stream. A wrong
+     *  password fails the GCM tag check at the end of the stream. */
+    private fun wrapIn(ins: java.io.InputStream, password: String): java.io.InputStream {
+        val h = ByteArray(7); readFully(ins, h)
+        val salt = ByteArray(16); readFully(ins, salt)
+        val iv = ByteArray(12); readFully(ins, iv)
+        val c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(javax.crypto.Cipher.DECRYPT_MODE, deriveKey(password, salt),
+            javax.crypto.spec.GCMParameterSpec(128, iv))
+        return javax.crypto.CipherInputStream(ins, c)
+    }
+
+    private fun readFully(ins: java.io.InputStream, b: ByteArray) {
+        var off = 0
+        while (off < b.size) {
+            val r = ins.read(b, off, b.size - off)
+            if (r < 0) throw java.io.EOFException()
+            off += r
+        }
+    }
+
+    private fun isEncrypted(uri: Uri): Boolean = try {
+        contentResolver.openInputStream(uri)?.use { ins ->
+            val h = ByteArray(7)
+            var off = 0
+            while (off < 7) { val r = ins.read(h, off, 7 - off); if (r < 0) break; off += r }
+            off == 7 && String(h, Charsets.US_ASCII) == MAGIC
+        } ?: false
+    } catch (e: Exception) { false }
 
     private fun toast(s: String) {
         try { Toast.makeText(this, s, Toast.LENGTH_LONG).show() } catch (e: Exception) { }
@@ -421,6 +509,7 @@ class BackupActivity : ListActivity() {
     }
 
     companion object {
+        private const val MAGIC = "NOVABK1"
         private const val REQ_SAVE = 4101
         private const val REQ_RESTORE = 4102
     }
