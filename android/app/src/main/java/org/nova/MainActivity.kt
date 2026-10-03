@@ -1118,6 +1118,11 @@ class MainActivity : Activity() {
         for (raw in s.lines()) {
             var line = raw
             val lt = line.trim()
+            // v9.16.7: drop a pure filler opener ("Sure!", "Certainly!",
+            // "Based on the context,") - small models love them
+            if (out.isEmpty() && lt.length <= 60 &&
+                Regex("(?i)^(?:sure|certainly|of course|okay|ok|alright|great|got it|here (?:is|are|'s)|based on (?:the )?(?:context|text|notes|document))[,!.:]?$")
+                    .containsMatchIn(lt)) continue
             if (Regex("(?i)^the final answer ").containsMatchIn(lt)) {
                 val ci = lt.indexOf(':')
                 if (ci >= 0) {
@@ -2587,7 +2592,23 @@ Study:
                 }
                 val number = lookupContact(who)
                 if (number == null) toast("Couldn't find '$who' in contacts")
-                else if (!viaWhatsapp && !canSms()) {
+                else if (viaWhatsapp) {
+                    // v9.16.7: WhatsApp has no silent-send API, and it ignores
+                    // an smsto: SMS intent - which is why "whatsapp <name>"
+                    // never worked. Use the official wa.me deep link: it opens
+                    // the chat with the message already typed; you tap send.
+                    val digits = number.filter { it.isDigit() }
+                    if (digits.length >= 10) {
+                        val url = "https://wa.me/" + digits + "?text=" +
+                            java.net.URLEncoder.encode(msg, "UTF-8")
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            toast("WhatsApp open for $who - press send")
+                        } catch (x: Exception) { toast("WhatsApp isn't installed") }
+                    } else {
+                        toast("Save '$who' with a country code to use WhatsApp")
+                    }
+                } else if (!canSms()) {
                     // v9.16.6: ask, but fall back to the draft so it still works
                     requestPermissions(arrayOf(android.Manifest.permission.SEND_SMS), 4256)
                     try {
@@ -2595,22 +2616,13 @@ Study:
                             .apply { putExtra("sms_body", msg) })
                         toast("Allow SMS to send directly - ready for $who, press send")
                     } catch (x: Exception) { toast("No messaging app") }
-                } else if (!viaWhatsapp && NovaSms.sendDirect(this, number, msg)) {
+                } else if (NovaSms.sendDirect(this, number, msg)) {
                     toast("Message sent to $who")
                 } else {
                     val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).apply {
-                        if (viaWhatsapp) setPackage("com.whatsapp")
                         putExtra("sms_body", msg)
                     }
-                    try {
-                        startActivity(send)
-                    } catch (e: Exception) {
-                        // no WhatsApp - fall back to the normal messaging app
-                        try {
-                            startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number"))
-                                .apply { putExtra("sms_body", msg) })
-                        } catch (x: Exception) { toast("No messaging app") }
-                    }
+                    try { startActivity(send) } catch (x: Exception) { toast("No messaging app") }
                     toast("Message ready for $who - press send")
                 }
                 return true
