@@ -75,8 +75,9 @@ android {
         // profile + reply cap + prompt hint, and a real WhatsApp deep link
         // v9.16.8 "Silent reply": answer a chat notification through its own
         // reply action (RemoteInput) - nothing opens
-        versionCode 118
-        versionName '9.16.8'
+        // v9.16.9 "Auto-responder": opt-in silent auto-reply to new messages
+        versionCode 119
+        versionName '9.16.9'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

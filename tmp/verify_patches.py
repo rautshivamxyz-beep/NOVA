@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.8: version bumped for the silent-reply fix", bg.count("versionName '9.16.8'") == 1 and bg.count("versionCode 118") == 1)
+check("v9.16.9: version bumped for the auto-responder", bg.count("versionName '9.16.9'") == 1 and bg.count("versionCode 119") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -236,6 +236,10 @@ check("v9.16.7: WhatsApp uses the wa.me deep link (MainActivity)", ma.count("wa.
 check("v9.16.8: silent reply through the notification action (NovaListener)",
       load("NovaListener.kt").count("fun silentReply(") == 1 and
       load("NovaListener.kt").count("addResultsToIntent") == 1)
+# ---- v9.16.9 "Auto-responder" ----
+check("v9.16.9: the auto-responder ships (NovaListener + Settings)",
+      load("NovaListener.kt").count("autoReplied") >= 1 and
+      load("Settings.kt").count("autoReplyMsg") >= 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",

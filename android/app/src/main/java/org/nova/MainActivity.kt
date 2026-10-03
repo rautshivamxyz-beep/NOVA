@@ -2469,6 +2469,10 @@ class MainActivity : Activity() {
         // v9.16.8 "Silent reply": "reply to <name> <msg>" answers the latest
         // chat notification from them through its own reply action.
         val replyCmd = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:reply|respond)\\s+(?:to\\s+)?(\\S+)\\s*[:,-]?\\s+(.+)$").find(t2)
+        // v9.16.9 "Auto-responder": opt-in silent auto-reply to new messages.
+        val autoReplySet = Regex("(?i)^(?:nova\\s*,?\\s*)?set\\s+auto\\s*reply\\s+(.+)$").find(t2)
+        val autoReplyOnOff = Regex("(?i)^(?:nova\\s*,?\\s*)?auto\\s*reply\\s+(on|off)$").find(t2)
+        val autoReplyStatus = Regex("(?i)^(?:nova\\s*,?\\s*)?auto\\s*reply\\s*$").matches(t2)
         // v9.8.0: "text <name> at <time>: <message>" - the scheduled send.
         // The time is matched structurally ("in 20 minutes" / "6pm" /
         // "18:30" / "tomorrow 9am") so the message after it is free text.
@@ -2648,6 +2652,25 @@ Study:
                 if (NovaListener.silentReply(this, who, msg))
                     toast("Replied to $who silently")
                 else toast("No recent message from '$who' to reply to")
+                return true
+            }
+            autoReplySet != null -> {
+                settings.autoReplyMsg = autoReplySet.groupValues[1].trim()
+                chatCommandReply(t, "Auto-reply message set: \"" + settings.autoReplyMsg + "\"")
+                return true
+            }
+            autoReplyOnOff != null -> {
+                val on = autoReplyOnOff.groupValues[1].equals("on", ignoreCase = true)
+                settings.autoReply = on
+                chatCommandReply(t, if (on)
+                    "Auto-responder ON - NOVA will answer new messages silently, once per person per 5 minutes. Say 'auto reply off' to stop."
+                else "Auto-responder OFF.")
+                return true
+            }
+            autoReplyStatus -> {
+                chatCommandReply(t, if (settings.autoReply)
+                    "Auto-responder is ON. Message: \"" + settings.autoReplyMsg + "\""
+                else "Auto-responder is OFF. Say 'auto reply on' to enable it.")
                 return true
             }
             call != null -> {
