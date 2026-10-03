@@ -101,6 +101,13 @@ private fun creativeRequest(text: String): Boolean {
 private val COMPARE_Q = Regex("(?i)\\bcompare\\b|\\bdifference\\s+between\\b|\\bvs\\b")
 private fun compareQuestion(text: String): Boolean = COMPARE_Q.containsMatchIn(text)
 
+/** v9.16.16: a short command that points at a document by deixis rather
+ *  than by name - "explain this pdf", "summarize the document", "read
+ *  this file". Used to ask for the document instead of guessing. */
+private val DOC_DEICTIC_Q = Regex(
+    "(?i)\\b(?:explain|summari[sz]e|read|describe|go\\s+through|open|show\\s+me|tell\\s+me\\s+about|what'?s\\s+in|what\\s+is\\s+in|what\\s+does)\\b[^.?!]{0,40}\\b(?:this|the|that|these|those|my)\\s+(?:pdf|document|doc|file|chapter|text|material|paper|attachment|notes?)\\b"
+)
+
 /** v9.13.0 "Audit Fixes": the fetch flow's completion turns (dialog
  *  buttons, the post-fetch ncieSend) - launched through the same
  *  routing guard send() uses, so a turn resumed after an online fetch
@@ -574,6 +581,27 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     return
                 }
             }
+        }
+        // v9.16.16 "Doc-aware honesty": a deictic reference to a document
+        // ("explain this pdf", "summarize the document", "read this file")
+        // with nothing attached used to fall through to the model, which
+        // GUESSED at the contents ("The PDF likely discusses..."). Ask for
+        // the document instead of inventing one.
+        if (docContext == null && text.length <= 120 && DOC_DEICTIC_Q.containsMatchIn(text)) {
+            val um = Msg(Role.USER, text)
+            currentChat.messages.add(um)
+            adapter.add(um)
+            val reply = Msg(Role.ASSISTANT,
+                "I don't have a document open in this chat, so I can't read " +
+                "that. Attach the PDF (or paste it into Knowledge) and I'll " +
+                "work from it - I won't guess at what's inside.")
+            currentChat.messages.add(reply)
+            adapter.add(reply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+            }
+            return
         }
         // v8.5.3: "im in class 10, lives in ..., studies at ..." - offer
         // to keep the self-description before answering the request
