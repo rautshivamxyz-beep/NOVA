@@ -81,8 +81,9 @@ android {
         // v9.16.12 "Dream mode: nightly": the overnight consolidation runs itself
         // v9.16.13 "Time Machine": find <query> across your notifications,
         // chats and notes
-        versionCode 123
-        versionName '9.16.13'
+        // v9.16.14 "Jarvis": one-phrase modes - away / back
+        versionCode 124
+        versionName '9.16.14'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
