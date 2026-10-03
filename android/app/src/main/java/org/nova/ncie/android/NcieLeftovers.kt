@@ -37,7 +37,10 @@ object NcieLeftovers {
 
         guardianContact(t)?.let { return NcieGuardian.setContact(ctx, it) }
         guardianArm(t)?.let { return NcieGuardian.arm(ctx, it) }
-        if (GUARDIAN_OK.matches(t)) return NcieGuardian.cancel(ctx)
+        // v9.17.1: "i'm fine" / "i'm okay" is ordinary chat unless a
+        // check-in is actually armed - only then is it a guardian command.
+        if (GUARDIAN_OK.matches(t) && Settings(ctx).guardianUntil > System.currentTimeMillis())
+            return NcieGuardian.cancel(ctx)
         if (GUARDIAN_STATUS.matches(t)) return NcieGuardian.status(ctx)
 
         quietSet(t)?.let { return NcieQuiet.set(ctx, it.first, it.second) }
@@ -91,7 +94,7 @@ object NcieLeftovers {
 
     private val QUIET_SET = Regex("(?i)^\\s*(?:quiet\\s*hours?|silence|do\\s*not\\s*disturb|dnd)\\s+(?:from\\s+)?(.+)$")
     private val QUIET_OFF = Regex("(?i)^\\s*(?:quiet\\s*hours?|silence|dnd)\\s+(?:off|cancel|disable)\\s*[.!]*\\s*$")
-    private val QUIET_STATUS = Regex("(?i)^\\s*(?:quiet\\s*hours?|silence|dnd)(?:\\s+status)?\\s*[.!?]*\\s*$")
+    private val QUIET_STATUS = Regex("(?i)^\\s*(?:(?:quiet\\s*hours?|dnd)(?:\\s+status)?|silence\\s+status)\\s*[.!?]*\\s*$")
     private val TIME_RE = Regex("(?i)(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?")
 
     private fun quietSet(t: String): Pair<Int, Int>? {
