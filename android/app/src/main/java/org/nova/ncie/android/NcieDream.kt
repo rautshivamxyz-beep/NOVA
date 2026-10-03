@@ -20,6 +20,7 @@ import java.util.Locale
 object NcieDream {
 
     private const val DAY_MS = 24L * 60 * 60 * 1000
+    private const val DREAM_REQ = 7301
 
     fun reportPath(ctx: Context): File = File(ctx.filesDir, "dream_report.txt")
 
@@ -98,7 +99,33 @@ object NcieDream {
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
         try { reportPath(ctx).writeText(text) } catch (e: Exception) { }
+        // v9.16.12: keep the nightly alarm armed (idempotent).
+        schedule(ctx)
         return text
+    }
+
+    /** v9.16.12: arms the daily overnight consolidation (~03:00), so the
+     *  report is ready before the morning briefing. Re-armed after each
+     *  fire; the exact-alarm grant is best-effort (falls back to inexact). */
+    fun schedule(ctx: Context) {
+        try {
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val pi = android.app.PendingIntent.getBroadcast(ctx, DREAM_REQ,
+                android.content.Intent(ctx, org.nova.DreamReceiver::class.java),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                    android.app.PendingIntent.FLAG_IMMUTABLE)
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 3); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+            }
+            try {
+                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP,
+                    cal.timeInMillis, pi)
+            } catch (e: SecurityException) {
+                am.set(android.app.AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+            }
+        } catch (e: Exception) { }
     }
 
     /** The last written report, or "" when none exists yet. */
