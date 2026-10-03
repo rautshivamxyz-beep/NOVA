@@ -82,9 +82,9 @@ android {
         // v9.16.13 "Time Machine": find <query> across your notifications,
         // chats and notes
         // v9.16.14 "Jarvis": one-phrase modes - away / back
-        // v9.16.16 "Doc-aware honesty": don't guess at an unopened document
-        versionCode 126
-        versionName '9.16.16'
+        // v9.17.0 "Leftovers": the rest of the automation backlog, one batch
+        versionCode 127
+        versionName '9.17.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

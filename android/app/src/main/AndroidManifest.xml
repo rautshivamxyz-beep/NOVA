@@ -67,6 +67,9 @@
         <!-- v9.16.12: the nightly Dream-mode consolidation -->
         <receiver android:name=".DreamReceiver" android:exported="false" />
 
+        <!-- v9.17.0: the guardian check-in and the daily recurring reminders -->
+        <receiver android:name=".LeftoverReceiver" android:exported="false" />
+
         <!-- v5.4.2: re-arm reminders after a reboot -->
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>

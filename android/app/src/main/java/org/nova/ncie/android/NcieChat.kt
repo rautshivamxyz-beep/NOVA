@@ -236,6 +236,23 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             }
             return
         }
+        // v9.17.0 "Leftovers": the rest of the automation backlog - guardian,
+        // quiet hours, recurring reminders, commitments, money radar, scam
+        // shield, document expiry and package tracking - one dispatcher, all
+        // deterministic and on-device.
+        val leftover = NcieLeftovers.handle(act, text)
+        if (leftover != null) {
+            input.setText("")
+            val lum = Msg(Role.USER, text)
+            currentChat.messages.add(lum); adapter.add(lum)
+            val lreply = Msg(Role.ASSISTANT, leftover)
+            currentChat.messages.add(lreply); adapter.add(lreply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+            }
+            return
+        }
         // v8.9.0: Tutor Mode - quiz me on X with two-pass LLM answer
         // checking, weak areas with 1-day spaced repetition, flashcards.
         // The deterministic paths (weak-area list, flashcard storage and

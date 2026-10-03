@@ -51,6 +51,9 @@ ea = load("ExamsActivity.kt")
 moa = load("ModelsActivity.kt")
 mea = load("MemoryActivity.kt")
 nt = load("NovaTheme.kt")
+# v9.17.0 "Leftovers"
+lo = load("ncie/android/NcieLeftovers.kt")
+lr2 = load("LeftoverReceiver.kt")
 
 # ---- feature markers, exactly as the patch chain writes them ----
 MA_MARKERS = [
@@ -207,7 +210,23 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.16: version bumped for doc-aware honesty", bg.count("versionName '9.16.16'") == 1 and bg.count("versionCode 126") == 1)
+check("v9.17.0: version bumped for the leftovers batch", bg.count("versionName '9.17.0'") == 1 and bg.count("versionCode 127") == 1)
+# ---- v9.17.0 "Leftovers": the rest of the backlog in one dispatcher ----
+check("v9.17.0: leftover dispatcher ships (NcieLeftovers)",
+      lo.count("object NcieLeftovers") == 1 and nc.count("NcieLeftovers.handle(act, text)") == 1)
+check("v9.17.0: guardian + quiet hours + recurring ship",
+      lo.count("object NcieGuardian") == 1 and lo.count("object NcieQuiet") == 1 and
+      lo.count("object NcieRecurring") == 1 and lr2.count("class LeftoverReceiver") == 1)
+check("v9.17.0: ledger + money + scam + expiry + packages ship",
+      lo.count("object NcieLedger") == 1 and lo.count("object NcieMoney") == 1 and
+      lo.count("object NcieScam") == 1 and lo.count("object NcieExpiry") == 1 and
+      lo.count("object NciePackages") == 1)
+check("v9.17.0: quiet hours gate the auto-responder (NovaListener)",
+      load("NovaListener.kt").count("NcieLeftovers.isQuietNow(this)") == 1)
+check("v9.17.0: guardian receiver registered (manifest)",
+      open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".LeftoverReceiver") == 1)
+check("v9.17.0: keystores are gitignored",
+      open(os.path.join(ROOT, ".gitignore"), encoding="utf-8").read().count("*.keystore") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -616,7 +635,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka)]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

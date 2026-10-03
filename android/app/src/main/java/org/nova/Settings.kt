@@ -136,6 +136,32 @@ class Settings(context: Context) {
             ?: "I'm busy right now - I'll get back to you soon."
         set(value) = prefs.edit().putString(KEY_AUTO_REPLY_MSG, value).apply()
 
+    /** v9.17.0 "Guardian": the trusted contact NOVA texts if you don't
+     *  check in. Empty means no guardian is set. */
+    var guardianContact: String
+        get() = prefs.getString(KEY_GUARDIAN_CONTACT, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_GUARDIAN_CONTACT, value).apply()
+
+    /** When the armed check-in is due (millis); 0 = not armed. */
+    var guardianUntil: Long
+        get() = prefs.getLong(KEY_GUARDIAN_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_GUARDIAN_UNTIL, value).apply()
+
+    /** The SOS text the guardian sends. */
+    var guardianMsg: String
+        get() = prefs.getString(KEY_GUARDIAN_MSG, DEFAULT_GUARDIAN_MSG) ?: DEFAULT_GUARDIAN_MSG
+        set(value) = prefs.edit().putString(KEY_GUARDIAN_MSG, value).apply()
+
+    /** v9.17.0 "Quiet hours": minutes-of-day window when NOVA stays silent
+     *  (no auto-reply). -1 = off. */
+    var quietStart: Int
+        get() = prefs.getInt(KEY_QUIET_START, -1)
+        set(value) = prefs.edit().putInt(KEY_QUIET_START, value).apply()
+
+    var quietEnd: Int
+        get() = prefs.getInt(KEY_QUIET_END, -1)
+        set(value) = prefs.edit().putInt(KEY_QUIET_END, value).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -158,6 +184,12 @@ class Settings(context: Context) {
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
         private const val KEY_AUTO_REPLY = "auto_reply"
         private const val KEY_AUTO_REPLY_MSG = "auto_reply_msg"
+        // v9.17.0 "Leftovers"
+        private const val KEY_GUARDIAN_CONTACT = "guardian_contact"
+        private const val KEY_GUARDIAN_UNTIL = "guardian_until"
+        private const val KEY_GUARDIAN_MSG = "guardian_msg"
+        private const val KEY_QUIET_START = "quiet_start"
+        private const val KEY_QUIET_END = "quiet_end"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small
@@ -177,6 +209,11 @@ class Settings(context: Context) {
                 "Be concise and direct. If you are not sure, say so instead of guessing. " +
                 "Do not invent facts.\n" +
                 "Reply in the language the user writes in."
+
+        /** v9.17.0: the default SOS text the guardian sends. */
+        const val DEFAULT_GUARDIAN_MSG =
+            "This is NOVA, your assistant. You asked me to check in on you and " +
+                "you haven't replied - please reach out to make sure you're okay."
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }
