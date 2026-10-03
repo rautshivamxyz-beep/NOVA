@@ -140,6 +140,13 @@ object NcieRoutines {
                 }
             }
         } catch (e: Exception) { }
+        // v9.19.0 "Polish": the leftover features (expiring documents,
+        // today's reminders, open promises, an armed guardian) join the
+        // briefing, so one screen shows the whole day.
+        try {
+            val digest = NcieLeftovers.dailyDigest(ctx)
+            if (digest.isNotBlank()) sb.append(digest)
+        } catch (e: Exception) { }
         // v9.16.11 "Dream mode": the overnight consolidation, shown here so
         // the day's picture is ready before you start.
         sb.append("\n\n").append(NcieDream.run(ctx)).append('\n')

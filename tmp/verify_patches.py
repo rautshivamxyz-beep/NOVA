@@ -210,7 +210,17 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.18.0: version bumped for the redesign", bg.count("versionName '9.18.0'") == 1 and bg.count("versionCode 129") == 1)
+check("v9.19.0: version bumped for the polish pass", bg.count("versionName '9.19.0'") == 1 and bg.count("versionCode 130") == 1)
+# ---- v9.19.0 "Polish": the Phase 2-5 features tied together ----
+check("v9.19.0: the leftover state joins the briefing + dream report",
+      lo.count("fun dailyDigest(") == 1 and
+      load("ncie/android/NcieRoutines.kt").count("NcieLeftovers.dailyDigest(ctx)") == 1 and
+      load("ncie/android/NcieDream.kt").count("NcieLeftovers.dailyDigest(ctx)") == 1)
+check("v9.19.0: money radar accepts the rupee sign",
+      lo.count("\\u20B9") == 1)
+check("v9.19.0: time machine searches promises + expiry",
+      load("ncie/android/NcieTimeMachine.kt").count('Hit("promise"') == 1 and
+      load("ncie/android/NcieTimeMachine.kt").count('Hit("expiry"') == 1)
 # ---- v9.18.0 "Redesign": the design system + the screens on it ----
 check("v9.18.0: the design system ships (NovaUi kit)",
       load("NovaUi.kt").count("object NovaUi") == 1 and

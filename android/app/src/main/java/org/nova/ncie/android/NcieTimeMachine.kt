@@ -50,6 +50,29 @@ object NcieTimeMachine {
             }
         } catch (e: Exception) { }
 
+        // v9.19.0 "Polish": promises and tracked expiry dates are searchable
+        // through the same Time Machine as everything else.
+        try {
+            val cf = java.io.File(ctx.filesDir, "commitments.txt")
+            if (cf.exists()) for (l in cf.readLines()) {
+                val p = l.split('\t', limit = 2)
+                if (p.size < 2) continue
+                if (matches(p[1], terms)) hits.add(Hit("promise", p[1].take(140)))
+            }
+        } catch (e: Exception) { }
+        try {
+            val ef = java.io.File(ctx.filesDir, "expiry.txt")
+            if (ef.exists()) for (l in ef.readLines()) {
+                val p = l.split('\t', limit = 2)
+                if (p.size < 2) continue
+                val ms = p[1].toLongOrNull()
+                val d = if (ms != null)
+                    java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
+                        .format(java.util.Date(ms)) else ""
+                val line = p[0] + " - expires " + d
+                if (matches(line, terms)) hits.add(Hit("expiry", line.take(140)))
+            }
+        } catch (e: Exception) { }
         if (hits.isEmpty()) return "Nothing in your stuff matches \"" + query + "\"."
 
         val sb = StringBuilder("Found " + hits.size + " for \"" + query + "\":\n")

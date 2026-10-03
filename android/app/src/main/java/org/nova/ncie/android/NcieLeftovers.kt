@@ -66,6 +66,39 @@ object NcieLeftovers {
      *  this before auto-replying, so NOVA stays silent when asked. */
     fun isQuietNow(ctx: Context): Boolean = NcieQuiet.isQuietNow(ctx)
 
+    /** v9.19.0 "Polish": one short digest of the leftover state, shared by
+     *  the morning briefing and the dream report so a single screen shows
+     *  the whole day. Empty when there is nothing to say. */
+    fun dailyDigest(ctx: Context): String {
+        val sb = StringBuilder()
+        try {
+            val soon = NcieExpiry.upcoming(ctx, 30)
+            if (soon.isNotEmpty())
+                sb.append("expiring soon: ")
+                    .append(soon.joinToString(", ") { it.first + " (" + it.second + "d)" })
+                    .append('\n')
+        } catch (e: Exception) { }
+        try {
+            val today = NcieRecurring.today(ctx)
+            if (today.isNotEmpty())
+                sb.append("reminders: ")
+                    .append(today.take(3).joinToString(", ") { NcieQuiet.fmt(it.first) + " " + it.second })
+                    .append('\n')
+        } catch (e: Exception) { }
+        try {
+            val n = NcieLedger.count(ctx)
+            if (n > 0) sb.append("promises open: ").append(n).append('\n')
+        } catch (e: Exception) { }
+        try {
+            val until = Settings(ctx).guardianUntil
+            if (until > System.currentTimeMillis())
+                sb.append("guardian: armed, ")
+                    .append(((until - System.currentTimeMillis()) / 60_000L).toInt() + 1)
+                    .append(" min left\n")
+        } catch (e: Exception) { }
+        return sb.toString()
+    }
+
     // ---- command patterns ----
 
     private val LEDGER_ADD1 = Regex("(?i)^\\s*i\\s+(?:promised|promise)\\s+(?:to\\s+)?(.{2,120})$")
@@ -208,6 +241,12 @@ object NcieLedger {
         try { file(ctx).delete() } catch (e: Exception) { }
         return "Cleared your promises."
     }
+
+    /** v9.19.0: how many promises are on the ledger. */
+    fun count(ctx: Context): Int = try {
+        val f = file(ctx)
+        if (f.exists()) f.readLines().count { it.isNotBlank() } else 0
+    } catch (e: Exception) { 0 }
 }
 
 /** v9.17.0 "Guardian / SOS": arm a check-in; if you don't cancel it in time,
@@ -360,6 +399,10 @@ object NcieRecurring {
         return "Cleared your daily reminders."
     }
 
+    /** v9.19.0: the reminders for today, soonest first. */
+    fun today(ctx: Context): List<Pair<Int, String>> = load(ctx).sortedBy { it.first }
+
+
     fun arm(ctx: Context) {
         val items = load(ctx)
         if (items.isEmpty()) return
@@ -410,7 +453,7 @@ object NcieMoney {
             set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
-        val amtRe = Regex("(?i)(?:rs\\.?|inr)\\s*([0-9][0-9,]*\\.?[0-9]{0,2})")
+        val amtRe = Regex("(?i)(?:rs\\.?|inr|\u20B9)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)")
         val debit = Regex("(?i)debited|spent|paid|withdrawn|purchase")
         val credit = Regex("(?i)credited|received|deposited|refund")
         var spent = 0.0
@@ -551,6 +594,24 @@ object NcieExpiry {
     fun clear(ctx: Context): String {
         try { file(ctx).delete() } catch (e: Exception) { }
         return "Cleared the expiry tracker."
+    }
+
+    /** v9.19.0: entries expiring within [days] (future only), soonest first. */
+    fun upcoming(ctx: Context, days: Int): List<Pair<String, Int>> {
+        val out = ArrayList<Pair<String, Int>>()
+        val dayMs = 24L * 60 * 60 * 1000
+        val now = System.currentTimeMillis()
+        try {
+            val f = file(ctx)
+            if (f.exists()) for (l in f.readLines()) {
+                val p = l.split('\t', limit = 2)
+                if (p.size < 2) continue
+                val ms = p[1].toLongOrNull() ?: continue
+                val d = ((ms - now) / dayMs).toInt()
+                if (d in 0..days) out.add(p[0] to d)
+            }
+        } catch (e: Exception) { }
+        return out.sortedBy { it.second }
     }
 }
 
