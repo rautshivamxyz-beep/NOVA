@@ -207,7 +207,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.16.10: version bumped for the encrypted backup", bg.count("versionName '9.16.10'") == 1 and bg.count("versionCode 120") == 1)
+check("v9.16.11: version bumped for Dream mode", bg.count("versionName '9.16.11'") == 1 and bg.count("versionCode 121") == 1)
 # ---- v9.16.4 "Quiz routing fix": the quiz topic is cleaned, bare "quiz me"
 #      routes to the tutor, and a deictic topic falls back to the open doc ----
 check("v9.16.4: quiz topic is cleaned + bare 'quiz me' routes (NcieChat)",
@@ -244,6 +244,10 @@ check("v9.16.9: the auto-responder ships (NovaListener + Settings)",
 check("v9.16.10: encrypted backup ships (BackupActivity)",
       load("BackupActivity.kt").count("AES/GCM/NoPadding") == 2 and
       load("BackupActivity.kt").count("PBKDF2WithHmacSHA256") == 1)
+# ---- v9.16.11 "Dream mode" ----
+check("v9.16.11: Dream mode ships (NcieDream + briefing)",
+      load("ncie/android/NcieDream.kt").count("fun run(") == 1 and
+      load("ncie/android/NcieRoutines.kt").count("NcieDream.run(") == 1)
 # ---- v9.15.0 "Camera": in-app camera screen (preview + shutter) -> OCR -> chat ----
 mf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
 check("v9.15.0: the camera permission is declared (AndroidManifest)",
