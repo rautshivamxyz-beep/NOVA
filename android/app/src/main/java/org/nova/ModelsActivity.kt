@@ -91,26 +91,7 @@ class ModelsActivity : Activity() {
     }
 
     private fun buildHeader(root: LinearLayout) {
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(6), dp(18), dp(6))
-        }
-        header.addView(Button(this).apply {
-            text = "←"
-            textSize = 18f
-            background = null
-            setTextColor(accent)
-            setOnClickListener { finish() }
-        })
-        header.addView(TextView(this).apply {
-            text = "Models"
-            textSize = 22f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(textMain)
-            setPadding(dp(8), 0, 0, 0)
-        })
-        root.addView(header, params())
+        root.addView(NovaUi.header(this, "Models") { finish() }, params())
     }
 
     private fun buildBody(root: LinearLayout) {
@@ -220,27 +201,18 @@ class ModelsActivity : Activity() {
         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
     ).apply { bottomMargin = dp(14) }
 
-    private fun sectionTitle(s: String) = TextView(this).apply {
-        text = s
-        setTextColor(textDim)
-        textSize = 13f
-        setTypeface(typeface, Typeface.BOLD)
-        setPadding(dp(22), 0, dp(22), dp(8))
-        letterSpacing = 0.08f
-    }
+    private fun sectionTitle(s: String) = NovaUi.sectionLabel(this, s)
 
     /** Rounded surface card; returns the wrapper containing [inner]. */
     private fun card(): LinearLayout {
         val inner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(14))
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(surface)
-                cornerRadius = dp(14).toFloat()
-            }
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = NovaUi.shape(this@ModelsActivity, NovaTheme.surface,
+                NovaTheme.RADIUS_CARD, 1, NovaTheme.border)
             addView(inner)
         }
     }
@@ -253,14 +225,11 @@ class ModelsActivity : Activity() {
 
     private fun smallButton(label: String, color: Int): Button = Button(this).apply {
         text = label
-        textSize = 13f
+        textSize = NovaTheme.T_SMALL
         isAllCaps = false
         setTextColor(color)
-        background = GradientDrawable().apply {
-            setColor(Color.TRANSPARENT)
-            setStroke(dp(1), color)
-            cornerRadius = dp(20).toFloat()
-        }
+        background = NovaUi.shape(this@ModelsActivity, Color.TRANSPARENT,
+            NovaTheme.RADIUS_PILL, 1, color)
         setPadding(dp(18), dp(8), dp(18), dp(8))
     }
 

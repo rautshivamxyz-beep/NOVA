@@ -3,21 +3,16 @@ package org.nova
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
 
 /**
  * Full settings screen: voice, memory, personality, appearance and data.
+ * v9.18.0 "Redesign": rebuilt on the NovaUi kit.
  */
 class SettingsActivity : Activity() {
 
@@ -32,197 +27,107 @@ class SettingsActivity : Activity() {
         setContentView(build())
     }
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int): Int = NovaUi.dp(this, v)
 
-    private fun card(title: String): LinearLayout {
-        val outer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(16), dp(18), dp(14))
-            background = GradientDrawable().apply {
-                setColor(NovaTheme.pill)
-                cornerRadius = dp(18).toFloat()
-                setStroke(dp(1), NovaTheme.border)
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(12) }
-        }
-        outer.addView(TextView(this).apply {
-            text = title
-            textSize = 12f
-            letterSpacing = 0.1f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(NovaTheme.dim)
-        })
-        return outer
-    }
-
-    private fun switchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(10), 0, dp(2))
-        }
-        row.addView(TextView(this).apply {
-            text = label; textSize = 15f; setTextColor(NovaTheme.text)
-            layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        row.addView(Switch(this).apply {
-            isChecked = checked
-            setOnCheckedChangeListener { _, v -> onChange(v) }
-        })
-        return row
-    }
-
-    private fun editField(text: String, hint: String, onChange: (String) -> Unit): EditText {
-        val field = EditText(this).apply {
+    private fun field(text: String, hint: String, onChange: (String) -> Unit): EditText {
+        val f = EditText(this).apply {
             this.hint = hint
-            setHintTextColor(NovaTheme.dim)
+            setHintTextColor(NovaTheme.faint)
             setTextColor(NovaTheme.text)
-            textSize = 14f
+            textSize = NovaTheme.T_BODY
             setSingleLine(false)
             minLines = 2
             maxLines = 6
-            background = GradientDrawable().apply {
-                setColor(NovaTheme.bg)
-                cornerRadius = dp(12).toFloat()
-                setStroke(dp(1), NovaTheme.border)
-            }
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = NovaUi.shape(this@SettingsActivity, NovaTheme.bg,
+                NovaTheme.RADIUS_FIELD, 1, NovaTheme.border)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         // listener added AFTER setText so opening the screen never saves the
         // initial text over the user's (or the default) value
-        field.setText(text)
-        field.addTextChangedListener(object : android.text.TextWatcher {
+        f.setText(text)
+        f.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 onChange(s?.toString() ?: "")
             }
         })
-        return field
+        return f
+    }
+
+    private fun group(col: LinearLayout, label: String, vararg rows: View) {
+        col.addView(NovaUi.sectionLabel(this, label))
+        val c = NovaUi.card(this)
+        for (r in rows) c.addView(r)
+        col.addView(c)
+    }
+
+    private fun lengthRow(): View {
+        val b = NovaUi.ghostButton(this, "Response length: ${settings.predictLength} tokens",
+            NovaTheme.text) {}
+        b.setOnClickListener {
+            val opts = Settings.LENGTH_OPTIONS.map { "$it tokens" }.toTypedArray()
+            val cur = Settings.LENGTH_OPTIONS.indexOf(settings.predictLength).coerceAtLeast(0)
+            AlertDialog.Builder(this)
+                .setTitle("Response length")
+                .setSingleChoiceItems(opts, cur) { d, which ->
+                    settings.predictLength = Settings.LENGTH_OPTIONS[which]
+                    b.text = "Response length: ${settings.predictLength} tokens"
+                    d.dismiss()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+        return b
     }
 
     private fun build(): View {
         val scroll = ScrollView(this)
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val col = NovaUi.column(this).apply {
             setBackgroundColor(NovaTheme.bg)
-            setPadding(dp(14), dp(28), dp(14), dp(30))
+            setPadding(dp(16), dp(20), dp(16), dp(32))
         }
+        col.addView(NovaUi.header(this, "Settings") { finish() })
 
-        // header
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(6))
-        }
-        header.addView(Button(this).apply {
-            isAllCaps = false
-            val d = getDrawable(R.drawable.ic_back)!!.mutate()
-            d.colorFilter = android.graphics.PorterDuffColorFilter(
-                NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
-            setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
-            background = null
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
-        header.addView(TextView(this).apply {
-            text = "Settings"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
-            setTextColor(NovaTheme.text)
-        })
-        col.addView(header)
+        group(col, "Voice",
+            NovaUi.switchRow(this, "Read replies aloud", settings.readAloud) { settings.readAloud = it },
+            NovaUi.switchRow(this, "Auto-listen (conversation mode)", settings.autoListen) { settings.autoListen = it })
 
-        // Voice
-        val voice = card("VOICE")
-        voice.addView(switchRow("Read replies aloud", settings.readAloud) { settings.readAloud = it })
-        voice.addView(switchRow("Auto-listen (conversation mode)", settings.autoListen) { settings.autoListen = it })
-        col.addView(voice)
-
-        // Memory
-        val memory = card("MEMORY")
-        memory.addView(TextView(this).apply {
-            text = "Facts NOVA always remembers"
-            textSize = 12f; setTextColor(NovaTheme.dim)
-            setPadding(0, dp(8), 0, dp(6))
-        })
-        memory.addView(editField(settings.memory, "e.g. My exam is on 12 May") { settings.memory = it })
+        col.addView(NovaUi.sectionLabel(this, "Memory"))
+        val memory = NovaUi.card(this)
+        memory.addView(NovaUi.small(this, "Facts NOVA always remembers").apply { setPadding(0, 0, 0, dp(8)) })
+        memory.addView(field(settings.memory, "e.g. My exam is on 12 May") { settings.memory = it })
         col.addView(memory)
 
-        // Personality
-        val person = card("PERSONALITY")
-        person.addView(TextView(this).apply {
-            text = "System prompt — how NOVA should behave"
-            textSize = 12f; setTextColor(NovaTheme.dim)
-            setPadding(0, dp(8), 0, dp(6))
-        })
-        person.addView(editField(settings.systemPrompt, "") { settings.systemPrompt = it })
+        col.addView(NovaUi.sectionLabel(this, "Personality"))
+        val person = NovaUi.card(this)
+        person.addView(NovaUi.small(this, "How NOVA should behave").apply { setPadding(0, 0, 0, dp(8)) })
+        person.addView(field(settings.systemPrompt, "") { settings.systemPrompt = it })
         col.addView(person)
 
-        // Answers
-        val answers = card("ANSWERS")
-        answers.addView(switchRow("Use offline Wikipedia", settings.wikiEnabled) {
-            settings.wikiEnabled = it
-        })
-        // v8.4.0 (stage 1): ask-first online learning - off by default
-        answers.addView(switchRow("Learn online (asks before fetching)", settings.onlineLearning) {
-            settings.onlineLearning = it
-        })
-        answers.addView(switchRow("Strict answers (notes & Wikipedia only)", settings.strictMode) {
+        col.addView(NovaUi.sectionLabel(this, "Answers"))
+        val answers = NovaUi.card(this)
+        answers.addView(NovaUi.switchRow(this, "Use offline Wikipedia", settings.wikiEnabled) { settings.wikiEnabled = it })
+        answers.addView(NovaUi.switchRow(this, "Learn online (asks before fetching)", settings.onlineLearning) { settings.onlineLearning = it })
+        answers.addView(NovaUi.switchRow(this, "Strict answers (notes & Wikipedia only)", settings.strictMode) {
             settings.strictMode = it
             // v5.5.0: answers cached under the other mode must not be served
             Knowledge.clearQaCache(this)
         })
-        answers.addView(switchRow("Adaptive context (skip sources that never help)", settings.adaptiveContext) {
-            settings.adaptiveContext = it
-        })
-        answers.addView(switchRow("Speculative decoding (Qwen3 only)", settings.specDecoding) {
+        answers.addView(NovaUi.switchRow(this, "Adaptive context (skip sources that never help)", settings.adaptiveContext) { settings.adaptiveContext = it })
+        answers.addView(NovaUi.switchRow(this, "Speculative decoding (Qwen3 only)", settings.specDecoding) {
             settings.specDecoding = it
-            // takes effect the next time a model loads
-            android.widget.Toast.makeText(this,
-                if (it) "Needs a Qwen3 model + Qwen3 0.6B downloaded - active on next model load"
-                else "Off after the next model load",
-                android.widget.Toast.LENGTH_LONG).show()
+            toast(if (it) "Needs a Qwen3 model + Qwen3 0.6B downloaded - active on next model load"
+                  else "Off after the next model load")
         })
-        answers.addView(Button(this).apply {
-            isAllCaps = false
-            background = null
-            setPadding(0, dp(10), 0, dp(4))
-            fun refreshLen() {
-                text = "Response length: ${settings.predictLength} tokens"
-                setTextColor(NovaTheme.text)
-                textSize = 15f
-            }
-            refreshLen()
-            setOnClickListener {
-                val opts = Settings.LENGTH_OPTIONS.map { "$it tokens" }.toTypedArray()
-                val cur = Settings.LENGTH_OPTIONS.indexOf(settings.predictLength)
-                    .coerceAtLeast(0)
-                AlertDialog.Builder(this@SettingsActivity)
-                    .setTitle("Response length")
-                    .setSingleChoiceItems(opts, cur) { d, which ->
-                        settings.predictLength = Settings.LENGTH_OPTIONS[which]
-                        refreshLen()
-                        d.dismiss()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
-        })
+        answers.addView(lengthRow())
         col.addView(answers)
 
-        // Privacy - v9.15.0 "Private Fetch"
-        val privacy = card("PRIVACY")
-        privacy.addView(TextView(this).apply {
-            text = "Route online lookups through a SOCKS proxy (Orbot/Tor) so " +
-                "the sites NOVA reads never see this phone's IP. Turn Orbot on first."
-            textSize = 12f; setTextColor(NovaTheme.dim)
-            setPadding(0, dp(8), 0, dp(6))
-        })
-        privacy.addView(switchRow("Route fetches through a SOCKS proxy", settings.proxyEnabled) {
-            settings.proxyEnabled = it
-        })
-        privacy.addView(editField(settings.proxyHost + ":" + settings.proxyPort,
+        col.addView(NovaUi.sectionLabel(this, "Privacy"))
+        val privacy = NovaUi.card(this)
+        privacy.addView(NovaUi.small(this, "Route online lookups through a SOCKS proxy (Orbot/Tor) so the sites NOVA reads never see this phone's IP. Turn Orbot on first.").apply { setPadding(0, 0, 0, dp(8)) })
+        privacy.addView(NovaUi.switchRow(this, "Route fetches through a SOCKS proxy", settings.proxyEnabled) { settings.proxyEnabled = it })
+        privacy.addView(field(settings.proxyHost + ":" + settings.proxyPort,
             "Proxy host:port (Orbot = 127.0.0.1:9050)") { v ->
             if (v.contains(':')) {
                 val host = v.substringBeforeLast(':').trim()
@@ -233,65 +138,41 @@ class SettingsActivity : Activity() {
         })
         col.addView(privacy)
 
-        // Appearance
-        val looks = card("APPEARANCE")
-        looks.addView(switchRow("Light theme", settings.theme == "light") {
+        col.addView(NovaUi.sectionLabel(this, "Appearance"))
+        val looks = NovaUi.card(this)
+        looks.addView(NovaUi.switchRow(this, "Light theme", settings.theme == "light") {
             settings.theme = if (it) "light" else "dark"
             NovaTheme.apply(it)
             toast("Theme changes when you go back")
         })
         col.addView(looks)
 
-        // Data
-        val data = card("DATA")
-        data.addView(Button(this).apply {
-            text = "Delete all chats"
-            isAllCaps = false
-            textSize = 14f
-            setTextColor(android.graphics.Color.parseColor("#F87171"))
-            background = null
-            setPadding(0, dp(10), 0, dp(4))
-            setOnClickListener {
-                AlertDialog.Builder(this@SettingsActivity)
-                    .setTitle("Delete all chats?")
-                    .setMessage("This cannot be undone.")
-                    .setPositiveButton("Delete") { _, _ ->
-                        ChatStore.clearAll(this@SettingsActivity)
-                        toast("All chats deleted")
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
+        col.addView(NovaUi.sectionLabel(this, "Data"))
+        val data = NovaUi.card(this)
+        data.addView(NovaUi.dangerButton(this, "Delete all chats") {
+            AlertDialog.Builder(this)
+                .setTitle("Delete all chats?")
+                .setMessage("This cannot be undone.")
+                .setPositiveButton("Delete") { _, _ ->
+                    ChatStore.clearAll(this)
+                    toast("All chats deleted")
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         })
         col.addView(data)
 
-        // Backup
-        // v9.4.0 "Audit Fixes II" (audit: two backup systems, one stale):
-        // the legacy JSON path (Backup.kt - chats, memory and study deck
-        // only, silently dropping the wiki store, knowledge docs, fetch
-        // log, skills, planner and everything else added since v8.7.0)
-        // is retired. This row opens the full zip backup screen instead.
-        val backup = card("BACKUP")
-        backup.addView(Button(this).apply {
-            text = "Backup & restore"
-            isAllCaps = false
-            textSize = 15f
-            setTextColor(NovaTheme.text)
-            background = null
-            setPadding(0, dp(10), 0, dp(4))
-            setOnClickListener {
-                startActivity(Intent(this@SettingsActivity, BackupActivity::class.java))
-            }
+        col.addView(NovaUi.sectionLabel(this, "Backup"))
+        val backup = NovaUi.card(this)
+        backup.addView(NovaUi.navRow(this, "Backup & restore",
+            "Full encrypted zip of your local state") {
+            startActivity(Intent(this, BackupActivity::class.java))
         })
         col.addView(backup)
 
-        // About
-        val about = card("ABOUT")
-        about.addView(TextView(this).apply {
-            text = "NOVA — your private AI.\nRuns 100% on this phone. Nothing leaves it."
-            textSize = 13f; setTextColor(NovaTheme.dim)
-            setPadding(0, dp(8), 0, dp(4))
-        })
+        col.addView(NovaUi.sectionLabel(this, "About"))
+        val about = NovaUi.card(this)
+        about.addView(NovaUi.small(this, "NOVA - your private AI.\nRuns 100% on this phone. Nothing leaves it."))
         col.addView(about)
 
         scroll.addView(col, LinearLayout.LayoutParams(

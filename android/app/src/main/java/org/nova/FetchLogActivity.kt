@@ -2,15 +2,10 @@ package org.nova
 
 import android.app.AlertDialog
 import android.app.ListActivity
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
@@ -23,13 +18,8 @@ import java.util.Locale
 
 /**
  * v8.5.0: the Fetches screen - every article NOVA has fetched online,
- * in plain sight and deletable. The privacy contract made visible: an
- * empty list means NOVA never fetched anything; a full list is exactly
- * what left the phone (once) and now lives offline. Deleting an entry
- * deletes the article from the offline store with it.
- *
- * Same style as MemoryActivity: ListActivity, programmatic UI, no XML,
- * fail-soft everywhere, list reloads after every mutation.
+ * in plain sight and deletable. The privacy contract made visible.
+ * v9.18.0 "Redesign": rebuilt on the NovaUi kit.
  */
 class FetchLogActivity : ListActivity() {
 
@@ -46,36 +36,22 @@ class FetchLogActivity : ListActivity() {
         reload()
     }
 
+    private fun dp(v: Int): Int = NovaUi.dp(this, v)
+
     private fun logFile(): File = File(filesDir, "fetch_log.txt")
 
     private fun buildUi() {
-        val dp = resources.displayMetrics.density
-        fun pad(n: Int) = (n * dp).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#101418"))
-            setPadding(pad(20), pad(18), pad(20), pad(12))
+        val root = NovaUi.column(this).apply {
+            setBackgroundColor(NovaTheme.bg)
+            setPadding(dp(16), dp(18), dp(16), dp(12))
         }
-        root.addView(TextView(this).apply {
-            text = "Fetches"
-            textSize = 22f
-            setTextColor(NovaTheme.text)
-            typeface = Typeface.DEFAULT_BOLD
-        })
-        hint = TextView(this).apply {
-            text = "Everything NOVA fetched online - offline forever.\n" +
-                "Tap to read, delete removes the article too."
-            textSize = 13f
-            setTextColor(NovaTheme.dim)
-            setPadding(0, pad(4), 0, pad(10))
-        }
+        root.addView(NovaUi.title(this, "Fetches"))
+        hint = NovaUi.small(this,
+            "Everything NOVA fetched online - offline forever.\n" +
+                "Tap to read, delete removes the article too.")
+            .apply { setPadding(0, dp(4), 0, dp(10)) }
         root.addView(hint)
-        root.addView(Button(this).apply {
-            text = "Delete all"
-            isAllCaps = false
-            setOnClickListener { confirmClearAll() }
-            setTextColor(NovaTheme.dim)
-        })
+        root.addView(NovaUi.ghostButton(this, "Delete all", NovaTheme.dim) { confirmClearAll() })
         // v8.5.1 crash fix: build our OWN ListView with the id ListActivity
         // requires. Grabbing `listView` before setContentView makes
         // ListActivity inflate its default layout, and re-adding that
@@ -84,7 +60,7 @@ class FetchLogActivity : ListActivity() {
         val list = ListView(this).apply {
             id = android.R.id.list
             divider = null
-            dividerHeight = pad(8)
+            dividerHeight = dp(8)
         }
         root.addView(list, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -115,7 +91,7 @@ class FetchLogActivity : ListActivity() {
         }.start()
     }
 
-    override fun onListItemClick(l: android.widget.ListView, v: View, position: Int, id: Long) {
+    override fun onListItemClick(l: ListView, v: View, position: Int, id: Long) {
         val e = entries.getOrNull(position) ?: return
         Thread {
             val body = try { WikiCore.articleText(this, e.title) } catch (x: Exception) { null }
@@ -176,28 +152,13 @@ class FetchLogActivity : ListActivity() {
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val e = entries[position]
-            val row = LinearLayout(this@FetchLogActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, 0, 0, 0)
-                background = GradientDrawable().apply {
-                    setColor(NovaTheme.pill)
-                    cornerRadius = 12f * resources.displayMetrics.density
-                    setStroke(1, NovaTheme.border)
-                }
-                val dp = resources.displayMetrics.density
-                setPadding((14 * dp).toInt(), (12 * dp).toInt(), (14 * dp).toInt(), (12 * dp).toInt())
-            }
-            row.addView(TextView(this@FetchLogActivity).apply {
-                text = e.title
-                textSize = 15f
-                setTextColor(NovaTheme.text)
-                typeface = Typeface.DEFAULT_BOLD
-            })
+            val row = NovaUi.card(this@FetchLogActivity).apply { setPadding(dp(14), dp(12), dp(14), dp(12)) }
+            row.addView(NovaUi.heading(this@FetchLogActivity, e.title))
             row.addView(TextView(this@FetchLogActivity).apply {
                 text = fmt.format(Date(e.millis)) + "  -  " +
                     (if (e.url == "wikipedia") "Wikipedia" else
                         try { android.net.Uri.parse(e.url).host ?: e.url } catch (x: Exception) { e.url })
-                textSize = 12f
+                textSize = NovaTheme.T_CAPTION + 1f
                 setTextColor(NovaTheme.dim)
             })
             return row

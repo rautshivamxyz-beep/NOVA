@@ -66,7 +66,7 @@ class BackupActivity : ListActivity() {
         fun pad(n: Int) = (n * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#101418"))
+            setBackgroundColor(NovaTheme.bg)
             setPadding(pad(20), pad(18), pad(20), pad(12))
         }
         root.addView(TextView(this).apply {
@@ -92,10 +92,8 @@ class BackupActivity : ListActivity() {
             isAllCaps = false
             textSize = 14f
             setTextColor(Color.WHITE)
-            background = GradientDrawable().apply {
-                setColor(NovaTheme.accentDeep)
-                cornerRadius = pad(12).toFloat()
-            }
+            background = NovaUi.shape(this@BackupActivity, NovaTheme.accentDeep,
+                NovaTheme.RADIUS_FIELD)
             setPadding(pad(16), pad(10), pad(16), pad(10))
             setOnClickListener { pickSaveTarget() }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))

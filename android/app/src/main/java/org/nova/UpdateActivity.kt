@@ -62,7 +62,7 @@ class UpdateActivity : ListActivity() {
         fun pad(n: Int) = (n * dp).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#101418"))
+            setBackgroundColor(NovaTheme.bg)
             setPadding(pad(20), pad(18), pad(20), pad(12))
         }
         root.addView(TextView(this).apply {
