@@ -79,8 +79,10 @@ android {
         // v9.16.10 "Encrypted backup": password-protect the backup zip
         // v9.16.11 "Dream mode": the overnight consolidation in the briefing
         // v9.16.12 "Dream mode: nightly": the overnight consolidation runs itself
-        versionCode 122
-        versionName '9.16.12'
+        // v9.16.13 "Time Machine": find <query> across your notifications,
+        // chats and notes
+        versionCode 123
+        versionName '9.16.13'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
