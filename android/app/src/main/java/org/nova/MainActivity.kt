@@ -3189,6 +3189,23 @@ Study:
         restoreLastModel()
     }
 
+    /**
+     * v9.16.15 "Voice briefing": speak an explicitly requested line (the
+     * morning briefing) when TTS is ready - independent of the read-aloud
+     * setting, since the user asked for it by name.
+     */
+    internal fun speakNow(text: String) {
+        try {
+            if (!NcieVoice.isReady || tts == null) return
+            val clean = text
+                .replace(Regex("```[a-zA-Z0-9]*"), " ")
+                .replace(Regex("[*_`>#~|]+"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (clean.isNotBlank()) tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "briefing")
+        } catch (e: Exception) { }
+    }
+
     private fun speakNewSentences(full: String, flush: Boolean) {
         if (!settings.readAloud || !NcieVoice.isReady || tts == null) return
         if (spokenLength >= full.length) return
