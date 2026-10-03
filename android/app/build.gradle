@@ -77,8 +77,9 @@ android {
         // reply action (RemoteInput) - nothing opens
         // v9.16.9 "Auto-responder": opt-in silent auto-reply to new messages
         // v9.16.10 "Encrypted backup": password-protect the backup zip
-        versionCode 120
-        versionName '9.16.10'
+        // v9.16.11 "Dream mode": the overnight consolidation in the briefing
+        versionCode 121
+        versionName '9.16.11'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

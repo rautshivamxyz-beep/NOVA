@@ -140,6 +140,9 @@ object NcieRoutines {
                 }
             }
         } catch (e: Exception) { }
+        // v9.16.11 "Dream mode": the overnight consolidation, shown here so
+        // the day's picture is ready before you start.
+        sb.append("\n\n").append(NcieDream.run(ctx)).append('\n')
         sb.append("```")
         return sb.toString()
     }
