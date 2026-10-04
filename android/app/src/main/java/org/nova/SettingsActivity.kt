@@ -4,6 +4,11 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.nova.ncie.android.NcieStyle
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -17,6 +22,8 @@ import android.widget.Toast
 class SettingsActivity : Activity() {
 
     private lateinit var settings: Settings
+    /** v9.22.0: a scope for the on-device style generation. */
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +99,32 @@ class SettingsActivity : Activity() {
         group(col, "Voice",
             NovaUi.switchRow(this, "Read replies aloud", settings.readAloud) { settings.readAloud = it },
             NovaUi.switchRow(this, "Auto-listen (conversation mode)", settings.autoListen) { settings.autoListen = it })
+
+        // v9.22.0 "Busy replies": what NOVA says for you while you are busy.
+        col.addView(NovaUi.sectionLabel(this, "Auto-reply"))
+        val auto = NovaUi.card(this)
+        auto.addView(NovaUi.switchRow(this, "Auto-reply when I'm busy", settings.autoReply) {
+            settings.autoReply = it
+        })
+        auto.addView(NovaUi.small(this,
+            "Up to " + settings.autoReplyMax + " different replies per person, " +
+                "then it stops. Stay silent in quiet hours is set above.")
+            .apply { setPadding(0, dp(8), 0, dp(4)) })
+        auto.addView(NovaUi.ghostButton(this, "Replies per person: " + settings.autoReplyMax) {
+            AlertDialog.Builder(this)
+                .setTitle("Replies per person")
+                .setItems(arrayOf("1", "2", "3", "4", "5", "6")) { _, which ->
+                    settings.autoReplyMax = which + 1
+                    recreate()
+                }
+                .show()
+        })
+        auto.addView(NovaUi.small(this, "Your busy replies (one per line):")
+            .apply { setPadding(0, dp(8), 0, dp(4)) })
+        auto.addView(field(settings.busyLines().joinToString("\n"),
+            "tell me fast, I'm doing something") { settings.autoReplyLines = it })
+        auto.addView(NovaUi.ghostButton(this, "Generate in my style") { generateLines() })
+        col.addView(auto)
 
         col.addView(NovaUi.sectionLabel(this, "Memory"))
         val memory = NovaUi.card(this)
@@ -178,6 +211,26 @@ class SettingsActivity : Activity() {
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         return scroll
+    }
+
+
+    /** v9.22.0 "Busy replies": rewrite the busy lines in the user's own style
+     *  using the on-device model (only possible while the app is open). */
+    private fun generateLines() {
+        if (!NcieStyle.ready()) { toast("Load a model first"); return }
+        if (NcieStyle.samples(this).isEmpty()) {
+            toast("Chat with NOVA a bit more first, so it can learn how you write")
+            return
+        }
+        toast("Writing your busy replies...")
+        scope.launch {
+            val lines = try { NcieStyle.generateBusyLines(this@SettingsActivity, 4) }
+                        catch (e: Exception) { emptyList() }
+            if (lines.isEmpty()) { toast("Couldn't write them - try again"); return@launch }
+            settings.autoReplyLines = lines.joinToString("\n")
+            toast("Done - " + lines.size + " replies saved")
+            recreate()
+        }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
