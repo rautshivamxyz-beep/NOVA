@@ -136,6 +136,25 @@ class Settings(context: Context) {
             ?: "I'm busy right now - I'll get back to you soon."
         set(value) = prefs.edit().putString(KEY_AUTO_REPLY_MSG, value).apply()
 
+    /** v9.22.0 "Busy replies": the lines NOVA sends while you are away, one
+     *  per line. Empty falls back to the single autoReplyMsg above. */
+    var autoReplyLines: String
+        get() = prefs.getString(KEY_AUTO_REPLY_LINES, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AUTO_REPLY_LINES, value).apply()
+
+    /** How many different replies NOVA may send to one person before it
+     *  stops (v9.22.0: was a flat one-per-five-minutes). */
+    var autoReplyMax: Int
+        get() = prefs.getInt(KEY_AUTO_REPLY_MAX, 3)
+        set(value) = prefs.edit().putInt(KEY_AUTO_REPLY_MAX, value).apply()
+
+    /** The busy replies, defaulted when the user has not set any. */
+    fun busyLines(): List<String> {
+        val mine = autoReplyLines.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        if (mine.isNotEmpty()) return mine
+        return DEFAULT_BUSY_LINES.split('|').map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
     /** v9.17.0 "Guardian": the trusted contact NOVA texts if you don't
      *  check in. Empty means no guardian is set. */
     var guardianContact: String
@@ -189,6 +208,9 @@ class Settings(context: Context) {
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
         private const val KEY_AUTO_REPLY = "auto_reply"
         private const val KEY_AUTO_REPLY_MSG = "auto_reply_msg"
+        // v9.22.0 "Busy replies"
+        private const val KEY_AUTO_REPLY_LINES = "auto_reply_lines"
+        private const val KEY_AUTO_REPLY_MAX = "auto_reply_max"
         // v9.17.0 "Leftovers"
         private const val KEY_GUARDIAN_CONTACT = "guardian_contact"
         private const val KEY_GUARDIAN_UNTIL = "guardian_until"
@@ -221,6 +243,14 @@ class Settings(context: Context) {
         const val DEFAULT_GUARDIAN_MSG =
             "This is NOVA, your assistant. You asked me to check in on you and " +
                 "you haven't replied - please reach out to make sure you're okay."
+
+        /** v9.22.0: the default busy replies, used until the user sets (or
+         *  generates) their own. */
+        const val DEFAULT_BUSY_LINES =
+            "Tell me fast, I'm doing something right now|" +
+                "I'm in the middle of something - tell me quick|" +
+                "Busy right now, what's up?|" +
+                "Can't talk properly right now, tell me fast"
 
         val LENGTH_OPTIONS = intArrayOf(256, 512, 1024, 2048)
     }

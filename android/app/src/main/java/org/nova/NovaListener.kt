@@ -66,17 +66,33 @@ class NovaListener : NotificationListenerService() {
                         // while you are busy - the SAME reply action as the
                         // manual silent reply, once per sender per 5 minutes
                         // so a chatty thread cannot loop.
-                        if (Settings(this).autoReply && isMessaging(pkg) &&
+                        // v9.22.0 "Busy replies": up to N DIFFERENT lines per
+                        // sender, a few seconds apart, instead of one fixed
+                        // message every five minutes. Each line is picked in
+                        // turn, so the other person hears something new every
+                        // time and it reads like you are genuinely busy. The
+                        // budget resets after half an hour of quiet.
+                        val st = Settings(this)
+                        if (st.autoReply && isMessaging(pkg) &&
                             cleanTitle.isNotBlank() &&
                             !org.nova.ncie.android.NcieLeftovers.isQuietNow(this)) {
                             val now2 = System.currentTimeMillis()
-                            val last = autoReplied[cleanTitle.lowercase()] ?: 0L
-                            if (now2 - last > 5 * 60 * 1000L) {
-                                val autoMsg = Settings(this).autoReplyMsg
-                                if (autoMsg.isNotBlank() &&
+                            val who = cleanTitle.lowercase()
+                            val at = autoRepliedAt[who] ?: 0L
+                            val count = if (now2 - at > 30 * 60 * 1000L) 0
+                                        else (autoReplied[who] ?: 0)
+                            val gapOk = now2 - at > 15 * 1000L
+                            if (count < st.autoReplyMax.coerceIn(1, 6) && gapOk) {
+                                val lines = st.busyLines()
+                                val msg = if (lines.isEmpty()) st.autoReplyMsg
+                                          else lines[count % lines.size]
+                                if (msg.isNotBlank() &&
                                     fire(this, ReplyTarget(pkg, cleanTitle, sbn.postTime,
-                                        repAction, repAction.remoteInputs!!), autoMsg))
-                                    autoReplied[cleanTitle.lowercase()] = now2
+                                        repAction, repAction.remoteInputs!!), msg)) {
+                                    autoReplied[who] = count + 1
+                                    autoRepliedAt[who] = now2
+                                    logAutoReply(this, cleanTitle)
+                                }
                             }
                         }
                     }
@@ -122,7 +138,39 @@ class NovaListener : NotificationListenerService() {
         private val recentReplies = LinkedHashMap<String, ReplyTarget>()
 
         /** v9.16.9 "Auto-responder": last auto-reply time per sender. */
-        private val autoReplied = HashMap<String, Long>()
+        private val autoReplied = HashMap<String, Int>()
+        /** v9.22.0: when each sender was last replied to (budget reset). */
+        private val autoRepliedAt = HashMap<String, Long>()
+
+        /** v9.22.0 "Busy replies": a small local log of auto-replies, so the
+         *  health screen can show that it is actually working. */
+        fun autoReplyLogPath(ctx: Context): File = File(ctx.filesDir, "auto_reply_log.txt")
+
+        fun logAutoReply(ctx: Context, who: String) {
+            try {
+                val f = autoReplyLogPath(ctx)
+                f.appendText(System.currentTimeMillis().toString() + "\t" +
+                    who.replace('\t', ' ').replace('\n', ' ') + "\n")
+                if (f.length() > 60_000) {
+                    val kept = f.readLines().takeLast(300)
+                    val tmp = File(f.parentFile, f.name + ".tmp")
+                    tmp.writeText(kept.joinToString("\n") + "\n")
+                    if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+                }
+            } catch (e: Exception) { }
+        }
+
+        /** How many auto-replies went out since midnight. */
+        fun autoRepliesToday(ctx: Context): Int = try {
+            val f = autoReplyLogPath(ctx)
+            if (!f.exists()) 0 else {
+                val midnight = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                f.readLines().count { (it.substringBefore('\t').toLongOrNull() ?: 0L) >= midnight }
+            }
+        } catch (e: Exception) { 0 }
 
         /**
          * v9.16.8 "Silent reply": answer [who]'s most recent chat message

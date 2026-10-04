@@ -210,7 +210,24 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.21.0: version bumped for the reliability pass", bg.count("versionName '9.21.0'") == 1 and bg.count("versionCode 132") == 1)
+check("v9.22.0: version bumped for busy replies", bg.count("versionName '9.22.0'") == 1 and bg.count("versionCode 133") == 1)
+# ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
+check("v9.22.0: the auto-responder sends up to N varied lines per sender",
+      load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
+      load("NovaListener.kt").count("lines[count % lines.size]") == 1 and
+      load("NovaListener.kt").count("autoRepliedAt") == 3)
+check("v9.22.0: the busy lines + the count live in Settings",
+      load("Settings.kt").count("fun busyLines(") == 1 and
+      load("Settings.kt").count("DEFAULT_BUSY_LINES") == 2 and
+      load("Settings.kt").count("var autoReplyMax") == 1)
+check("v9.22.0: the model can write the lines in the user's style",
+      load("ncie/android/NcieStyle.kt").count("object NcieStyle") == 1 and
+      load("ncie/android/NcieStyle.kt").count("suspend fun generateBusyLines(") == 1 and
+      load("ncie/android/NcieStyle.kt").count("fun parseLines(") == 1 and
+      load("SettingsActivity.kt").count("Generate in my style") == 1)
+check("v9.22.0: every auto-reply is logged (so the health screen can show it)",
+      load("NovaListener.kt").count("fun logAutoReply(") == 1 and
+      load("NovaListener.kt").count("fun autoRepliesToday(") == 1)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and
@@ -689,7 +706,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt"))]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
