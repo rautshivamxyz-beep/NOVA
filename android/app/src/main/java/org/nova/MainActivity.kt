@@ -249,6 +249,13 @@ class MainActivity : Activity() {
             ScheduledSends.fireDue(this, foreground = true)
         } catch (e: Exception) { }
 
+        // v9.21.0 "Reliable": arm the alarms the startup pass above does not
+        // cover - the nightly Dream consolidation and the daily recurring
+        // reminders. Before this they were armed only by the morning
+        // briefing, so after a reboot they silently stopped.
+        try { NovaHealth.armAll(this) } catch (e: Exception) { }
+
+
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
             WikiCore.warmUp(this@MainActivity)
         }
@@ -260,6 +267,15 @@ class MainActivity : Activity() {
         displayChatMessages()
         // v7.1: welcome brand-new users and point at the model download
         maybeOnboard()
+
+        // v9.21.0 "Easy": a brand-new install opens the setup wizard once -
+        // model, notification access, permissions, battery - instead of
+        // dropping the user into an empty chat box that does nothing.
+        try {
+            if (NovaHealth.needsSetup(this))
+                startActivity(Intent(this, SetupActivity::class.java))
+        } catch (e: Exception) { }
+
         observeEngine()
         handleSharedText()
         maybeShowCrashReport()
@@ -730,6 +746,15 @@ class MainActivity : Activity() {
         // device and install the result
         drawerPane.addView(drawerRow("Update", R.drawable.ic_refresh) {
             startActivity(Intent(this, UpdateActivity::class.java))
+        })
+        // v9.21.0 "Reliable + Easy": one screen that shows whether every
+        // part of NOVA is actually working, and one that teaches the
+        // commands - the two things a silent failure needs.
+        drawerPane.addView(drawerRow("Setup & health", R.drawable.ic_settings) {
+            startActivity(Intent(this, HealthActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("Help", R.drawable.ic_lightbulb) {
+            startActivity(Intent(this, HelpActivity::class.java))
         })
         // v9.1.0: the app lock - set or remove the PIN (only a salted
         // SHA-256 hash is stored, never the PIN); the blocking launch

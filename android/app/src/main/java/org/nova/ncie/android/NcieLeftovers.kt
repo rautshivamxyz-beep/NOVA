@@ -66,6 +66,14 @@ object NcieLeftovers {
      *  this before auto-replying, so NOVA stays silent when asked. */
     fun isQuietNow(ctx: Context): Boolean = NcieQuiet.isQuietNow(ctx)
 
+    /** v9.21.0 "Reliable": re-arm the leftover alarms - the daily recurring
+     *  reminders and an armed guardian. Idempotent; called at app start, on
+     *  boot and from the health screen. */
+    fun rearm(ctx: Context) {
+        try { NcieRecurring.arm(ctx) } catch (e: Exception) { }
+        try { NcieGuardian.rearm(ctx) } catch (e: Exception) { }
+    }
+
     /** v9.19.0 "Polish": one short digest of the leftover state, shared by
      *  the morning briefing and the dream report so a single screen shows
      *  the whole day. Empty when there is nothing to say. */
@@ -309,6 +317,21 @@ object NcieGuardian {
         if (num != null && NovaSms.canSendDirect(ctx) && NovaSms.sendDirect(ctx, num, msg)) return
         postNotif(ctx, REQ, "NOVA guardian",
             "Check-in missed. Send this to " + (if (c.isBlank()) "your contact" else c) + ": " + msg)
+    }
+
+    /** v9.21.0 "Reliable": re-arm an armed check-in after a reboot or a
+     *  force-stop (AlarmManager drops alarms on both). */
+    fun rearm(ctx: Context) {
+        val until = Settings(ctx).guardianUntil
+        if (until <= System.currentTimeMillis()) return
+        try {
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            try {
+                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, until, pi(ctx))
+            } catch (e: SecurityException) {
+                am.set(android.app.AlarmManager.RTC_WAKEUP, until, pi(ctx))
+            }
+        } catch (e: Exception) { }
     }
 
     private fun pi(ctx: Context): android.app.PendingIntent =

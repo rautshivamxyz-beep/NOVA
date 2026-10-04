@@ -210,7 +210,21 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.20.0: version bumped for the search fix", bg.count("versionName '9.20.0'") == 1 and bg.count("versionCode 131") == 1)
+check("v9.21.0: version bumped for the reliability pass", bg.count("versionName '9.21.0'") == 1 and bg.count("versionCode 132") == 1)
+# ---- v9.21.0 "Reliable + Easy": health, setup, help ----
+check("v9.21.0: the health engine + the three screens ship",
+      load("NovaHealth.kt").count("object NovaHealth") == 1 and
+      load("NovaHealth.kt").count("fun armAll(") == 1 and
+      load("NovaHealth.kt").count("fun checks(") == 1 and
+      load("SetupActivity.kt").count("class SetupActivity") == 1 and
+      load("HealthActivity.kt").count("class HealthActivity") == 1 and
+      load("HelpActivity.kt").count("class HelpActivity") == 1)
+check("v9.21.0: alarms are armed at app start and on boot",
+      ma.count("NovaHealth.armAll(this)") == 1 and
+      load("ReminderStore.kt").count("NovaHealth.armAll(context)") == 1)
+check("v9.21.0: the new screens are registered (manifest)",
+      open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".HealthActivity") == 1 and
+      open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".SetupActivity") == 1)
 # ---- v9.20.0 "Search fix": the fetch gate + honest failures ----
 check("v9.20.0: the fetch gate accepts a 2-keyword match (OnlineFetch)",
       of_.count("fun hits(") == 1 and of_.count("hits(q, wiki.second) >= 2") == 1 and
@@ -675,7 +689,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt"))]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

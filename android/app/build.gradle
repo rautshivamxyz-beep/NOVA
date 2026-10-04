@@ -82,9 +82,9 @@ android {
         // v9.16.13 "Time Machine": find <query> across your notifications,
         // chats and notes
         // v9.16.14 "Jarvis": one-phrase modes - away / back
-        // v9.20.0 "Search fix": web search actually returns results
-        versionCode 131
-        versionName '9.20.0'
+        // v9.21.0 "Reliable + Easy": health screen, setup wizard, help
+        versionCode 132
+        versionName '9.21.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
