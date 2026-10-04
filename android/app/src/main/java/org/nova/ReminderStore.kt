@@ -92,5 +92,10 @@ class BootReceiver : android.content.BroadcastReceiver() {
         // anything that came due while the phone was off, then re-arm
         // the nearest future one
         try { ScheduledSends.fireDue(context) } catch (e: Exception) { }
+        // v9.21.0 "Reliable": re-arm the rest of NOVA's alarms too - the
+        // nightly Dream consolidation and the daily recurring reminders
+        // were armed only when the morning briefing ran, so a reboot
+        // silently stopped them.
+        try { NovaHealth.armAll(context) } catch (e: Exception) { }
     }
 }

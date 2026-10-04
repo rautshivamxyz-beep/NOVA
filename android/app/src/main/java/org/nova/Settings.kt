@@ -162,6 +162,11 @@ class Settings(context: Context) {
         get() = prefs.getInt(KEY_QUIET_END, -1)
         set(value) = prefs.edit().putInt(KEY_QUIET_END, value).apply()
 
+    /** v9.21.0 "Easy": the first-run setup wizard has been completed. */
+    var setupDone: Boolean
+        get() = prefs.getBoolean(KEY_SETUP_DONE, false)
+        set(value) = prefs.edit().putBoolean(KEY_SETUP_DONE, value).apply()
+
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
@@ -190,6 +195,8 @@ class Settings(context: Context) {
         private const val KEY_GUARDIAN_MSG = "guardian_msg"
         private const val KEY_QUIET_START = "quiet_start"
         private const val KEY_QUIET_END = "quiet_end"
+        // v9.21.0 "Easy"
+        private const val KEY_SETUP_DONE = "setup_done"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small

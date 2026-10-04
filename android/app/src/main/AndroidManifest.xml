@@ -12,6 +12,13 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- v9.21.0 "Reliable": exact alarms, so reminders and the nightly Dream
+         consolidation fire on time (Android 12+ needs the grant). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- v9.21.0 "Easy": the setup wizard can ask to be exempt from battery
+         optimisation, so background features survive Realme/Oppo. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- v9.15.0 "Camera": the in-app camera screen. Approved by the user;
          optional feature so the app still installs on camera-less devices. -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -99,6 +106,12 @@
         <!-- v9.7.0: the Update screen - releases page or an on-device
              delta patch applied against the installed APK -->
         <activity android:name=".UpdateActivity" android:exported="false" />
+
+        <!-- v9.21.0 "Easy + Reliable": the setup wizard, the health screen
+             and the in-app command list. -->
+        <activity android:name=".SetupActivity" android:exported="false" />
+        <activity android:name=".HealthActivity" android:exported="false" />
+        <activity android:name=".HelpActivity" android:exported="false" />
 
         <service
             android:name=".NotifBrain"
