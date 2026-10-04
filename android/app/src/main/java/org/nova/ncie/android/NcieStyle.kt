@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.nova.ChatStore
 import org.nova.NovaEngine
 import org.nova.Role
+import org.nova.Settings
 
 /**
  * v9.22.0 "Busy replies": makes NOVA's away-messages sound like the user.
@@ -103,5 +104,28 @@ object NcieStyle {
             withContext(Dispatchers.IO) { NovaEngineAdapter.generate(p, 120) }
         } catch (e: Exception) { return null }
         return parseLines(out).firstOrNull()
+    }
+
+    /**
+     * v9.24.0 "Wake for WhatsApp": load the model on demand - the last one
+     * the user ran - and then write the reply, so a WhatsApp message can be
+     * answered by the model even when NOVA is cold. Returns null when there
+     * is nothing to load or the load fails, so the caller falls back to a
+     * canned line. Loading takes seconds and real RAM; the caller runs this
+     * off the notification thread with a long timeout.
+     */
+    suspend fun wakeAndReply(ctx: Context, incoming: String): String? {
+        if (ready()) return busyReply(ctx, incoming)
+        val s = Settings(ctx)
+        val path = s.lastModelPath
+        if (path.isNullOrBlank()) return null
+        if (!java.io.File(path).exists()) return null
+        try {
+            withContext(Dispatchers.IO) {
+                NovaEngine.load(ctx, path, s.lastModelLabel, s.systemPrompt)
+            }
+        } catch (e: Exception) { return null }
+        if (!ready()) return null
+        return busyReply(ctx, incoming)
     }
 }
