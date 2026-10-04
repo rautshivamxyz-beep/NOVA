@@ -151,34 +151,47 @@ object OnlineFetch {
             }
         }
         act.scope.launch(Dispatchers.IO) {
+            // v9.20.0 "Search fix": the gate is now "covers at least two of
+            // the query's keywords, or 15% of them" - the old flat 20% floor
+            // rejected real Wikipedia hits on any question with five or six
+            // keywords, which is exactly why every search ended in
+            // "couldn't find anything good".
+            var reason = ""
             // 1. Wikipedia first - curated, clean, no page parsing needed
-            val wiki = try { fetchWiki(act, q) } catch (e: Exception) { null }
+            val wiki = try { fetchWiki(act, q) } catch (e: Exception) {
+                reason = "wikipedia: " + err(e); null
+            }
             var saved: String? = null
-            if (wiki != null && Coverage.ratio(q, wiki.second) >= 0.2) {
+            if (wiki != null && (Coverage.ratio(q, wiki.second) >= 0.15 ||
+                    hits(q, wiki.second) >= 2)) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
-                }
-            }
+                } else reason = "wikipedia: could not store"
+            } else if (wiki == null) {
+                if (reason.isEmpty()) reason = "wikipedia: no usable article"
+            } else reason = "wikipedia: weak match"
             // 2. the open web - only when Wikipedia had nothing usable
             if (saved == null) {
-                val page = try { fetchWeb(act, q) } catch (e: Exception) { null }
+                val page = try { fetchWeb(act, q) } catch (e: Exception) {
+                    reason = joinReason(reason, "web: " + err(e)); null
+                }
                 if (page != null) {
                     // code blocks ride along verbatim, so fetched examples
                     // land exactly as written
                     val body = page.text + (if (page.code.isNotEmpty())
                         "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
                         else "")
-                    if (Coverage.ratio(q, body) >= 0.2 &&
+                    if ((Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
-                    }
-                }
+                    } else reason = joinReason(reason, "web: weak match")
+                } else reason = joinReason(reason, "web: no page")
             }
             // v9.17.1: diagnose the failure on the IO thread (a proxy
             // reachability probe must never block the UI)
-            val failMsg = if (saved == null) diagnose(act) else null
+            val failMsg = if (saved == null) diagnose(act, reason) else null
             withContext(Dispatchers.Main) {
                 if (saved != null) {
                     act.toast("Saved \"$saved\" - now offline forever")
@@ -194,7 +207,7 @@ object OnlineFetch {
      *  is Private Fetch pointing at a proxy that is not running (Orbot off
      *  at 127.0.0.1:9050) - then every request fails and the result looked
      *  identical to "the web had nothing". Probed on the IO thread. */
-    private fun diagnose(act: MainActivity): String {
+    private fun diagnose(act: MainActivity, reason: String): String {
         val s = Settings(act)
         if (s.proxyEnabled) {
             val host = s.proxyHost.ifBlank { "127.0.0.1" }
@@ -207,7 +220,31 @@ object OnlineFetch {
             if (!up) return "Private Fetch is on but nothing is listening at " +
                 host + ":" + port + " - start Orbot or turn Private Fetch off in Settings"
         }
-        return "Couldn't find anything good - check your internet, then try again"
+        // v9.20.0: when nothing was fetched, say WHY - the reason carries
+        // the real failure (no article, weak match, an HTTP error) instead
+        // of the old catch-all line that hid every cause.
+        return if (reason.isNotBlank()) "Couldn't fetch anything (" + reason + ")"
+        else "Couldn't find anything good - check your internet, then try again"
+    }
+
+    /** v9.20.0: a short, specific error string for the failure message. */
+    private fun err(e: Exception): String =
+        (e.message ?: e.javaClass.simpleName).take(80)
+
+    /** v9.20.0: join two reasons without repeating a blank one. */
+    private fun joinReason(a: String, b: String): String =
+        if (a.isBlank()) b else a + "; " + b
+
+    /** v9.20.0 "Search fix": how many of the query's keywords the text
+     *  contains. Used beside the Coverage ratio - a page that names two of
+     *  the query's terms is a real hit even when it cannot cover the rest
+     *  of a long question. */
+    private fun hits(q: String, text: String): Int {
+        val terms = q.lowercase().split(Regex("[^a-z0-9]+"))
+            .filter { it.length > 2 }.distinct()
+        if (terms.isEmpty()) return 0
+        val low = text.lowercase()
+        return terms.count { low.contains(it) }
     }
 
     /** (title, intro extract) from Wikipedia, or null. Two requests:
@@ -232,7 +269,16 @@ object OnlineFetch {
                 val k = pages.keys().next()
                 pages.getJSONObject(k).getString("extract")
             } catch (e: Exception) { null }
-            if (extract != null && extract.length >= 80) return title to extract
+            if (extract != null && extract.length >= 60) return title to extract
+            // v9.20.0: the extract API comes back empty for some pages
+            // (redirect chains, stubs) - the REST summary usually still has
+            // the intro, so try it before giving up on this title.
+            val rest = try {
+                val body = http(act, "https://en.wikipedia.org/api/rest_v1/page/summary/" +
+                    URLEncoder.encode(title.replace(' ', '_'), "UTF-8"))
+                JSONObject(body).optString("extract").ifBlank { null }
+            } catch (e: Exception) { null }
+            if (rest != null && rest.length >= 60) return title to rest
         }
         return null
     }
@@ -246,8 +292,16 @@ object OnlineFetch {
      *  HtmlText for the clean text - up to 3 candidates, first one
      *  with real content wins. */
     private fun fetchWeb(act: MainActivity, q: String): WebPage? {
-        val html = http(act, "https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(q, "UTF-8"))
-        val links = parseDdgLinks(html)
+        // v9.20.0: the lite endpoint sometimes returns an anti-bot page with
+        // no links at all - try the html endpoint before giving up.
+        var html = http(act, "https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(q, "UTF-8"))
+        var links = parseDdgLinks(html)
+        if (links.isEmpty()) {
+            html = try {
+                http(act, "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(q, "UTF-8"))
+            } catch (e: Exception) { "" }
+            links = parseDdgLinks(html)
+        }
         for ((url, title) in links.take(3)) {
             val pageHtml = try { http(act, url) } catch (e: Exception) { continue }
             val text = HtmlText.toText(pageHtml)

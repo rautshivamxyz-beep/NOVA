@@ -169,7 +169,7 @@ check("build.gradle: jniLibs srcDirs intact (no typo corruption)",
       bg.count("jniLibs.srcDirs") == 1 and bg.count("srdDirs") == 0)
 # ---- v8.5.0: live search, code mode, fetch log, profile tool ----
 check("v8.5.0: live web search - Wikipedia first, DuckDuckGo fallback (OnlineFetch)",
-      of_.count("duckduckgo") == 2 and of_.count("HtmlText") == 6)
+      of_.count("duckduckgo") == 3 and of_.count("HtmlText") == 6)
 check("v8.5.0: every fetch logged (OnlineFetch)",
       of_.count("fetch_log") == 3)
 check("v8.5.0: HtmlText synced from NCIE v0.9.5",
@@ -210,7 +210,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.19.0: version bumped for the polish pass", bg.count("versionName '9.19.0'") == 1 and bg.count("versionCode 130") == 1)
+check("v9.20.0: version bumped for the search fix", bg.count("versionName '9.20.0'") == 1 and bg.count("versionCode 131") == 1)
+# ---- v9.20.0 "Search fix": the fetch gate + honest failures ----
+check("v9.20.0: the fetch gate accepts a 2-keyword match (OnlineFetch)",
+      of_.count("fun hits(") == 1 and of_.count("hits(q, wiki.second) >= 2") == 1 and
+      of_.count("Coverage.ratio(q,") == 2)
+check("v9.20.0: failures name their cause (OnlineFetch)",
+      of_.count("Couldn't fetch anything (") == 1 and of_.count("fun joinReason(") == 1)
+check("v9.20.0: Wikipedia + DuckDuckGo each get a fallback (OnlineFetch)",
+      of_.count("rest_v1/page/summary") == 1 and of_.count("html.duckduckgo.com") == 1)
 # ---- v9.19.0 "Polish": the Phase 2-5 features tied together ----
 check("v9.19.0: the leftover state joins the briefing + dream report",
       lo.count("fun dailyDigest(") == 1 and
