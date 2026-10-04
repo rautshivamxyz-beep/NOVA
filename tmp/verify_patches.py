@@ -496,7 +496,7 @@ check("v8.4.0: failures noted, gaps logged (NcieLearn)",
 check("v8.4.0: weak topics surface on the Memory screen (NcieLearn)",
       nl.count("weakTopics") == 1)
 check("v8.4.0: the fetcher gates with Coverage and sends keywords only",
-      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 2)
+      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 3)
 check("v8.4.0: skills parsed by the kernel (NcieSkills)",
       nsk.count("SkillStore.parse") == 2)
 check("v8.4.0: kernel stage files synced (Coverage, SkillStore, GapStore)",
