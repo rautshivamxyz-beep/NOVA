@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.22.0: version bumped for busy replies", bg.count("versionName '9.22.0'") == 1 and bg.count("versionCode 133") == 1)
+check("v9.23.0: version bumped for the model-written replies", bg.count("versionName '9.23.0'") == 1 and bg.count("versionCode 134") == 1)
 # ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -220,14 +220,17 @@ check("v9.22.0: the busy lines + the count live in Settings",
       load("Settings.kt").count("fun busyLines(") == 1 and
       load("Settings.kt").count("DEFAULT_BUSY_LINES") == 2 and
       load("Settings.kt").count("var autoReplyMax") == 1)
-check("v9.22.0: the model can write the lines in the user's style",
-      load("ncie/android/NcieStyle.kt").count("object NcieStyle") == 1 and
-      load("ncie/android/NcieStyle.kt").count("suspend fun generateBusyLines(") == 1 and
-      load("ncie/android/NcieStyle.kt").count("fun parseLines(") == 1 and
-      load("SettingsActivity.kt").count("Generate in my style") == 1)
 check("v9.22.0: every auto-reply is logged (so the health screen can show it)",
       load("NovaListener.kt").count("fun logAutoReply(") == 1 and
       load("NovaListener.kt").count("fun autoRepliesToday(") == 1)
+# ---- v9.23.0 "The model for the messages" ----
+check("v9.23.0: the model writes a reply to what they actually said",
+      load("ncie/android/NcieStyle.kt").count("suspend fun busyReply(") == 1 and
+      load("NovaListener.kt").count("NcieStyle.busyReply(svc, incoming)") == 1 and
+      load("NovaListener.kt").count("written ?: canned") == 1)
+check("v9.23.0: the reply runs off the notification thread (with a timeout)",
+      load("NovaListener.kt").count("replyScope.launch") == 1 and
+      load("NovaListener.kt").count("withTimeoutOrNull(20000L)") == 1)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and

@@ -4,6 +4,7 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.io.File
+import org.nova.ncie.android.NcieStyle
 
 /**
  * v8.8.0: NOVA's eyes. A second, quiet listener beside NotifBrain: it
@@ -66,12 +67,13 @@ class NovaListener : NotificationListenerService() {
                         // while you are busy - the SAME reply action as the
                         // manual silent reply, once per sender per 5 minutes
                         // so a chatty thread cannot loop.
-                        // v9.22.0 "Busy replies": up to N DIFFERENT lines per
-                        // sender, a few seconds apart, instead of one fixed
-                        // message every five minutes. Each line is picked in
-                        // turn, so the other person hears something new every
-                        // time and it reads like you are genuinely busy. The
-                        // budget resets after half an hour of quiet.
+                        // v9.22.0/v9.23.0 "Busy replies": up to N DIFFERENT
+                        // replies per sender, a few seconds apart, then it
+                        // stops. When a model is loaded the reply is WRITTEN
+                        // by it to match what they actually said (in the
+                        // user's style); otherwise it falls back to the
+                        // rotating busy lines. The budget resets after half
+                        // an hour of quiet.
                         val st = Settings(this)
                         if (st.autoReply && isMessaging(pkg) &&
                             cleanTitle.isNotBlank() &&
@@ -83,15 +85,31 @@ class NovaListener : NotificationListenerService() {
                                         else (autoReplied[who] ?: 0)
                             val gapOk = now2 - at > 15 * 1000L
                             if (count < st.autoReplyMax.coerceIn(1, 6) && gapOk) {
+                                // Reserve the slot now, then answer OFF the
+                                // notification thread - a model-written reply
+                                // takes seconds and must never block the
+                                // listener's executor.
+                                autoReplied[who] = count + 1
+                                autoRepliedAt[who] = now2
                                 val lines = st.busyLines()
-                                val msg = if (lines.isEmpty()) st.autoReplyMsg
-                                          else lines[count % lines.size]
-                                if (msg.isNotBlank() &&
-                                    fire(this, ReplyTarget(pkg, cleanTitle, sbn.postTime,
-                                        repAction, repAction.remoteInputs!!), msg)) {
-                                    autoReplied[who] = count + 1
-                                    autoRepliedAt[who] = now2
-                                    logAutoReply(this, cleanTitle)
+                                val canned = if (lines.isEmpty()) st.autoReplyMsg
+                                             else lines[count % lines.size]
+                                val svc = this
+                                val target = ReplyTarget(pkg, cleanTitle, sbn.postTime,
+                                    repAction, repAction.remoteInputs!!)
+                                val incoming = text
+                                replyScope.launch {
+                                    val written = try {
+                                        if (NovaEngine.isModelLoaded)
+                                            withTimeoutOrNull(20000L) {
+                                                NcieStyle.busyReply(svc, incoming)
+                                            }
+                                        else null
+                                    } catch (e: Exception) { null }
+                                    try {
+                                        if (fire(svc, target, written ?: canned))
+                                            logAutoReply(svc, target.title)
+                                    } catch (e: Exception) { }
                                 }
                             }
                         }
@@ -141,6 +159,11 @@ class NovaListener : NotificationListenerService() {
         private val autoReplied = HashMap<String, Int>()
         /** v9.22.0: when each sender was last replied to (budget reset). */
         private val autoRepliedAt = HashMap<String, Long>()
+
+        /** v9.23.0: the model-written replies run here - the notification
+         *  callback must never block on generation. */
+        private val replyScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
         /** v9.22.0 "Busy replies": a small local log of auto-replies, so the
          *  health screen can show that it is actually working. */

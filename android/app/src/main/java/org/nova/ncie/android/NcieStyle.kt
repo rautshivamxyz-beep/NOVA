@@ -83,4 +83,25 @@ object NcieStyle {
         }
         return out.distinct()
     }
+
+    /**
+     * v9.23.0 "The model for the messages": write a reply to ONE incoming
+     * message, in the user's style. Returns null when no model is loaded or
+     * the generation fails, so the caller falls back to a canned line.
+     */
+    suspend fun busyReply(ctx: Context, incoming: String): String? {
+        if (!ready()) return null
+        val theirs = incoming.trim().take(300)
+        if (theirs.isEmpty()) return null
+        val req = "You are replying to a chat message while you are busy and " +
+            "cannot talk right now. Their message: \"" + theirs + "\". " +
+            "Write ONE short reply, 3 to 10 words, that fits what they said " +
+            "and asks them to say it fast if it matters. First person, casual. " +
+            "Reply with only the text, no quotes."
+        val p = prompt(ctx, req) ?: return null
+        val out = try {
+            withContext(Dispatchers.IO) { NovaEngineAdapter.generate(p, 120) }
+        } catch (e: Exception) { return null }
+        return parseLines(out).firstOrNull()
+    }
 }
