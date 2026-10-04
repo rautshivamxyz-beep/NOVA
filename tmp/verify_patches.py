@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.23.0: version bumped for the model-written replies", bg.count("versionName '9.23.0'") == 1 and bg.count("versionCode 134") == 1)
+check("v9.23.1: version bumped for the coroutine imports", bg.count("versionName '9.23.1'") == 1 and bg.count("versionCode 135") == 1)
 # ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
