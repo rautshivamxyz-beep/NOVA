@@ -69,13 +69,13 @@ class NovaListener : NotificationListenerService() {
                         // while you are busy - the SAME reply action as the
                         // manual silent reply, once per sender per 5 minutes
                         // so a chatty thread cannot loop.
-                        // v9.22.0/v9.23.0 "Busy replies": up to N DIFFERENT
-                        // replies per sender, a few seconds apart, then it
-                        // stops. When a model is loaded the reply is WRITTEN
-                        // by it to match what they actually said (in the
-                        // user's style); otherwise it falls back to the
-                        // rotating busy lines. The budget resets after half
-                        // an hour of quiet.
+                        // v9.22.0/v9.23.0/v9.24.0 "Busy replies": up to N
+                        // DIFFERENT replies per sender, a few seconds apart,
+                        // then it stops. A WhatsApp message WAKES the model -
+                        // it is loaded on demand and writes the reply to what
+                        // they actually said, in the user's style. Other apps
+                        // use the model only if it is already warm, and
+                        // everything falls back to the rotating busy lines.
                         val st = Settings(this)
                         if (st.autoReply && isMessaging(pkg) &&
                             cleanTitle.isNotBlank() &&
@@ -88,8 +88,8 @@ class NovaListener : NotificationListenerService() {
                             val gapOk = now2 - at > 15 * 1000L
                             if (count < st.autoReplyMax.coerceIn(1, 6) && gapOk) {
                                 // Reserve the slot now, then answer OFF the
-                                // notification thread - a model-written reply
-                                // takes seconds and must never block the
+                                // notification thread - loading and writing
+                                // take seconds and must never block the
                                 // listener's executor.
                                 autoReplied[who] = count + 1
                                 autoRepliedAt[who] = now2
@@ -100,9 +100,14 @@ class NovaListener : NotificationListenerService() {
                                 val target = ReplyTarget(pkg, cleanTitle, sbn.postTime,
                                     repAction, repAction.remoteInputs!!)
                                 val incoming = text
+                                val whatsapp = pkg == "com.whatsapp"
                                 replyScope.launch {
                                     val written = try {
-                                        if (NovaEngine.isModelLoaded)
+                                        if (whatsapp)
+                                            withTimeoutOrNull(120000L) {
+                                                NcieStyle.wakeAndReply(svc, incoming)
+                                            }
+                                        else if (NovaEngine.isModelLoaded)
                                             withTimeoutOrNull(20000L) {
                                                 NcieStyle.busyReply(svc, incoming)
                                             }
