@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.24.0: version bumped for the WhatsApp model wake", bg.count("versionName '9.24.0'") == 1 and bg.count("versionCode 136") == 1)
+check("v9.25.0: version bumped for the lock + banner fixes", bg.count("versionName '9.25.0'") == 1 and bg.count("versionCode 137") == 1)
 # ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -236,6 +236,13 @@ check("v9.24.0: a WhatsApp message wakes the model",
       load("ncie/android/NcieStyle.kt").count("NovaEngine.load(ctx, path") == 1 and
       load("NovaListener.kt").count("NcieStyle.wakeAndReply(svc, incoming)") == 1 and
       load("NovaListener.kt").count('pkg == "com.whatsapp"') >= 2)
+# ---- v9.25.0 "Privacy + honesty": the lock hides the chat; no banner ----
+check("v9.25.0: the app lock hides the chat behind it (MainActivity)",
+      ma.count("android.R.id.content") >= 3 and
+      ma.count("never show the chat behind the lock") == 1)
+check("v9.25.0: the 'not in my notes' banner is no longer written (MainActivity)",
+      ma.count("do NOT announce the source") == 1 and
+      ma.count("'From general knowledge (not in your notes):'") == 0)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and
