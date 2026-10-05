@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.25.0: version bumped for the lock + banner fixes", bg.count("versionName '9.25.0'") == 1 and bg.count("versionCode 137") == 1)
+check("v9.26.0: version bumped for the search + busy-reply fixes", bg.count("versionName '9.26.0'") == 1 and bg.count("versionCode 138") == 1)
 # ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -243,6 +243,19 @@ check("v9.25.0: the app lock hides the chat behind it (MainActivity)",
 check("v9.25.0: the 'not in my notes' banner is no longer written (MainActivity)",
       ma.count("do NOT announce the source") == 1 and
       ma.count("'From general knowledge (not in your notes):'") == 0)
+# ---- v9.26.0 "Search + busy replies" ----
+check("v9.26.0: the fetch sends a browser User-Agent (so DuckDuckGo answers)",
+      load("NovaNet.kt").count("Chrome/122.0.0.0 Mobile Safari") == 1 and
+      load("NovaNet.kt").count("NOVA-local-assistant/1.0 (offline study)") == 0 and
+      load("NovaNet.kt").count("Accept-Language") == 1)
+check("v9.26.0: a Devanagari question is searched, not refused",
+      of_.count("val devanagari =") == 1 and
+      of_.count("if (devanagari) text.trim()") == 1)
+check("v9.26.0: the busy-line prompt puts the TASK before the examples",
+      load("ncie/android/NcieStyle.kt").count("TASK: ") == 1 and
+      load("ncie/android/NcieStyle.kt").count("ONLY a style reference") == 1 and
+      load("ncie/android/NcieStyle.kt").count("Each must be a STATEMENT, never a question") == 1 and
+      load("ncie/android/NcieStyle.kt").count('filterNot { it.trimEnd().endsWith("?") }') == 1)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and

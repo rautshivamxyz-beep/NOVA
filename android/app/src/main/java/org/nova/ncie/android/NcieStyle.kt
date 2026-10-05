@@ -41,11 +41,22 @@ object NcieStyle {
     /** A prompt that makes the model write [request] in the user's style, or
      *  null when there is not enough of the user's writing to learn from. */
     fun prompt(ctx: Context, request: String): String? {
-        val mine = samples(ctx)
+        val mine = samples(ctx, 900)
         if (mine.isEmpty()) return null
-        return "The user writes like this (real examples of their messages):\n-----\n" +
-            mine + "-----\nNow write the following IN THE SAME STYLE - same tone, same " +
-            "language mix, same habits, first person. Reply with only the text:\n" + request
+        // v9.26.0 "Busy-reply fix": the TASK now comes first and the examples
+        // are marked reference-only. The old order put ~1400 chars of the
+        // user's own messages - mostly questions they had asked NOVA - BEFORE
+        // the instruction, so a small model simply continued that list and
+        // answered with questions instead of writing a busy reply.
+        return "TASK: " + request + "\n\n" +
+            "Write it in the user's own voice - match their tone, language mix " +
+            "and habits, first person.\n" +
+            "The lines below are ONLY a style reference (how the user writes). " +
+            "Do NOT reply to them, do NOT continue them, and do NOT ask any " +
+            "question unless the TASK above asks for one.\n" +
+            "----- examples of the user's writing -----\n" + mine +
+            "----- end of examples -----\n" +
+            "Now do the TASK above, in that style. Output only the text."
     }
 
     /** True when a model is loaded, so generation can actually run. */
@@ -61,12 +72,15 @@ object NcieStyle {
         val req = "Write " + n + " short replies I can send when I am busy and " +
             "cannot talk right now. Each 3 to 8 words, casual, asking them to " +
             "say it fast (for example \"tell me fast, I am doing something\"). " +
+            "Each must be a STATEMENT, never a question. " +
             "One per line, no numbering, no quotes."
         val p = prompt(ctx, req) ?: return emptyList()
         val out = try {
             withContext(Dispatchers.IO) { NovaEngineAdapter.generate(p, 200) }
         } catch (e: Exception) { return emptyList() }
-        return parseLines(out).take(n)
+        // v9.26.0: a busy line is never a question - drop any the model still
+        // asks, so "What's up with this news?" can never reach a sender.
+        return parseLines(out).filterNot { it.trimEnd().endsWith("?") }.take(n)
     }
 
     /** Trim a raw model reply into clean, short lines. */
@@ -98,6 +112,7 @@ object NcieStyle {
             "cannot talk right now. Their message: \"" + theirs + "\". " +
             "Write ONE short reply, 3 to 10 words, that fits what they said " +
             "and asks them to say it fast if it matters. First person, casual. " +
+            "It must be a STATEMENT, not a question. " +
             "Reply with only the text, no quotes."
         val p = prompt(ctx, req) ?: return null
         val out = try {

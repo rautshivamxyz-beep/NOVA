@@ -69,17 +69,15 @@ object OnlineFetch {
      *  look online anyway. Ask-first stays the law either way. */
     fun offer(act: MainActivity, text: String, haveLocal: Boolean = false) {
         val kws = NcieKnowledge.keyTerms(text).take(6)
-        if (kws.isEmpty()) {
-            // v9.3.0: keywords empty AND the raw text is Devanagari -
-            // nothing local or online can be searched for this; be
-            // honest about it instead of falling through silently
-            if (DEVANAGARI.containsMatchIn(text)) {
-                honestNotSearchable(act, text)
-                return
-            }
+        // v9.26.0 "Search fix": a Devanagari (Hindi/Marathi) question yields
+        // no ASCII keywords, but the web understands the raw text - so search
+        // it instead of refusing. The old code dead-ended with "I can't
+        // search ... in Hindi", which read as "search does nothing".
+        val devanagari = kws.isEmpty() && DEVANAGARI.containsMatchIn(text)
+        if (kws.isEmpty() && !devanagari) {
             act.launchNcieSend(text, offered = true); return
         }
-        val q = kws.joinToString(" ")
+        val q = if (devanagari) text.trim().take(160) else kws.joinToString(" ")
         val title: String; val message: String; val noBtn: String
         if (haveLocal) {
             title = "Look online too?"
