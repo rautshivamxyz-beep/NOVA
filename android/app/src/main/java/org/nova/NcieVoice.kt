@@ -60,6 +60,22 @@ object NcieVoice {
                     if (res == TextToSpeech.LANG_MISSING_DATA ||
                         res == TextToSpeech.LANG_NOT_SUPPORTED) {
                         try { tts?.language = def } catch (e: Exception) { }
+                    } else {
+                        // v9.28.0 "Best Indian voice": the engine offers several
+                        // en-IN voices of different quality and setLanguage picks
+                        // whichever it likes. Choose the HIGHEST-quality voice that
+                        // works offline, so the accent is the best this engine has
+                        // - still the stock engine, so still zero extra RAM.
+                        try {
+                            val best = tts?.voices
+                                ?.filter { v ->
+                                    v.locale.language.equals("en", ignoreCase = true) &&
+                                        v.locale.country.equals("IN", ignoreCase = true) &&
+                                        !v.isNetworkConnectionRequired
+                                }
+                                ?.maxByOrNull { v -> v.quality }
+                            if (best != null) tts?.voice = best
+                        } catch (e: Exception) { }
                     }
                 } else {
                     // no engine on this phone - disable and stay silent,
