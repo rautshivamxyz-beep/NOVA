@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.26.0: version bumped for the search + busy-reply fixes", bg.count("versionName '9.26.0'") == 1 and bg.count("versionCode 138") == 1)
+check("v9.27.0: version bumped for the Indian voice", bg.count("versionName '9.27.0'") == 1 and bg.count("versionCode 139") == 1)
 # ---- v9.22.0 "Busy replies": budget + variety + the user's style ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -256,6 +256,11 @@ check("v9.26.0: the busy-line prompt puts the TASK before the examples",
       load("ncie/android/NcieStyle.kt").count("ONLY a style reference") == 1 and
       load("ncie/android/NcieStyle.kt").count("Each must be a STATEMENT, never a question") == 1 and
       load("ncie/android/NcieStyle.kt").count('filterNot { it.trimEnd().endsWith("?") }') == 1)
+# ---- v9.27.0 "Indian voice" ----
+check("v9.27.0: spoken replies prefer an Indian-English accent",
+      load("NcieVoice.kt").count('Locale("en", "IN")') == 1 and
+      load("NcieVoice.kt").count("LANG_NOT_SUPPORTED") >= 1 and
+      load("NcieVoice.kt").count("tts?.language = def") == 1)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and

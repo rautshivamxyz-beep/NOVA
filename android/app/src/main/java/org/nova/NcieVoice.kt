@@ -45,7 +45,22 @@ object NcieVoice {
             tts = TextToSpeech(ctx.applicationContext) { code ->
                 ready = code == TextToSpeech.SUCCESS
                 if (ready) {
-                    try { tts?.language = Locale.getDefault() } catch (e: Exception) { }
+                    // v9.27.0 "Indian voice": prefer an Indian-English accent
+                    // when the phone's language is English. The system default
+                    // is usually en-US (an American accent); en-IN is the voice
+                    // the user asked for. A non-English phone keeps its own
+                    // language, and if no en-IN voice is installed we fall back
+                    // to the device default rather than going silent.
+                    val def = try { Locale.getDefault() } catch (e: Exception) { Locale.US }
+                    val want = if (def.language.equals("en", ignoreCase = true))
+                        Locale("en", "IN") else def
+                    val res = try { tts?.setLanguage(want) } catch (e: Exception) {
+                        TextToSpeech.LANG_NOT_SUPPORTED
+                    }
+                    if (res == TextToSpeech.LANG_MISSING_DATA ||
+                        res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        try { tts?.language = def } catch (e: Exception) { }
+                    }
                 } else {
                     // no engine on this phone - disable and stay silent,
                     // never crash
