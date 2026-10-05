@@ -264,6 +264,13 @@ class MainActivity : Activity() {
         scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }
         installCrashReporter()
         setContentView(buildUi())
+        // v9.25.0: on a cold launch the launch gate runs in onResume, so
+        // without this the chat is visible for a frame behind it.
+        try {
+            if (pinSet() && !pinUnlocked)
+                findViewById<android.view.View>(android.R.id.content)
+                    ?.visibility = android.view.View.INVISIBLE
+        } catch (e: Exception) { }
         displayChatMessages()
         // v7.1: welcome brand-new users and point at the model download
         maybeOnboard()
@@ -1124,11 +1131,14 @@ class MainActivity : Activity() {
     /** v5.5.0: strict mode - grounded answers only, no invented facts. */
     private fun effectivePrompt(p: String): String =
         if (settings.strictMode)
+            // v9.25.0: the reply no longer announces where it came from. The
+            // banner ("From general knowledge (not in your notes):") is only
+            // wanted when the user ASKS, so the model is told not to write it.
             "STRICT MODE: Answer from the user's notes and the Wikipedia extracts in this " +
-                "conversation WHEN they cover the question. If they do not cover it, begin the " +
-                "reply with 'From general knowledge (not in your notes):' and answer from your " +
-                "own knowledge. Say that phrase once at the start only - never again inside " +
-                "the reply. Never invent facts, names, dates or numbers.\n\n" + p
+                "conversation WHEN they cover the question. If they do not cover it, answer " +
+                "from your own knowledge - but do NOT announce the source, and never write " +
+                "\"From general knowledge\" or \"not in your notes\" unless the user asks " +
+                "where the answer came from. Never invent facts, names, dates or numbers.\n\n" + p
         else p
 
     /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
@@ -1157,13 +1167,13 @@ class MainActivity : Activity() {
                     continue   // pure announcement line - drop it
                 }
             }
+            // v9.25.0: the banner is stripped EVERY time now - the user
+            // asked for it to appear only when they ask where an answer came
+            // from, so it never rides along with a normal reply.
             val marker = Regex("(?i)^\\s*From general knowledge \\(not in your notes?\\)\\s*[:：]?\\s*")
             if (marker.containsMatchIn(line)) {
-                if (seenMarker) {
-                    line = marker.replace(line, "")
-                } else {
-                    seenMarker = true
-                }
+                line = marker.replace(line, "")
+                if (line.isBlank()) continue
             }
             out.add(line)
         }
@@ -3734,6 +3744,14 @@ Study:
      *  back button cannot dismiss it - only the right PIN can. */
     private fun maybePinLock() {
         if (!pinSet() || pinUnlocked) return
+        // v9.25.0 "Privacy": never show the chat behind the lock. The PIN
+        // dialog does not cover the screen, so the conversation used to be
+        // readable behind it - the whole content is hidden until it is
+        // entered, and restored the moment the right PIN lands.
+        try {
+            findViewById<android.view.View>(android.R.id.content)
+                ?.visibility = android.view.View.INVISIBLE
+        } catch (e: Exception) { }
         val pinBox = EditText(this).apply {
             hint = "PIN"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
@@ -3748,6 +3766,10 @@ Study:
         lockDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
             if (pinHashMatches(pinBox.text.toString())) {
                 pinUnlocked = true
+                try {
+                    findViewById<android.view.View>(android.R.id.content)
+                        ?.visibility = android.view.View.VISIBLE
+                } catch (e: Exception) { }
                 lockDialog.dismiss()
             } else {
                 toast("Wrong PIN")
