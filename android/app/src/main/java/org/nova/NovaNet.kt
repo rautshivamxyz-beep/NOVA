@@ -46,8 +46,17 @@ object NovaNet {
         conn.connectTimeout = connectMs
         conn.readTimeout = readMs
         conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "NOVA-local-assistant/1.0 (offline study)")
-        conn.setRequestProperty("Accept", "text/html,application/json,text/plain,*/*")
+        // v9.26.0 "Search fix": a real browser User-Agent. The old
+        // "NOVA-local-assistant/1.0" string made DuckDuckGo serve an
+        // anti-bot page with no result links at all, so every web search
+        // came back empty. A common browser UA also blends in with the
+        // crowd, so this is better for privacy than a unique app string.
+        conn.setRequestProperty("User-Agent",
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
+        conn.setRequestProperty("Accept",
+            "text/html,application/xhtml+xml,application/json,text/plain,*/*")
+        conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
         return conn
     }
 
