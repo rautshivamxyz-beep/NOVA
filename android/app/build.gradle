@@ -90,8 +90,10 @@ android {
         // embedder fallback is logged; "what did I miss" reads one log.
         // v9.29.2 "Honest search": a web lookup that finds nothing answers
         // honestly instead of letting the model invent facts.
-        versionCode 143
-        versionName '9.29.2'
+        // v9.29.3 "Tool recipes": NOVA builds its own offline tools from a
+        // fixed primitive set; a recipe is data, never code.
+        versionCode 144
+        versionName '9.29.3'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -147,6 +149,8 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.core:core:1.13.1'
+    // v9.29.3: tool recipes read a folder the user grants via SAF.
+    implementation 'androidx.documentfile:documentfile:1.0.1'
     implementation 'io.noties.markwon:core:4.6.2'
     // v9.29.1: the LaTeX plugin needs the inline parser to render $$...$$
     // inline (it is off by default) - without it the model's single-dollar

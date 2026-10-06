@@ -39,6 +39,11 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_MEMORY, "") ?: ""
         set(value) = prefs.edit().putString(KEY_MEMORY, value).apply()
 
+    /** v9.29.3: the folder the user granted for tool recipes (SAF tree URI). */
+    var grantedFolder: String
+        get() = prefs.getString(KEY_GRANTED_FOLDER, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_GRANTED_FOLDER, value).apply()
+
     /** Conversation mode: auto-listen + auto-send after each reply. */
     var theme: String
         get() = prefs.getString(KEY_THEME, "dark") ?: "dark"
@@ -194,6 +199,7 @@ class Settings(context: Context) {
         private const val KEY_CURRENT_CHAT = "current_chat_id"
         private const val KEY_READ_ALOUD = "read_aloud"
         private const val KEY_MEMORY = "memory"
+        private const val KEY_GRANTED_FOLDER = "grantedFolder"
         private const val KEY_AUTO_LISTEN = "auto_listen"
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"

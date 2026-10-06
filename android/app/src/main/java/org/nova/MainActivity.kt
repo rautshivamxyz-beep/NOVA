@@ -747,6 +747,15 @@ class MainActivity : Activity() {
                 }
                 .show()
         })
+        // v9.29.3: grant a folder for tool recipes (SAF, kept across restarts)
+        drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
+            try {
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    REQ_FOLDER)
+            } catch (e: Exception) { toast("No file picker available") }
+        })
         // v8.8.0: the eyes - notification access; NovaListener logs
         // notifications locally for "what did I miss" and "messages from X"
         drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
@@ -914,6 +923,19 @@ class MainActivity : Activity() {
         // v9.8.0: "Scan notes" - a photo picked for the OCR notes import
         if (requestCode == 7800 && resultCode == RESULT_OK) {
             data?.data?.let { uri -> scanNotesImage(uri) }
+            return
+        }
+        // v9.29.3: a folder granted for tool recipes - keep the permission
+        // across restarts and remember the tree URI.
+        if (requestCode == REQ_FOLDER && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) { }
+                settings.grantedFolder = uri.toString()
+                toast("Folder granted - NOVA can look inside it")
+            }
             return
         }
         // v9.15.0 "Camera": a photo taken in the in-app camera -> the same
@@ -3901,6 +3923,7 @@ Study:
     companion object {
         private const val REQ_CHATS = 4252
         private const val REQ_CAMERA = 7900
+        private const val REQ_FOLDER = 7901
         // v9.2.1: fresh code for the ACTION_RECOGNIZE_SPEECH handoff -
         // 4251 (old intent flow) and 4254 (RECORD_AUDIO) retired with
         // the direct-SpeechRecognizer code; 4261 collides with nothing
