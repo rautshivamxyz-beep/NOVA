@@ -1900,7 +1900,7 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
         val r = Msg(Role.ASSISTANT, s)
         self.currentChat.messages.add(r); self.adapter.add(r); self.scrollToEnd()
         self.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, self.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(self, self.currentChat) } catch (e: Exception) { }
         }
     }
 
@@ -1920,7 +1920,7 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
         }
         reply("Running \"${r.name}\"...")
         scope.launch(Dispatchers.IO) {
-            val out = NcieTools.run(act, r.steps)
+            val out = NcieTools.run(self, r.steps)
             withContext(Dispatchers.Main) { reply(out.ifBlank { "(the tool returned nothing)" }) }
         }
         return true
@@ -1938,21 +1938,21 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
                     "files, read them, search, summarise, and answer questions about them.")
                 return@withContext
             }
-            android.app.AlertDialog.Builder(act)
+            android.app.AlertDialog.Builder(self)
                 .setTitle("New tool")
                 .setMessage(NcieRecipes.preview(recipe) + "\n\nRun it?")
                 .setPositiveButton("Run") { _, _ ->
                     reply("Running...")
                     self.scope.launch(Dispatchers.IO) {
-                        val out = NcieTools.run(act, recipe.steps)
+                        val out = NcieTools.run(self, recipe.steps)
                         withContext(Dispatchers.Main) {
                             reply(out.ifBlank { "(the tool returned nothing)" })
-                            android.app.AlertDialog.Builder(act)
+                            android.app.AlertDialog.Builder(self)
                                 .setTitle("Save this tool?")
                                 .setMessage("Save \"" + recipe.name + "\" so you can say " +
                                     "\"run tool " + recipe.name + "\" next time.")
                                 .setPositiveButton("Save") { _, _ ->
-                                    self.scope.launch(Dispatchers.IO) { NcieRecipes.save(act, recipe) }
+                                    self.scope.launch(Dispatchers.IO) { NcieRecipes.save(self, recipe) }
                                     reply("Saved. Say \"run tool ${recipe.name}\" any time.")
                                 }
                                 .setNegativeButton("No", null)
