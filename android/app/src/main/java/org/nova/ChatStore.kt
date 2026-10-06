@@ -48,7 +48,7 @@ object ChatStore {
             chat.updatedAt = System.currentTimeMillis()
             val arr = JSONArray()
             for (m in chat.messages) {
-                arr.put(JSONObject().put("r", if (m.role == Role.USER) "u" else "a").put("t", m.text))
+                arr.put(JSONObject().put("r", if (m.role == Role.USER) "u" else "a").put("t", m.text).put("d", m.done))
             }
             val json = JSONObject()
                 .put("id", chat.id)
@@ -77,7 +77,8 @@ object ChatStore {
             val o = arr.getJSONObject(i)
             messages.add(Msg(
                 if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
-                o.optString("t")
+                o.optString("t"),
+                o.optBoolean("d", true)
             ))
         }
         Chat(

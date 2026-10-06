@@ -320,9 +320,15 @@ class NovaListener : NotificationListenerService() {
 
         /** True when NOVA has been granted notification access. */
         fun isEnabled(ctx: Context): Boolean = try {
+            // v9.29.1: compare component-by-component. The old substring check
+            // matched unrelated packages containing "org.nova" - the same bug
+            // NotifBrain.isEnabled already fixed.
             android.provider.Settings.Secure.getString(
                 ctx.contentResolver, "enabled_notification_listeners")
-                ?.contains(ctx.packageName) == true
+                ?.split(':')?.any {
+                    android.content.ComponentName.unflattenFromString(it)
+                        ?.packageName == ctx.packageName
+                } == true
         } catch (e: Exception) { false }
     }
 }
