@@ -232,30 +232,30 @@ class MainActivity : Activity() {
         // reminders.json survives both - re-arm every future-dated
         // reminder here, exactly like BootReceiver does after a reboot.
         // Fire times are recoverable from the store ("at" + "rep").
-        try {
-            val nowMs = System.currentTimeMillis()
-            for ((at, t, rep) in ReminderStore.load(this)) {
-                val next = when {
-                    rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
-                    at > nowMs -> at
-                    else -> continue
+        // v9.29.1: the reminder re-arm pass and the alarm arming are file
+        // + AlarmManager work that need not delay the first frame - run
+        // them off the main thread, right after the UI is up. Same work,
+        // same result, no main-thread stall on launch.
+        scope.launch(Dispatchers.IO) {
+            try {
+                val nowMs = System.currentTimeMillis()
+                for ((at, t, rep) in ReminderStore.load(this@MainActivity)) {
+                    val next = when {
+                        rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
+                        at > nowMs -> at
+                        else -> continue
+                    }
+                    Reminder.schedule(this@MainActivity, next, t, rep)
                 }
-                Reminder.schedule(this, next, t, rep)
-            }
-            // v9.8.0: scheduled texts ride the same re-arm pass - one that
-            // came due while NOVA was dead fires now, the nearest future
-            // one is re-armed (mirrors what BootReceiver does on boot).
-            // v9.13.0 "Audit Fixes": foreground = true - the startup pass
-            // runs from a visible Activity, the one caller allowed to open
-            // the messaging draft directly (background receivers notify).
-            ScheduledSends.fireDue(this, foreground = true)
-        } catch (e: Exception) { }
-
-        // v9.21.0 "Reliable": arm the alarms the startup pass above does not
-        // cover - the nightly Dream consolidation and the daily recurring
-        // reminders. Before this they were armed only by the morning
-        // briefing, so after a reboot they silently stopped.
-        try { NovaHealth.armAll(this) } catch (e: Exception) { }
+            } catch (e: Exception) { }
+            // v9.21.0 "Reliable": the nightly Dream consolidation and the
+            // daily recurring reminders, off the main thread too.
+            try { NovaHealth.armAll(this@MainActivity) } catch (e: Exception) { }
+        }
+        // v9.8.0: scheduled texts may open a messaging draft, so this stays
+        // on the main thread - a text that came due while NOVA was dead
+        // fires now, the nearest future one is re-armed.
+        try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { }
 
 
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {

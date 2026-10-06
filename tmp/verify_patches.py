@@ -280,7 +280,7 @@ check("v9.21.0: the health engine + the three screens ship",
       load("HealthActivity.kt").count("class HealthActivity") == 1 and
       load("HelpActivity.kt").count("class HelpActivity") == 1)
 check("v9.21.0: alarms are armed at app start and on boot",
-      ma.count("NovaHealth.armAll(this)") == 1 and
+      ma.count("NovaHealth.armAll(this@MainActivity)") == 1 and
       load("ReminderStore.kt").count("NovaHealth.armAll(context)") == 1)
 check("v9.21.0: the new screens are registered (manifest)",
       open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".HealthActivity") == 1 and

@@ -96,7 +96,7 @@ object NcieGround {
         // embedder (and its 23 MB ONNX session) on a doc-less install.
         if (!NcieKnowledge.hasDocs(ctx)) return false
         val qv = queryVector(ctx, question) ?: return false
-        val cv = NcieEmbed.embed(ctx, candidate.take(1500)) ?: return false
+        val cv = candidateVector(ctx, candidate) ?: return false
         return NcieEmbed.cosine(qv, cv) >= 0.45f
     }
 
@@ -120,6 +120,23 @@ object NcieGround {
         val v = NcieEmbed.embed(ctx, question)
         qVecKey = question
         qVecVal = v
+        return v
+    }
+
+    /** v9.29.1: candidate vectors are cached for the turn (bounded). The
+     *  same candidate is embedded across the knowledge / wiki / overlap
+     *  gates and the vector is identical - this only removes recomputation;
+     *  it changes neither what is compared nor the 0.45 threshold. */
+    private val candCache =
+        java.util.LinkedHashMap<String, FloatArray?>(16, 0.75f, true)
+    private fun candidateVector(ctx: Context, candidate: String): FloatArray? {
+        val key = candidate.take(1500)
+        synchronized(candCache) { candCache[key]?.let { return it } }
+        val v = NcieEmbed.embed(ctx, key)
+        synchronized(candCache) {
+            if (candCache.size >= 16) candCache.remove(candCache.keys.first())
+            candCache[key] = v
+        }
         return v
     }
 
