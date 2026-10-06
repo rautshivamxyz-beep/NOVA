@@ -66,6 +66,17 @@ object NcieVoice {
                     try {
                         val def = Locale.getDefault()
                         val englishDevice = def.language.equals("en", ignoreCase = true)
+                        // v9.29.2 "Natural voice": a Kitten voice, when the
+                        // engine has one installed, sounds markedly more
+                        // natural than the stock voices - prefer it over the
+                        // accent logic below.
+                        val kitten = tts?.voices?.firstOrNull { v ->
+                            v.name.contains("kitten", ignoreCase = true) &&
+                                !v.isNetworkConnectionRequired
+                        }
+                        if (kitten != null) {
+                            try { tts?.voice = kitten } catch (e: Exception) { }
+                        } else {
                         val inVoices = tts?.voices
                             ?.filter { v ->
                                 v.locale.language.equals("en", ignoreCase = true) &&
@@ -85,6 +96,7 @@ object NcieVoice {
                             // A non-English phone keeps its own language,
                             // exactly as the engine default would.
                             try { tts?.language = def } catch (e: Exception) { }
+                        }
                         }
                     } catch (e: Exception) { }
                 } else {

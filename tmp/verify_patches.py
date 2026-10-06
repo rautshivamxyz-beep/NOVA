@@ -263,7 +263,7 @@ check("v9.27.0: spoken replies prefer an Indian-English accent",
       load("NcieVoice.kt").count("tts?.language = def") == 1)
 # ---- v9.28.0 "Best Indian voice" ----
 check("v9.28.0: the best offline en-IN voice is chosen",
-      load("NcieVoice.kt").count("isNetworkConnectionRequired") == 1 and
+      load("NcieVoice.kt").count("isNetworkConnectionRequired") >= 1 and
       load("NcieVoice.kt").count("maxByOrNull { v -> v.quality }") == 1 and
       load("NcieVoice.kt").count("tts?.voice = best") == 1)
 # ---- v9.29.0 "Respect the engine" ----
@@ -413,7 +413,7 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
       cam.count("PreviewView") >= 1 and cam.count("takePicture(") == 1 and
       cam.count("bindToLifecycle(") == 1)
 check("v9.15.0: the camera row + result wiring are in MainActivity",
-      ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
+      ma.count("drawerRow(\"Scan a page\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
 # ---- v9.16.3 "Fixes + Automation" ----
 _vamf3 = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
