@@ -1176,6 +1176,21 @@ private fun MainActivity.maybeRememberName(name: String) {
 private val FACT_CLASS = Regex("(?i)\\bclass\\s+(\\d{1,2})\\b")
 private val FACT_CITY = Regex("(?i)\\b(?:lives?|living)\\s+in\\s+([a-z]{2,}(?:\\s+[a-z]{2,}){0,2})")
 private val FACT_SCHOOL = Regex("(?i)\\b(?:stud(?:y|ies|ying)|reads?)\\s+(?:in|at)\\s+([a-z0-9' ]{4,60}?(?:school|college|academy|vidyalaya|institute))")
+// v9.29.1: academic results - "my marks are 92", "I got 85% in maths",
+// "I scored 450 in NEET". Previously a mark told in one chat lived only
+// in that chat's history and was gone in a new one. Same opt-in dialog
+// as class/city/school, so nothing is stored without the user tapping
+// Add. Groups: 1 = score, 2 = unit, 3 = subject.
+private val FACT_MARKS = Regex(
+    "(?i)\\b(?:my\\s+)?(?:marks?|score|scores|percentage)\\s*" +
+        "(?:are|is|were|was|:)?\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*" +
+        "((?:%|percent|marks?)?)" +
+        "(?:\\s*(?:in|for|on)\\s+([a-z][a-z ]{2,30}))?")
+private val FACT_SCORED = Regex(
+    "(?i)\\b(?:i\\s+)?(?:scored|got|secured|obtained|achieved)\\s+" +
+        "(\\d{1,3}(?:\\.\\d+)?)\\s*" +
+        "((?:%|percent|marks?|/\\s*\\d{1,3}|out\\s+of\\s+\\d{1,3})?)" +
+        "(?:\\s*(?:in|for|on)\\s+([a-z][a-z ]{2,30}))?")
 
 private fun MainActivity.maybeRememberFacts(text: String) {
     // only self-descriptions, never third-person study text
@@ -1204,6 +1219,26 @@ private fun MainActivity.maybeRememberFacts(text: String) {
             val f = "The user studies at " + school.replaceFirstChar { it.uppercase() }
             if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
         }
+    }
+    // v9.29.1: a mark stated in this chat is offered to memory, so the next
+    // chat (which has no history) can still answer about it.
+    FACT_MARKS.find(text)?.let { m ->
+        val score = m.groupValues[1].trim()
+        val subject = m.groupValues.getOrNull(3)?.trim()?.trim(',', '.')?.trim() ?: ""
+        val f = if (subject.isNotEmpty()) "The user scored $score in $subject"
+                else "The user scored $score"
+        if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
+    }
+    FACT_SCORED.find(text)?.let { m ->
+        val score = m.groupValues[1].trim()
+        val unit = m.groupValues.getOrNull(2)?.trim() ?: ""
+        val subject = m.groupValues.getOrNull(3)?.trim()?.trim(',', '.')?.trim() ?: ""
+        // a bare number is not a mark - require a unit (%, marks, /N) or a
+        // subject ("in maths"), so "I got 5 apples" is never stored
+        if (unit.isEmpty() && subject.isEmpty()) return@let
+        val f = if (subject.isNotEmpty()) "The user scored $score in $subject"
+                else "The user scored $score$unit"
+        if (!settings.memory.contains(f, ignoreCase = true)) facts.add(f)
     }
     if (facts.isEmpty()) return
     android.app.AlertDialog.Builder(this)
