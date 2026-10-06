@@ -47,6 +47,8 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
 import io.noties.markwon.ext.latex.JLatexMathPlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -1143,7 +1145,7 @@ class MainActivity : Activity() {
 
     /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
     private fun mathPrompt(p: String): String =
-        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
+        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX between double dollar signs, like \$\$x^2 + 1\$\$. Single dollar signs do not render.)"
 
     /** v7.6: strips model-echoed boilerplate - repeated strict-mode
      *  markers (keep only the first) and "The final answer is:" lines. */
@@ -4421,7 +4423,27 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val prism4j = Prism4j(NovaGrammarLocator)
             markwon = Markwon.builder(ctx)
                 .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
-                .usePlugin(JLatexMathPlugin.create(15.5f))
+                // v9.29.1: inline math was never enabled, so the model's
+                // single-dollar formulas ($x+1$) rendered as raw LaTeX. Turn
+                // on the inline parser + inline LaTeX, and normalise single-$
+                // math to the $$...$$ form the plugin actually parses.
+                .usePlugin(MarkwonInlineParserPlugin.create())
+                .usePlugin(JLatexMathPlugin.create(15.5f) { builder -> builder.inlinesEnabled(true) })
+                .usePlugin(object : AbstractMarkwonPlugin() {
+                    private val dollar = "${'$'}"
+                    private val singleDollar =
+                        Regex("(?<!" + dollar + ")" + dollar +
+                            "([^" + dollar + "\\n]+?)" + dollar + "(?!" + dollar + ")")
+                    override fun processMarkdown(markdown: String): String =
+                        singleDollar.replace(markdown) { m ->
+                            val inner = m.groupValues[1]
+                            // only clear math (a command, superscript or
+                            // subscript) - never a currency "$5"
+                            if (inner.contains('\\') || inner.contains('^') || inner.contains('_'))
+                                "\$\$" + inner + "\$\$"
+                            else m.value
+                        }
+                })
                 .build()
         }
         val avatar = TextView(ctx).apply {
