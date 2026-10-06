@@ -113,16 +113,12 @@
         <activity android:name=".HealthActivity" android:exported="false" />
         <activity android:name=".HelpActivity" android:exported="false" />
 
-        <service
-            android:name=".NotifBrain"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true"
-            android:label="NOVA notification access">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
+        <!-- v9.29.1: only ONE notification listener is registered. NotifBrain
+             and NovaListener both logged every notification to their own file
+             (double work, two sources of truth); NovaListener is the richer
+             one (7-day expiry, pause, silent-reply, remote replies) and now
+             also serves "what did I miss", so NotifBrain's service entry is
+             removed. Its class is kept for source-integrity checks. -->
         <!-- v8.8.0: the eyes - notifications logged locally for the
              deterministic "what did I miss" / "messages from X" queries -->
         <service

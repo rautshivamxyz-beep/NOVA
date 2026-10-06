@@ -240,13 +240,16 @@ class KnowledgeActivity : Activity() {
         Thread {
             kotlinx.coroutines.runBlocking { WikiCore.download(this@KnowledgeActivity) }
         }.start()
-        Thread {
-            while (WikiCore.downloading) {
-                runOnUiThread { refreshWiki() }
-                Thread.sleep(800)
+        // v9.29.1: poll the progress on the main thread instead of parking a
+        // worker in a Thread.sleep loop for the whole download.
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val tick = object : Runnable {
+            override fun run() {
+                refreshWiki()
+                if (WikiCore.downloading) handler.postDelayed(this, 800)
             }
-            runOnUiThread { refreshWiki() }
-        }.start()
+        }
+        handler.postDelayed(tick, 800)
     }
 
     /** v5.4.9: per-document actions. */

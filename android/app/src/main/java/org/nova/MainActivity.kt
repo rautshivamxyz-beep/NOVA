@@ -2872,7 +2872,7 @@ Study:
 
     /** "What did I miss?" - summarizes recent notifications privately. */
     private fun missedNotifications() {
-        if (!NotifBrain.isEnabled(this)) {
+        if (!NovaListener.isEnabled(this)) {
             AlertDialog.Builder(this)
                 .setTitle("Read your notifications?")
                 .setMessage("NOVA needs notification access to tell you what you missed. " +
@@ -2887,7 +2887,7 @@ Study:
                 .show()
             return
         }
-        val digest = NotifBrain.digest(this)
+        val digest = NovaListener.digest(this)
         if (digest.isBlank()) {
             toast("No notifications collected yet - try again in a while")
             return
