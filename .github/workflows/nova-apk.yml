@@ -133,18 +133,21 @@ jobs:
         run: |
           VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
           if [ -z "$VER" ]; then echo "FATAL: could not read versionName"; exit 1; fi
-          PREV="$(gh release list --limit 8 --json tagName,isDraft --jq "[.[] | select(.isDraft == false) | .tagName] | map(select(. != \"v${VER}\")) | .[0] // empty")"
-          if [ -z "$PREV" ]; then
-            echo "no previous release found - skipping delta patch"
+          PREVS="$(gh release list --limit 12 --json tagName,isDraft --jq "[.[] | select(.isDraft == false) | .tagName] | map(select(. != \"v${VER}\")) | .[0:3] | .[]")"
+          if [ -z "$PREVS" ]; then
+            echo "no previous release found - skipping delta patches"
             exit 0
           fi
-          echo "building delta patch from $PREV to v${VER}"
-          gh release download "$PREV" --pattern '*.apk' --output old.apk
           pip install bsdiff4
           gh release download "v${VER}" --pattern '*.apk' --output new.apk
-          python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-v${VER}.patch')"
-          gh release upload "v${VER}" "NOVA-delta-${PREV}-to-v${VER}.patch" --clobber
-          echo "delta patch attached: NOVA-delta-${PREV}-to-v${VER}.patch ($(du -m "NOVA-delta-${PREV}-to-v${VER}.patch" | cut -f1) MB)"
+          for PREV in $PREVS; do
+            echo "building delta patch from $PREV to v${VER}"
+            rm -f old.apk
+            gh release download "$PREV" --pattern '*.apk' --output old.apk || continue
+            python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-v${VER}.patch')" || continue
+            gh release upload "v${VER}" "NOVA-delta-${PREV}-to-v${VER}.patch" --clobber
+            echo "attached NOVA-delta-${PREV}-to-v${VER}.patch"
+          done
       # v9.16.3: publish a public release on NOVA-APK so the in-app update
       # check can find it. Needs a PAT with repo scope on NOVA-APK stored as
       # the secret NOVA_APK_TOKEN; without it this step is skipped.
@@ -168,11 +171,9 @@ jobs:
           # v9.29.3: mirror the delta patch too. The patch is built by the
           # step above in this same workspace; without this the public page
           # (and the in-app "apply update patch" flow) had no patch at all.
-          PATCH="$(ls NOVA-delta-*.patch 2>/dev/null | head -1)"
-          if [ -n "$PATCH" ]; then
+          for PATCH in NOVA-delta-*.patch; do
+            [ -e "$PATCH" ] || continue
             GH_TOKEN="$NOVA_APK_TOKEN" gh release upload "v${VER}" "$PATCH" \
               --repo rautshivamxyz-beep/NOVA-APK --clobber
             echo "mirrored delta patch: $PATCH"
-          else
-            echo "no delta patch to mirror"
-          fi
+          done
