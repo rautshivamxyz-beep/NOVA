@@ -3464,12 +3464,19 @@ Study:
                 val summary = stripThinking(sb.toString()).trim()
                 // v7.6: user switched chats while the summary was generating -
                 // never write the old chat's summary into the new one
-                if (summary.length > 40 && currentChat === chatAtStart) {
-                    compactSummary = summary
+                if (currentChat === chatAtStart) {
+                    // v9.29.2: ALWAYS advance the watermark, even when the
+                    // summary came back short/empty. Before this, a short
+                    // summary left compactedAtCount behind, so the trigger
+                    // (size - compactedAtCount >= 8) stayed true and the chat
+                    // was "compressed" again on EVERY message.
                     compactedAtCount = currentChat.messages.size
-                    needsContextCarry = true
-                    docInjected = false
-                    NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
+                    if (summary.length > 40) {
+                        compactSummary = summary
+                        needsContextCarry = true
+                        docInjected = false
+                        NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
+                    }
                 }
             } catch (e: Exception) {
                 // failed - keep full context, retry next turn
