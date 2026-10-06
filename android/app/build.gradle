@@ -88,8 +88,10 @@ android {
         // gated by one switch (voiceReplies/read_aloud kept in sync); the
         // wiki download no longer parks a thread in a sleep loop; the
         // embedder fallback is logged; "what did I miss" reads one log.
-        versionCode 142
-        versionName '9.29.1'
+        // v9.29.2 "Honest search": a web lookup that finds nothing answers
+        // honestly instead of letting the model invent facts.
+        versionCode 143
+        versionName '9.29.2'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
