@@ -195,6 +195,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // model used to hallucinate a personality from wiki background;
         // this question never reaches the model now.
         if (answerProfile(text)) { input.setText(""); return }
+        // v9.29.3: tool recipes - "build a tool to ..." authors a recipe from
+        // NOVA's fixed offline primitives; "run tool ..." replays one.
+        if (answerToolRequest(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the
@@ -1875,4 +1878,91 @@ private fun MainActivity.onlineLookupQ(text: String): String? {
         return q
     }
     return null
+}
+
+// v9.29.3 "Tool recipes": "build a tool to ..." authors a recipe from
+// NOVA's fixed OFFLINE primitives; "run tool ..." replays a saved one.
+// A recipe is data, never code - nothing the model writes is executed.
+private val TOOL_BUILD_Q = Regex(
+    "(?i)^\\s*(?:build|make|create)\\s+(?:me\\s+)?(?:a\\s+)?tool\\s+(?:to|that|which)\\s+(.+?)\\s*$")
+private val TOOL_RUN_Q = Regex(
+    "(?i)^\\s*(?:run|use)\\s+(?:the\\s+)?tool\\s+(.+?)\\s*$")
+
+fun MainActivity.answerToolRequest(text: String): Boolean {
+    val build = TOOL_BUILD_Q.find(text)?.groupValues?.get(1)?.trim()
+    val run = TOOL_RUN_Q.find(text)?.groupValues?.get(1)?.trim()
+    if (build == null && run == null) return false
+    val self = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+
+    fun reply(s: String) {
+        val r = Msg(Role.ASSISTANT, s)
+        self.currentChat.messages.add(r); self.adapter.add(r); self.scrollToEnd()
+        self.scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(self, self.currentChat) } catch (e: Exception) { }
+        }
+    }
+
+    if (NcieTools.grantedFolder(this) == null) {
+        reply("I need a folder to look in first. Open the menu (the three lines), " +
+            "tap \"Files\", pick a folder, then ask me again.")
+        return true
+    }
+
+    if (run != null) {
+        val r = NcieRecipes.all(this).firstOrNull {
+            it.name.equals(run, true) || it.name.contains(run, true)
+        }
+        if (r == null) {
+            reply("I don't have a tool called \"$run\" yet. Say \"build a tool to ...\" and I'll make one.")
+            return true
+        }
+        reply("Running \"${r.name}\"...")
+        scope.launch(Dispatchers.IO) {
+            val out = NcieTools.run(self, r.steps)
+            withContext(Dispatchers.Main) { reply(out.ifBlank { "(the tool returned nothing)" }) }
+        }
+        return true
+    }
+
+    val req = build!!
+    reply("Building a tool for: $req")
+    scope.launch(Dispatchers.IO) {
+        val json = try { NovaEngineAdapter.generate(NcieRecipes.authorPrompt(req), 400) }
+            catch (e: Exception) { "" }
+        val recipe = NcieRecipes.parse(json)
+        withContext(Dispatchers.Main) {
+            if (recipe == null || recipe.steps.isEmpty()) {
+                reply("I couldn't build a tool for that with what I have. I can look at " +
+                    "files, read them, search, summarise, and answer questions about them.")
+                return@withContext
+            }
+            android.app.AlertDialog.Builder(self)
+                .setTitle("New tool")
+                .setMessage(NcieRecipes.preview(recipe) + "\n\nRun it?")
+                .setPositiveButton("Run") { _, _ ->
+                    reply("Running...")
+                    self.scope.launch(Dispatchers.IO) {
+                        val out = NcieTools.run(self, recipe.steps)
+                        withContext(Dispatchers.Main) {
+                            reply(out.ifBlank { "(the tool returned nothing)" })
+                            android.app.AlertDialog.Builder(self)
+                                .setTitle("Save this tool?")
+                                .setMessage("Save \"" + recipe.name + "\" so you can say " +
+                                    "\"run tool " + recipe.name + "\" next time.")
+                                .setPositiveButton("Save") { _, _ ->
+                                    self.scope.launch(Dispatchers.IO) { NcieRecipes.save(self, recipe) }
+                                    reply("Saved. Say \"run tool ${recipe.name}\" any time.")
+                                }
+                                .setNegativeButton("No", null)
+                                .show()
+                        }
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+    return true
 }

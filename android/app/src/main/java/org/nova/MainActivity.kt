@@ -747,6 +747,15 @@ class MainActivity : Activity() {
                 }
                 .show()
         })
+        // v9.29.3: grant a folder for tool recipes (SAF, kept across restarts)
+        drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
+            try {
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    REQ_FOLDER)
+            } catch (e: Exception) { toast("No file picker available") }
+        })
         // v8.8.0: the eyes - notification access; NovaListener logs
         // notifications locally for "what did I miss" and "messages from X"
         drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
@@ -914,6 +923,19 @@ class MainActivity : Activity() {
         // v9.8.0: "Scan notes" - a photo picked for the OCR notes import
         if (requestCode == 7800 && resultCode == RESULT_OK) {
             data?.data?.let { uri -> scanNotesImage(uri) }
+            return
+        }
+        // v9.29.3: a folder granted for tool recipes - keep the permission
+        // across restarts and remember the tree URI.
+        if (requestCode == REQ_FOLDER && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) { }
+                settings.grantedFolder = uri.toString()
+                toast("Folder granted - NOVA can look inside it")
+            }
             return
         }
         // v9.15.0 "Camera": a photo taken in the in-app camera -> the same
@@ -3037,7 +3059,49 @@ Study:
     // ---- v7.6.3: in-app update ----
 
     /** Latest published version from the public download repo, as (version, apkUrl). */
-    private fun fetchLatestRelease(): Pair<String, String>? {
+    /** v9.29.3: apply the small delta patch against the INSTALLED APK, then
+     *  install - a ~0.2 MB update instead of the full 68 MB download. */
+    private fun applyDeltaUpdate(patchUrl: String, newVer: String) {
+        Toast.makeText(this, "Downloading the small update...", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val out = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = java.io.File(cacheDir, "updates").apply { mkdirs() }
+                    val part = java.io.File(dir, "nova-update.patch.part")
+                    val patch = java.io.File(dir, "nova-update.patch")
+                    java.net.URL(patchUrl).openStream().use { input ->
+                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                    }
+                    if (patch.exists()) patch.delete()
+                    if (!part.renameTo(patch)) throw RuntimeException("could not save the patch")
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "org.nova.fileprovider", patch)
+                    val apk = java.io.File(dir, "NOVA-delta-update.apk")
+                    if (!org.nova.ncie.android.NcieDelta.applyPatch(this@MainActivity, uri, apk))
+                        throw RuntimeException("the patch did not apply")
+                    apk
+                }
+            }
+            out.fold(
+                { apk ->
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "org.nova.fileprovider", apk)
+                    startActivity(Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                },
+                { err ->
+                    Toast.makeText(this@MainActivity,
+                        "Small update failed (" + (err.message ?: "error") +
+                            ") - tap Update again or use the full download",
+                        Toast.LENGTH_LONG).show()
+                }
+            )
+        }
+    }
+
+    private fun fetchLatestRelease(): Triple<String, String, String?>? {
         // v9.16.3: read the PUBLIC NOVA-APK repo's latest release through the
         // GitHub API. The old code read a version.txt frozen at 8.5.3 and
         // downloaded NOVA-latest.apk, which never existed (404) - so the
@@ -3055,15 +3119,23 @@ Study:
             val json = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
             val tag = json.optString("tag_name").trim().removePrefix("v")
             val assets = json.optJSONArray("assets")
+            // v9.29.3: also find the delta patch for THIS installed version,
+            // so an update can be a ~0.2 MB patch instead of the 68 MB APK.
+            val current = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+            } catch (e: Exception) { "" }
+            val want = "delta-v$current-to-v$tag".lowercase()
             var apk: String? = null
+            var patch: String? = null
             if (assets != null) for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk")) {
-                    apk = a.optString("browser_download_url"); break
-                }
+                val n = a.optString("name")
+                if (n.endsWith(".apk") && apk == null) apk = a.optString("browser_download_url")
+                else if (n.endsWith(".patch") && n.lowercase().contains(want))
+                    patch = a.optString("browser_download_url")
             }
             if (tag.isEmpty() || apk.isNullOrEmpty()) return null
-            return Pair(tag, apk)
+            return Triple(tag, apk, patch)
         } finally {
             conn.disconnect()
         }
@@ -3138,13 +3210,20 @@ Study:
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
+                        val patch = latest.third
+                        val msg = if (patch != null)
+                            "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
+                                "Small update - about 0.2 MB, applied on your phone. No big download."
+                        else
+                            "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
+                                "Download and install now? The download is about 68 MB."
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("Update available")
-                            .setMessage(
-                                "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
-                                    "Download and install now? The download is about 35 MB."
-                            )
-                            .setPositiveButton("Download") { _, _ -> downloadUpdate(latest.second) }
+                            .setMessage(msg)
+                            .setPositiveButton("Update") { _, _ ->
+                                if (patch != null) applyDeltaUpdate(patch, latest.first)
+                                else downloadUpdate(latest.second)
+                            }
                             .setNegativeButton("Later", null)
                             .show()
                     }
@@ -3901,6 +3980,7 @@ Study:
     companion object {
         private const val REQ_CHATS = 4252
         private const val REQ_CAMERA = 7900
+        private const val REQ_FOLDER = 7901
         // v9.2.1: fresh code for the ACTION_RECOGNIZE_SPEECH handoff -
         // 4251 (old intent flow) and 4254 (RECORD_AUDIO) retired with
         // the direct-SpeechRecognizer code; 4261 collides with nothing
