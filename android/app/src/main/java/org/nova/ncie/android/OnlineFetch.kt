@@ -290,15 +290,21 @@ object OnlineFetch {
      *  HtmlText for the clean text - up to 3 candidates, first one
      *  with real content wins. */
     private fun fetchWeb(act: MainActivity, q: String): WebPage? {
-        // v9.20.0: the lite endpoint sometimes returns an anti-bot page with
-        // no links at all - try the html endpoint before giving up.
-        var html = http(act, "https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(q, "UTF-8"))
-        var links = parseDdgLinks(html)
+        // v9.29.1 "Search fix": DuckDuckGo's lite endpoint now serves an
+        // anti-bot challenge page (HTTP 202, no result links) on most
+        // networks, and under rate-limiting it returns a non-2xx that used
+        // to throw UNGUARDED - killing the whole fetch before the html
+        // endpoint was ever tried, so web search came back empty. The html
+        // endpoint is the one that still returns results: ask it FIRST, and
+        // guard both calls so neither can abort the search.
+        val enc = URLEncoder.encode(q, "UTF-8")
+        var links = try {
+            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc))
+        } catch (e: Exception) { emptyList() }
         if (links.isEmpty()) {
-            html = try {
-                http(act, "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(q, "UTF-8"))
-            } catch (e: Exception) { "" }
-            links = parseDdgLinks(html)
+            links = try {
+                parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc))
+            } catch (e: Exception) { emptyList() }
         }
         for ((url, title) in links.take(3)) {
             val pageHtml = try { http(act, url) } catch (e: Exception) { continue }
