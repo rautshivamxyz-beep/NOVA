@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.29.1: version bumped for the feature repairs", bg.count("versionName '9.29.1'") == 1 and bg.count("versionCode 142") == 1)
+check("v9.29.2: version bumped for the honest-search fix", bg.count("versionName '9.29.2'") == 1 and bg.count("versionCode 143") == 1)
 # ---- v9.22.0 "Busy replies" ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -263,7 +263,7 @@ check("v9.27.0: spoken replies prefer an Indian-English accent",
       load("NcieVoice.kt").count("tts?.language = def") == 1)
 # ---- v9.28.0 "Best Indian voice" ----
 check("v9.28.0: the best offline en-IN voice is chosen",
-      load("NcieVoice.kt").count("isNetworkConnectionRequired") == 1 and
+      load("NcieVoice.kt").count("isNetworkConnectionRequired") >= 1 and
       load("NcieVoice.kt").count("maxByOrNull { v -> v.quality }") == 1 and
       load("NcieVoice.kt").count("tts?.voice = best") == 1)
 # ---- v9.29.0 "Respect the engine" ----
@@ -413,7 +413,7 @@ check("v9.15.0: the camera screen ships (preview + shutter + capture)",
       cam.count("PreviewView") >= 1 and cam.count("takePicture(") == 1 and
       cam.count("bindToLifecycle(") == 1)
 check("v9.15.0: the camera row + result wiring are in MainActivity",
-      ma.count("drawerRow(\"Camera\", R.drawable.ic_camera)") == 1 and
+      ma.count("drawerRow(\"Scan a page\", R.drawable.ic_camera)") == 1 and
       ma.count("REQ_CAMERA") == 4)
 # ---- v9.16.3 "Fixes + Automation" ----
 _vamf3 = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()

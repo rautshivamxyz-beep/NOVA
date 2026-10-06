@@ -182,6 +182,8 @@ class MainActivity : Activity() {
 
     // streaming TTS: how much of the reply has been spoken already
     private var spokenLength = 0
+    /** v9.29.2: when speech last made progress - the stall filler's clock. */
+    @Volatile private var lastSpeechProgress = 0L
     private var speechCancelled = false
 
     /** True while the chat is scrolled to the bottom; see scrollToEnd(). */
@@ -735,11 +737,16 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Backup", R.drawable.ic_copy) {
             startActivity(Intent(this, BackupActivity::class.java))
         })
-        // v9.8.0 "OCR Notes": scan a photo of handwritten notes, fix the
-        // recognized text, save it as a Knowledge document - all on-device
-        drawerPane.addView(drawerRow("Scan notes", R.drawable.ic_doc) { scanNotes() })
-        // v9.15.0 "Camera": live preview + shutter -> on-device OCR -> chat
-        drawerPane.addView(drawerRow("Camera", R.drawable.ic_camera) { openCamera() })
+        // v9.29.2: "Scan notes" and "Camera" did the same job (get an image
+        // -> on-device OCR -> chat) through two rows. One row, one chooser.
+        drawerPane.addView(drawerRow("Scan a page", R.drawable.ic_camera) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Scan a page")
+                .setItems(arrayOf("Take a photo", "Choose from gallery")) { _, which ->
+                    if (which == 0) openCamera() else scanNotes()
+                }
+                .show()
+        })
         // v8.8.0: the eyes - notification access; NovaListener logs
         // notifications locally for "what did I miss" and "messages from X"
         drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
@@ -769,18 +776,21 @@ class MainActivity : Activity() {
         // SHA-256 hash is stored, never the PIN); the blocking launch
         // gate itself lives in onResume
         drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
-        // v9.0.0 "Voice": spoken replies - one persisted toggle right
-        // under Update (key "voiceReplies" in the shared nova prefs)
-        drawerPane.addView(drawerRow("Voice replies", R.drawable.ic_mic) {
-            NcieVoice.enabled = !NcieVoice.enabled
-            toast(if (NcieVoice.enabled) "Voice replies on" else "Voice replies off")
-        })
-        // v9.4.0 "Audit Fixes II" (audit: the speech locale was stuck on
-        // the recognizer's default): cycles en-IN -> hi-IN -> phone default
-        // (voice_lang.txt deleted). startSpeech() passes the choice as
-        // EXTRA_LANGUAGE when the file exists.
-        drawerPane.addView(drawerRow("Voice language", R.drawable.ic_mic) {
-            cycleVoiceLanguage()
+        // v9.29.2: "Voice replies" and "Voice language" were two mic rows
+        // for one feature. One "Voice" row with a small chooser now.
+        drawerPane.addView(drawerRow("Voice", R.drawable.ic_mic) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Voice")
+                .setItems(arrayOf(
+                    if (NcieVoice.enabled) "Voice replies: ON" else "Voice replies: OFF",
+                    "Voice language: " + voiceLanguageLabel()
+                )) { _, which ->
+                    if (which == 0) {
+                        NcieVoice.enabled = !NcieVoice.enabled
+                        toast(if (NcieVoice.enabled) "Voice replies on" else "Voice replies off")
+                    } else cycleVoiceLanguage()
+                }
+                .show()
         })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
@@ -1236,6 +1246,23 @@ class MainActivity : Activity() {
         generating = true
         NcieChat.generating = true
         setStatus()
+
+        // v9.29.2: if the reply stalls, the voice went silent. Fill the gap
+        // with "hmm" (only while reading aloud) instead of dead air.
+        scope.launch {
+            while (generating) {
+                delay(500)
+                try {
+                    if (settings.readAloud && NcieVoice.isReady && tts != null &&
+                        tts?.isSpeaking == false &&
+                        replyMsg.text.length > spokenLength &&
+                        System.currentTimeMillis() - lastSpeechProgress > 2000) {
+                        tts?.speak("hmm", TextToSpeech.QUEUE_ADD, null, "nova_fill")
+                        lastSpeechProgress = System.currentTimeMillis()
+                    }
+                } catch (e: Exception) { }
+            }
+        }
 
         generationJob = scope.launch {
             // v5.4.2: performance timers (time-to-first-token + total)
@@ -3268,6 +3295,7 @@ Study:
             if (clean.isNotBlank()) {
                 tts?.speak(clean, TextToSpeech.QUEUE_ADD, null, "nova$spokenLength")
             }
+            lastSpeechProgress = System.currentTimeMillis()
             spokenLength += chunk.length
         }
     }
@@ -3305,6 +3333,12 @@ Study:
      * filesDir/voice_lang.txt (deleted = phone default) and is passed
      * to the recognizer in startSpeech().
      */
+    /** v9.29.2: the current voice-input language, for the Voice row label. */
+    private fun voiceLanguageLabel(): String = try {
+        val f = File(filesDir, "voice_lang.txt")
+        if (f.exists()) f.readText().trim().ifBlank { "phone default" } else "phone default"
+    } catch (e: Exception) { "phone default" }
+
     private fun cycleVoiceLanguage() {
         val f = File(filesDir, "voice_lang.txt")
         val cur = if (f.exists()) try { f.readText().trim() } catch (e: Exception) { "" } else ""
@@ -3464,12 +3498,19 @@ Study:
                 val summary = stripThinking(sb.toString()).trim()
                 // v7.6: user switched chats while the summary was generating -
                 // never write the old chat's summary into the new one
-                if (summary.length > 40 && currentChat === chatAtStart) {
-                    compactSummary = summary
+                if (currentChat === chatAtStart) {
+                    // v9.29.2: ALWAYS advance the watermark, even when the
+                    // summary came back short/empty. Before this, a short
+                    // summary left compactedAtCount behind, so the trigger
+                    // (size - compactedAtCount >= 8) stayed true and the chat
+                    // was "compressed" again on EVERY message.
                     compactedAtCount = currentChat.messages.size
-                    needsContextCarry = true
-                    docInjected = false
-                    NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
+                    if (summary.length > 40) {
+                        compactSummary = summary
+                        needsContextCarry = true
+                        docInjected = false
+                        NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
+                    }
                 }
             } catch (e: Exception) {
                 // failed - keep full context, retry next turn

@@ -193,11 +193,34 @@ object OnlineFetch {
             withContext(Dispatchers.Main) {
                 if (saved != null) {
                     act.toast("Saved \"$saved\" - now offline forever")
+                    act.launchNcieSend(text, offered = true)
                 } else {
+                    // v9.29.1: the lookup found NOTHING. Re-sending with
+                    // offered=true used to disable every honesty gate and let
+                    // the model invent an answer from its own memory - that is
+                    // exactly how "Modi's wife" came back as fabricated names.
+                    // Answer honestly instead of guessing.
                     act.toast(failMsg ?: "Couldn't find anything good")
+                    answerNotFound(act)
                 }
-                act.launchNcieSend(text, offered = true)
             }
+        }
+    }
+
+    /** v9.29.1: a lookup that found nothing gets an honest reply, never a
+     *  guess. Deterministic - no model call - so a failed search can never
+     *  turn into invented names, dates or numbers. */
+    private fun answerNotFound(act: MainActivity) {
+        act.offeredQuestionShown = null
+        val reply = Msg(Role.ASSISTANT,
+            "I looked that up and couldn't find a reliable source for it, so " +
+                "I won't guess. Try rephrasing the question, or ask about " +
+                "something in your notes.")
+        act.currentChat.messages.add(reply)
+        act.adapter.add(reply)
+        act.scrollToEnd()
+        act.scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
         }
     }
 
