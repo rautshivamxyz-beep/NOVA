@@ -165,3 +165,14 @@ jobs:
           GH_TOKEN="$NOVA_APK_TOKEN" gh release upload "v${VER}" \
             "$RUNNER_TEMP/apk-arm64/app-release.apk#NOVA-v${VER}.apk" \
             --repo rautshivamxyz-beep/NOVA-APK --clobber
+          # v9.29.3: mirror the delta patch too. The patch is built by the
+          # step above in this same workspace; without this the public page
+          # (and the in-app "apply update patch" flow) had no patch at all.
+          PATCH="$(ls NOVA-delta-*.patch 2>/dev/null | head -1)"
+          if [ -n "$PATCH" ]; then
+            GH_TOKEN="$NOVA_APK_TOKEN" gh release upload "v${VER}" "$PATCH" \
+              --repo rautshivamxyz-beep/NOVA-APK --clobber
+            echo "mirrored delta patch: $PATCH"
+          else
+            echo "no delta patch to mirror"
+          fi
