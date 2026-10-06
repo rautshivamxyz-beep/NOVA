@@ -45,38 +45,37 @@ object NcieVoice {
             tts = TextToSpeech(ctx.applicationContext) { code ->
                 ready = code == TextToSpeech.SUCCESS
                 if (ready) {
-                    // v9.27.0 "Indian voice": prefer an Indian-English accent
-                    // when the phone's language is English. The system default
-                    // is usually en-US (an American accent); en-IN is the voice
-                    // the user asked for. A non-English phone keeps its own
-                    // language, and if no en-IN voice is installed we fall back
-                    // to the device default rather than going silent.
-                    val def = try { Locale.getDefault() } catch (e: Exception) { Locale.US }
-                    val want = if (def.language.equals("en", ignoreCase = true))
-                        Locale("en", "IN") else def
-                    val res = try { tts?.setLanguage(want) } catch (e: Exception) {
-                        TextToSpeech.LANG_NOT_SUPPORTED
-                    }
-                    if (res == TextToSpeech.LANG_MISSING_DATA ||
-                        res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        try { tts?.language = def } catch (e: Exception) { }
-                    } else {
-                        // v9.28.0 "Best Indian voice": the engine offers several
-                        // en-IN voices of different quality and setLanguage picks
-                        // whichever it likes. Choose the HIGHEST-quality voice that
-                        // works offline, so the accent is the best this engine has
-                        // - still the stock engine, so still zero extra RAM.
-                        try {
-                            val best = tts?.voices
-                                ?.filter { v ->
-                                    v.locale.language.equals("en", ignoreCase = true) &&
-                                        v.locale.country.equals("IN", ignoreCase = true) &&
-                                        !v.isNetworkConnectionRequired
-                                }
-                                ?.maxByOrNull { v -> v.quality }
-                            if (best != null) tts?.voice = best
-                        } catch (e: Exception) { }
-                    }
+                    // v9.27.0 "Indian voice" / v9.28.0 "Best Indian voice" /
+                    // v9.29.0 "Respect the engine": prefer an Indian-English
+                    // accent ONLY when the phone is English AND the engine has
+                    // an offline en-IN voice - then take the best one. An
+                    // English phone whose engine has no en-IN voice is left
+                    // alone, so a voice the user chose in the engine's own
+                    // settings (a Kitten voice, say) is never overridden.
+                    try {
+                        val def = Locale.getDefault()
+                        val englishDevice = def.language.equals("en", ignoreCase = true)
+                        val inVoices = tts?.voices
+                            ?.filter { v ->
+                                v.locale.language.equals("en", ignoreCase = true) &&
+                                    v.locale.country.equals("IN", ignoreCase = true) &&
+                                    !v.isNetworkConnectionRequired
+                            } ?: emptyList()
+                        if (englishDevice && inVoices.isNotEmpty()) {
+                            val res = try { tts?.setLanguage(Locale("en", "IN")) } catch (e: Exception) {
+                                TextToSpeech.LANG_NOT_SUPPORTED
+                            }
+                            if (res != TextToSpeech.LANG_MISSING_DATA &&
+                                res != TextToSpeech.LANG_NOT_SUPPORTED) {
+                                val best = inVoices.maxByOrNull { v -> v.quality }
+                                if (best != null) tts?.voice = best
+                            }
+                        } else if (!englishDevice) {
+                            // A non-English phone keeps its own language,
+                            // exactly as the engine default would.
+                            try { tts?.language = def } catch (e: Exception) { }
+                        }
+                    } catch (e: Exception) { }
                 } else {
                     // no engine on this phone - disable and stay silent,
                     // never crash

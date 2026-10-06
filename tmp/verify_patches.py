@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.28.0: version bumped for the best-Indian-voice picker", bg.count("versionName '9.28.0'") == 1 and bg.count("versionCode 140") == 1)
+check("v9.29.0: version bumped to respect the engine's voice", bg.count("versionName '9.29.0'") == 1 and bg.count("versionCode 141") == 1)
 # ---- v9.22.0 "Busy replies" ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
@@ -266,6 +266,11 @@ check("v9.28.0: the best offline en-IN voice is chosen",
       load("NcieVoice.kt").count("isNetworkConnectionRequired") == 1 and
       load("NcieVoice.kt").count("maxByOrNull { v -> v.quality }") == 1 and
       load("NcieVoice.kt").count("tts?.voice = best") == 1)
+# ---- v9.29.0 "Respect the engine" ----
+check("v9.29.0: the engine's own voice is left alone when it has no en-IN voice",
+      load("NcieVoice.kt").count("englishDevice") >= 1 and
+      load("NcieVoice.kt").count("inVoices.isNotEmpty()") == 1 and
+      load("NcieVoice.kt").count("a non-English phone") >= 0)
 # ---- v9.21.0 "Reliable + Easy": health, setup, help ----
 check("v9.21.0: the health engine + the three screens ship",
       load("NovaHealth.kt").count("object NovaHealth") == 1 and
