@@ -165,7 +165,7 @@ class ModelsActivity : Activity() {
             } else {
                 customUrl.setText("")
                 hideKeyboard()
-                ModelDownloader.download(url, ModelCatalog.modelsDir(this))
+                ModelDownloader.download(url, ModelCatalog.modelsDir(this), applicationContext)
             }
         }
         catInner.addView(customBtn, LinearLayout.LayoutParams(
@@ -266,7 +266,7 @@ class ModelsActivity : Activity() {
         val dl = smallButton("Download", accent)
         dl.setOnClickListener {
             if (ModelDownloader.isBusy) toast("A download is already running")
-            else ModelDownloader.download(entry.url, ModelCatalog.modelsDir(this))
+            else ModelDownloader.download(entry.url, ModelCatalog.modelsDir(this), applicationContext)
         }
         row.addView(top, params())
         row.addView(meta, params().apply { topMargin = dp(2) })

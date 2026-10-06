@@ -30,7 +30,15 @@ object Reminder {
             context, id, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pi)
+        // v9.29.1: match the rest of the app - exact when the OS allows it,
+        // else the inexact window (Android 12+ needs the "Alarms & reminders"
+        // grant). Previously reminders always used the inexact call, so they
+        // could land minutes late.
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pi)
+        } catch (e: SecurityException) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pi)
+        }
     }
 }
 

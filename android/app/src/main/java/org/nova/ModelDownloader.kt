@@ -59,16 +59,63 @@ object ModelDownloader {
         job?.cancel()
     }
 
+    // ---- v9.29.1: progress in the notification shade ------------------
+    // A multi-GB model download used to be visible only while the Models
+    // screen stayed open. This mirrors the same State into an ongoing
+    // notification, so the download and its progress survive leaving the
+    // screen. UI only - the transfer itself is unchanged.
+    private const val CHANNEL = "nova_downloads"
+    private const val NOTIF_ID = 9092
+    private var lastNotifiedPct = -1
+
+    private fun postProgress(ctx: android.content.Context, name: String,
+                             done: Long, total: Long) {
+        try {
+            val pct = if (total > 0) ((done * 100) / total).toInt() else -1
+            if (pct == lastNotifiedPct) return
+            lastNotifiedPct = pct
+            val nm = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            nm.createNotificationChannel(android.app.NotificationChannel(
+                CHANNEL, "Model downloads",
+                android.app.NotificationManager.IMPORTANCE_LOW))
+            val text = if (total > 0)
+                String.format(java.util.Locale.US, "%.2f / %.2f GB  (%d%%)",
+                    done / 1e9, total / 1e9, pct)
+            else String.format(java.util.Locale.US, "%.2f GB", done / 1e9)
+            val n = androidx.core.app.NotificationCompat.Builder(ctx, CHANNEL)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle("Downloading $name")
+                .setContentText(text)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, if (pct >= 0) pct else 0, pct < 0)
+                .build()
+            nm.notify(NOTIF_ID, n)
+        } catch (e: Exception) { }
+    }
+
+    private fun dismissProgress(ctx: android.content.Context) {
+        try {
+            val nm = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            nm.cancel(NOTIF_ID)
+        } catch (e: Exception) { }
+        lastNotifiedPct = -1
+    }
+
     /**
      * Starts a download. Only one transfer runs at a time.
-     * Observe [state] for progress.
+     * Observe [state] for progress. [appCtx] mirrors that progress into an
+     * ongoing notification so it survives leaving the Models screen.
      */
-    fun download(url: String, dir: File) {
+    fun download(url: String, dir: File, appCtx: android.content.Context? = null) {
         if (isBusy) return
         cancelled = false
+        lastNotifiedPct = -1
         job = scope.launch {
             try {
-                _state.value = doDownload(url, dir)
+                _state.value = doDownload(url, dir, appCtx)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 _state.value = State.Idle
             } catch (e: java.io.IOException) {
@@ -77,6 +124,8 @@ object ModelDownloader {
                     else State.Failed(fileNameFromUrl(url), e.message ?: "download failed")
             } catch (e: Exception) {
                 _state.value = State.Failed(fileNameFromUrl(url), e.message ?: "download failed")
+            } finally {
+                try { appCtx?.let { dismissProgress(it) } } catch (e: Exception) { }
             }
         }
     }
@@ -127,7 +176,8 @@ object ModelDownloader {
         }
     }
 
-    private suspend fun doDownload(url: String, dir: File): State = withContext(Dispatchers.IO) {
+    private suspend fun doDownload(url: String, dir: File,
+                                   appCtx: android.content.Context?): State = withContext(Dispatchers.IO) {
         val fileName = sanitize(fileNameFromUrl(url))
         if (!fileName.endsWith(".gguf")) throw IOException("URL does not point to a .gguf file")
         val dest = uniqueFile(File(dir, fileName))
@@ -171,6 +221,7 @@ object ModelDownloader {
                         out.write(buf, 0, n)
                         done += n
                         _state.value = State.Downloading(dest.name, done, total)
+                        appCtx?.let { postProgress(it, dest.name, done, total) }
                     }
                     out.fd.sync()
                 }

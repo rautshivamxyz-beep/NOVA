@@ -48,7 +48,7 @@ object ChatStore {
             chat.updatedAt = System.currentTimeMillis()
             val arr = JSONArray()
             for (m in chat.messages) {
-                arr.put(JSONObject().put("r", if (m.role == Role.USER) "u" else "a").put("t", m.text))
+                arr.put(JSONObject().put("r", if (m.role == Role.USER) "u" else "a").put("t", m.text).put("d", m.done))
             }
             val json = JSONObject()
                 .put("id", chat.id)
@@ -77,7 +77,8 @@ object ChatStore {
             val o = arr.getJSONObject(i)
             messages.add(Msg(
                 if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
-                o.optString("t")
+                o.optString("t"),
+                o.optBoolean("d", true)
             ))
         }
         Chat(
@@ -91,12 +92,29 @@ object ChatStore {
         null
     }
 
-    /** All chats, most recently used first. */
+    /** All chats, most recently used first. v9.29.1: reads only each chat's
+     *  header (id / name / timestamps) instead of decoding every message -
+     *  the list screen shows names, so a chat with hundreds of messages no
+     *  longer has to be fully rebuilt just to appear. Same order, same data
+     *  shown. */
     fun list(context: Context): List<Chat> =
         dir(context).listFiles { f: File -> f.name.endsWith(".json") }
-            ?.mapNotNull { load(context, it.name.removeSuffix(".json")) }
+            ?.mapNotNull { loadMeta(context, it.name.removeSuffix(".json")) }
             ?.sortedByDescending { it.updatedAt }
             ?: emptyList()
+
+    /** Header-only read for the chat list - never builds the messages. */
+    private fun loadMeta(context: Context, id: String): Chat? = try {
+        val f = File(dir(context), id + ".json")
+        if (!f.exists()) return null
+        val json = JSONObject(f.readText())
+        Chat(
+            id = json.optString("id", id),
+            name = json.optString("name", "New chat"),
+            createdAt = json.optLong("created", 0L),
+            updatedAt = json.optLong("updated", 0L)
+        )
+    } catch (e: Exception) { null }
 
     fun clearAll(context: Context) {
         dir(context).listFiles()?.forEach { it.delete() }

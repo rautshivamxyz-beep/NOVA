@@ -77,6 +77,13 @@ object NcieEmbed {
                 broken = true
                 session = null
                 vocab = null
+                // v9.29.1: a missing/unloadable embedder asset silently
+                // downgraded semantic search to keyword-only with no trace.
+                // Log it so the fallback is diagnosable (still non-fatal).
+                android.util.Log.w(
+                    "NOVA",
+                    "embedder unavailable - semantic search falls back to keyword-only",
+                    t)
             }
             initDone = true
         }

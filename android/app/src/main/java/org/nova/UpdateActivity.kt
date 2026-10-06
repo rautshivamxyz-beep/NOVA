@@ -26,7 +26,7 @@ import java.io.File
 /**
  * v9.7.0 "Delta Updates": the Update screen, from the drawer's Update row.
  *
- * Three rows: open the (private) releases page - the same browser intent
+ * Three rows: open the public releases page - the same browser intent
  * the drawer row used before; APPLY UPDATE PATCH, highlighted - pick a
  * NOVA-delta-*.patch downloaded from the latest release with SAF, and
  * NcieDelta applies it against the INSTALLED APK entirely on this phone,
@@ -145,10 +145,12 @@ class UpdateActivity : ListActivity() {
     // ------------------------------------------------------------------
 
     private fun openReleases() {
-        toast("Opening private releases - sign in as the owner")
+        // v9.29.1: the PUBLIC download repo. The old target was the private
+        // NOVA repo, which 404s for anyone but the owner - a dead end for
+        // every real user.
         try {
             startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://github.com/rautshivamxyz-beep/NOVA/releases")))
+                Uri.parse("https://github.com/rautshivamxyz-beep/NOVA-APK/releases")))
         } catch (e: Exception) { }
     }
 

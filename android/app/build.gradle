@@ -83,8 +83,13 @@ android {
         // chats and notes
         // v9.16.14 "Jarvis": one-phrase modes - away / back
         // v9.29.0 "Respect the engine": never override a chosen voice
-        versionCode 141
-        versionName '9.29.0'
+        // v9.29.1 "Feature repairs": one notification listener (NotifBrain's
+        // service removed; NovaListener is the single log); voice replies
+        // gated by one switch (voiceReplies/read_aloud kept in sync); the
+        // wiki download no longer parks a thread in a sleep loop; the
+        // embedder fallback is logged; "what did I miss" reads one log.
+        versionCode 142
+        versionName '9.29.1'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -141,6 +146,10 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.core:core:1.13.1'
     implementation 'io.noties.markwon:core:4.6.2'
+    // v9.29.1: the LaTeX plugin needs the inline parser to render $$...$$
+    // inline (it is off by default) - without it the model's single-dollar
+    // formulas showed up as raw LaTeX text.
+    implementation 'io.noties.markwon:inline-parser:4.6.2'
     implementation 'io.noties.markwon:syntax-highlight:4.6.2'
     implementation 'io.noties:prism4j:2.0.0'
     // v6.1.0: textbook math rendering

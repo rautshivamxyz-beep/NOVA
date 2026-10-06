@@ -301,11 +301,34 @@ class NovaListener : NotificationListenerService() {
             logPath(ctx).readLines().filter { it.isNotBlank() }
         } catch (e: Exception) { emptyList() }
 
+        /** v9.29.1: the readable digest "what did I miss" uses. Previously
+         *  this came from the separate NotifBrain listener (its own
+         *  notifs.txt); it now reads THIS listener's log so one service is
+         *  the single source of truth. Shape: "12min ago Title (package):
+         *  text", newest last. */
+        fun digest(ctx: Context, maxLines: Int = 120): String = try {
+            val now = System.currentTimeMillis()
+            readLog(ctx).takeLast(maxLines).mapNotNull { l ->
+                val p = l.split('\t')
+                if (p.size < 4) return@mapNotNull null
+                val mins = ((now - (p[0].toLongOrNull() ?: now)) / 60_000L).toInt()
+                val ago = if (mins < 1) "just now"
+                    else if (mins < 60) "${mins}min ago" else "${mins / 60}h ago"
+                "$ago ${p[2]} (${p[1]}): ${p[3]}"
+            }.joinToString("\n")
+        } catch (e: Exception) { "" }
+
         /** True when NOVA has been granted notification access. */
         fun isEnabled(ctx: Context): Boolean = try {
+            // v9.29.1: compare component-by-component. The old substring check
+            // matched unrelated packages containing "org.nova" - the same bug
+            // NotifBrain.isEnabled already fixed.
             android.provider.Settings.Secure.getString(
                 ctx.contentResolver, "enabled_notification_listeners")
-                ?.contains(ctx.packageName) == true
+                ?.split(':')?.any {
+                    android.content.ComponentName.unflattenFromString(it)
+                        ?.packageName == ctx.packageName
+                } == true
         } catch (e: Exception) { false }
     }
 }

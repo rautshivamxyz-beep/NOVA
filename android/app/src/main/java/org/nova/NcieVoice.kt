@@ -29,10 +29,21 @@ object NcieVoice {
     private var ready = false
     private var prefs: android.content.SharedPreferences? = null
 
-    /** True when NOVA should read its replies aloud (drawer: "Voice replies"). */
+    /** True when NOVA should read its replies aloud. v9.29.1: the drawer
+     *  toggle (key "voiceReplies") and the Settings "Read replies aloud"
+     *  switch (key "read_aloud") were two independent gates for one feature
+     *  - turning on only one gave inconsistent speech. Either switch now
+     *  turns speaking on, and the setter writes BOTH keys so the two are
+     *  always in sync. */
     var enabled: Boolean
-        get() = prefs?.getBoolean(KEY_ENABLED, false) ?: false
-        set(value) { prefs?.edit()?.putBoolean(KEY_ENABLED, value)?.apply() }
+        get() = (prefs?.getBoolean(KEY_ENABLED, false) ?: false) ||
+            (prefs?.getBoolean(KEY_READ_ALOUD, false) ?: false)
+        set(value) {
+            prefs?.edit()
+                ?.putBoolean(KEY_ENABLED, value)
+                ?.putBoolean(KEY_READ_ALOUD, value)
+                ?.apply()
+        }
 
     /** Create the engine once, from MainActivity.onCreate.
      *  v9.4.0 "Audit Fixes II" (audit: TTS leak): init is idempotent -
@@ -138,4 +149,5 @@ object NcieVoice {
     }
 
     private const val KEY_ENABLED = "voiceReplies"
+    private const val KEY_READ_ALOUD = "read_aloud"
 }

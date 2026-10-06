@@ -47,6 +47,8 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
 import io.noties.markwon.ext.latex.JLatexMathPlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.prism4j.Prism4j
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -230,30 +232,30 @@ class MainActivity : Activity() {
         // reminders.json survives both - re-arm every future-dated
         // reminder here, exactly like BootReceiver does after a reboot.
         // Fire times are recoverable from the store ("at" + "rep").
-        try {
-            val nowMs = System.currentTimeMillis()
-            for ((at, t, rep) in ReminderStore.load(this)) {
-                val next = when {
-                    rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
-                    at > nowMs -> at
-                    else -> continue
+        // v9.29.1: the reminder re-arm pass and the alarm arming are file
+        // + AlarmManager work that need not delay the first frame - run
+        // them off the main thread, right after the UI is up. Same work,
+        // same result, no main-thread stall on launch.
+        scope.launch(Dispatchers.IO) {
+            try {
+                val nowMs = System.currentTimeMillis()
+                for ((at, t, rep) in ReminderStore.load(this@MainActivity)) {
+                    val next = when {
+                        rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
+                        at > nowMs -> at
+                        else -> continue
+                    }
+                    Reminder.schedule(this@MainActivity, next, t, rep)
                 }
-                Reminder.schedule(this, next, t, rep)
-            }
-            // v9.8.0: scheduled texts ride the same re-arm pass - one that
-            // came due while NOVA was dead fires now, the nearest future
-            // one is re-armed (mirrors what BootReceiver does on boot).
-            // v9.13.0 "Audit Fixes": foreground = true - the startup pass
-            // runs from a visible Activity, the one caller allowed to open
-            // the messaging draft directly (background receivers notify).
-            ScheduledSends.fireDue(this, foreground = true)
-        } catch (e: Exception) { }
-
-        // v9.21.0 "Reliable": arm the alarms the startup pass above does not
-        // cover - the nightly Dream consolidation and the daily recurring
-        // reminders. Before this they were armed only by the morning
-        // briefing, so after a reboot they silently stopped.
-        try { NovaHealth.armAll(this) } catch (e: Exception) { }
+            } catch (e: Exception) { }
+            // v9.21.0 "Reliable": the nightly Dream consolidation and the
+            // daily recurring reminders, off the main thread too.
+            try { NovaHealth.armAll(this@MainActivity) } catch (e: Exception) { }
+        }
+        // v9.8.0: scheduled texts may open a messaging draft, so this stays
+        // on the main thread - a text that came due while NOVA was dead
+        // fires now, the nearest future one is re-armed.
+        try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { }
 
 
         if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
@@ -1143,7 +1145,7 @@ class MainActivity : Activity() {
 
     /** v6.1.0: ask for LaTeX so formulas render like a textbook. */
     private fun mathPrompt(p: String): String =
-        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX, wrapped in dollar signs.)"
+        p + "\n(If your answer includes mathematical formulas, write each formula in LaTeX between double dollar signs, like \$\$x^2 + 1\$\$. Single dollar signs do not render.)"
 
     /** v7.6: strips model-echoed boilerplate - repeated strict-mode
      *  markers (keep only the first) and "The final answer is:" lines. */
@@ -2872,7 +2874,7 @@ Study:
 
     /** "What did I miss?" - summarizes recent notifications privately. */
     private fun missedNotifications() {
-        if (!NotifBrain.isEnabled(this)) {
+        if (!NovaListener.isEnabled(this)) {
             AlertDialog.Builder(this)
                 .setTitle("Read your notifications?")
                 .setMessage("NOVA needs notification access to tell you what you missed. " +
@@ -2887,7 +2889,7 @@ Study:
                 .show()
             return
         }
-        val digest = NotifBrain.digest(this)
+        val digest = NovaListener.digest(this)
         if (digest.isBlank()) {
             toast("No notifications collected yet - try again in a while")
             return
@@ -4421,7 +4423,27 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             val prism4j = Prism4j(NovaGrammarLocator)
             markwon = Markwon.builder(ctx)
                 .usePlugin(SyntaxHighlightPlugin.create(prism4j, Prism4jThemeDefault.create()))
-                .usePlugin(JLatexMathPlugin.create(15.5f))
+                // v9.29.1: inline math was never enabled, so the model's
+                // single-dollar formulas ($x+1$) rendered as raw LaTeX. Turn
+                // on the inline parser + inline LaTeX, and normalise single-$
+                // math to the $$...$$ form the plugin actually parses.
+                .usePlugin(MarkwonInlineParserPlugin.create())
+                .usePlugin(JLatexMathPlugin.create(15.5f) { builder -> builder.inlinesEnabled(true) })
+                .usePlugin(object : AbstractMarkwonPlugin() {
+                    private val dollar = "${'$'}"
+                    private val singleDollar =
+                        Regex("(?<!" + dollar + ")" + dollar +
+                            "([^" + dollar + "\\n]+?)" + dollar + "(?!" + dollar + ")")
+                    override fun processMarkdown(markdown: String): String =
+                        singleDollar.replace(markdown) { m ->
+                            val inner = m.groupValues[1]
+                            // only clear math (a command, superscript or
+                            // subscript) - never a currency "$5"
+                            if (inner.contains('\\') || inner.contains('^') || inner.contains('_'))
+                                "\$\$" + inner + "\$\$"
+                            else m.value
+                        }
+                })
                 .build()
         }
         val avatar = TextView(ctx).apply {
