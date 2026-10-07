@@ -267,6 +267,12 @@ class MainActivity : Activity() {
         // session otherwise parsed knowledge.json on the main thread
         scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }
         installCrashReporter()
+        // v9.29.4: auto-check for an update on launch - silent unless one is
+        // actually available, and never twice for a version already deferred.
+        if (settings.autoUpdate) scope.launch {
+            delay(1500)
+            checkForUpdates(silent = true)
+        }
         setContentView(buildUi())
         // v9.25.0: on a cold launch the launch gate runs in onResume, so
         // without this the chat is visible for a frame behind it.
@@ -3196,20 +3202,20 @@ Study:
     }
 
     /** Drawer action: check GitHub for a newer release and offer to install it. */
-    private fun checkForUpdates() {
-        Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+    private fun checkForUpdates(silent: Boolean = false) {
+        if (!silent) Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
         scope.launch {
             val fetched = withContext(Dispatchers.IO) { runCatching { fetchLatestRelease() } }
             fetched.fold(
                 { latest ->
                     val current = packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
                     if (latest == null || compareVersions(latest.first, current) <= 0) {
-                        Toast.makeText(
+                        if (!silent) Toast.makeText(
                             this@MainActivity,
                             "NOVA is up to date (v" + current + ")",
                             Toast.LENGTH_SHORT
                         ).show()
-                    } else {
+                    } else if (!(silent && latest.first == settings.dismissedUpdate)) {
                         val patch = latest.third
                         val msg = if (patch != null)
                             "NOVA v" + latest.first + " is available (you have v" + current + ").\n\n" +
@@ -3224,12 +3230,12 @@ Study:
                                 if (patch != null) applyDeltaUpdate(patch, latest.first)
                                 else downloadUpdate(latest.second)
                             }
-                            .setNegativeButton("Later", null)
+                            .setNegativeButton("Later") { _, _ -> settings.dismissedUpdate = latest.first }
                             .show()
                     }
                 },
                 { e ->
-                    Toast.makeText(
+                    if (!silent) Toast.makeText(
                         this@MainActivity,
                         "Update check failed: " + (e.message ?: "network error"),
                         Toast.LENGTH_LONG
