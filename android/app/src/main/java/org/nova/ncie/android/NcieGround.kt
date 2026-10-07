@@ -479,9 +479,9 @@ object NcieGround {
     private fun sourceText(ctx: Context, name: String): String = try {
         val t = NcieKnowledge.docText(ctx, name)
         if (t.isNotBlank()) t
-        else if (WikiCore.isReady(ctx)) {
+        else {
             WikiCore.warmUp(ctx)
             WikiCore.articleText(ctx, name) ?: ""
-        } else ""
+        }
     } catch (e: Exception) { "" }
 }
