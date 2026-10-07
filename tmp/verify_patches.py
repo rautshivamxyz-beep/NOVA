@@ -544,7 +544,7 @@ check("v9.10.0: hardening - planner soft-fail, store lock, save-on-send",
       nk.count("check(") == 0 and nk.count("synchronized(storeLock)") == 5 and
       ma.count("persist the question IMMEDIATELY") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
-      nc.count("lastSkillMatched == null") == 1 and
+      nc.count("lastSkillMatched == null") == 2 and
       nc.count("OnlineFetch.offer(act, text,") == 1)
 check("v8.6.0: local material is the alternative, not the blocker (OnlineFetch)",
       of_.count("haveLocal") == 2 and of_.count("Answer locally") == 1 and
@@ -563,7 +563,7 @@ check("v8.4.0: keywords-only search terms (NcieKnowledge)",
 check("v8.4.0: ask-first gap offer + skill match in the chat path (NcieChat)",
       nc.count("OnlineFetch.offer") == 1 and nc.count("NcieSkills.match") == 1)
 check("v8.4.0: skill turn bookkeeping (MainActivity + NcieChat + NcieLearn)",
-      ma.count("lastSkillMatched") == 2 and nc.count("lastSkillMatched") == 3 and
+      ma.count("lastSkillMatched") == 2 and nc.count("lastSkillMatched") == 4 and
       nl.count("lastSkillMatched") == 1)
 check("v8.4.0: failures noted, gaps logged (NcieLearn)",
       nl.count("noteFailure") == 1 and nl.count("noteGap") == 2)

@@ -1028,10 +1028,18 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // local match on a who-is question still offers - now joined
         // by comparison questions ("compare X and Y", "difference
         // between", "X vs Y") with weak-local material.
+        // v9.29.6 "Tool router": the MODEL decides which source to gather from,
+        // asked once on a seeking turn with no local material. If it names
+        // "web", the online lookup is offered even when the regex heuristics
+        // would not have - the model reasons about what the question needs.
+        val route = if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
+            lastSkillMatched == null && knowledgePart.isEmpty()) {
+            withContext(Dispatchers.IO) { NciePlanner.choose(act, text) }
+        } else emptyList()
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
             lastSkillMatched == null && knowledgePart.isEmpty() &&
             (wikiPart.isEmpty() || !wikiStrong ||
-                bioQuestion(text) || compareQuestion(text))
+                bioQuestion(text) || compareQuestion(text) || "web" in route)
         ) {
             offerOnlineFetch(act, text)
             return
