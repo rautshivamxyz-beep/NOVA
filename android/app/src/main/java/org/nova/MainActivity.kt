@@ -260,9 +260,9 @@ class MainActivity : Activity() {
         try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { }
 
 
-        if (WikiCore.isReady(this)) scope.launch(Dispatchers.IO) {
-            WikiCore.warmUp(this@MainActivity)
-        }
+        // v9.29.5: warm the store whenever the file exists, not only when the
+        // full offline dataset was downloaded - fetched articles live there too.
+        scope.launch(Dispatchers.IO) { WikiCore.warmUp(this@MainActivity) }
         // v7.6: warm the notes cache too - the first message of every
         // session otherwise parsed knowledge.json on the main thread
         scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }

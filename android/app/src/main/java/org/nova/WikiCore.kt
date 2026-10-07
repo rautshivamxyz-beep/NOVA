@@ -178,7 +178,12 @@ object WikiCore {
      *  index + prepared form are refreshed; a same-title article replaces
      *  its old copy. The article is offline forever after this call. */
     fun appendArticle(ctx: Context, title: String, text: String): Boolean {
-        if (!isReady(ctx)) return false
+        // v9.29.5: a fetched article must land even when the offline dataset
+        // was never downloaded - the store FILE is the source of truth and
+        // isReady() only marks "the full download finished". Without this,
+        // every online lookup failed for anyone who skipped the Wikipedia
+        // download ("couldn't find a reliable source").
+        try { dir(ctx).mkdirs() } catch (e: Exception) { }
         // one line per article: stray newlines would corrupt the format
         val paras = text.split("\n\n").map { it.replace("\n", " ").trim() }
             .filter { it.isNotEmpty() }
@@ -234,7 +239,7 @@ object WikiCore {
 
     /** Finds the most relevant stored articles for a question. */
     fun search(ctx: Context, query: String, maxResults: Int = 2): List<Hit> {
-        if (!isReady(ctx)) return emptyList()
+        if (!articlesFile(ctx).exists()) return emptyList()
         val qw = words(query)
         if (qw.isEmpty()) return emptyList()
         // NEVER build the index here: it reads the whole multi-MB articles

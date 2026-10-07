@@ -290,7 +290,11 @@ object OnlineFetch {
                 val k = pages.keys().next()
                 pages.getJSONObject(k).getString("extract")
             } catch (e: Exception) { null }
-            if (extract != null && extract.length >= 60) return title to extract
+            // v9.29.5: skip disambiguation pages ("X may refer to:") - the top
+            // hit for many names is one, and grounding on a list of unrelated
+            // people is worse than trying the next hit.
+            if (extract != null && extract.length >= 60 &&
+                !extract.contains("may refer to:", ignoreCase = true)) return title to extract
             // v9.20.0: the extract API comes back empty for some pages
             // (redirect chains, stubs) - the REST summary usually still has
             // the intro, so try it before giving up on this title.
