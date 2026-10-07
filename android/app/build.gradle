@@ -92,8 +92,10 @@ android {
         // honestly instead of letting the model invent facts.
         // v9.29.3 "Tool recipes": NOVA builds its own offline tools from a
         // fixed primitive set; a recipe is data, never code.
-        versionCode 144
-        versionName '9.29.3'
+        // v9.29.4 "No stuck replies + auto-update": history never reloads as
+        // "generating"; NOVA auto-checks for updates on launch.
+        versionCode 145
+        versionName '9.29.4'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

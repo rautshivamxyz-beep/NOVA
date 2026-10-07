@@ -78,7 +78,11 @@ object ChatStore {
             messages.add(Msg(
                 if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
                 o.optString("t"),
-                o.optBoolean("d", true)
+                // v9.29.4: a message read from disk is NEVER "generating".
+                // A mid-stream save (done=false) used to reload as a
+                // permanent animated bubble - the "stuck on generating"
+                // report. History is always done.
+                true
             ))
         }
         Chat(
