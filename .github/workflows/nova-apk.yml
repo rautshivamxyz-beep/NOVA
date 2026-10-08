@@ -63,6 +63,21 @@ jobs:
           SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      # v9.29.5: the release keystore is no longer committed to the repo (it
+      # would become public if the repo ever goes public) - it is restored
+      # here from the NOVA_KEYSTORE_BASE64 secret. The signature check below
+      # fails loudly if this did not work, so a debug-signed APK can never be
+      # published by mistake.
+      - name: Restore the release keystore from the secret
+        env:
+          NOVA_KEYSTORE_BASE64: ${{ secrets.NOVA_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$NOVA_KEYSTORE_BASE64" ]; then
+            echo "$NOVA_KEYSTORE_BASE64" | base64 -d > android/nova-release-v2.keystore
+            echo "keystore restored ($(wc -c < android/nova-release-v2.keystore) bytes)"
+          else
+            echo "NOVA_KEYSTORE_BASE64 not set - the build will fall back to debug signing"
+          fi
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
