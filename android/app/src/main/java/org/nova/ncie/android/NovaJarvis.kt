@@ -152,7 +152,7 @@ object NovaNudge {
         if (parts.isEmpty()) return ""
         mark(ctx)
         val line = parts.joinToString(" ")
-        try { NcieVoice.init(ctx); NcieVoice.speak(line) } catch (e: Exception) { }
+        try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(line) } catch (e: Exception) { }
         return line
     }
 }
@@ -215,12 +215,11 @@ object NovaTriggers {
                     val want = t.cond.removePrefix("app:").trim()
                     try {
                         val us = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-                        val since = now - 3L * 60L * 1000L
-                        us.queryEvents(since, now).use { cur ->
-                            var ev = cur.nextEvent(); var seen = false
-                            while (ev != null) { if (ev.packageName == want) seen = true; ev = cur.nextEvent() }
-                            seen
-                        }
+                        val evs = us.queryEvents(now - 3L * 60L * 1000L, now)
+                        var ev = evs.nextEvent()
+                        var seen = false
+                        while (ev != null) { if (ev.packageName == want) seen = true; ev = evs.nextEvent() }
+                        seen
                     } catch (e: Exception) { false }
                 }
                 t.cond.startsWith("near:") -> {
@@ -242,7 +241,7 @@ object NovaTriggers {
         }
         if (said.isNotEmpty()) {
             saveFired(ctx, f)
-            try { NcieVoice.init(ctx); NcieVoice.speak(said) } catch (e: Exception) { }
+            try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(said) } catch (e: Exception) { }
         }
         return said
     }

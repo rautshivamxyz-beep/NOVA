@@ -1794,7 +1794,7 @@ private fun MainActivity.answerJarvis(text: String): Boolean {
             "Hands-free is on. I am listening - just talk. Say \"hands free off\" when you are done."
             else "Hands-free is off.")
         currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
-        try { if (on) NcieVoice.init(this) } catch (e: Exception) { }
+        try { if (on) org.nova.NcieVoice.init(this) } catch (e: Exception) { }
         return true
     }
     // what triggers are set
