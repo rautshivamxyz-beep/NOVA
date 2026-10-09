@@ -23,6 +23,13 @@
          optional feature so the app still installs on camera-less devices. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- v9.31.0 "Jarvis": the trigger layer - a coarse location for
+         "when I reach home", and app-usage for "when I open X". Both are
+         optional; the app works fully without either being granted. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application android:icon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
@@ -50,6 +57,18 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
+            <!-- v9.31.0 "Jarvis": NOVA can be the phone's assistant - the
+                 assist gesture / power-button hold opens it straight into
+                 hands-free listening. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
         </activity>
 
         <!-- v0.9.2 phase 3: NOVA's memory screen, reached from the
@@ -67,6 +86,10 @@
         <activity android:name=".ChatsActivity" android:exported="false" />
 
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+
+        <!-- v9.31.0 "Jarvis": the periodic tick that runs the spoken nudges
+             and the user's triggers, then re-arms itself. -->
+        <receiver android:name=".ncie.android.NovaTriggerReceiver" android:exported="false" />
 
         <!-- v9.8.0: fires the scheduled "text <name> at <time>" sends -->
         <receiver android:name=".SendReceiver" android:exported="false" />
