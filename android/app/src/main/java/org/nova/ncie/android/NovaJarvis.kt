@@ -214,12 +214,19 @@ object NovaTriggers {
                 t.cond.startsWith("app:") -> {
                     val want = t.cond.removePrefix("app:").trim()
                     try {
-                        val us = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-                        val evs = us.queryEvents(now - 3L * 60L * 1000L, now)
-                        var ev = evs.nextEvent()
-                        var seen = false
-                        while (ev != null) { if (ev.packageName == want) seen = true; ev = evs.nextEvent() }
-                        seen
+                        val us = ctx.getSystemService(Context.USAGE_STATS_SERVICE)
+                            as? android.app.usage.UsageStatsManager
+                        if (us == null) false else {
+                            val evs: android.app.usage.UsageEvents =
+                                us.queryEvents(now - 3L * 60L * 1000L, now)
+                            var e: android.app.usage.UsageEvents.Event? = evs.nextEvent()
+                            var seen = false
+                            while (e != null) {
+                                if (e.packageName == want) seen = true
+                                e = evs.nextEvent()
+                            }
+                            seen
+                        }
                     } catch (e: Exception) { false }
                 }
                 t.cond.startsWith("near:") -> {
