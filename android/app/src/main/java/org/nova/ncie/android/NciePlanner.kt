@@ -34,10 +34,7 @@ object NciePlanner {
             "actually needs, then choose. Which source(s) are needed to answer the question " +
             "below? Reply with ONLY a JSON array of source names, best first, at most 2. " +
             "Available sources:\n" + catalogue() +
-            "\nChoose \"web\" when the answer depends on live or recent information, " +
-            "\"wiki\" for general facts, \"notes\"/\"files\" for the user's own material, " +
-            "\"memory\" for things about the user, \"calculator\" for arithmetic, and " +
-            "\"none\" only when no source is needed. Output only the JSON array.\n\n" +
+            "\nReply with ONLY the JSON array.\n\n" +
             "Question: " + question
 
     /** Parses the model's reply into known tool names (best effort). */
@@ -51,8 +48,26 @@ object NciePlanner {
             .distinct()
     }
 
+    /**
+     * v9.31.1 "Fast route": the OBVIOUS cases never need a model call. The
+     * router used to generate up to 60 tokens before every answer, which
+     * pushed the first word out by seconds. These cheap checks settle the
+     * common questions instantly and only fall through to the model when
+     * the question really is ambiguous. Same routing, no model cost.
+     */
+    private val FAST: List<Pair<Regex, String>> = listOf(
+        Regex("(?i)\\b(search|google|look ?it ?up|online|internet|latest|news|today|current|right now|price|weather|score|match|kya hua|aaj|abhi)\\b") to "web",
+        Regex("(?i)\\b(calculate|compute|what(?:'s| is) [0-9]|[0-9]+\\s*[+\\-*/x]\\s*[0-9]+)\\b") to "calculator",
+        Regex("(?i)\\b(my notes|my documents|my pdf|my book|mere notes|mere documents)\\b") to "notes",
+        Regex("(?i)\\b(do you remember|my memory|what do you remember|yaad)\\b") to "memory",
+        Regex("(?i)\\b(who|what|when|where|which|kaun|kya|kab|kahan)\\b") to "wiki"
+    )
+
     /** Asks the local model which tools to use. Call OFF the main thread. */
-    fun choose(ctx: Context, text: String): List<String> = try {
-        parse(NovaEngineAdapter.generate(prompt(text), 60))
-    } catch (e: Exception) { emptyList() }
+    fun choose(ctx: Context, text: String): List<String> {
+        for ((re, tool) in FAST) if (re.containsMatchIn(text)) return listOf(tool)
+        return try {
+            parse(NovaEngineAdapter.generate(prompt(text), 24))
+        } catch (e: Exception) { emptyList() }
+    }
 }

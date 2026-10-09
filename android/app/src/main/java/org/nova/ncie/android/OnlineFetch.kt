@@ -384,7 +384,7 @@ object OnlineFetch {
     /** v9.15.0 "Private Fetch": one raw request, routed through the
      *  configured SOCKS proxy (Orbot/Tor or a user proxy) when one is on. */
     private fun httpOnce(act: MainActivity, url: String): String =
-        NovaNet.getText(act, url, connectMs = 10000, readMs = 20000)
+        NovaNet.getText(act, url, connectMs = 4000, readMs = 8000)
 
     /** v9.15.0 "Private Fetch": https only. A plain-http URL is upgraded
      *  to https outright and never sent in the clear - if the upgrade
