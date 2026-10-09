@@ -211,24 +211,6 @@ object NovaTriggers {
                     val hm = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Calendar.getInstance().time)
                     hm == t.cond.padStart(5, '0')
                 }
-                t.cond.startsWith("app:") -> {
-                    val want = t.cond.removePrefix("app:").trim()
-                    try {
-                        val us = ctx.getSystemService(Context.USAGE_STATS_SERVICE)
-                            as? android.app.usage.UsageStatsManager
-                        if (us == null) false else {
-                            val evs: android.app.usage.UsageEvents =
-                                us.queryEvents(now - 3L * 60L * 1000L, now)
-                            var e: android.app.usage.UsageEvents.Event? = evs.nextEvent()
-                            var seen = false
-                            while (e != null) {
-                                if (e.packageName == want) seen = true
-                                e = evs.nextEvent()
-                            }
-                            seen
-                        }
-                    } catch (e: Exception) { false }
-                }
                 t.cond.startsWith("near:") -> {
                     // coarse: only if we already hold a last-known fix
                     try {
