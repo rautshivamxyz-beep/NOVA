@@ -96,8 +96,8 @@ android {
         // "generating"; NOVA auto-checks for updates on launch.
         // v9.29.5 "Lookups that work": online fetches store and retrieve even
         // without the offline Wikipedia download; disambiguation pages skipped.
-        versionCode 146
-        versionName '9.29.5'
+        versionCode 148
+        versionName '9.31.0'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

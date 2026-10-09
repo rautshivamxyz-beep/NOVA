@@ -35,4 +35,16 @@ object NcieSkills {
         val s = skills ?: return null
         return SkillStore.best(s, text)
     }
+
+    /** v9.30.0: drop the cache so a freshly forged skill is live at once. */
+    fun reload(ctx: Context) {
+        skills = null
+        ensure(ctx)
+    }
+
+    /** v9.30.0: does any loaded skill already use this trigger pattern? */
+    fun triggerExists(pattern: String): Boolean {
+        val s = skills ?: return false
+        return s.any { it.trigger.pattern == pattern }
+    }
 }

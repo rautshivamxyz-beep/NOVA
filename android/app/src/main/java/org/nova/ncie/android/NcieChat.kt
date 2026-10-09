@@ -351,6 +351,12 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // file work only, like the commands above.
         if (answerLearned(text)) { input.setText(""); return }
         if (answerConnections(text)) { input.setText(""); return }
+        // v9.30.0 "Growth": the self-evolution report - "growth" / "your
+        // skills" shows what NOVA has taught itself (forged skills, the
+        // turns it has answered, and the consolidation pass's tally).
+        if (answerSkills(text)) { input.setText(""); return }
+        // v9.31.0 "Jarvis": hands-free mode and the trigger list.
+        if (answerJarvis(text)) { input.setText(""); return }
         // v9.7.0 "Quiet Fetch": the manual online lookup - "look it up
         // online: <q>" (also "look it up online <q>" / "search online for
         // <q>"; the bare form re-runs the last question). The quiet
@@ -1754,6 +1760,67 @@ private fun groundDocsBody(ctx: android.content.Context): String {
 // regenerated (filesDir/experience.txt), monospace. Like DOCS_Q above: no
 // model call, no network, works with no model loaded at all.
 private val LEARNED_Q = Regex("(?i)^\\s*what\\s+have\\s+you\\s+learned\\s*[.!?]*\\s*$")
+
+// v9.30.0 "Growth": the self-evolution commands - what NOVA has taught
+// itself. Short, typed commands only (long text is a study question).
+private val SKILLS_Q = Regex(
+    "(?i)^\\s*(?:(?:your|my|nova'?s)\\s+)?skills?\\s*[.!?]*\\s*$" +
+        "|^\\s*what\\s+skills\\b|^\\s*growth\\s*[.!?]*\\s*$" +
+        "|^\\s*how\\s+have\\s+you\\s+grown\\b|^\\s*what\\s+have\\s+you\\s+taught\\s+yourself\\b"
+)
+
+private fun MainActivity.answerSkills(text: String): Boolean {
+    if (text.length > 80 || !SKILLS_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try { NcieEvolve.report(activity) } catch (e: Exception) { "Growth report unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, "```\n" + body + "```") }
+    }
+    return true
+}
+
+private fun MainActivity.answerJarvis(text: String): Boolean {
+    if (text.length > 80) return false
+    // hands-free on / off / toggle
+    if (HANDSFREE_Q.containsMatchIn(text)) {
+        val on = NovaHandsfree.toggle(this)
+        input.setText("")
+        val um = Msg(Role.USER, text)
+        currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+        val reply = Msg(Role.ASSISTANT, if (on)
+            "Hands-free is on. I am listening - just talk. Say \"hands free off\" when you are done."
+            else "Hands-free is off.")
+        currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
+        try { if (on) NcieVoice.init(this) } catch (e: Exception) { }
+        return true
+    }
+    // what triggers are set
+    if (TRIGGERS_Q.containsMatchIn(text)) {
+        val activity = this
+        input.setText("")
+        val um = Msg(Role.USER, text)
+        currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+        scope.launch(Dispatchers.IO) {
+            val list = try { NovaTriggers.all(activity) } catch (e: Exception) { emptyList() }
+            val body = if (list.isEmpty()) "No triggers set yet."
+                else "Your triggers:\n" + list.mapIndexed { i, t -> (i + 1).toString() + ". when " + t.when + " -> " + t.what }.joinToString("\n")
+            withContext(Dispatchers.Main) { postGroundReply(activity, "```\n" + body + "\n```") }
+        }
+        return true
+    }
+    return false
+}
+
+private val HANDSFREE_Q = Regex(
+    "(?i)^\\s*(?:hands[\\s-]?free|jarvis)(?:\\s+(?:mode|on|off))?\\s*[.!?]*\\s*$"
+)
+
+private val TRIGGERS_Q = Regex(
+    "(?i)^\\s*(?:my\\s+)?triggers?\\s*[.!?]*\\s*$"
+)
 
 private fun MainActivity.answerLearned(text: String): Boolean {
     // long/OCR'd text is a study question that merely contains the
