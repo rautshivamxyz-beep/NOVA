@@ -68,7 +68,7 @@ jobs:
           set -e
           cp llama.cpp/examples/llama.android/lib/build/outputs/aar/*.aar android/app/libs/llama-release.aar
           git config user.name "rautshivamxyz-beep"
-          git config user.email "rautshivamxyz@gmail.com"
+          git config user.email "306575017+rautshivamxyz-beep@users.noreply.github.com"
           git add android/app/libs/llama-release.aar android/app/src/main/java/org/nova/ android/app/build.gradle
           git commit -m "engine: v8.0.0 live sampling - setSampling setters for temp/top_p/top_k/min_p/repeat_penalty (llama.cpp 6e60f35 + v5.3..v8.0 patches)"
           git push
