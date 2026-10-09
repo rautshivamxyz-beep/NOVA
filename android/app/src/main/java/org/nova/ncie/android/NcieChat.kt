@@ -1806,7 +1806,7 @@ private fun MainActivity.answerJarvis(text: String): Boolean {
         scope.launch(Dispatchers.IO) {
             val list = try { NovaTriggers.all(activity) } catch (e: Exception) { emptyList() }
             val body = if (list.isEmpty()) "No triggers set yet."
-                else "Your triggers:\n" + list.mapIndexed { i, t -> (i + 1).toString() + ". when " + t.when + " -> " + t.what }.joinToString("\n")
+                else "Your triggers:\n" + list.mapIndexed { i, t -> (i + 1).toString() + ". when " + t.cond + " -> " + t.what }.joinToString("\n")
             withContext(Dispatchers.Main) { postGroundReply(activity, "```\n" + body + "\n```") }
         }
         return true

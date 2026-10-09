@@ -160,7 +160,7 @@ object NovaNudge {
 object NovaTriggers {
 
     /** when=<time HH:MM | app package | place name>, do=<what to say/do>. */
-    class Trigger(val when: String, val what: String)
+    class Trigger(val cond: String, val what: String)
 
     private fun file(ctx: Context): File = File(ctx.filesDir, "triggers.txt")
 
@@ -171,14 +171,14 @@ object NovaTriggers {
         }
     } catch (e: Exception) { emptyList() }
 
-    fun add(ctx: Context, when: String, what: String) {
-        try { file(ctx).appendText(when.trim() + "\t" + what.trim() + "\n") } catch (e: Exception) { }
+    fun add(ctx: Context, cond: String, what: String) {
+        try { file(ctx).appendText(cond.trim() + "\t" + what.trim() + "\n") } catch (e: Exception) { }
     }
 
     fun removeAt(ctx: Context, index: Int) {
         try {
             val l = all(ctx).toMutableList()
-            if (index in l.indices) { l.removeAt(index); file(ctx).writeText(l.joinToString("\n") { it.when + "\t" + it.what } + "\n") }
+            if (index in l.indices) { l.removeAt(index); file(ctx).writeText(l.joinToString("\n") { it.cond + "\t" + it.what } + "\n") }
         } catch (e: Exception) { }
     }
 
@@ -205,30 +205,30 @@ object NovaTriggers {
         val f = fired(ctx)
         var said = ""
         for (t in all(ctx)) {
-            if (now - (f[t.when] ?: 0L) < 60L * 60L * 1000L) continue     // once an hour
+            if (now - (f[t.cond] ?: 0L) < 60L * 60L * 1000L) continue     // once an hour
             val hit = when {
-                t.when.matches(Regex("\\d{1,2}:\\d{2}")) -> {
+                t.cond.matches(Regex("\\d{1,2}:\\d{2}")) -> {
                     val hm = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Calendar.getInstance().time)
-                    hm == t.when.padStart(5, '0')
+                    hm == t.cond.padStart(5, '0')
                 }
-                t.when.startsWith("app:") -> {
-                    val want = t.when.removePrefix("app:").trim()
+                t.cond.startsWith("app:") -> {
+                    val want = t.cond.removePrefix("app:").trim()
                     try {
                         val us = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
                         val since = now - 3L * 60L * 1000L
-                        us.queryEvents(since, now).use { it ->
-                            var ev = it.nextEvent(); var seen = false
-                            while (ev != null) { if (ev.packageName == want) seen = true; ev = it.nextEvent() }
+                        us.queryEvents(since, now).use { cur ->
+                            var ev = cur.nextEvent(); var seen = false
+                            while (ev != null) { if (ev.packageName == want) seen = true; ev = cur.nextEvent() }
                             seen
                         }
                     } catch (e: Exception) { false }
                 }
-                t.when.startsWith("near:") -> {
+                t.cond.startsWith("near:") -> {
                     // coarse: only if we already hold a last-known fix
                     try {
                         val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                        val loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) ?: return@for continue
-                        val want = t.when.removePrefix("near:").trim().lowercase()
+                        val loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) ?: continue
+                        val want = t.cond.removePrefix("near:").trim().lowercase()
                         // a place name is matched against a saved note of the last area
                         want.isNotEmpty() && want == lastArea(ctx)
                     } catch (e: Exception) { false }
@@ -236,7 +236,7 @@ object NovaTriggers {
                 else -> false
             }
             if (hit) {
-                f[t.when] = now
+                f[t.cond] = now
                 said = if (said.isEmpty()) t.what else said + " " + t.what
             }
         }
