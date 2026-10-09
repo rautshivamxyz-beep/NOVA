@@ -22,16 +22,22 @@ object NciePlanner {
         "web" to "look it up online (Wikipedia and the open web)",
         "files" to "files in the folder the user granted NOVA",
         "notifications" to "the user's recent phone notifications",
+        "calculator" to "arithmetic - a sum, an equation, a percentage",
+        "skills" to "a repeatable procedure NOVA has a skill for",
         "none" to "no source - answer from general knowledge"
     )
 
     fun catalogue(): String = TOOLS.joinToString("\n") { "  - ${it.first}: ${it.second}" }
 
     fun prompt(question: String): String =
-        "You route NOVA's questions to the right source. Which source(s) are needed to " +
-            "answer the question below? Reply with ONLY a JSON array of source names, " +
-            "best first, at most 2. Available sources:\n" + catalogue() +
-            "\nUse \"none\" only when no source is needed. Output only the JSON array.\n\n" +
+        "You route NOVA's questions to the right source. Think about what the question " +
+            "actually needs, then choose. Which source(s) are needed to answer the question " +
+            "below? Reply with ONLY a JSON array of source names, best first, at most 2. " +
+            "Available sources:\n" + catalogue() +
+            "\nChoose \"web\" when the answer depends on live or recent information, " +
+            "\"wiki\" for general facts, \"notes\"/\"files\" for the user's own material, " +
+            "\"memory\" for things about the user, \"calculator\" for arithmetic, and " +
+            "\"none\" only when no source is needed. Output only the JSON array.\n\n" +
             "Question: " + question
 
     /** Parses the model's reply into known tool names (best effort). */
@@ -39,7 +45,7 @@ object NciePlanner {
         val known = TOOLS.map { it.first }.toSet()
         val m = Regex("\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(reply) ?: return emptyList()
         return m.groupValues[1].split(',')
-            .map { it.trim().trim('"', '\'', '.', ' ') }
+            .map { it.trim().trim('"', '\'', '.', ' ', '`', '*') }
             .filter { it.lowercase() in known }
             .map { it.lowercase() }
             .distinct()

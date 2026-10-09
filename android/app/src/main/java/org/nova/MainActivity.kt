@@ -1541,6 +1541,12 @@ class MainActivity : Activity() {
                         // plate replies and internal prompts never enter the
                         // cache) and writes asynchronously; nothing blocks here.
                         NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)
+                        // v9.30.0 "Skill Forge" + "Growth": the same good turn
+                        // may become a skill NOVA writes for itself, and every
+                        // answered turn joins the growth ledger. Both hop onto
+                        // their own background threads - nothing blocks here.
+                        NcieSkillForge.maybeForge(this@MainActivity, userText, replyMsg.text)
+                        NcieEvolve.note(this@MainActivity, userText, replyMsg.text)
                         // v9.14.0 "Sharp Memory": did the injected wiki
                         // background actually contribute? Learn it, so a
                         // source that never helps stops costing prompt

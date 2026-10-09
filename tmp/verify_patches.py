@@ -210,7 +210,13 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.29.5: version bumped for the working-lookups fix", bg.count("versionName '9.29.5'") == 1 and bg.count("versionCode 146") == 1)
+check("v9.30.0: version bumped for the skill forge + growth loop", bg.count("versionName '9.30.0'") == 1 and bg.count("versionCode 147") == 1)
+check("v9.30.0: Skill Forge exists and appends a skill", open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieSkillForge.kt")).read().count("source=nova") >= 1)
+check("v9.30.0: Growth loop exists", os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieEvolve.kt")))
+check("v9.30.0: the forge is wired into the completed turn", open(os.path.join(ROOT, "android/app/src/main/java/org/nova/MainActivity.kt")).read().count("NcieSkillForge.maybeForge") == 1)
+check("v9.30.0: skills cache can reload after a forge", open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieSkills.kt")).read().count("fun reload(") == 1)
+check("v9.30.0: growth command wired", open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieChat.kt")).read().count("answerSkills(text)") == 1)
+check("v9.30.0: tool router knows the wider catalogue", open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NciePlanner.kt")).read().count("\"calculator\" to") == 1)
 # ---- v9.22.0 "Busy replies" ----
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and

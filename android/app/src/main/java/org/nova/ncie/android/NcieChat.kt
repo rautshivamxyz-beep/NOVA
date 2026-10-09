@@ -351,6 +351,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // file work only, like the commands above.
         if (answerLearned(text)) { input.setText(""); return }
         if (answerConnections(text)) { input.setText(""); return }
+        // v9.30.0 "Growth": the self-evolution report - "growth" / "your
+        // skills" shows what NOVA has taught itself (forged skills, the
+        // turns it has answered, and the consolidation pass's tally).
+        if (answerSkills(text)) { input.setText(""); return }
         // v9.7.0 "Quiet Fetch": the manual online lookup - "look it up
         // online: <q>" (also "look it up online <q>" / "search online for
         // <q>"; the bare form re-runs the last question). The quiet
@@ -1754,6 +1758,27 @@ private fun groundDocsBody(ctx: android.content.Context): String {
 // regenerated (filesDir/experience.txt), monospace. Like DOCS_Q above: no
 // model call, no network, works with no model loaded at all.
 private val LEARNED_Q = Regex("(?i)^\\s*what\\s+have\\s+you\\s+learned\\s*[.!?]*\\s*$")
+
+// v9.30.0 "Growth": the self-evolution commands - what NOVA has taught
+// itself. Short, typed commands only (long text is a study question).
+private val SKILLS_Q = Regex(
+    "(?i)^\\s*(?:(?:your|my|nova'?s)\\s+)?skills?\\s*[.!?]*\\s*$" +
+        "|^\\s*what\\s+skills\\b|^\\s*growth\\s*[.!?]*\\s*$" +
+        "|^\\s*how\\s+have\\s+you\\s+grown\\b|^\\s*what\\s+have\\s+you\\s+taught\\s+yourself\\b"
+)
+
+private fun MainActivity.answerSkills(text: String): Boolean {
+    if (text.length > 80 || !SKILLS_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try { NcieEvolve.report(activity) } catch (e: Exception) { "Growth report unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, "```\n" + body + "```") }
+    }
+    return true
+}
 
 private fun MainActivity.answerLearned(text: String): Boolean {
     // long/OCR'd text is a study question that merely contains the
