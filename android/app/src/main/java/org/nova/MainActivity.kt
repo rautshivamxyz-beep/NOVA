@@ -3497,10 +3497,7 @@ Study:
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating || !ensureModelReady()) return
         startGeneration(
-            "Continue your previous answer exactly where it stopped. Do not repeat anything. "
-                            + "You had written this much so far - carry straight on from its very "
-                            + "last character, do not restart and do not re-explain:\n"
-                            + replyMsg.text.takeLast(400),
+            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
             null, newBubble = false)
     }
 
