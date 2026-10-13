@@ -285,11 +285,23 @@ class ModelsActivity : Activity() {
             totalRam >= 5 -> "3B–4B Q4 models are the sweet spot"
             else -> "1B–3B Q4 models are recommended"
         }
+        // v9.31.6 "Best for this phone": the tier above was generic ("3B-4B
+        // models"). Name the exact catalogue model that fits this device's
+        // RAM best - the biggest one that still runs comfortably - so the
+        // user never has to guess which download is right for their phone.
+        val best = try {
+            ModelCatalog.entries
+                .filter { it.minRamGb <= totalRam.toInt() }
+                .maxByOrNull { it.minRamGb }
+        } catch (e: Exception) { null }
         deviceText.text =
             "This device\n" +
             String.format(java.util.Locale.US, "RAM: %.1f GB total · %.1f GB free\n", totalRam, freeRam) +
             "CPU: ${DeviceCapabilities.cpuDescription()}\n\n" +
-            "Recommended: $recommended"
+            "Recommended: $recommended" +
+            if (best != null)
+                "\n\nBest for this phone: ${best.name} (${best.params} ${best.quant})\n${best.notes}"
+            else ""
     }
 
     // ------------------------------------------------------- local models
