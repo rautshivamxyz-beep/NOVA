@@ -1786,6 +1786,15 @@ private fun MainActivity.answerJarvis(text: String): Boolean {
     if (text.length > 80) return false
     // hands-free on / off / toggle
     if (HANDSFREE_Q.containsMatchIn(text)) {
+        // v9.31.2: hands-free needs the mic - ask for it the first time
+        if (!NovaHandsfree.isOn() && !NovaHandsfree.hasMic(this)) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 4260)
+            input.setText("")
+            val um0 = Msg(Role.USER, text); currentChat.messages.add(um0); adapter.add(um0)
+            val r0 = Msg(Role.ASSISTANT, "I need the microphone for hands-free. Allow it, then say \"hands free\" again.")
+            currentChat.messages.add(r0); adapter.add(r0); scrollToEnd()
+            return true
+        }
         val on = NovaHandsfree.toggle(this)
         input.setText("")
         val um = Msg(Role.USER, text)
@@ -1795,6 +1804,18 @@ private fun MainActivity.answerJarvis(text: String): Boolean {
             else "Hands-free is off.")
         currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
         try { if (on) org.nova.NcieVoice.init(this) } catch (e: Exception) { }
+        return true
+    }
+    // v9.31.2: "remember this place as <name>" - the place trigger needs a spot
+    val placeQ = Regex("(?i)^\\s*remember this place as\\s+(.{2,20})\\s*[.!?]*\\s*$").find(text)
+    if (placeQ != null) {
+        if (!NovaTriggers.hasLocation(this)) requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), 4261)
+        input.setText("")
+        val um = Msg(Role.USER, text); currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+        val msg = if (!NovaTriggers.hasLocation(this))
+            "Allow location, then say \"remember this place as home\" again."
+            else NovaTriggers.rememberPlace(this, placeQ.groupValues[1])
+        val rp = Msg(Role.ASSISTANT, msg); currentChat.messages.add(rp); adapter.add(rp); scrollToEnd()
         return true
     }
     // what triggers are set

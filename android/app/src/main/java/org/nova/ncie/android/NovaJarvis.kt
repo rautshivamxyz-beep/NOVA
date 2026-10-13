@@ -37,8 +37,16 @@ object NovaHandsfree {
 
     @Volatile private var rec: SpeechRecognizer? = null
     @Volatile private var on = false
+    @Volatile private var idle = 0            // consecutive listens with no speech
+    private const val IDLE_LIMIT = 6          // ~2 minutes of silence -> stop
 
     fun isOn(): Boolean = on
+
+    /** v9.31.2: does the app hold the mic permission? */
+    fun hasMic(ctx: Context): Boolean = try {
+        ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    } catch (e: Exception) { false }
 
     /** Toggle. Returns the new state. */
     fun toggle(act: MainActivity): Boolean {
@@ -49,7 +57,9 @@ object NovaHandsfree {
     /** Start the listen -> answer -> listen loop. */
     fun start(act: MainActivity) {
         if (!SpeechRecognizer.isRecognitionAvailable(act)) return
+        if (!hasMic(act)) return          // the caller asks for the permission first
         on = true
+        idle = 0
         listen(act)
     }
 
@@ -77,9 +87,14 @@ object NovaHandsfree {
                     val said = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull()?.trim().orEmpty()
                     if (said.isNotEmpty()) {
+                        idle = 0
                         // strip a wake word if they used one
                         val clean = said.replace(Regex("(?i)^\\s*(hey |ok |okay )?nova[,!.]?\\s*"), "").trim()
                         if (clean.isNotEmpty()) act.launchNcieSend(clean)
+                    }
+                    if (said.isEmpty()) {
+                        idle++
+                        if (idle >= IDLE_LIMIT) { stop(); return }   // quiet for a while -> stop
                     }
                     // answer, then listen again
                     Handler(Looper.getMainLooper()).postDelayed({ listen(act) }, 1200)
@@ -212,13 +227,11 @@ object NovaTriggers {
                     hm == t.cond.padStart(5, '0')
                 }
                 t.cond.startsWith("near:") -> {
-                    // coarse: only if we already hold a last-known fix
                     try {
-                        val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                        val loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) ?: continue
                         val want = t.cond.removePrefix("near:").trim().lowercase()
-                        // a place name is matched against a saved note of the last area
-                        want.isNotEmpty() && want == lastArea(ctx)
+                        val saved = places(ctx)[want] ?: false
+                        val now2 = here(ctx) ?: false
+                        metres(now2, saved.first, saved.second) < 500.0   // within ~500 m
                     } catch (e: Exception) { false }
                 }
                 else -> false
@@ -235,13 +248,48 @@ object NovaTriggers {
         return said
     }
 
-    /** The coarse area NOVA last saw (set by the app when it has a fix). */
-    fun lastArea(ctx: Context): String = try {
-        File(ctx.filesDir, "last_area.txt").readText().trim().lowercase()
-    } catch (e: Exception) { "" }
+    /** v9.31.2: saved places, name -> (lat, lon). Written by [rememberPlace]. */
+    private fun places(ctx: Context): Map<String, Pair<Double, Double>> {
+        val m = HashMap<String, Pair<Double, Double>>()
+        try {
+            for (l in File(ctx.filesDir, "places.txt").readLines()) {
+                val p = l.split('\t')
+                if (p.size == 3) {
+                    val la = p[1].toDoubleOrNull() ?: continue
+                    val lo = p[2].toDoubleOrNull() ?: continue
+                    m[p[0].trim().lowercase()] = la to lo
+                }
+            }
+        } catch (e: Exception) { }
+        return m
+    }
 
-    fun setArea(ctx: Context, area: String) {
-        try { File(ctx.filesDir, "last_area.txt").writeText(area.trim().lowercase()) } catch (e: Exception) { }
+    fun hasLocation(ctx: Context): Boolean = try {
+        ctx.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    } catch (e: Exception) { false }
+
+    private fun here(ctx: Context): android.location.Location? = try {
+        val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+    } catch (e: Exception) { null }
+
+    /** "remember this place as home" - stores where we are now under a name. */
+    fun rememberPlace(ctx: Context, name: String): String {
+        if (!hasLocation(ctx)) return "I need location permission first - say \"allow location\"."
+        val loc = here(ctx) ?: return "I have no location fix yet. Open Maps once, then try again."
+        val key = name.trim().lowercase().ifBlank { "home" }
+        return try {
+            File(ctx.filesDir, "places.txt").appendText(key + "\t" + loc.latitude + "\t" + loc.longitude + "\n")
+            "Saved. I will act when you are near " + key + "."
+        } catch (e: Exception) { "Could not save the place." }
+    }
+
+    private fun metres(a: android.location.Location, la: Double, lo: Double): Double {
+        val r = DoubleArray(1)
+        android.location.Location.distanceBetween(a.latitude, a.longitude, la, lo, r)
+        return r[0]
     }
 }
 

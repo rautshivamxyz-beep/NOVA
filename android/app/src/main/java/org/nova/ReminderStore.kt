@@ -97,5 +97,8 @@ class BootReceiver : android.content.BroadcastReceiver() {
         // were armed only when the morning briefing ran, so a reboot
         // silently stopped them.
         try { NovaHealth.armAll(context) } catch (e: Exception) { }
+        // v9.31.2 "Jarvis": re-arm the spoken-nudge / trigger tick too, so a
+        // reboot no longer silently stops them.
+        try { org.nova.ncie.android.NovaNudge.schedule(context) } catch (e: Exception) { }
     }
 }

@@ -26,6 +26,13 @@ class HelpActivity : Activity() {
             "study" to "revise your weak areas",
             "my weak areas" to "what you keep getting wrong",
             "my flashcards" to "your saved cards",
+            // v9.31.2: the new Jarvis / self-evolution commands
+            "hands free" to "talk to NOVA without touching the phone",
+            "hands free off" to "stop hands-free mode",
+            "growth" to "what NOVA has taught itself",
+            "your skills" to "skills NOVA wrote for itself",
+            "my triggers" to "your when-X-do-Y list",
+            "remember this place as home" to "save where you are for a place trigger",
             "start study" to "a 45-minute timer",
             "my exam is on 5 March" to "sets the exam countdown",
             "plan my revision" to "builds a revision plan"
