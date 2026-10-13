@@ -1535,7 +1535,10 @@ class MainActivity : Activity() {
                     if (willContinue) {
                         autoContinueCount++
                         startGeneration(
-                            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
+                            "Continue your previous answer exactly where it stopped. Do not repeat anything. "
+                            + "You had written this much so far - carry straight on from its very "
+                            + "last character, do not restart and do not re-explain:\n"
+                            + replyMsg.text.takeLast(400),
                             null, newBubble = false)
                     } else {
                         // NCIE v0.7.0 (#1): the turn is complete (no continuation
@@ -3494,7 +3497,10 @@ Study:
         if (compacting) { toast("Compressing older messages — one moment"); return }
         if (generating || !ensureModelReady()) return
         startGeneration(
-            "Continue your previous answer exactly where it stopped. Do not repeat anything.",
+            "Continue your previous answer exactly where it stopped. Do not repeat anything. "
+                            + "You had written this much so far - carry straight on from its very "
+                            + "last character, do not restart and do not re-explain:\n"
+                            + replyMsg.text.takeLast(400),
             null, newBubble = false)
     }
 

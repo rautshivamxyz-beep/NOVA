@@ -937,9 +937,20 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // warmly..."). The match itself stays exact-question-only
         // (NcieEngines.isExperienced is a case-insensitive trim match;
         // v9.13.0 moved the val up, above the caches it now gates).
-        var experiencePart = if (experienced)
-            "(Answer the question directly and completely. Do not describe what you will say.)\n\n"
-        else ""
+        // v9.31.4 "Answer quality": the instruction now always rides along -
+        // a small model invents dates and places when it is not told what to
+        // do when unsure, answers "who is X" in two vague lines, and pads the
+        // end with empty filler. This is the cheap, speed-neutral half of the
+        // quality work: same model, same tokens, sharper answers.
+        val qualityRules =
+            "(Answer the question directly and completely. Do not describe what you will say.)\n" +
+            "(FACTS: if you are not certain of a date, a place, an institution, a name or a number, " +
+            "say you are not sure - never guess one.\n" +
+            "WHO IS/WAS X: first one line on who they were, then 4 to 5 key facts with their dates, " +
+            "then one line on why they matter.\n" +
+            "Do not end with filler such as \"a figure of fascination\" or \"left a lasting impact\" " +
+            "unless you also give a real fact.)\n\n"
+        var experiencePart = qualityRules
         // one background source for tiny models, both for bigger ones -
         // the source a tiny model drops stays out of the budget math too
         if (tiny) {
