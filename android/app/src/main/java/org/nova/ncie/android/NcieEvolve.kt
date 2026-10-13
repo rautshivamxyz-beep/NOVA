@@ -41,7 +41,8 @@ object NcieEvolve {
     fun note(ctx: Context, question: String?, answer: String?) {
         if (question == null || answer == null) return
         val q = question.trim()
-        if (q.length < 8 || q.length > 300) return
+        // v9.31.5: a real question only - one-word chit-chat is not growth
+        if (q.length < 20 || q.length > 300) return
         NcieSkills.ensure(ctx)
         val kind = if (NcieSkills.match(q) != null) "skill" else "answer"
         io.execute {
@@ -51,8 +52,11 @@ object NcieEvolve {
                     System.currentTimeMillis().toString() + "\t" + kind + "\t" +
                         q.replace('\n', ' ').take(140) + "\n"
                 )
-                val lines = f.readLines()
-                if (lines.size > MAX_LINES) f.writeText(lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
+                // v9.31.5: only compact when the file actually grew past the cap
+                if (f.length() > 40_000) {
+                    val lines = f.readLines()
+                    if (lines.size > MAX_LINES) f.writeText(lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
+                }
             } catch (e: Exception) { }
         }
     }

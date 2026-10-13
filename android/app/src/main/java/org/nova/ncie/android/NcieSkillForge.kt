@@ -23,7 +23,8 @@ import java.util.concurrent.Executors
 object NcieSkillForge {
 
     private const val MAX_FORGED = 20          // cap the library it grows
-    private const val MIN_GAP_MS = 90_000L     // at most one forge per 90s
+    private const val MIN_GAP_MS = 900_000L    // v9.31.5: at most one forge per 15 min
+    private const val MIN_ANSWER = 400        // only a substantial answer is worth a skill
     private const val MAX_INSTRUCTION = 600
 
     /** NOVA's own skills live in the user file (it takes precedence). */
@@ -124,7 +125,7 @@ object NcieSkillForge {
         val q = question.trim()
         val a = answer.trim()
         if (q.length < 12 || q.length > 300) return
-        if (a.length < 60) return
+        if (a.length < MIN_ANSWER) return
         if (CHITCHAT.containsMatchIn(q)) return
         if (!PROCEDURAL.containsMatchIn(q)) return
         NcieSkills.ensure(ctx)
