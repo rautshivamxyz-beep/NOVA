@@ -222,9 +222,32 @@ class KnowledgeStore(
         // the best match
         val center = idxs.maxByOrNull { chunkScores[it] } ?: docIdx.first()
         val pos = docIdx.indexOf(center).coerceAtLeast(0)
-        val from = maxOf(0, pos - 2)
-        val to = minOf(docIdx.size, from + maxChunks)
-        return docIdx.subList(from, to).map { chunks[it].text }
+        // v9.31.3 "Two-window retrieval": one window answered single-topic
+        // questions well, but a question whose answer lives in TWO places
+        // (a definition here, a formula there) only ever saw the first.
+        // The best match still gives its window; if the second-best match
+        // sits far away it is a different part of the answer, so its window
+        // comes along too. Same token budget, better coverage - no model
+        // call, no extra cost.
+        val ranked = idxs.sortedByDescending { chunkScores[it] }
+        val out = ArrayList<Int>()
+        fun addWindow(at: Int) {
+            val from2 = maxOf(0, at - 2)
+            val to2 = minOf(docIdx.size, from2 + maxChunks / 2)
+            for (i in from2 until to2) if (!out.contains(i)) out.add(i)
+        }
+        addWindow(pos)
+        val second = ranked.drop(1).firstOrNull {
+            kotlin.math.abs(docIdx.indexOf(it) - pos) > 3
+        }
+        if (second != null) addWindow(docIdx.indexOf(second).coerceAtLeast(0))
+        if (out.isEmpty()) {
+            val from2 = maxOf(0, pos - 2)
+            val to2 = minOf(docIdx.size, from2 + maxChunks)
+            return docIdx.subList(from2, to2).map { chunks[it].text }
+        }
+        out.sort()
+        return out.take(maxChunks).map { chunks[it].text }
     }
 
     /** True when every query term hits the document NAME — the user means
