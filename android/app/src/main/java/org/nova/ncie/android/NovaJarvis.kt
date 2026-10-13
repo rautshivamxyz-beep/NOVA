@@ -229,9 +229,11 @@ object NovaTriggers {
                 t.cond.startsWith("near:") -> {
                     try {
                         val want = t.cond.removePrefix("near:").trim().lowercase()
-                        val saved = places(ctx)[want] ?: false
-                        val now2 = here(ctx) ?: false
-                        metres(now2, saved.first, saved.second) < 500.0   // within ~500 m
+                        val saved = places(ctx)[want]
+                        val now2 = here(ctx)
+                        if (saved != null && now2 != null) {
+                            metres(now2, saved.first, saved.second) < 500.0   // within ~500 m
+                        } else false
                     } catch (e: Exception) { false }
                 }
                 else -> false
@@ -287,9 +289,9 @@ object NovaTriggers {
     }
 
     private fun metres(a: android.location.Location, la: Double, lo: Double): Double {
-        val r = DoubleArray(1)
+        val r = FloatArray(1)
         android.location.Location.distanceBetween(a.latitude, a.longitude, la, lo, r)
-        return r[0]
+        return r[0].toDouble()
     }
 }
 
