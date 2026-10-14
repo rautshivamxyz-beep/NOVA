@@ -191,6 +191,12 @@ object NovaEngine {
      * (the engine unloads any draft), so this can only help, never regress.
      */
     private fun findDraftModel(ctx: Context): java.io.File? {
+        // v9.32.1 "Low-RAM guard": speculative decoding keeps a SECOND model in
+        // memory. On a 4 GB phone Android already holds 2-3 GB, so the draft
+        // pushes the device into swapping - the draft made those phones slower,
+        // not faster. Below 5 GB the draft is skipped entirely.
+        val ramGb = try { org.nova.DeviceCapabilities.totalRamGb(ctx) } catch (e: Exception) { 8.0 }
+        if (ramGb < 5.0) return null
         val target = (activeModelLabel + " " + (activeModelPath ?: "")).lowercase()
         val files = ModelCatalog.modelsDir(ctx).listFiles { f: java.io.File ->
             f.extension == "gguf"

@@ -289,18 +289,23 @@ class ModelsActivity : Activity() {
         // models"). Name the exact catalogue model that fits this device's
         // RAM best - the biggest one that still runs comfortably - so the
         // user never has to guess which download is right for their phone.
+        // v9.32.1: on a 4 GB phone the LARGEST fitting model is a trap - it
+        // swaps. Below 5 GB pick the smallest-but-good model instead, and say
+        // why, so nobody loads a model their phone cannot hold.
         val best = try {
-            ModelCatalog.entries
-                .filter { it.minRamGb <= totalRam.toInt() }
-                .maxByOrNull { it.minRamGb }
+            val fits = ModelCatalog.entries.filter { it.minRamGb <= totalRam.toInt() }
+            if (totalRam < 5.0) fits.minByOrNull { it.sizeBytes } else fits.maxByOrNull { it.minRamGb }
         } catch (e: Exception) { null }
+        val lowRam = totalRam < 5.0
         deviceText.text =
             "This device\n" +
             String.format(java.util.Locale.US, "RAM: %.1f GB total · %.1f GB free\n", totalRam, freeRam) +
             "CPU: ${DeviceCapabilities.cpuDescription()}\n\n" +
             "Recommended: $recommended" +
             if (best != null)
-                "\n\nBest for this phone: ${best.name} (${best.params} ${best.quant})\n${best.notes}"
+                "\n\nBest for this phone: ${best.name} (${best.params} ${best.quant})\n${best.notes}" +
+                    if (lowRam) "\n\nThis phone has little RAM, so a small model is the fast one here - " +
+                        "a bigger model would make the phone swap and feel slow." else ""
             else ""
     }
 
