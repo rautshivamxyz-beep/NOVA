@@ -63,6 +63,20 @@ object NciePlanner {
         Regex("(?i)\\b(who|what|when|where|which|kaun|kya|kab|kahan)\\b") to "wiki"
     )
 
+    /**
+     * v9.32.2 "No leak": the router's reply is internal, but a chat answer was
+     * once the raw array - the router's own output surfaced as the reply. Any
+     * answer that is nothing but a JSON array of tool names is not an answer.
+     */
+    fun isToolJson(answer: String?): Boolean {
+        val t = (answer ?: "").trim()
+        if (t.length < 6 || !t.startsWith("[") || !t.endsWith("]")) return false
+        val known = TOOLS.map { it.first }.toSet()
+        val parts = t.substring(1, t.length - 1).split(',')
+            .map { it.trim().trim('"', '\'', ' ') }.filter { it.isNotEmpty() }
+        return parts.isNotEmpty() && parts.all { it.lowercase() in known }
+    }
+
     /** Asks the local model which tools to use. Call OFF the main thread. */
     fun choose(ctx: Context, text: String): List<String> {
         for ((re, tool) in FAST) if (re.containsMatchIn(text)) return listOf(tool)

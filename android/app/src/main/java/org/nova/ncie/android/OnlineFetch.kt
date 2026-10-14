@@ -77,7 +77,13 @@ object OnlineFetch {
         if (kws.isEmpty() && !devanagari) {
             act.launchNcieSend(text, offered = true); return
         }
-        val q = if (devanagari) text.trim().take(160) else kws.joinToString(" ")
+        // v9.32.2 "Search the question": searching the bare keywords sent "modi" to
+        // Wikipedia, where it is ambiguous, and the answer came back about his
+        // estranged wife. A natural question resolves the entity correctly, so a
+        // short question is searched as written; only a long one falls back to
+        // its key terms.
+        val q = if (devanagari || text.trim().length <= 120) text.trim().take(160)
+                else kws.joinToString(" ")
         val title: String; val message: String; val noBtn: String
         if (haveLocal) {
             title = "Look online too?"
@@ -123,7 +129,7 @@ object OnlineFetch {
     fun honestOffer(act: MainActivity, text: String) {
         val kws = NcieKnowledge.keyTerms(text).take(6)
         if (kws.isEmpty()) { act.launchNcieSend(text, offered = true); return }
-        val q = kws.joinToString(" ")
+        val q = if (text.trim().length <= 120) text.trim().take(160) else kws.joinToString(" ")
         if (org.nova.Settings(act).autoOnline) { fetch(act, text, q); return }
         AlertDialog.Builder(act)
             .setTitle("Look it up online?")
