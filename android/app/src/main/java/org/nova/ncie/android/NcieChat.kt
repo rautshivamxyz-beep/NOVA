@@ -949,7 +949,16 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             "WHO IS/WAS X: first one line on who they were, then 4 to 5 key facts with their dates, " +
             "then one line on why they matter.\n" +
             "Do not end with filler such as \"a figure of fascination\" or \"left a lasting impact\" " +
-            "unless you also give a real fact.)\n\n"
+            "unless you also give a real fact.\n" +
+            "ANSWER WHAT WAS ASKED: answer only the question you were given. Never answer a different " +
+            "question, and never invent or restate a request the user did not make.\n" +
+            "FOLLOW-UPS: when the user says \"he\", \"him\", \"she\", \"it\", \"the character\", " +
+            "\"the topic\" or similar, they mean the SAME subject as the previous turn. Keep that subject - " +
+            "never switch to a different person or thing.\n" +
+            "VOICE: speak directly to the user. Never refer to yourself in the third person " +
+            "(never write \"Nova explains that...\" or \"Nova says...\").\n" +
+            "TEACHING: when asked to teach, teach - start with the topic, then the ideas in order, then a " +
+            "short example. Do not describe what you are about to do.)\n\n"
         var experiencePart = qualityRules
         // one background source for tiny models, both for bigger ones -
         // the source a tiny model drops stays out of the budget math too
