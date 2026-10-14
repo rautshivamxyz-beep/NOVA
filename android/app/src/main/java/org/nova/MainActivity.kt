@@ -1190,6 +1190,27 @@ class MainActivity : Activity() {
 
     /** v7.6: strips model-echoed boilerplate - repeated strict-mode
      *  markers (keep only the first) and "The final answer is:" lines. */
+    /**
+     * v9.32.4 "Asked, not invented": a small model sometimes answers a question
+     * the user never asked. It quotes its OWN question and then replies to it.
+     * The gift question ("what can I gift my sister") came back as an answer to
+     * "how to kill my sister" - a question nobody asked, answered with harm.
+     * When the reply quotes a question whose words barely overlap the user's,
+     * the whole reply is answering something invented, so it is not shown.
+     */
+    private fun stripInventedQuestion(reply: String, asked: String): String {
+        if (asked.isBlank()) return reply
+        val q = Regex("[\"\u201c]([^\"\u201d]{6,140}\\?)[\"\u201d]").find(reply) ?: return reply
+        val invented = q.groupValues[1]
+        fun words(x: String) = Regex("[a-z]{3,}").findAll(x.lowercase()).map { it.value }.toSet()
+        val askedW = words(asked)
+        val invW = words(invented)
+        if (invW.isEmpty()) return reply
+        val overlap = invW.count { it in askedW }.toDouble() / invW.size
+        if (overlap >= 0.5) return reply          // the user's own question, quoted back
+        return "(no reply - tap the regenerate icon to try again)"
+    }
+
     private fun cleanReplyText(s: String): String {
         val out = ArrayList<String>()
         var seenMarker = false
@@ -1448,7 +1469,8 @@ class MainActivity : Activity() {
                     // v7.6: small models copy the strict-mode marker into
                     // reply after reply and announce "The final answer is:" -
                     // keep the first marker, drop the rest and the announcements
-                    val cleaned = cleanReplyText(replyMsg.text)
+                    val asked = currentChat.messages.lastOrNull { it.role == Role.USER }?.text ?: ""
+                    val cleaned = stripInventedQuestion(cleanReplyText(replyMsg.text), asked)
                     if (cleaned != replyMsg.text) {
                         replyMsg.text = cleaned
                         adapter.setLastText(cleaned)
