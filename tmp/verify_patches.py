@@ -264,7 +264,7 @@ check("v9.26.0: the fetch sends a browser User-Agent (so DuckDuckGo answers)",
       load("NovaNet.kt").count("NOVA-local-assistant/1.0 (offline study)") == 0 and
       load("NovaNet.kt").count("Accept-Language") == 1)
 check("v9.26.0/9.32.2: a Devanagari (and any short) question is searched as written, not refused",
-      "devanagari || text.trim().length <= 120" in of)
+      "devanagari || text.trim().length <= 120" in of_)
 check("v9.26.0: the busy-line prompt puts the TASK before the examples",
       load("ncie/android/NcieStyle.kt").count("TASK: ") == 1 and
       load("ncie/android/NcieStyle.kt").count("ONLY a style reference") == 1 and
