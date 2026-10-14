@@ -1438,8 +1438,12 @@ class MainActivity : Activity() {
                         return@withContext
                     }
                     // a reply that still came out completely empty - say so
-                    // instead of showing a blank bubble
-                    if (stripThinking(replyMsg.text).isBlank() && !speechCancelled)
+                    // instead of showing a blank bubble.
+                    // v9.32.2: and a reply that is nothing but the router's own
+                    // tool array ("[\"notes\",\"wikipedia\"]") is not an answer
+                    // either - the router is internal and must never reach the chat.
+                    if ((stripThinking(replyMsg.text).isBlank() ||
+                            org.nova.ncie.android.NciePlanner.isToolJson(replyMsg.text)) && !speechCancelled)
                         replyMsg.text = "(no reply - tap the regenerate icon to try again)"
                     // v7.6: small models copy the strict-mode marker into
                     // reply after reply and announce "The final answer is:" -
