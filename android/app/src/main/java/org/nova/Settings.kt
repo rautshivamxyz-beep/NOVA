@@ -83,6 +83,12 @@ class Settings(context: Context) {
      *  forever. Off by default: the phone answers 100% offline until the
      *  user opts in. */
     var onlineLearning: Boolean
+    /** v9.32.0 "Always online": a factual question is looked up automatically instead of
+     *  asking first - the source is what stops the model inventing facts.
+     */
+    var autoOnline: Boolean
+        get() = prefs.getBoolean("autoOnline", true)
+        set(v) = prefs.edit().putBoolean("autoOnline", v).apply()
         get() = prefs.getBoolean(KEY_ONLINE_LEARN, false)
         set(value) = prefs.edit().putBoolean(KEY_ONLINE_LEARN, value).apply()
 

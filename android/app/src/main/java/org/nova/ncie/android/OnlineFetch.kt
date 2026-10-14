@@ -96,6 +96,13 @@ object OnlineFetch {
                 "offline forever."
             noBtn = "Answer anyway"
         }
+        // v9.32.0 "Always online": when the user has asked NOVA to look things up
+        // on its own, the dialog is skipped and the fetch runs immediately - a
+        // grounded answer is the only thing that stops the invented facts.
+        if (org.nova.Settings(act).autoOnline) {
+            fetch(act, text, q)
+            return
+        }
         AlertDialog.Builder(act)
             .setTitle(title)
             .setMessage(message)
@@ -117,6 +124,7 @@ object OnlineFetch {
         val kws = NcieKnowledge.keyTerms(text).take(6)
         if (kws.isEmpty()) { act.launchNcieSend(text, offered = true); return }
         val q = kws.joinToString(" ")
+        if (org.nova.Settings(act).autoOnline) { fetch(act, text, q); return }
         AlertDialog.Builder(act)
             .setTitle("Look it up online?")
             .setMessage("I don't know this well enough with this model — " +
