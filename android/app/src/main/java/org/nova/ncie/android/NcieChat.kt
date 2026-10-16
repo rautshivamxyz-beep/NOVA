@@ -199,6 +199,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // NOVA's fixed offline primitives; "run tool ..." replays one.
         if (answerToolRequest(text)) { input.setText(""); return }
         if (answerHealth(text)) { input.setText(""); return }
+        if (answerProxy(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the
@@ -1782,6 +1783,23 @@ private val DOCS_Q = Regex(
 private val HEALTH_Q = Regex(
     "(?i)^\\s*(health|nova health|what(?:'s| is) not working|what is broken|" +
         "fix nova|nova setup|setup nova|diagnose)\\b")
+
+/** v9.33.3: "proxy" / "test proxy" - is the SOCKS proxy actually carrying traffic? */
+private val PROXY_Q = Regex(
+    "(?i)^\\s*(proxy|test proxy|check proxy|is the proxy working|socks)\\s*$")
+
+private fun MainActivity.answerProxy(text: String): Boolean {
+    if (!PROXY_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = org.nova.NovaNet.testProxy(activity)
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
 
 private fun MainActivity.answerHealth(text: String): Boolean {
     if (text.length > 60 || !HEALTH_Q.containsMatchIn(text)) return false

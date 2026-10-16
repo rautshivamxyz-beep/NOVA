@@ -77,7 +77,7 @@ object WikiCore {
         try {
             _state.value = Pair(0.04f, "downloading Wikipedia data")
             val url = "https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA-APK/main/wiki/articles-v1.txt"
-            val text = http(url)
+            val text = http(ctx, url)
             val lines = text.split("\n").filter { it.contains("\u241F") }
             if (lines.size < 100) {
                 lastError = "dataset file not ready yet - try again in a few minutes"
@@ -127,11 +127,12 @@ object WikiCore {
         }
     }
 
-    private fun http(url: String): String {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15000
-        conn.readTimeout = 60000
-        conn.setRequestProperty("User-Agent", "NOVA-local-assistant/1.0 (offline study)")
+    private fun http(ctx: Context, url: String): String {
+        // v9.33.3 "Really private": this opened its own connection, so the
+        // Wikipedia download went out with the phone's own IP even with the
+        // SOCKS proxy switched on. Every outbound request now goes through
+        // NovaNet, which is the one place the proxy is applied.
+        val conn = NovaNet.open(ctx, url, connectMs = 15000, readMs = 60000)
         // gzip cuts the transfer to ~1/4 - the dataset is several MB
         conn.setRequestProperty("Accept-Encoding", "gzip")
         try {

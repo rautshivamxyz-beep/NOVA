@@ -60,6 +60,34 @@ object NovaNet {
         return conn
     }
 
+    /**
+     * v9.33.3 "Really private": a check the user can actually run. With the
+     * proxy on but Orbot not running, every lookup failed with "couldn't find
+     * anything" - which looks identical to a lookup that simply found nothing,
+     * so the proxy looked broken with no way to tell. This reports the exit
+     * address, so the answer is unambiguous.
+     */
+    fun testProxy(context: Context?): String {
+        if (context == null) return "No app context - cannot test."
+        val s = Settings(context.applicationContext)
+        if (!s.proxyEnabled)
+            return "The SOCKS proxy is OFF, so lookups go out with this phone's own IP. " +
+                "Turn it on in Settings, under Privacy."
+        val host = s.proxyHost.ifBlank { DEFAULT_HOST }
+        val port = if (s.proxyPort in 1..65535) s.proxyPort else DEFAULT_PORT
+        return try {
+            val ip = getText(context, "https://api.ipify.org", 8000, 12000).trim()
+            if (ip.length in 7..45 && ip.all { it.isDigit() || it == '.' || it in "abcdefABCDEF:" })
+                "The proxy works. Sites NOVA reads now see " + ip + " instead of your own address."
+            else
+                "The proxy answered, but not with an address. Check " + host + ":" + port + "."
+        } catch (e: Exception) {
+            "Could not reach the internet through " + host + ":" + port + " (" +
+                e.javaClass.simpleName + "). Start Orbot and make sure its SOCKS port is " +
+                port + "."
+        }
+    }
+
     /** GET a URL as text, through the configured proxy (or direct). */
     fun getText(context: Context?, url: String, connectMs: Int = 10000,
                 readMs: Int = 20000): String {
