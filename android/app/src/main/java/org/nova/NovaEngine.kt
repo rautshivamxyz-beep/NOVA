@@ -227,16 +227,27 @@ object NovaEngine {
         val params = MODEL_PARAMS.find(n)?.groupValues?.get(1)?.toDoubleOrNull()
         val big = params != null && params >= 1.0
         if (!reasoning && !big) return ""
+        // v9.33.6: a 1.2B Thinking model is BOTH "reasoning" and "big", and the
+        // big branch came first - so NOVA told a thinking model not to think.
+        // It thinks anyway, and the thinking then leaks into the visible answer
+        // (live log: a calculator reply contained "{subtract(10,8)}? Wait, let's
+        // compute properly.}" inside the code block). A model that reasons is
+        // now always given the reasoning rule, not the no-thinking one.
+        if (reasoning) {
+            return "\n\n(You are a reasoning model. THINK BRIEFLY: at most ONE short " +
+                "sentence of planning for routine questions; save step-by-step " +
+                "reasoning for genuinely hard math or logic only. Never repeat the " +
+                "question or restate your plan inside the thinking. Never put " +
+                "reasoning, working-out or self-correction inside a code block or " +
+                "inside the visible answer. Start the visible answer immediately " +
+                "after thinking.)"
+        }
         if (big) {
             return "\n\n(Do NOT produce any thinking, reasoning or planning - " +
                 "no hidden chain-of-thought, no scratchpad. Answer the user " +
                 "directly and concisely, starting with the answer itself.)"
         }
-        return "\n\n(You are a reasoning model. THINK BRIEFLY: at most ONE short " +
-            "sentence of planning for routine questions; save step-by-step " +
-            "reasoning for genuinely hard math or logic only. Never repeat the " +
-            "question or restate your plan inside the thinking. Start the visible " +
-            "answer immediately after thinking.)"
+        return ""
     }
 
     /**
