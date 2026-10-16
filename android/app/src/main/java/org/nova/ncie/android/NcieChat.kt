@@ -889,7 +889,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 if (wikiStrong && entityQ) {
                     var body = wikiHits.first().text.replace(Regex("\\[\\d+\\]"), "")
                         .replace(Regex("\\s+"), " ").trim()
-                    if (body.length > 900) {
+                    if (body.length > 1200) {
                         body = body.substring(0, 1200)
                         val cut = body.lastIndexOf(". ")
                         if (cut > 300) body = body.substring(0, cut + 1)
