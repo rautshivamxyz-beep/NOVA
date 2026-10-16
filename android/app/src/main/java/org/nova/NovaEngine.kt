@@ -339,7 +339,7 @@ object NovaEngine {
         // budget with filler. Cap its reply so answers stay tight.
         val budget = if (org.nova.ncie.android.NcieChat.tinyModelFile(
                 activeModelPath?.substringAfterLast('/')))
-            minOf(predictLength, 256) else predictLength
+            minOf(predictLength, 320) else predictLength
         // v9.13.9 "No dropped turns": the engine DISCARDS a prompt that
         // arrives while it is still processing the previous one - the user
         // sees "[error: User prompt discarded due to: ProcessingUserPrompt]"

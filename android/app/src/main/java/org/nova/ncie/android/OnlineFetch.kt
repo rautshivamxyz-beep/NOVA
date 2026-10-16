@@ -328,7 +328,7 @@ object OnlineFetch {
     private fun cleanSource(t: String): String {
         var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
         if (x.length > 900) {
-            x = x.substring(0, 900)
+            x = x.substring(0, 1200)
             val cut = x.lastIndexOf(". ")
             if (cut > 300) x = x.substring(0, cut + 1)
         }

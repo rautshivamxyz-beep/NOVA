@@ -873,7 +873,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 var facts = wikiHits.joinToString("\n---\n") { "${it.title}: ${it.text}" }
                 // v7.5: wiki is background only - halve it so the model reads
                 // less before the first word; notes (the quality driver) stay
-                val cap = if (lean) 900 else 1200
+                val cap = if (lean) 1400 else 1800
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(This is the reference you just looked up. ANSWER FROM IT. It overrides your own memory - if the reference and your memory disagree, the reference is right. If the reference does NOT contain the answer, say plainly that you could not find it there; do not fill the gap from memory and do not invent dates, names or numbers that are not in it.\n$facts)\n\n"
                 lastWikiText = facts   // v9.14.0 "Sharp Memory": measured at turn end
@@ -890,7 +890,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     var body = wikiHits.first().text.replace(Regex("\\[\\d+\\]"), "")
                         .replace(Regex("\\s+"), " ").trim()
                     if (body.length > 900) {
-                        body = body.substring(0, 900)
+                        body = body.substring(0, 1200)
                         val cut = body.lastIndexOf(". ")
                         if (cut > 300) body = body.substring(0, cut + 1)
                     }
