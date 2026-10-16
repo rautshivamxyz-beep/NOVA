@@ -208,7 +208,10 @@ object NcieLeftovers {
         Calendar.getInstance().apply {
             set(Calendar.YEAR, y)
             set(Calendar.MONTH, (m - 1).coerceIn(0, 11))
-            set(Calendar.DAY_OF_MONTH, d.coerceIn(1, 28))
+            // v9.33.7: clamp to the month's real length (was a flat 28),
+            // so a date on the 29th-31st is no longer moved to the 28th
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.DAY_OF_MONTH, d.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
