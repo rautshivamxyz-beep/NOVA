@@ -206,8 +206,17 @@ object OnlineFetch {
             val failMsg = if (saved == null) diagnose(act, reason) else null
             withContext(Dispatchers.Main) {
                 if (saved != null) {
-                    act.toast("Saved \"$saved\" - now offline forever")
-                    act.launchNcieSend(text, offered = true)
+                    // v9.32.6: a direct entity question is answered FROM the
+                    // article, not rewritten by the model. The article is also
+                    // stored, so the offline wiki still gets it.
+                    val src = wiki?.second
+                    if (src != null && wiki.first == saved && entityQuestion(text)) {
+                        act.toast("Found \"$saved\" - answering from it")
+                        directAnswer(act, cleanSource(src), saved)
+                    } else {
+                        act.toast("Saved \"$saved\" - now offline forever")
+                        act.launchNcieSend(text, offered = true)
+                    }
                 } else {
                     // v9.29.1: the lookup found NOTHING. Re-sending with
                     // offered=true used to disable every honesty gate and let
@@ -285,6 +294,43 @@ object OnlineFetch {
     /** (title, intro extract) from Wikipedia, or null. Two requests:
      *  the search API for the best title, then the extract API for its
      *  intro paragraphs. */
+    /**
+     * v9.32.6 "Answer from the source": for a direct entity question ("who is
+     * X", "what is X") the fetched Wikipedia intro IS the answer. Letting the
+     * small model rewrite it is what produced "Jashodaben Modi is the estranged
+     * wife of Narendra Modi, the former Prime Minister" and "Thomas Shelby is
+     * portrayed by Paul Anderson" - the model filled the gaps from its own
+     * memory. Returning the source text verbatim cannot be wrong and needs no
+     * generation, so the answer is also instant. Every other question still
+     * goes through the model.
+     */
+    private fun entityQuestion(q: String): Boolean =
+        Regex("(?i)^\\s*(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(q) ||
+            Regex("(?i)^\\s*(kaun|kya)\\b").containsMatchIn(q)
+
+    /** The article text, with citation markers and wiki markup cleaned off. */
+    private fun cleanSource(t: String): String {
+        var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
+        if (x.length > 900) {
+            x = x.substring(0, 900)
+            val cut = x.lastIndexOf(". ")
+            if (cut > 300) x = x.substring(0, cut + 1)
+        }
+        return x
+    }
+
+    /** Posts the source text as the answer. Deterministic - no model call. */
+    private fun directAnswer(act: MainActivity, body: String, source: String) {
+        act.offeredQuestionShown = null
+        val reply = Msg(Role.ASSISTANT, body + "\n\n(Source: Wikipedia - " + source + ")")
+        act.currentChat.messages.add(reply)
+        act.adapter.add(reply)
+        act.scrollToEnd()
+        act.scope.launch(Dispatchers.IO) {
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+        }
+    }
+
     private fun fetchWiki(act: MainActivity, q: String): Pair<String, String>? {
         // v9.16.2: try the top few search hits and keep the FIRST with a
         // real intro - the old code only looked at hit #1, so a
