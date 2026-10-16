@@ -984,6 +984,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             "never switch to a different person or thing.\n" +
             "VOICE: speak directly to the user. Never refer to yourself in the third person " +
             "(never write \"Nova explains that...\" or \"Nova says...\").\n" +
+            "CODE: when the user asks for code, write the code in the SAME reply - complete and " +
+            "runnable, in one fenced block. Never describe the code instead of writing it, never " +
+            "promise code you have not written, never put your own thinking inside the code, and " +
+            "never invent what the output would be.\n" +
             "TEACHING: when asked to teach, teach - start with the topic, then the ideas in order, then a " +
             "short example. Do not describe what you are about to do.)\n\n"
         var experiencePart = qualityRules
