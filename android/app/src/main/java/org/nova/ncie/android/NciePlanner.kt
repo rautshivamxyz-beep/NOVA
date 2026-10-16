@@ -71,10 +71,18 @@ object NciePlanner {
     fun isToolJson(answer: String?): Boolean {
         val t = (answer ?: "").trim()
         if (t.length < 6 || !t.startsWith("[") || !t.endsWith("]")) return false
-        val known = TOOLS.map { it.first }.toSet()
-        val parts = t.substring(1, t.length - 1).split(',')
-            .map { it.trim().trim('"', '\'', ' ') }.filter { it.isNotEmpty() }
-        return parts.isNotEmpty() && parts.all { it.lowercase() in known }
+        val inner = t.substring(1, t.length - 1).trim()
+        if (inner.isEmpty()) return true
+        // v9.33.0: not just known tool names. A reply that is a bare JSON array
+        // of short quoted strings is a machine list, never prose - the live app
+        // showed ["home is where you hang yourself"] as an answer, which the
+        // tool-name test did not catch. A real answer is not a bracketed list.
+        return inner.split(',').all { part ->
+            val e = part.trim()
+            e.length in 2..80 &&
+                ((e.startsWith("\"") && e.endsWith("\"")) ||
+                 (e.startsWith("'") && e.endsWith("'")))
+        }
     }
 
     /** Asks the local model which tools to use. Call OFF the main thread. */

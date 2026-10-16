@@ -866,8 +866,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 lastWikiText = facts   // v9.14.0 "Sharp Memory": measured at turn end
                 // v9.32.7: a strong match on a direct entity question is the
                 // answer itself - the model is not asked to rewrite it.
-                val entityQ = Regex("(?i)^\\s*(who|what|where|when|which|whose|tell me about)\\b").containsMatchIn(text) ||
-                    Regex("(?i)^\\s*(kaun|kya|kahan|kab|kis)\\b").containsMatchIn(text)
+                val entityQ = text.trim().length <= 60 &&
+                    (Regex("(?i)^(who|what|where|when|which|whose)\\s+(is|was|are|were)\\b").containsMatchIn(text.trim()) ||
+                     Regex("(?i)^tell me about\\b").containsMatchIn(text.trim()) ||
+                     Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(text.trim()))
                 if (wikiStrong && entityQ) {
                     var body = wikiHits.first().text.replace(Regex("\\[\\d+\\]"), "")
                         .replace(Regex("\\s+"), " ").trim()

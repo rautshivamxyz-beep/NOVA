@@ -304,9 +304,18 @@ object OnlineFetch {
      * generation, so the answer is also instant. Every other question still
      * goes through the model.
      */
-    private fun entityQuestion(q: String): Boolean =
-        Regex("(?i)^\\s*(who|what|where|when|which|whose|tell me about)\\b").containsMatchIn(q) ||
-            Regex("(?i)^\\s*(kaun|kya|kahan|kab|kis)\\b").containsMatchIn(q)
+    private fun entityQuestion(q: String): Boolean {
+        // v9.33.0: this asked "does it start with what/who", which sent
+        // "what things you can do for me" to Wikipedia and answered with the
+        // plot of a film called "You Can Count on Me". A source answer is for
+        // a SHORT question naming one thing ("who is X", "when was X born"),
+        // so the shape and the length are both required now.
+        val t = q.trim()
+        if (t.length > 60) return false
+        return Regex("(?i)^(who|what|where|when|which|whose)\\s+(is|was|are|were)\\b").containsMatchIn(t) ||
+            Regex("(?i)^tell me about\\b").containsMatchIn(t) ||
+            Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
+    }
 
     /** The article text, with citation markers and wiki markup cleaned off. */
     private fun cleanSource(t: String): String {
