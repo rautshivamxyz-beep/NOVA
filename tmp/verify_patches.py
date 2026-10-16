@@ -69,7 +69,7 @@ MA_MARKERS = [
     # moved to NcieChat.kt below: ("v7.5.1 tiny notes caps", "if (tiny) 1200 else 2400", 4),
     ("v7.5.1 doc chunk overlap", "takeLast(650)", 1),
     ("v7.5.1 notes chunk overlap", "takeLast(260)", 1),
-    ("v7.5.1/9.33.2 anti-invent guardrails", "never invent", 3),
+    ("v7.5.1 anti-invent guardrails", "never invent", 2),
     ("v7.5.1/9.33.1 instant resets", "NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)", 7),
     # moved to NcieChat.kt below: ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     # moved to NcieChat.kt below: ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
