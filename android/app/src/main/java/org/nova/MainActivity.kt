@@ -1317,6 +1317,19 @@ class MainActivity : Activity() {
         }
 
         generationJob = scope.launch {
+            // v9.33.1 "Clean context": the native engine accumulates every turn
+            // and never forgets it, so the previous answer bled into the next -
+            // the calculator example came back glued to a World Cup question,
+            // and the model continued the earlier promise instead of answering.
+            // The prompt already carries the recent history (currentChat
+            // takeLast(6)), so the engine's own memory is redundant. Clear it
+            // for a fresh answer; a continuation (newBubble = false) keeps it,
+            // because it is finishing the answer that is still in there.
+            if (newBubble && NovaEngine.contextDirty) {
+                try {
+                    NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
+                } catch (e: Exception) { }
+            }
             // v5.4.2: performance timers (time-to-first-token + total)
             val tStart = android.os.SystemClock.elapsedRealtime()
             var tFirstToken = 0L

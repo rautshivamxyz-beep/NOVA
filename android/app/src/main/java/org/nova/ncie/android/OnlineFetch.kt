@@ -312,7 +312,14 @@ object OnlineFetch {
         // so the shape and the length are both required now.
         val t = q.trim()
         if (t.length > 60) return false
-        return Regex("(?i)^(who|what|where|when|which|whose)\\s+(is|was|are|were)\\b").containsMatchIn(t) ||
+        // a question about NOVA itself ("what can you do") is not a lookup
+        val low = " " + t.lowercase()
+        if (low.contains(" you") || low.contains("your")) return false
+        // v9.33.1: "who won the 2026 World Cup" was answered with an invented
+        // winner - the article was fetched and then rewritten from memory. The
+        // verb list makes these factual asks answer FROM the article too.
+        return Regex("(?i)^(who|what|where|when|which|whose)\\s+" +
+                "(is|was|are|were|won|wins|did|does|has|had|will)\\b").containsMatchIn(t) ||
             Regex("(?i)^tell me about\\b").containsMatchIn(t) ||
             Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
     }
