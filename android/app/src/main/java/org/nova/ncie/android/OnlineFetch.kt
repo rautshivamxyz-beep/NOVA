@@ -287,8 +287,10 @@ object OnlineFetch {
         val terms = q.lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length > 2 }.distinct()
         if (terms.isEmpty()) return 0
-        val low = text.lowercase()
-        return terms.count { low.contains(it) }
+        // v9.33.7: whole-word match - substring matching counted "art"
+        // inside "start", inflating the 2+ keyword acceptance gate
+        val low = " " + text.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        return terms.count { low.contains(" " + it + " ") }
     }
 
     /** (title, intro extract) from Wikipedia, or null. Two requests:
@@ -327,7 +329,7 @@ object OnlineFetch {
     /** The article text, with citation markers and wiki markup cleaned off. */
     private fun cleanSource(t: String): String {
         var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
-        if (x.length > 900) {
+        if (x.length > 1200) {
             x = x.substring(0, 1200)
             val cut = x.lastIndexOf(". ")
             if (cut > 300) x = x.substring(0, cut + 1)
