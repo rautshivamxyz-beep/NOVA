@@ -88,6 +88,18 @@ internal fun MainActivity.tinyModel(): Boolean =
 /** v9.13.2 "Small Model Honesty": creative asks always generate, even
  *  on a tiny model - the honesty gate is for factual answers only. */
 private val CREATIVE_WORDS = listOf("story", "poem", "joke", "write me", "imagine")
+/** v9.33.4: a question that wants a fact, not a chat reply. Used to keep the
+ *  answer cache away from factual asks - a cached wrong answer was served
+ *  verbatim on every repeat, and the user had no way to know it was stale. */
+internal fun factualAsk(t: String): Boolean {
+    val x = t.trim()
+    if (x.length > 80) return false
+    val low = " " + x.lowercase()
+    if (low.contains(" you") || low.contains("your")) return false
+    return Regex("(?i)^(who|what|where|when|which|whose|how many|how much)\\b").containsMatchIn(x) ||
+        Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
+}
+
 private fun creativeRequest(text: String): Boolean {
     val q = text.lowercase()
     return CREATIVE_WORDS.any { it in q }
@@ -697,7 +709,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 }
                 "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
-            needsContextCarry && currentChat.messages.isNotEmpty() -> {
+            currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
@@ -1140,7 +1152,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // generation. Regenerating bypasses this and refreshes the
             // entry; commands, skills and grounded answers never reach
             // this point.
-            val hit = NcieEngines.cachedAnswer(this, text)
+            val hit = if (factualAsk(text)) null else NcieEngines.cachedAnswer(this, text)
             if (hit != null) {
                 val um = Msg(Role.USER, text)
                 currentChat.messages.add(um); adapter.add(um)
