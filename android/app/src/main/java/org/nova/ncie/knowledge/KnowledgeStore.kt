@@ -188,7 +188,18 @@ class KnowledgeStore(
             nameDocs[t]?.forEach { docScores[it] = (docScores[it] ?: 0.0) + 2.0 * w }
             textDocs[t]?.forEach { docScores[it] = (docScores[it] ?: 0.0) + w }
         }
-        return docScores.maxByOrNull { it.value }?.key
+        // v9.32.5 "The primary subject": when a term names MORE THAN ONE
+        // document, every one of them scored the same and the winner was
+        // decided by HashMap order. "modi" names both "Narendra Modi" and
+        // "Jashodaben Modi", so "who is modi" could answer about his estranged
+        // wife. The primary subject of a name is the one with the most
+        // material, so equal scores now break toward the bigger document.
+        val sizeOf = HashMap<String, Int>()
+        for (c in chunks) sizeOf[c.doc] = (sizeOf[c.doc] ?: 0) + 1
+        return docScores.entries.maxWithOrNull(
+            compareBy<Map.Entry<String, Double>> { it.value }
+                .thenBy { sizeOf[it.key] ?: 0 }
+        )?.key
     }
 
     /** Chunks for a summary request: the ONE best document, then either the
