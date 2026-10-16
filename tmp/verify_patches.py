@@ -94,7 +94,7 @@ NC_MARKERS = [
     ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),
     ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),
     ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
-    ("v7.5/NCIE-6 lean wiki cap", "val cap = if (lean) 900 else 1200", 1),
+    ("v7.5/9.33.5 lean wiki cap", "val cap = if (lean) 1400 else 1800", 1),
     ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
     ("v8.3.1 tiny detection parses the parameter count", "MODEL_PARAMS.find(mlabel)", 1),
     ("v7.5.1/NCIE-6 lean notes caps", "if (lean) 1200 else 2400", 4),
