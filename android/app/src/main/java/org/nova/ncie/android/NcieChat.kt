@@ -822,6 +822,12 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         }
         // offline Wikipedia: matching articles as background facts
         var wikiPart = ""
+        // v9.32.7 "Answer from the offline source": a direct entity question
+        // whose offline article matches strongly is answered with the
+        // article's own text instead of letting the model rewrite it (the
+        // rewrite is where "Modi is ... the former Prime Minister" came from).
+        var directReply: String? = null
+        var directSource = ""
         // v9.12.1 "Context Diet": does the wiki top match pass the same
         // strength gate as the documents? The online offer below needs
         // to know whether weak wiki background really covers the
@@ -857,6 +863,21 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 if (facts.length > cap) facts = facts.substring(0, cap) + "…"
                 wikiPart = "(This is the reference you just looked up. ANSWER FROM IT. It overrides your own memory - if the reference and your memory disagree, the reference is right. If the reference does NOT contain the answer, say plainly that you could not find it there; do not fill the gap from memory and do not invent dates, names or numbers that are not in it.\n$facts)\n\n"
                 lastWikiText = facts   // v9.14.0 "Sharp Memory": measured at turn end
+                // v9.32.7: a strong match on a direct entity question is the
+                // answer itself - the model is not asked to rewrite it.
+                val entityQ = Regex("(?i)^\\s*(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(text) ||
+                    Regex("(?i)^\\s*(kaun|kya)\\b").containsMatchIn(text)
+                if (wikiStrong && entityQ) {
+                    var body = wikiHits.first().text.replace(Regex("\\[\\d+\\]"), "")
+                        .replace(Regex("\\s+"), " ").trim()
+                    if (body.length > 900) {
+                        body = body.substring(0, 900)
+                        val cut = body.lastIndexOf(". ")
+                        if (cut > 300) body = body.substring(0, cut + 1)
+                    }
+                    directReply = body
+                    directSource = wikiHits.first().title
+                }
             }
         }
         // v5.4: study questions - rewrap the notes as STRICT instructions,
@@ -1158,6 +1179,16 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 NcieSummary.reset(act, chatAtRoll.id)
                 NcieSummary.bump(act, chatAtRoll.id)
                 compacting = false
+                val dr = directReply
+                if (dr != null) {
+                    val m = Msg(Role.ASSISTANT,
+                        dr + "\n\n(Source: offline Wikipedia - " + directSource + ")")
+                    currentChat.messages.add(m)
+                    adapter.add(m)
+                    scrollToEnd()
+                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                    return@launch
+                }
                 startGeneration(turnPrompt, if (preShown) null else text)
             }
         } else {

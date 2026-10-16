@@ -210,7 +210,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.32.6: version bumped for answer-from-the-source", bg.count("versionName '9.32.6'") == 1 and bg.count("versionCode 164") == 1)
+check("v9.32.7: version bumped for the offline answer-from-source", bg.count("versionName '9.32.7'") == 1 and bg.count("versionCode 165") == 1)
 check("v9.31.0: hands-free, nudges and triggers exist",
       os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt")) and
       load("ncie/android/NovaJarvis.kt").count("object NovaHandsfree") == 1 and
