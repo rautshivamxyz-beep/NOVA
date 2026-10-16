@@ -264,11 +264,16 @@ class PersistentLearner(
     @Synchronized override fun demoteStale(maxAgeDays: Int): Int {
         val cutoff = System.currentTimeMillis() - maxAgeDays * DAY_MILLIS
         var demoted = 0
-        for ((k, f) in facts) {
-            if (f.lastConfirmedMillis < cutoff) {
-                facts[k] = f.copy(score = f.score * 0.5)
-                demoted++
-            }
+        // v9.33.7: snapshot the stale keys FIRST - writing into an
+        // access-ordered LinkedHashMap while iterating it reorders the
+        // map mid-loop, which can skip or double-process entries.
+        val stale = facts.entries
+            .filter { it.value.lastConfirmedMillis < cutoff }
+            .map { it.key }
+        for (k in stale) {
+            val f = facts[k] ?: continue
+            facts[k] = f.copy(score = f.score * 0.5)
+            demoted++
         }
         if (demoted > 0) persist()
         return demoted
