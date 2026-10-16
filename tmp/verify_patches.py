@@ -377,7 +377,7 @@ check("v9.16.6: robust contact lookup (NovaSms)",
 check("v9.16.7: tiny-model sampling profile (NcieTune)",
       load("ncie/android/NcieTune.kt").count("TINY_DEFAULTS") == 2)
 check("v9.16.7: tiny-model reply cap (NovaEngine)",
-      load("NovaEngine.kt").count("minOf(predictLength, 256)") == 1)
+      load("NovaEngine.kt").count("minOf(predictLength, 320)") == 1)
 check("v9.16.7: WhatsApp uses the wa.me deep link (MainActivity)", ma.count("wa.me/") == 1)
 # ---- v9.16.8 "Silent reply" ----
 check("v9.16.8: silent reply through the notification action (NovaListener)",
