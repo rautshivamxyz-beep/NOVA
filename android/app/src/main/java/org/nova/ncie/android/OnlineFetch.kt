@@ -305,8 +305,8 @@ object OnlineFetch {
      * goes through the model.
      */
     private fun entityQuestion(q: String): Boolean =
-        Regex("(?i)^\\s*(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(q) ||
-            Regex("(?i)^\\s*(kaun|kya)\\b").containsMatchIn(q)
+        Regex("(?i)^\\s*(who|what|where|when|which|whose|tell me about)\\b").containsMatchIn(q) ||
+            Regex("(?i)^\\s*(kaun|kya|kahan|kab|kis)\\b").containsMatchIn(q)
 
     /** The article text, with citation markers and wiki markup cleaned off. */
     private fun cleanSource(t: String): String {
