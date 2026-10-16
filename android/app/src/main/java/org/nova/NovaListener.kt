@@ -93,6 +93,17 @@ class NovaListener : NotificationListenerService() {
                                 // listener's executor.
                                 autoReplied[who] = count + 1
                                 autoRepliedAt[who] = now2
+                                // v9.33.7: prune senders idle for over an
+                                // hour, so the maps cannot grow for the
+                                // whole life of the process
+                                if (autoRepliedAt.size > 64) {
+                                    val idle = autoRepliedAt
+                                        .filterValues { now2 - it > 60 * 60 * 1000L }.keys
+                                    for (k in idle) {
+                                        autoReplied.remove(k)
+                                        autoRepliedAt.remove(k)
+                                    }
+                                }
                                 val lines = st.busyLines()
                                 val canned = if (lines.isEmpty()) st.autoReplyMsg
                                              else lines[count % lines.size]
