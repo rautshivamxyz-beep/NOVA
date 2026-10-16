@@ -57,7 +57,13 @@ class ReminderReceiver : BroadcastReceiver() {
         // repeating reminder: schedule the next occurrence first
         if (repeatMs > 0) {
             try {
-                Reminder.schedule(context, System.currentTimeMillis() + repeatMs, text, repeatMs)
+                // v9.33.7: advance from the INTENDED time, not "now", so a
+                // late fire (Doze) no longer drifts the schedule forward
+                val base = if (at > 0L) at else System.currentTimeMillis()
+                var next = base + repeatMs
+                val now = System.currentTimeMillis()
+                while (next <= now) next += repeatMs
+                Reminder.schedule(context, next, text, repeatMs)
             } catch (e: Exception) {
                 // keep notifying even if re-arming failed
             }
