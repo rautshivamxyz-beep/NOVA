@@ -30,6 +30,7 @@ class HelpActivity : Activity() {
             "hands free" to "talk to NOVA without touching the phone",
             "hands free off" to "stop hands-free mode",
             "growth" to "what NOVA has taught itself",
+            "health" to "checks what is set up, and what a feature needs",
             "your skills" to "skills NOVA wrote for itself",
             "my triggers" to "your when-X-do-Y list",
             "remember this place as home" to "save where you are for a place trigger",

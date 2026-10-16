@@ -198,6 +198,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // v9.29.3: tool recipes - "build a tool to ..." authors a recipe from
         // NOVA's fixed offline primitives; "run tool ..." replays one.
         if (answerToolRequest(text)) { input.setText(""); return }
+        if (answerHealth(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the
@@ -1767,6 +1768,24 @@ private fun MainActivity.answerGrounded(text: String): Boolean {
 private val DOCS_Q = Regex(
     "(?i)^\\s*(?:what\\s+documents\\s+do\\s+i\\s+have|my\\s+documents|" +
         "list\\s+my\\s+documents)\\s*[.!?]*\\s*$")
+
+/** v9.32.8: "health" / "what's not working" - the setup checklist in the chat. */
+private val HEALTH_Q = Regex(
+    "(?i)^\\s*(health|nova health|what(?:'s| is) not working|what is broken|" +
+        "fix nova|nova setup|setup nova|diagnose)\\b")
+
+private fun MainActivity.answerHealth(text: String): Boolean {
+    if (text.length > 60 || !HEALTH_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = org.nova.NovaHealth.report(activity)
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
 
 private fun MainActivity.answerDocsList(text: String): Boolean {
     // long/OCR'd text is a study question that merely contains the

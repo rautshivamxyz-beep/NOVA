@@ -100,6 +100,26 @@ object NovaHealth {
         checks(ctx).count { !it.ok }
     } catch (e: Exception) { 0 }
 
+    /**
+     * v9.32.8 "Polish": the whole checklist as plain text, for the chat.
+     * Almost every "NOVA doesn't work" report is a missing access - a feature
+     * that is implemented, wired and simply switched off. This says which,
+     * and what to do about each.
+     */
+    fun report(ctx: Context): String {
+        val cs = checks(ctx)
+        val bad = cs.count { !it.ok }
+        val head = if (bad == 0)
+            "Everything NOVA needs is set up. All features are available."
+        else
+            bad.toString() + " thing(s) still need setting up - these features " +
+                "cannot work until they are:"
+        return head + "\n\n" + cs.joinToString("\n") { c ->
+            (if (c.ok) "\u2713 " else "\u2717 ") + c.label +
+                (if (c.ok) "" else "\n   " + c.detail)
+        }
+    }
+
     fun requestBattery(ctx: Context) {
         try {
             val i = Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
