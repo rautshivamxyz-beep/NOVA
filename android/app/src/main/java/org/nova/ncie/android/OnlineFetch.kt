@@ -212,7 +212,7 @@ object OnlineFetch {
                     val src = wiki?.second
                     if (src != null && wiki.first == saved && entityQuestion(text)) {
                         act.toast("Found \"$saved\" - answering from it")
-                        directAnswer(act, cleanSource(src), saved)
+                        directAnswer(act, cleanSourceText(src), saved)
                     } else {
                         act.toast("Saved \"$saved\" - now offline forever")
                         act.launchNcieSend(text, offered = true)
@@ -324,17 +324,6 @@ object OnlineFetch {
                 "(is|was|are|were|won|wins|did|does|has|had|will)\\b").containsMatchIn(t) ||
             Regex("(?i)^tell me about\\b").containsMatchIn(t) ||
             Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
-    }
-
-    /** The article text, with citation markers and wiki markup cleaned off. */
-    private fun cleanSource(t: String): String {
-        var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
-        if (x.length > 1200) {
-            x = x.substring(0, 1200)
-            val cut = x.lastIndexOf(". ")
-            if (cut > 300) x = x.substring(0, cut + 1)
-        }
-        return x
     }
 
     /** Posts the source text as the answer. Deterministic - no model call. */
