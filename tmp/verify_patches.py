@@ -110,7 +110,11 @@ for name, marker, n in NC_MARKERS:
 check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
 check("v7.6 streaming turn through NovaEngineAdapter (all 6 generations now)", ma.count("NovaEngineAdapter.stream(") == 6)
 
-check("v7.4 notification thread fix (NotifBrain.kt)", nb.count("return@Thread") == 1)
+# v9.33.7: NotifBrain runs on a SHARED executor now (a fresh Thread per
+# notification was unbounded) - the marker follows the fix.
+check("v7.4 notification thread fix (NotifBrain.kt)",
+      nb.count("io.execute") == 1 and nb.count("return@execute") == 1 and
+      nb.count("newSingleThreadExecutor") == 1)
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
 check("NCIE polish: import UI through the boundary", ka.count("NcieKnowledge.addDoc(this, name, text)") == 1)
 nk = load("ncie/android/NcieKnowledge.kt")
@@ -210,7 +214,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.6: version bumped for the reasoning-model hint fix", bg.count("versionName '9.33.6'") == 1 and bg.count("versionCode 174") == 1)
+check("v9.33.7: version bumped for the bug-review fixes", bg.count("versionName '9.33.7'") == 1 and bg.count("versionCode 175") == 1)
 check("v9.31.0: hands-free, nudges and triggers exist",
       os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt")) and
       load("ncie/android/NovaJarvis.kt").count("object NovaHandsfree") == 1 and
@@ -230,7 +234,7 @@ check("v9.30.0: tool router knows the wider catalogue", open(os.path.join(ROOT, 
 check("v9.22.0: the auto-responder sends up to N varied lines per sender",
       load("NovaListener.kt").count("count < st.autoReplyMax.coerceIn(1, 6)") == 1 and
       load("NovaListener.kt").count("lines[count % lines.size]") == 1 and
-      load("NovaListener.kt").count("autoRepliedAt") == 3)
+      load("NovaListener.kt").count("autoRepliedAt[who] = now2") == 1)
 check("v9.22.0: the busy lines + the count live in Settings",
       load("Settings.kt").count("fun busyLines(") == 1 and
       load("Settings.kt").count("DEFAULT_BUSY_LINES") == 2 and

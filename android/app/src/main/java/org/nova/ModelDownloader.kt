@@ -67,13 +67,21 @@ object ModelDownloader {
     private const val CHANNEL = "nova_downloads"
     private const val NOTIF_ID = 9092
     private var lastNotifiedPct = -1
+    /** v9.33.7: with an unknown total the percent never moves, so
+     *  throttle by bytes instead of silently freezing the notification. */
+    private var lastNotifiedDone = -1L
 
     private fun postProgress(ctx: android.content.Context, name: String,
                              done: Long, total: Long) {
         try {
             val pct = if (total > 0) ((done * 100) / total).toInt() else -1
-            if (pct == lastNotifiedPct) return
+            if (pct >= 0) {
+                if (pct == lastNotifiedPct) return
+            } else if (lastNotifiedDone >= 0 && done - lastNotifiedDone < 2_000_000L) {
+                return   // unknown total: repost at most every ~2 MB
+            }
             lastNotifiedPct = pct
+            lastNotifiedDone = done
             val nm = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
                 as android.app.NotificationManager
             nm.createNotificationChannel(android.app.NotificationChannel(
@@ -102,6 +110,7 @@ object ModelDownloader {
             nm.cancel(NOTIF_ID)
         } catch (e: Exception) { }
         lastNotifiedPct = -1
+        lastNotifiedDone = -1L
     }
 
     /**
@@ -113,6 +122,7 @@ object ModelDownloader {
         if (isBusy) return
         cancelled = false
         lastNotifiedPct = -1
+        lastNotifiedDone = -1L
         job = scope.launch {
             try {
                 _state.value = doDownload(url, dir, appCtx)

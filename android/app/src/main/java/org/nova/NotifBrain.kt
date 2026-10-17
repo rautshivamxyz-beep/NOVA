@@ -16,15 +16,18 @@ class NotifBrain : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // v7.4: this callback arrives on the MAIN thread - file I/O there
-        // janks the whole phone while chatting; run it on a worker thread
-        Thread {
+        // janks the whole phone while chatting; run it on a worker thread.
+        // v9.33.7: a SHARED single-thread executor, not a fresh Thread per
+        // post (the v9.4.0 fix NovaListener already has) - a notification
+        // storm no longer spawns unbounded threads.
+        io.execute {
         try {
             val ex = sbn.notification.extras
             val title = ex.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
             val text = ex.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
             val big = ex.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString() ?: text
             val body = if (big.length >= text.length) big else text
-            if (title.isBlank() && body.isBlank()) return@Thread
+            if (title.isBlank() && body.isBlank()) return@execute
             val f = File(filesDir, "notifs.txt")
             val line = listOf(
                 (sbn.postTime / 1000L).toString(),
@@ -43,11 +46,15 @@ class NotifBrain : NotificationListenerService() {
                 }
             }
         } catch (e: Exception) { }
-        }.start()
+        }
     }
 
     companion object {
         private val lock = Any()
+
+        /** v9.33.7: the one shared background executor every notification
+         *  is handled on (mirrors NovaListener's v9.4.0 fix). */
+        private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
 
         /** True when NOVA has been granted notification access. */
         fun isEnabled(ctx: Context): Boolean = try {

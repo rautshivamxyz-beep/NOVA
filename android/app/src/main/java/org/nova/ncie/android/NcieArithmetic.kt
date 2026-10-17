@@ -115,14 +115,15 @@ class ArithmeticTool : Tool {
                     return r
                 }
                 fun pw(): Double {
-                    val r = unary()
-                    if (peek() == '^') { i++; return Math.pow(r, pw()) }
-                    return r
-                }
-                fun unary(): Double {
-                    if (peek() == '-') { i++; return -unary() }
+                    // v9.33.7: the unary sign binds LOOSER than '^', so
+                    // -2^2 == -4 (standard math, and the kernel
+                    // CalculatorTool's own rule). The old order, which
+                    // consumed the sign before the exponent, returned 4.
+                    if (peek() == '-') { i++; return -pw() }
                     if (peek() == '+') { i++ }
-                    return atom()
+                    val base = atom()
+                    if (peek() == '^') { i++; return Math.pow(base, pw()) }
+                    return base
                 }
                 fun atom(): Double {
                     val ch = peek()

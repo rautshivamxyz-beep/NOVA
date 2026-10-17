@@ -45,6 +45,12 @@ object NovaHealth {
     fun notificationsOk(ctx: Context): Boolean =
         try { NovaListener.isEnabled(ctx) } catch (e: Exception) { false }
 
+    /** v9.33.7: is the always-armed nightly Dream alarm really scheduled?
+     *  This check was hard-coded to true, so the health screen could never
+     *  report a missing alarm - the exact silent failure it exists to catch. */
+    fun alarmsArmed(ctx: Context): Boolean =
+        try { NcieDream.isArmed(ctx) } catch (e: Exception) { false }
+
     private fun granted(ctx: Context, p: String): Boolean = try {
         ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
     } catch (e: Exception) { false }
@@ -89,7 +95,7 @@ object NovaHealth {
             "Android - especially Realme/Oppo - kills NOVA's background parts " +
                 "while this is on, so reminders and notifications stop.",
             { requestBattery(ctx) }),
-        Check("Alarms armed", true,
+        Check("Alarms armed", alarmsArmed(ctx),
             "Dream mode, reminders and recurring reminders. Re-armed whenever " +
                 "you open NOVA and after a reboot.",
             { armAll(ctx) })

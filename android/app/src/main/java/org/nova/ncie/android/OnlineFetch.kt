@@ -212,7 +212,7 @@ object OnlineFetch {
                     val src = wiki?.second
                     if (src != null && wiki.first == saved && entityQuestion(text)) {
                         act.toast("Found \"$saved\" - answering from it")
-                        directAnswer(act, cleanSource(src), saved)
+                        directAnswer(act, cleanSourceText(src), saved)
                     } else {
                         act.toast("Saved \"$saved\" - now offline forever")
                         act.launchNcieSend(text, offered = true)
@@ -287,8 +287,10 @@ object OnlineFetch {
         val terms = q.lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length > 2 }.distinct()
         if (terms.isEmpty()) return 0
-        val low = text.lowercase()
-        return terms.count { low.contains(it) }
+        // v9.33.7: whole-word match - substring matching counted "art"
+        // inside "start", inflating the 2+ keyword acceptance gate
+        val low = " " + text.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        return terms.count { low.contains(" " + it + " ") }
     }
 
     /** (title, intro extract) from Wikipedia, or null. Two requests:
@@ -322,17 +324,6 @@ object OnlineFetch {
                 "(is|was|are|were|won|wins|did|does|has|had|will)\\b").containsMatchIn(t) ||
             Regex("(?i)^tell me about\\b").containsMatchIn(t) ||
             Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
-    }
-
-    /** The article text, with citation markers and wiki markup cleaned off. */
-    private fun cleanSource(t: String): String {
-        var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
-        if (x.length > 900) {
-            x = x.substring(0, 1200)
-            val cut = x.lastIndexOf(". ")
-            if (cut > 300) x = x.substring(0, cut + 1)
-        }
-        return x
     }
 
     /** Posts the source text as the answer. Deterministic - no model call. */

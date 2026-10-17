@@ -134,6 +134,16 @@ object NcieDream {
         } catch (e: Exception) { }
     }
 
+    /** v9.33.7: true when the nightly Dream alarm is actually scheduled
+     *  (FLAG_NO_CREATE finds the existing PendingIntent without creating
+     *  one). NovaHealth's "Alarms armed" check reads this. */
+    fun isArmed(ctx: Context): Boolean = try {
+        android.app.PendingIntent.getBroadcast(ctx, DREAM_REQ,
+            android.content.Intent(ctx, org.nova.DreamReceiver::class.java),
+            android.app.PendingIntent.FLAG_NO_CREATE or
+                android.app.PendingIntent.FLAG_IMMUTABLE) != null
+    } catch (e: Exception) { false }
+
     /** The last written report, or "" when none exists yet. */
     fun lastReport(ctx: Context): String = try {
         val f = reportPath(ctx)

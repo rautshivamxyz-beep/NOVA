@@ -887,14 +887,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                      Regex("(?i)^tell me about\\b").containsMatchIn(text.trim()) ||
                      Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(text.trim()))
                 if (wikiStrong && entityQ) {
-                    var body = wikiHits.first().text.replace(Regex("\\[\\d+\\]"), "")
-                        .replace(Regex("\\s+"), " ").trim()
-                    if (body.length > 900) {
-                        body = body.substring(0, 1200)
-                        val cut = body.lastIndexOf(". ")
-                        if (cut > 300) body = body.substring(0, cut + 1)
-                    }
-                    directReply = body
+                    directReply = cleanSourceText(wikiHits.first().text)
                     directSource = wikiHits.first().title
                 }
             }
