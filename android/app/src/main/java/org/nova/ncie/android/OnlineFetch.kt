@@ -320,9 +320,11 @@ object OnlineFetch {
         // v9.33.1: "who won the 2026 World Cup" was answered with an invented
         // winner - the article was fetched and then rewritten from memory. The
         // verb list makes these factual asks answer FROM the article too.
-        return Regex("(?i)^(who|what|where|when|which|whose)\\s+" +
-                "(is|was|are|were|won|wins|did|does|has|had|will)\\b").containsMatchIn(t) ||
-            Regex("(?i)^tell me about\\b").containsMatchIn(t) ||
+        // v9.33.7: this grew to where/when/which/tell-me-about/won/did/has and
+        // NOVA started quoting articles instead of answering - the user's exact
+        // complaint, "it behaves like a search engine, not a brain". Verbatim is
+        // for a plain lookup only; anything that needs thought goes to the model.
+        return Regex("(?i)^(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(t) ||
             Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
     }
 

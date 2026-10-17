@@ -882,9 +882,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 val qLow2 = " " + text.trim().lowercase()
                 val entityQ = text.trim().length <= 60 &&
                     !qLow2.contains(" you") && !qLow2.contains("your") &&
-                    (Regex("(?i)^(who|what|where|when|which|whose)\\s+" +
-                            "(is|was|are|were|won|wins|did|does|has|had|will)\\b").containsMatchIn(text.trim()) ||
-                     Regex("(?i)^tell me about\\b").containsMatchIn(text.trim()) ||
+                    (Regex("(?i)^(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(text.trim()) ||
                      Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(text.trim()))
                 if (wikiStrong && entityQ) {
                     directReply = cleanSourceText(wikiHits.first().text)
