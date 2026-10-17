@@ -10,10 +10,13 @@ package org.nova.ncie.android
  */
 internal fun cleanSourceText(t: String): String {
     var x = t.replace(Regex("\\[\\d+\\]"), "").replace(Regex("\\s+"), " ").trim()
-    if (x.length > 1200) {
-        x = x.substring(0, 1200)
+    // v9.33.8: 1200 characters is a paragraph dump. Even when the answer is
+    // quoted from a source, two or three sentences answer a lookup - the rest
+    // is what made NOVA read like a search result instead of a reply.
+    if (x.length > 420) {
+        x = x.substring(0, 420)
         val cut = x.lastIndexOf(". ")
-        if (cut > 300) x = x.substring(0, cut + 1)
+        if (cut > 150) x = x.substring(0, cut + 1)
     }
     return x
 }
