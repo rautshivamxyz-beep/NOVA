@@ -358,6 +358,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // mode the user invokes.
         if (answerGrounded(text)) { input.setText(""); return }
         if (answerDocsList(text)) { input.setText(""); return }
+        // A2 "Deadline radar" (v9.33.9): "what's due" / "deadlines" /
+        // "what's coming up" - deterministic, fully offline, no new
+        // permission: reminders + exam countdown + dates in the notes.
+        if (answerDeadlines(text)) { input.setText(""); return }
         // v9.6.0 "Engine Pack": "what have you learned" - the Experience
         // Engine's deterministic view of the questions whose answers the
         // user regenerated; "connections" / "related documents" - the
@@ -1854,6 +1858,26 @@ private fun groundDocsBody(ctx: android.content.Context): String {
     }
     sb.append("```")
     return sb.toString()
+}
+
+// A2 "Deadline radar" (v9.33.9): "what's due" / "deadlines" / "what's
+// coming up" - the offline radar over the user's own material. Short,
+// typed commands only (long text is a study question).
+private val DEADLINES_Q = Regex(
+    "(?i)^\\s*(?:what(?:'s| is)\\s+(?:due|coming\\s+up)|deadlines?|" +
+        "my\\s+deadlines?|upcoming\\s+deadlines?|what\\s+deadlines\\s+do\\s+i\\s+have)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerDeadlines(text: String): Boolean {
+    if (text.length > 80 || !DEADLINES_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try { NcieDeadlines.radar(activity) } catch (e: Exception) { "Deadline radar unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
 }
 
 // v9.6.0 "Engine Pack": "what have you learned" - the Experience Engine's

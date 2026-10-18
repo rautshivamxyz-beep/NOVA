@@ -214,7 +214,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.7/9.33.8: version bumped for the bug-review and quote fixes", bg.count("versionName '9.33.8'") == 1 and bg.count("versionCode 176") == 1)
+check("v9.33.9: version bumped for the deadline radar", bg.count("versionName '9.33.9'") == 1 and bg.count("versionCode 177") == 1)
+# ---- A2 "Deadline radar" (v9.33.9) ----
+check("v9.33.9: the deadline radar exists",
+      os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieDeadlines.kt")))
+check("v9.33.9: the radar is deterministic and offline (no model, no net)",
+      load("ncie/android/NcieDeadlines.kt").count("object NcieDeadlines") == 1 and
+      load("ncie/android/NcieDeadlines.kt").count("fun radar(") == 1)
+check("v9.33.9: the radar command is wired into the chat turn",
+      nc.count("answerDeadlines(text)") == 1 and
+      nc.count("fun MainActivity.answerDeadlines(") == 1)
 check("v9.31.0: hands-free, nudges and triggers exist",
       os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt")) and
       load("ncie/android/NovaJarvis.kt").count("object NovaHandsfree") == 1 and
@@ -767,7 +776,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt"))]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
