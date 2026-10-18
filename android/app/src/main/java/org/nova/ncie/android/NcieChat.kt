@@ -362,6 +362,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // "what's coming up" - deterministic, fully offline, no new
         // permission: reminders + exam countdown + dates in the notes.
         if (answerDeadlines(text)) { input.setText(""); return }
+        // A3 "Weekly review" (v9.33.10): "weekly review" / "week ahead" /
+        // "sunday review" - deterministic, fully offline, no permission.
+        if (answerWeekly(text)) { input.setText(""); return }
         // v9.6.0 "Engine Pack": "what have you learned" - the Experience
         // Engine's deterministic view of the questions whose answers the
         // user regenerated; "connections" / "related documents" - the
@@ -1875,6 +1878,25 @@ private fun MainActivity.answerDeadlines(text: String): Boolean {
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
     scope.launch(Dispatchers.IO) {
         val body = try { NcieDeadlines.radar(activity) } catch (e: Exception) { "Deadline radar unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
+// A3 "Weekly review" (v9.33.10): "weekly review" / "week ahead" /
+// "sunday review" - the offline digest of the week ahead + material.
+private val WEEKLY_Q = Regex(
+    "(?i)^\\s*(?:weekly\\s+review|week\\s+in\\s+review|week\\s+ahead|sunday\\s+review|" +
+        "how(?:'s| is)\\s+my\\s+week)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerWeekly(text: String): Boolean {
+    if (text.length > 80 || !WEEKLY_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try { NcieWeekly.review(activity) } catch (e: Exception) { "Weekly review unavailable." }
         withContext(Dispatchers.Main) { postGroundReply(activity, body) }
     }
     return true
