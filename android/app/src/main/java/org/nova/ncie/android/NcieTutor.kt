@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -112,7 +114,7 @@ object NcieTutor {
                 System.currentTimeMillis().toString() + "\t" +
                     topic.replace("\t", " ").replace("\n", " ") + "\t" +
                     question.replace("\t", " ").replace("\n", " ") + "\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
     }
 
     /** v9.3.0: millis<TAB>front<TAB>back - one line per wrong flashcard,
@@ -123,7 +125,7 @@ object NcieTutor {
                 System.currentTimeMillis().toString() + "\t" +
                     front.replace("\t", " ").replace("\n", " ") + "\t" +
                     back.replace("\t", " ").replace("\n", " ") + "\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
     }
 
     /** Drop the (topic, question) entry the user just re-answered
@@ -140,7 +142,7 @@ object NcieTutor {
                 !(p.size == 3 && p[1].trim().lowercase() == key && p[2] == question)
             }
             f.writeText(if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
     }
 
     // ---------------------------------------------------- entry points
@@ -671,7 +673,7 @@ object NcieTutor {
                     }
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
         return null
     }
 
@@ -711,7 +713,7 @@ object NcieTutor {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
         }
     }
 
