@@ -79,7 +79,8 @@ class NovaListener : NotificationListenerService() {
                         val st = Settings(this)
                         if (st.autoReply && isMessaging(pkg) &&
                             cleanTitle.isNotBlank() &&
-                            !org.nova.ncie.android.NcieLeftovers.isQuietNow(this)) {
+                            !org.nova.ncie.android.NcieLeftovers.isQuietNow(this) &&
+                            !org.nova.ncie.android.NcieFocus.active(this)) {
                             val now2 = System.currentTimeMillis()
                             val who = cleanTitle.lowercase()
                             val at = autoRepliedAt[who] ?: 0L

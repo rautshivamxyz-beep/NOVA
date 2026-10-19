@@ -369,6 +369,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // nova alive" - deterministic, fully offline, no new permission:
         // re-arms the reminders and reports the notification listener.
         if (answerWatchdog(text)) { input.setText(""); return }
+        // A5 "Focus mode" (v9.33.12): "focus 25" / "focus mode" /
+        // "stop focus" - deterministic, fully offline, no new permission.
+        if (answerFocus(text)) { input.setText(""); return }
         // v9.6.0 "Engine Pack": "what have you learned" - the Experience
         // Engine's deterministic view of the questions whose answers the
         // user regenerated; "connections" / "related documents" - the
@@ -1921,6 +1924,42 @@ private fun MainActivity.answerWatchdog(text: String): Boolean {
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
     scope.launch(Dispatchers.IO) {
         val body = try { NcieWatchdog.run(activity) } catch (e: Exception) { "Watchdog unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
+// A5 "Focus mode" (v9.33.12): "focus 25" / "focus mode" / "stop focus".
+// The start form needs a number; the bare form is the status.
+private val FOCUS_START_Q = Regex(
+    "(?i)^\\s*(?:focus(?:\\s+mode)?(?:\\s+for)?\\s+(\\d{1,3})\\s*(?:min|mins|minutes)?|" +
+        "deep\\s+work\\s+(\\d{1,3})\\s*(?:min|mins|minutes)?|" +
+        "start\\s+focus\\s+(\\d{1,3}))\\s*[.!?]*\\s*$")
+private val FOCUS_OFF_Q = Regex(
+    "(?i)^\\s*(?:stop|end|cancel|exit)\\s+focus(?:\\s+mode)?\\s*[.!?]*\\s*$")
+private val FOCUS_STATUS_Q = Regex(
+    "(?i)^\\s*(?:focus|focus\\s+mode|focus\\s+status|am\\s+i\\s+focused)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerFocus(text: String): Boolean {
+    if (text.length > 60) return false
+    val start = FOCUS_START_Q.find(text)
+    val off = start == null && FOCUS_OFF_Q.containsMatchIn(text)
+    val status = start == null && !off && FOCUS_STATUS_Q.containsMatchIn(text)
+    if (start == null && !off && !status) return false
+    val activity = this
+    var n = 0
+    if (start != null)
+        n = (start.groupValues[1].ifBlank { start.groupValues[2] })
+            .ifBlank { start.groupValues[3] }.toIntOrNull() ?: 25
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try {
+            if (start != null) NcieFocus.start(activity, n)
+            else if (off) NcieFocus.stop(activity)
+            else NcieFocus.status(activity)
+        } catch (e: Exception) { "Focus mode unavailable." }
         withContext(Dispatchers.Main) { postGroundReply(activity, body) }
     }
     return true
