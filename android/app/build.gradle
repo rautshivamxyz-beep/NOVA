@@ -96,8 +96,8 @@ android {
         // "generating"; NOVA auto-checks for updates on launch.
         // v9.29.5 "Lookups that work": online fetches store and retrieve even
         // without the offline Wikipedia download; disambiguation pages skipped.
-        versionCode 181
-        versionName '9.33.13'
+        versionCode 182
+        versionName '9.33.14'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -147,6 +147,10 @@ android {
 }
 
 dependencies {
+    // v9.33.14: real unit tests for the pure-JVM NCIE kernel
+    // (android/app/src/test/java). Run: gradle testDebugUnitTest
+    testImplementation 'junit:junit:4.13.2'
+
     // llama.cpp Android binding (com.arm.aichat) - v5.7.0: speculative decoding
     implementation files('libs/llama-release.aar')
 

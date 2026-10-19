@@ -102,7 +102,7 @@ NC_MARKERS = [
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend(", 1),
-    ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
+    ("Stage 5 collapse: body reached the act capture", "val act = this", 2),
     ("NCIE 7: Smart Skip recall in the chat turn", "NcieLearn.recall(this, text)", 1),
 ]
 for name, marker, n in NC_MARKERS:
@@ -214,7 +214,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.13: version bumped for the focus nudge gate", bg.count("versionName '9.33.13'") == 1 and bg.count("versionCode 181") == 1)
+check("v9.33.14: version bumped for the reliability pass", bg.count("versionName '9.33.14'") == 1 and bg.count("versionCode 182") == 1)
+
+# ---- v9.33.14 "reliability": right entity or nothing, no invented lyrics, real tests ----
+check("v9.33.14: the entity-title gate ships (EntityMatch)",
+      open(os.path.join(ROOT, BASE + "ncie/knowledge/EntityMatch.kt")).read().count("fun titleMatchesEntity(") == 1)
+check("v9.33.14: OnlineFetch refuses an article that does not name the entity",
+      load("ncie/android/OnlineFetch.kt").count("titleMatchesEntity(wiki.first, text)") == 1 and
+      load("ncie/android/OnlineFetch.kt").count("does not name the thing asked about") == 1)
+check("v9.33.14: a lyrics request is declined, not invented (NcieChat)",
+      nc.count("answerLyrics(text)") == 1 and nc.count("can't give you song lyrics") == 1)
+check("v9.33.14: the pure kernel has real unit tests",
+      os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/execute/tools/CalculatorToolTest.kt")) and
+      os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/knowledge/EntityMatchTest.kt")))
 # ---- A2 "Deadline radar" (v9.33.9) ----
 check("v9.33.9: the deadline radar exists",
       os.path.isfile(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieDeadlines.kt")))
