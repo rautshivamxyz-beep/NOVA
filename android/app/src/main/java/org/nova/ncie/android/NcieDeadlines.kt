@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.ReminderStore
 import java.text.SimpleDateFormat
@@ -58,7 +60,7 @@ object NcieDeadlines {
                 if (fireAt in now..horizon)
                     items.add(fireAt to ("reminder: " + t + (if (rep > 0L) " (repeats)" else "")))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDeadlines", e) }
 
         // 2. the exam countdown
         try {
@@ -66,7 +68,7 @@ object NcieDeadlines {
             if (dl != null && dl >= 0 && dl <= HORIZON_DAYS)
                 items.add((today + dl * DAY_MS) to
                     ("exam in " + dl + (if (dl == 1) " day" else " days")))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDeadlines", e) }
 
         // 3. explicit dates inside the knowledge notes
         try {
@@ -97,7 +99,7 @@ object NcieDeadlines {
                     if (at in now..horizon) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDeadlines", e) }
 
         if (items.isEmpty()) return "Nothing due in the next " + HORIZON_DAYS + " days."
         items.sortBy { it.first }
