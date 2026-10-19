@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -100,7 +102,7 @@ object NcieLearn {
         // v8.1.0 (opt #7): the chat save is file I/O - it moves off the
         // caller's (main) thread, where it had no business sitting
         io.execute {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
         }
         act.needsContextCarry = true
         return true
@@ -197,7 +199,7 @@ object NcieLearn {
                 try {
                     file.parentFile?.mkdirs()
                     file.writeText(snap)
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             }
         }
         override fun write(snapshot: String) {
@@ -229,7 +231,7 @@ object NcieLearn {
     fun invalidate() {
         io.execute {
             val f = learnFile ?: return@execute
-            try { f.delete() } catch (e: Exception) { }
+            try { f.delete() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             learner?.clear()
             disk?.flushNow()
         }
@@ -263,12 +265,12 @@ object NcieLearn {
                 val weak = learner?.weakTopics().orEmpty().take(3)
                 if (weak.isNotEmpty())
                     stats += "\nWeakest topics: " + weak.joinToString(", ") { "${it.topic} (${it.failures})" }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             try {
                 val gaps = gapStore?.top(3).orEmpty()
                 if (gaps.isNotEmpty())
                     stats += "\nAsked for, can't do: " + gaps.joinToString(", ") { g -> "'" + g.question + "' x" + g.count }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             post { onReady(facts, stats) }
         }
     }
@@ -287,7 +289,7 @@ object NcieLearn {
                 try { gapFile(ctx).readText() } catch (e: Exception) { "" }
             ).also { gapStore = it }
             g.note(question, System.currentTimeMillis())
-            try { gapFile(ctx).writeText(g.serialize()) } catch (e: Exception) { }
+            try { gapFile(ctx).writeText(g.serialize()) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
         }
     }
 
@@ -295,7 +297,7 @@ object NcieLearn {
      *  Everything else stays (the surgical opposite of [memoryClear]). */
     fun memoryForget(question: String) {
         io.execute {
-            try { learner?.forget(question) } catch (e: Exception) { }
+            try { learner?.forget(question) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
         }
     }
 
@@ -303,8 +305,8 @@ object NcieLearn {
      *  counters — the same clear() the kernel's invalidation uses. */
     fun memoryClear() {
         io.execute {
-            try { learner?.clear() } catch (e: Exception) { }
-            try { disk?.flushNow() } catch (e: Exception) { }
+            try { learner?.clear() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
+            try { disk?.flushNow() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
         }
     }
 
@@ -367,17 +369,17 @@ object NcieLearn {
                     try {
                         Knowledge.addDoc(ctx, name, q + "\n\n" + f.answer.trim())
                         if (Knowledge.docText(ctx, name).isNotEmpty()) continue
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
                     // The doc did NOT land in knowledge.json — the fact
                     // goes back on probation, exactly as it was.
-                    try { l.record(f) } catch (e: Exception) { }
+                    try { l.record(f) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
                     unpersisted++
                 }
                 // v9.6.0 "Engine Pack": the promotions above changed
                 // knowledge.json outside the NcieKnowledge boundary - reset
                 // the grounding index so the next retrieve re-reads fresh.
                 NcieGround.indexReset(ctx)
-                try { disk?.flushNow() } catch (e: Exception) { }
+                try { disk?.flushNow() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
                 val tail = if (unpersisted > 0)
                     " — $unpersisted promotion(s) failed to persist and were kept in memory"
                 else ""
@@ -392,8 +394,8 @@ object NcieLearn {
     private fun post(r: () -> Unit) {
         try {
             main.post {
-                try { r() } catch (e: Exception) { }
+                try { r() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
     }
 }
