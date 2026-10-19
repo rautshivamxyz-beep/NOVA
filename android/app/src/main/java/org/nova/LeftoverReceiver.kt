@@ -18,6 +18,6 @@ class LeftoverReceiver : BroadcastReceiver() {
                 "guardian" -> NcieGuardian.fire(context)
                 "recurring" -> NcieRecurring.fire(context)
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("LeftoverReceiver", e) }
     }
 }
