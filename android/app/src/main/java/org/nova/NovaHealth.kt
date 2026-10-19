@@ -32,9 +32,9 @@ object NovaHealth {
      * silently stopped until the user said "good morning" again.
      */
     fun armAll(ctx: Context) {
-        try { NcieDream.schedule(ctx) } catch (e: Exception) { }
-        try { NcieLeftovers.rearm(ctx) } catch (e: Exception) { }
-        try { ScheduledSends.armNext(ctx) } catch (e: Exception) { }
+        try { NcieDream.schedule(ctx) } catch (e: Exception) { NovaLog.quiet("NovaHealth", e) }
+        try { NcieLeftovers.rearm(ctx) } catch (e: Exception) { NovaLog.quiet("NovaHealth", e) }
+        try { ScheduledSends.armNext(ctx) } catch (e: Exception) { NovaLog.quiet("NovaHealth", e) }
     }
 
     fun modelOk(ctx: Context): Boolean = try {
@@ -120,10 +120,15 @@ object NovaHealth {
         else
             bad.toString() + " thing(s) still need setting up - these features " +
                 "cannot work until they are:"
-        return head + "\n\n" + cs.joinToString("\n") { c ->
+        val body = head + "\n\n" + cs.joinToString("\n") { c ->
             (if (c.ok) "\u2713 " else "\u2717 ") + c.label +
                 (if (c.ok) "" else "\n   " + c.detail)
         }
+        // v9.33.15 "Nothing fails silently": the count of exceptions NOVA
+        // deliberately swallowed this session. Zero is the healthy answer;
+        // anything else is the trail to why a feature looked like it did
+        // nothing. Detail is in logcat under the NOVA tag.
+        return body + "\n\n" + NovaLog.summary()
     }
 
     fun requestBattery(ctx: Context) {
@@ -131,13 +136,13 @@ object NovaHealth {
             val i = Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
             i.data = Uri.parse("package:" + ctx.packageName)
             launch(ctx, i)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaHealth", e) }
     }
 
     private fun launch(ctx: Context, i: Intent) {
         try {
             if (ctx !is android.app.Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ctx.startActivity(i)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaHealth", e) }
     }
 }
