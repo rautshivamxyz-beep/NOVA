@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import android.net.Uri
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
@@ -92,10 +94,10 @@ object NcieDelta {
         } catch (t: Throwable) {
             // honest failure - OutOfMemory included; clean the partial
             // output so nothing half-built is ever offered to install
-            try { outApk.delete() } catch (e: Exception) { }
+            try { outApk.delete() } catch (e: Exception) { NovaLog.quiet("NcieDelta", e) }
             return false
         } finally {
-            try { staged.delete() } catch (e: Exception) { }
+            try { staged.delete() } catch (e: Exception) { NovaLog.quiet("NcieDelta", e) }
         }
     }
 
