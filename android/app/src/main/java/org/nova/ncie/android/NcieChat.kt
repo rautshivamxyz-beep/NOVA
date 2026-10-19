@@ -2293,6 +2293,7 @@ private val LYRICS_Q = Regex(
 
 private fun MainActivity.answerLyrics(text: String): Boolean {
     if (!LYRICS_Q.containsMatchIn(text)) return false
+    val act = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um)
     adapter.add(um)
@@ -2305,7 +2306,7 @@ private fun MainActivity.answerLyrics(text: String): Boolean {
     adapter.add(reply)
     scrollToEnd()
     scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
     }
     return true
 }
