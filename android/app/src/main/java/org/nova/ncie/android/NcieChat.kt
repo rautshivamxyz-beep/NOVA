@@ -212,6 +212,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (answerToolRequest(text)) { input.setText(""); return }
         if (answerHealth(text)) { input.setText(""); return }
         if (answerProxy(text)) { input.setText(""); return }
+        // v9.33.14 "No invented lyrics": a lyrics request is declined
+        // deterministically - the model has no lyrics to read and invents
+        // them (and the artist/album with them).
+        if (answerLyrics(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the
@@ -2269,6 +2273,39 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
                 .setNegativeButton("Cancel", null)
                 .show()
         }
+    }
+    return true
+}
+
+/**
+ * v9.33.14 "No invented lyrics": a request for song lyrics is answered
+ * honestly instead of being sent to a model that has no lyrics to read and
+ * therefore invents them - and invents the artist and album too ("Love Me
+ * Not" came back as Elvis Presley, from Sgt. Pepper's). Lyrics are
+ * copyrighted besides, so NOVA offers facts about the song instead.
+ *
+ * Narrow on purpose: only an explicit ask for lyrics, so "explain the
+ * lyrics of the poem" still reaches the model.
+ */
+private val LYRICS_Q = Regex(
+    "(?i)\\b(?:give|send|tell|show|sing|write|get|what\\s+are|whats|what's)\\b[^.]{0,40}\\blyrics?\\b" +
+        "|\\blyrics?\\b\\s+(?:of|for|to)\\b")
+
+private fun MainActivity.answerLyrics(text: String): Boolean {
+    if (!LYRICS_Q.containsMatchIn(text)) return false
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um)
+    adapter.add(um)
+    val reply = Msg(Role.ASSISTANT,
+        "I can't give you song lyrics - they're copyrighted, and I don't have " +
+            "them to read, so anything I produced would be invented. I can tell " +
+            "you about the song instead: the artist, the album, when it came out, " +
+            "or what it is about.")
+    currentChat.messages.add(reply)
+    adapter.add(reply)
+    scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
     }
     return true
 }
