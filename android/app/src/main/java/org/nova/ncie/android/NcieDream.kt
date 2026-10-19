@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.NovaListener
 import org.nova.ScheduledSends
@@ -74,7 +76,7 @@ object NcieDream {
                 if (topic.isNotEmpty() && now - t >= DAY_MS) topics.add(topic.lowercase())
             }
             due = topics.size
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("weak areas due: ").append(due).append('\n')
 
         // flashcard deck
@@ -82,7 +84,7 @@ object NcieDream {
         try {
             val f = File(ctx.filesDir, "flashcards.txt")
             if (f.exists()) cards = f.readLines().count { it.isNotBlank() }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("flashcards: ").append(cards).append('\n')
 
         // exam countdown + today's revision topic
@@ -94,17 +96,17 @@ object NcieDream {
                     sb.append("revision today: ").append(it).append('\n')
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
 
         // v9.19.0 "Polish": the leftover state (expiring docs, reminders,
         // promises, guardian) joins the dream report.
         try {
             val digest = NcieLeftovers.dailyDigest(ctx)
             if (digest.isNotBlank()) sb.append(digest)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
-        try { reportPath(ctx).writeText(text) } catch (e: Exception) { }
+        try { reportPath(ctx).writeText(text) } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         // v9.16.12: keep the nightly alarm armed (idempotent).
         schedule(ctx)
         return text
@@ -131,7 +133,7 @@ object NcieDream {
             } catch (e: SecurityException) {
                 am.set(android.app.AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
     }
 
     /** v9.33.7: true when the nightly Dream alarm is actually scheduled
