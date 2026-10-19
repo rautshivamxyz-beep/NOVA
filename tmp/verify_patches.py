@@ -102,7 +102,7 @@ NC_MARKERS = [
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend(", 1),
-    ("Stage 5 collapse: body reached the act capture", "val act = this", 1),
+    ("Stage 5 collapse: body reached the act capture", "val act = this", 2),
     ("NCIE 7: Smart Skip recall in the chat turn", "NcieLearn.recall(this, text)", 1),
 ]
 for name, marker, n in NC_MARKERS:
