@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -66,7 +68,7 @@ object NcieRecipes {
             val tmp = File(ctx.filesDir, "recipes.json.tmp")
             tmp.writeText(arr.toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieRecipes", e) }
     }
 
     /** Parses a model-authored JSON recipe, keeping only known primitives. */
