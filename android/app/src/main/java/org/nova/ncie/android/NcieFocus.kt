@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import java.io.File
 
@@ -37,7 +39,7 @@ object NcieFocus {
     fun start(ctx: Context, minutes: Int): String {
         val mins = minutes.coerceIn(1, 480)
         val end = System.currentTimeMillis() + mins * 60_000L
-        try { file(ctx).writeText(end.toString()) } catch (e: Exception) { }
+        try { file(ctx).writeText(end.toString()) } catch (e: Exception) { NovaLog.quiet("NcieFocus", e) }
         return "Focus mode on for " + mins +
             (if (mins == 1) " minute." else " minutes.") +
             "\nNOVA will stay quiet - no auto-replies, no spoken nudges - until then." +
@@ -46,7 +48,7 @@ object NcieFocus {
 
     fun stop(ctx: Context): String {
         val was = active(ctx)
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieFocus", e) }
         return if (was) "Focus mode off." else "Focus mode was not on."
     }
 
