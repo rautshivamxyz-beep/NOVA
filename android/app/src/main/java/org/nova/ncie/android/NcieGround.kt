@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -356,7 +358,7 @@ object NcieGround {
         try {
             indexFile(ctx).writeText(names.filter { flashChunks[it]?.isNotEmpty() == true }
                 .joinToString("") { it + "\t" + flashChunks[it]!!.size + "\n" })
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
     }
 
     /** Write point for ONE changed source: refresh (or, with text == null,
@@ -377,7 +379,7 @@ object NcieGround {
             if (text == null) map.remove(name)
             else map[name] = flashChunks[name]!!.size
             f.writeText(map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
         // v9.9.0: keep the semantic chunk embeddings in step with this
         // write (fire-and-forget; deleteIndex when the source is gone).
         reindexEmbeddings(ctx, name, if (text == null) null else flashChunks[name])
@@ -389,7 +391,7 @@ object NcieGround {
     fun indexReset(ctx: Context) {
         graphTerms = null
         flashChunks.clear()
-        try { indexFile(ctx).delete() } catch (e: Exception) { }
+        try { indexFile(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
         // v9.9.0: the whole source set changed - drop every embedding
         // index too; retrieve rebuilds them as sources come back.
         NcieEmbed.resetIndexes(ctx)
