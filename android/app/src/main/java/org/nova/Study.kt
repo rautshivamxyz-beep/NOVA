@@ -32,7 +32,7 @@ object Study {
                 out.add(Card(o.getString("q"), o.getString("a"),
                     o.optInt("iv", 1), o.optLong("due", 0L)))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Study", e) }
         return out
     }
 
@@ -48,7 +48,7 @@ object Study {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(arr.toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Study", e) }
     }
 
     fun totalCards(ctx: Context): Int = load(ctx).size
