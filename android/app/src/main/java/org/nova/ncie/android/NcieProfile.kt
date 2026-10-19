@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.nova.ChatStore
@@ -55,7 +57,7 @@ fun MainActivity.answerProfile(text: String): Boolean {
         val reply = Msg(Role.ASSISTANT, sb.toString().trim())
         currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieProfile", e) }
         }
     }
     return true
