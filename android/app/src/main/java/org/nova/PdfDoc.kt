@@ -80,7 +80,7 @@ object PdfDoc {
             val tmp = File(cache.parentFile, cache.name + ".tmp")
             tmp.writeText(text)
             if (!tmp.renameTo(cache)) { cache.delete(); tmp.renameTo(cache) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("PdfDoc", e) }
         if (text.length > maxChars)
             text.substring(0, maxChars) + "\n[...document truncated]" else text
     }
