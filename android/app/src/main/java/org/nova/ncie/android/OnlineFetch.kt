@@ -12,6 +12,7 @@ import org.nova.NovaNet
 import org.nova.Role
 import org.nova.Settings
 import org.nova.WikiCore
+import org.nova.ncie.knowledge.EntityMatch
 import org.nova.ncie.knowledge.HtmlText
 import org.nova.ncie.verify.Coverage
 import java.io.File
@@ -174,12 +175,22 @@ object OnlineFetch {
                 reason = "wikipedia: " + err(e); null
             }
             var saved: String? = null
-            if (wiki != null && (Coverage.ratio(q, wiki.second) >= 0.15 ||
+            // v9.33.14 "The right entity or nothing": a "who is X" question
+            // whose fetched article does not NAME X in its title is the wrong
+            // answer - "who is physics wallah" was answered with the Radha
+            // Bhatt intro because her page merely mentions those words. An
+            // article that is not about the thing asked is never served, and
+            // never stored.
+            val wrongEntity = wiki != null && entityQuestion(text) &&
+                !EntityMatch.titleMatchesEntity(wiki.first, text)
+            if (wiki != null && !wrongEntity && (Coverage.ratio(q, wiki.second) >= 0.15 ||
                     hits(q, wiki.second) >= 2)) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
                 } else reason = "wikipedia: could not store"
+            } else if (wrongEntity) {
+                reason = "wikipedia: '" + wiki!!.first + "' does not name the thing asked about"
             } else if (wiki == null) {
                 if (reason.isEmpty()) reason = "wikipedia: no usable article"
             } else reason = "wikipedia: weak match"
