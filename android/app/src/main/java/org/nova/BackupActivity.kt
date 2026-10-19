@@ -207,7 +207,7 @@ class BackupActivity : ListActivity() {
                     }
                 }
                 ok = true
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
             runOnUiThread {
                 if (ok) {
                     hint?.text = "Backup saved: $count files, " + kb(bytes) + ".\n" +
@@ -264,7 +264,7 @@ class BackupActivity : ListActivity() {
                         }
                     }
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
             runOnUiThread {
                 entries = loaded
                 adapter?.notifyDataSetChanged()
@@ -353,7 +353,7 @@ class BackupActivity : ListActivity() {
                     }
                 }
                 ok = true
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
             runOnUiThread {
                 if (ok) {
                     // v9.4.0 "Audit Fixes II" (audit: stale in-memory state
@@ -469,7 +469,7 @@ class BackupActivity : ListActivity() {
     } catch (e: Exception) { false }
 
     private fun toast(s: String) {
-        try { Toast.makeText(this, s, Toast.LENGTH_LONG).show() } catch (e: Exception) { }
+        try { Toast.makeText(this, s, Toast.LENGTH_LONG).show() } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
     }
 
     private fun kb(bytes: Long): String = "%.1f KB".format(Locale.US, bytes / 1024.0)
