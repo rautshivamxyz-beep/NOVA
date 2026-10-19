@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
@@ -68,7 +70,7 @@ object NcieTools {
                 out.add(Item(n, ""))
                 if (out.size >= MAX_ITEMS) break
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTools", e) }
         return out
     }
 
@@ -141,7 +143,7 @@ object NcieTools {
                     }
                     else -> { }
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NcieTools", e) }
         }
         val out = text.ifBlank {
             items.joinToString("\n") {
@@ -171,6 +173,6 @@ object NcieTools {
             val tmp = File(dir, name + ".tmp")
             FileOutputStream(tmp).use { it.write(body.toByteArray()) }
             if (!tmp.renameTo(dest)) { dest.delete(); tmp.renameTo(dest) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTools", e) }
     }
 }
