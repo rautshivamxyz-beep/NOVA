@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,7 +36,7 @@ object NcieStyle {
                 }
                 if (mine.length > budget) break
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieStyle", e) }
         return if (mine.length < 300) "" else mine.toString()
     }
 
