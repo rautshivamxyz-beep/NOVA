@@ -54,8 +54,7 @@ object Planner {
                 f.delete()
                 tmp.renameTo(f)
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
     }
 
     // ------------------------------------------------ daily budget (minutes)
@@ -78,8 +77,7 @@ object Planner {
             } else JSONObject()
             o.put("minutes", m)
             writeAtomic(f, o.toString())
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
     }
 
     // ------------------------------------------------ weak topics
@@ -101,8 +99,7 @@ object Planner {
                     )
                 )
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
         return out
     }
 
@@ -123,8 +120,7 @@ object Planner {
             }
             o.put("topics", arr)
             writeAtomic(f, o.toString())
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
     }
 
     // ------------------------------------------------ doubt journal
@@ -139,8 +135,7 @@ object Planner {
                 val d = arr.getJSONObject(i)
                 out.add(Doubt(d.optString("text", ""), d.optLong("ts", 0L), d.optBoolean("done", false)))
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
         return out
     }
 
@@ -156,8 +151,7 @@ object Planner {
                 )
             }
             writeAtomic(doubtsFile(ctx), arr.toString())
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
     }
 
     // ------------------------------------------------ today's plan
