@@ -75,7 +75,7 @@ object NcieVoice {
                                 !v.isNetworkConnectionRequired
                         }
                         if (kitten != null) {
-                            try { tts?.voice = kitten } catch (e: Exception) { }
+                            try { tts?.voice = kitten } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
                         } else {
                         val inVoices = tts?.voices
                             ?.filter { v ->
@@ -95,14 +95,14 @@ object NcieVoice {
                         } else if (!englishDevice) {
                             // A non-English phone keeps its own language,
                             // exactly as the engine default would.
-                            try { tts?.language = def } catch (e: Exception) { }
+                            try { tts?.language = def } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
                         }
                         }
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
                 } else {
                     // no engine on this phone - disable and stay silent,
                     // never crash
-                    try { tts?.shutdown() } catch (e: Exception) { }
+                    try { tts?.shutdown() } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
                     tts = null
                 }
             }
@@ -125,19 +125,19 @@ object NcieVoice {
         if (clean.isBlank()) return
         try {
             tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "nova_reply")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
     }
 
     /** Stop any in-flight speech (QUEUE_FLUSH already handles overlap;
      *  exposed for safety). */
     fun stop() {
-        try { tts?.stop() } catch (e: Exception) { }
+        try { tts?.stop() } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
     }
 
     /** Release the engine - called from MainActivity.onDestroy. */
     fun shutdown(@Suppress("UNUSED_PARAMETER") ctx: Context) {
-        try { tts?.stop() } catch (e: Exception) { }
-        try { tts?.shutdown() } catch (e: Exception) { }
+        try { tts?.stop() } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
+        try { tts?.shutdown() } catch (e: Exception) { NovaLog.quiet("NcieVoice", e) }
         tts = null
         ready = false
     }

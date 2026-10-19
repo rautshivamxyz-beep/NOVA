@@ -28,7 +28,7 @@ object Exams {
                 val o = arr.getJSONObject(i)
                 out.add(Exam(o.getString("name"), o.optLong("date", 0L)))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Exams", e) }
         return out
     }
 
@@ -41,7 +41,7 @@ object Exams {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(arr.toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Exams", e) }
     }
 
     fun add(ctx: Context, name: String, dateMs: Long) {

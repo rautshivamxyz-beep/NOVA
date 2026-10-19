@@ -46,7 +46,23 @@ object EntityMatch {
     fun titleMatchesEntity(title: String, question: String): Boolean {
         val terms = entityTerms(question).filter { it.length >= 3 }
         if (terms.isEmpty()) return false
-        val t = " " + title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
-        return terms.all { t.contains(" " + it + " ") }
+        val norm = title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+        val spaced = " " + norm + " "
+        // v9.33.15: a title may run the entity together ("PhysicsWallah") -
+        // a term is also accepted when it is contained in the de-spaced title.
+        val deSpaced = norm.replace(" ", "")
+        return terms.all { spaced.contains(" " + it + " ") || deSpaced.contains(it) }
     }
+
+    /**
+     * v9.33.15: the entity phrase a "who is X" question names - the question
+     * with its lead-in words stripped, so it can be looked up as a page TITLE
+     * ("who is physics wallah" -> "physics wallah").
+     */
+    fun entityPhrase(question: String): String =
+        question.lowercase()
+            .replace(Regex("^(who|what|which|whose|where|when|why|how)\\s+(is|was|are|were|am)\\s+"), "")
+            .replace(Regex("^(kaun|kya|kahan|kab)\\s+"), "")
+            .replace(Regex("[?.!]+\\s*$"), "")
+            .trim()
 }

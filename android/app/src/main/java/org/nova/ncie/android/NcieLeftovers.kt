@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.NovaListener
 import org.nova.NovaSms
@@ -70,8 +72,8 @@ object NcieLeftovers {
      *  reminders and an armed guardian. Idempotent; called at app start, on
      *  boot and from the health screen. */
     fun rearm(ctx: Context) {
-        try { NcieRecurring.arm(ctx) } catch (e: Exception) { }
-        try { NcieGuardian.rearm(ctx) } catch (e: Exception) { }
+        try { NcieRecurring.arm(ctx) } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
+        try { NcieGuardian.rearm(ctx) } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
     }
 
     /** v9.19.0 "Polish": one short digest of the leftover state, shared by
@@ -85,25 +87,25 @@ object NcieLeftovers {
                 sb.append("expiring soon: ")
                     .append(soon.joinToString(", ") { it.first + " (" + it.second + "d)" })
                     .append('\n')
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         try {
             val today = NcieRecurring.today(ctx)
             if (today.isNotEmpty())
                 sb.append("reminders: ")
                     .append(today.take(3).joinToString(", ") { NcieQuiet.fmt(it.first) + " " + it.second })
                     .append('\n')
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         try {
             val n = NcieLedger.count(ctx)
             if (n > 0) sb.append("promises open: ").append(n).append('\n')
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         try {
             val until = Settings(ctx).guardianUntil
             if (until > System.currentTimeMillis())
                 sb.append("guardian: armed, ")
                     .append(((until - System.currentTimeMillis()) / 60_000L).toInt() + 1)
                     .append(" min left\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return sb.toString()
     }
 
@@ -225,7 +227,7 @@ object NcieLedger {
 
     fun add(ctx: Context, whoWhat: String): String {
         val clean = whoWhat.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(System.currentTimeMillis().toString() + "\t" + clean + "\n") } catch (e: Exception) { }
+        try { file(ctx).appendText(System.currentTimeMillis().toString() + "\t" + clean + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Noted - I'll keep track. Say \"what did I promise\" any time."
     }
 
@@ -249,7 +251,7 @@ object NcieLedger {
     }
 
     fun clear(ctx: Context): String {
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Cleared your promises."
     }
 
@@ -286,7 +288,7 @@ object NcieGuardian {
             } catch (e: SecurityException) {
                 am.set(android.app.AlarmManager.RTC_WAKEUP, until, pi(ctx))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Guardian armed - if you don't check in within " + minutes +
             " min I'll text " + c + ". Say \"i'm ok\" to cancel."
     }
@@ -296,7 +298,7 @@ object NcieGuardian {
         try {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             am.cancel(pi(ctx))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Checked in - guardian disarmed."
     }
 
@@ -334,7 +336,7 @@ object NcieGuardian {
             } catch (e: SecurityException) {
                 am.set(android.app.AlarmManager.RTC_WAKEUP, until, pi(ctx))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
     }
 
     private fun pi(ctx: Context): android.app.PendingIntent =
@@ -396,13 +398,13 @@ object NcieRecurring {
                 val m = p[0].toIntOrNull() ?: continue
                 if (p[1].isNotBlank()) out.add(m to p[1])
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return out
     }
 
     fun add(ctx: Context, atMinutes: Int, what: String): String {
         val clean = what.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(atMinutes.toString() + "\t" + clean + "\n") } catch (e: Exception) { }
+        try { file(ctx).appendText(atMinutes.toString() + "\t" + clean + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         arm(ctx)
         return "Every day at " + NcieQuiet.fmt(atMinutes) + " I'll remind you: " + clean
     }
@@ -417,11 +419,11 @@ object NcieRecurring {
     }
 
     fun clear(ctx: Context): String {
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         try {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             am.cancel(pi(ctx))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Cleared your daily reminders."
     }
 
@@ -449,7 +451,7 @@ object NcieRecurring {
             } catch (e: SecurityException) {
                 am.set(android.app.AlarmManager.RTC_WAKEUP, best, pi(ctx))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
     }
 
     /** Fired by LeftoverReceiver: notify anything due now, then re-arm. */
@@ -587,7 +589,7 @@ object NcieExpiry {
 
     fun add(ctx: Context, name: String, millis: Long): String {
         val clean = name.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(clean + "\t" + millis + "\n") } catch (e: Exception) { }
+        try { file(ctx).appendText(clean + "\t" + millis + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Noted: " + clean + " expires " +
             SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(millis)) + "."
     }
@@ -602,7 +604,7 @@ object NcieExpiry {
                 val ms = p[1].toLongOrNull() ?: continue
                 items.add(p[0] to ms)
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         if (items.isEmpty()) return "Nothing tracked yet. Say \"my passport expires 2030-05-01\"."
         val dayMs = 24L * 60 * 60 * 1000
         val now = System.currentTimeMillis()
@@ -618,7 +620,7 @@ object NcieExpiry {
     }
 
     fun clear(ctx: Context): String {
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return "Cleared the expiry tracker."
     }
 
@@ -636,7 +638,7 @@ object NcieExpiry {
                 val d = ((ms - now) / dayMs).toInt()
                 if (d in 0..days) out.add(p[0] to d)
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
         return out.sortedBy { it.second }
     }
 }
@@ -655,5 +657,5 @@ private fun postNotif(ctx: Context, id: Int, title: String, text: String) {
             .setAutoCancel(true)
             .build()
         nm.notify(id, n)
-    } catch (e: Exception) { }
+    } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
 }

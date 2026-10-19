@@ -140,6 +140,10 @@ class MainActivity : Activity() {
      *  own completion turn runs. */
     internal var offeredQuestionShown: String? = null
 
+    /** v9.33.15: was the previous turn a "generate ..." request? Used to give
+     *  a switch INTO a generation task a clean context (see NcieChat). */
+    internal var lastTurnWasCode = false
+
     /** Set while a flashcard-generating reply is running. */
     internal var pendingCards = false
     private var pendingAutosend: String? = null
@@ -249,15 +253,15 @@ class MainActivity : Activity() {
                     }
                     Reminder.schedule(this@MainActivity, next, t, rep)
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             // v9.21.0 "Reliable": the nightly Dream consolidation and the
             // daily recurring reminders, off the main thread too.
-            try { NovaHealth.armAll(this@MainActivity) } catch (e: Exception) { }
+            try { NovaHealth.armAll(this@MainActivity) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         }
         // v9.8.0: scheduled texts may open a messaging draft, so this stays
         // on the main thread - a text that came due while NOVA was dead
         // fires now, the nearest future one is re-armed.
-        try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { }
+        try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
 
 
         // v9.29.5: warm the store whenever the file exists, not only when the
@@ -280,7 +284,7 @@ class MainActivity : Activity() {
             if (pinSet() && !pinUnlocked)
                 findViewById<android.view.View>(android.R.id.content)
                     ?.visibility = android.view.View.INVISIBLE
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         displayChatMessages()
         // v7.1: welcome brand-new users and point at the model download
         maybeOnboard()
@@ -291,7 +295,7 @@ class MainActivity : Activity() {
         try {
             if (NovaHealth.needsSetup(this))
                 startActivity(Intent(this, SetupActivity::class.java))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
 
         observeEngine()
         handleSharedText()
@@ -308,7 +312,7 @@ class MainActivity : Activity() {
         NcieVoice.init(this)
         // v9.31.0 "Jarvis": start the periodic tick that runs the spoken
         // nudges and the user's triggers (idempotent, cheap, best-effort).
-        try { org.nova.ncie.android.NovaNudge.schedule(this) } catch (e: Exception) { }
+        try { org.nova.ncie.android.NovaNudge.schedule(this) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
     }
 
 
@@ -772,7 +776,7 @@ class MainActivity : Activity() {
             else toast("Grant notification access to NOVA")
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         })
         // v8.8.0: the update row; v9.7.0 "Delta Updates" - it opens the
         // Update screen now: the private releases page, or apply a
@@ -941,7 +945,7 @@ class MainActivity : Activity() {
                 try {
                     contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 settings.grantedFolder = uri.toString()
                 toast("Folder granted - NOVA can look inside it")
             }
@@ -1155,7 +1159,7 @@ class MainActivity : Activity() {
             .setPositiveButton("Close", null)
             .show()
         // v7.6: the WebView leaked on every run - destroy it with the dialog
-        dlg.setOnDismissListener { try { wv.destroy() } catch (e: Exception) { } }
+        dlg.setOnDismissListener { try { wv.destroy() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) } }
         val html = "<html><body><script>try{\n" + code + "\n}catch(e){console.log('Error: '+e.message)}</script></body></html>"
         wv.loadData(html, "text/html", "utf-8")
         // WebView renders asynchronously - poll the captured output briefly
@@ -1267,7 +1271,7 @@ class MainActivity : Activity() {
             // still runs (it also stores the answer); this one is the
             // parachute.
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(this@MainActivity, genChat) } catch (e: Exception) { }
+                try { ChatStore.save(this@MainActivity, genChat) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }
         }
         val replyMsg: Msg
@@ -1312,7 +1316,7 @@ class MainActivity : Activity() {
                         tts?.speak("hmm", TextToSpeech.QUEUE_ADD, null, "nova_fill")
                         lastSpeechProgress = System.currentTimeMillis()
                     }
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }
         }
 
@@ -1328,7 +1332,7 @@ class MainActivity : Activity() {
             if (newBubble && NovaEngine.contextDirty) {
                 try {
                     NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }
             // v5.4.2: performance timers (time-to-first-token + total)
             val tStart = android.os.SystemClock.elapsedRealtime()
@@ -1403,7 +1407,7 @@ class MainActivity : Activity() {
                         setStatus()
                         try {
                             withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
-                        } catch (e: Exception) { }
+                        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                         return@withContext
                     }
                     generating = false
@@ -1520,7 +1524,7 @@ class MainActivity : Activity() {
                             if (qaAns.length > 30) try {
                                 File(File(filesDir, "summary_cache").apply { mkdirs() },
                                     qaKey).writeText(qaAns)
-                            } catch (e: Exception) { }
+                            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                         }
                     }
                     // v9.6.0 "Engine Pack": the Predictive Cache write -
@@ -1540,7 +1544,7 @@ class MainActivity : Activity() {
                     // persist the conversation
                     try {
                         withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     // v7.6: the save above SUSPENDS the Main thread - the
                     // user can switch chats during it. Re-check before
                     // continuing/compacting, or the continuation lands in
@@ -1549,7 +1553,7 @@ class MainActivity : Activity() {
                     // speak whatever is left of the reply
                     if (!speechCancelled) {
                         try { speakNewSentences(stripThinking(replyMsg.text), flush = true) }
-                        catch (e: Exception) { }
+                        catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     }
                     // v9.0.0 "Voice": spoken replies - the model's answer is
                     // read aloud ONCE, in full, when the turn truly ends.
@@ -1814,7 +1818,7 @@ class MainActivity : Activity() {
                     if (i in 1 until chunks.size && i % 3 == 0 && NovaEngine.contextDirty) {
                         // v7.5.1: instant KV reset instead of a full model
                         // reload from flash - same clean context, sub-second
-                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
+                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     }
                     adapter.setLastText("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n" +
                         tail300(sectionSummaries.toString()))
@@ -1829,7 +1833,7 @@ class MainActivity : Activity() {
                                 "numbers and dates exact. Only use facts " +
                                 "present - never invent:\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${chunks.size}\u2026\n\n", sb) }
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     val s = stripThinking(sb.toString()).trim()
                     if (s.length > 10) {
                         val before = sectionSummaries.length
@@ -1853,7 +1857,7 @@ class MainActivity : Activity() {
                 // model derail into "Step 1..." nonsense mid-generation)
                 if (NovaEngine.contextDirty) {
                     // v7.5.1: instant KV reset, not a full flash reload
-                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
+                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 }
                 val sb2 = StringBuilder()
                 NovaEngineAdapter.stream(
@@ -1879,19 +1883,19 @@ class MainActivity : Activity() {
                 if (key != null && finalText.length > 50) try {
                     File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
                         .writeText(finalText)
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 // the engine context now holds every section prompt - reset it
                 needsContextCarry = true
                 NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
                 try {
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 toast("Summary ready - long-press it to make study cards")
             } catch (e: Exception) {
                 try {
                     reply.text = "Summary failed - try again"
                     adapter.finalizeLast()
-                } catch (x: Exception) { }
+                } catch (x: Exception) { NovaLog.quiet("MainActivity", x) }
                 toast("Summary failed - try again")
             } finally {
                 generating = false
@@ -1991,7 +1995,7 @@ class MainActivity : Activity() {
                 if (NovaEngine.contextDirty) {
                     try {
                         NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 }
                 // checkpoint: sections summarized in an earlier interrupted
                 // run are resumed instead of redone from zero
@@ -2001,7 +2005,7 @@ class MainActivity : Activity() {
                     val arr = JSONArray(cpFile.readText())
                     for (k in 0 until arr.length()) done.add(arr.getString(k))
                     if (done.size > sections.size) done.clear()   // doc changed
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 var sectionSummaries = StringBuilder(
                     dedupeLines(done.joinToString("\n\n")))
                 var emptyStreak = 0
@@ -2015,7 +2019,7 @@ class MainActivity : Activity() {
                     // quietly degrades later sections - reload in batches
                     if (i in 1 until sections.size && i % 6 == 0 && NovaEngine.contextDirty) {
                         // v7.5.1: instant KV reset instead of a full reload
-                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
+                        try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     }
                     adapter.setLastText("Summarizing section ${i + 1}/${sections.size}\u2026\n\n" +
                         tail300(sectionSummaries.toString()))
@@ -2028,7 +2032,7 @@ class MainActivity : Activity() {
                                 "as short bullet lines. Keep dates, names and " +
                                 "numbers exact. Only use facts present - never invent:$antiCot\n-----\n$c2\n-----", 280
                         ).collect { sb.append(it); uiProgress("Summarizing section ${i + 1}/${sections.size}\u2026\n\n", sb) }
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     val s = stripThinking(sb.toString()).trim()
                     if (s.length > 10) {
                         val before = sectionSummaries.length
@@ -2042,7 +2046,7 @@ class MainActivity : Activity() {
                             val ja = JSONArray()
                             for (d in done) ja.put(d)
                             cpFile.writeText(ja.toString())
-                        } catch (e: Exception) { }
+                        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                         // stop early when the notes just repeat themselves
                         if (sectionSummaries.length - before < 20) emptyStreak++ else emptyStreak = 0
                         if (emptyStreak >= 6 && i + 1 < sections.size) {
@@ -2058,7 +2062,7 @@ class MainActivity : Activity() {
                 // model derail into "Step 1..." nonsense mid-generation)
                 if (NovaEngine.contextDirty) {
                     // v7.5.1: instant KV reset, not a full flash reload
-                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { }
+                    try { NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 }
                 val sb2 = StringBuilder()
                 NovaEngineAdapter.stream(
@@ -2080,20 +2084,20 @@ class MainActivity : Activity() {
                 reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
-                if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { }
+                if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 // the summary is cached now - drop the section checkpoint
-                try { cpFile.delete() } catch (e: Exception) { }
+                try { cpFile.delete() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 needsContextCarry = true
                 NovaEngine.resetConversationAsync(this@MainActivity, settings.systemPrompt)
                 try {
                     withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, currentChat) }
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 toast("Summary ready - long-press it to make study cards")
             } catch (e: Exception) {
                 try {
                     reply.text = "Summary failed - try again"
                     adapter.finalizeLast()
-                } catch (x: Exception) { }
+                } catch (x: Exception) { NovaLog.quiet("MainActivity", x) }
                 toast("Summary failed - try again")
             } finally {
                 generating = false
@@ -2217,7 +2221,7 @@ class MainActivity : Activity() {
             val qaKey = "qa_" + Integer.toHexString(lastUser.text.lowercase().hashCode()) + "_" +
                 Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
             File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey).delete()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         NcieLearn.memoryForget(lastUser.text)
         val recent = currentChat.messages.dropLast(1).takeLast(6)
             .joinToString("\n") { m ->
@@ -2387,7 +2391,7 @@ class MainActivity : Activity() {
                         .show()
                 }
                 .addOnFailureListener {
-                    try { rec.close() } catch (e: Exception) { }
+                    try { rec.close() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     toast("Couldn't read image: " + (it.message ?: "error"))
                 }
         } catch (e: Exception) {
@@ -2455,7 +2459,7 @@ class MainActivity : Activity() {
                         .show()
                 }
                 .addOnFailureListener {
-                    try { rec.close() } catch (e: Exception) { }
+                    try { rec.close() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     toast("Text recognition failed on this image.")
                 }
         } catch (e: Exception) {
@@ -2539,7 +2543,7 @@ class MainActivity : Activity() {
         currentChat.messages.add(reply); adapter.add(reply)
         scrollToEnd()
         scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         }
         return true
     }
@@ -2562,7 +2566,7 @@ class MainActivity : Activity() {
                 .setPositiveButton("Got it") { _, _ -> showHelpTips() }
                 .setNegativeButton("Later", null)
                 .show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
     }
 
     // ---------- phone commands (no model needed) ----------
@@ -2989,7 +2993,7 @@ Study:
                     try {
                         startActivity(android.content.Intent(
                             android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
@@ -3403,7 +3407,7 @@ Study:
                 .replace(Regex("\\s+"), " ")
                 .trim()
             if (clean.isNotBlank()) tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "briefing")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
     }
 
     private fun speakNewSentences(full: String, flush: Boolean) {
@@ -3456,7 +3460,7 @@ Study:
                         val l = lf.readText().trim()
                         if (l.isNotEmpty()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, l)
                     }
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }, VOICE_REQUEST_CODE)
         } catch (e: ActivityNotFoundException) {
             toast("No voice input app found on this phone")
@@ -3485,7 +3489,7 @@ Study:
         }
         try {
             if (next == null) f.delete() else f.writeText(next)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         toast("Voice language: " + (next ?: "phone default"))
     }
 
@@ -3869,7 +3873,7 @@ Study:
                         .format(java.util.Date()) +
                         "\nthread: " + t.name + "\n\n" +
                         android.util.Log.getStackTraceString(e))
-            } catch (x: Exception) { }
+            } catch (x: Exception) { NovaLog.quiet("MainActivity", x) }
             previous?.uncaughtException(t, e)
         }
     }
@@ -3893,7 +3897,7 @@ Study:
                 }
                 .setNegativeButton("Dismiss", null)
                 .show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
     }
 
     // ------------------------------------------- v9.1.0: the app lock
@@ -3930,7 +3934,7 @@ Study:
         try {
             findViewById<android.view.View>(android.R.id.content)
                 ?.visibility = android.view.View.INVISIBLE
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         val pinBox = EditText(this).apply {
             hint = "PIN"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
@@ -3948,7 +3952,7 @@ Study:
                 try {
                     findViewById<android.view.View>(android.R.id.content)
                         ?.visibility = android.view.View.VISIBLE
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 lockDialog.dismiss()
             } else {
                 toast("Wrong PIN")
@@ -4011,7 +4015,7 @@ Study:
                 .show()
             removeDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
                 if (pinHashMatches(pinBox.text.toString())) {
-                    try { pinFile().delete() } catch (e: Exception) { }
+                    try { pinFile().delete() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                     toast("App lock off")
                     removeDialog.dismiss()
                 } else {

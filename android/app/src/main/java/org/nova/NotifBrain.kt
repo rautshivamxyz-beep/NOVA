@@ -45,7 +45,7 @@ class NotifBrain : NotificationListenerService() {
                     if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NotifBrain", e) }
         }
     }
 

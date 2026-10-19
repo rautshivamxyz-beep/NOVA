@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.NovaHealth
 import org.nova.NovaListener
@@ -40,15 +42,15 @@ object NcieWatchdog {
                     else -> continue
                 }
                 pending++
-                try { Reminder.schedule(ctx, next, t, rep); rearmed++ } catch (e: Exception) { }
+                try { Reminder.schedule(ctx, next, t, rep); rearmed++ } catch (e: Exception) { NovaLog.quiet("NcieWatchdog", e) }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieWatchdog", e) }
         sb.append("\nReminders\n")
         sb.append("  ").append(pending).append(" pending, ")
             .append(rearmed).append(" re-armed\n")
 
         // ---- the nightly Dream alarm (re-arm + confirm) ----
-        try { NovaHealth.armAll(ctx) } catch (e: Exception) { }
+        try { NovaHealth.armAll(ctx) } catch (e: Exception) { NovaLog.quiet("NcieWatchdog", e) }
         val dream = try { NovaHealth.alarmsArmed(ctx) } catch (e: Exception) { false }
         sb.append("  dream alarm: ").append(if (dream) "armed" else "NOT armed").append("\n")
 

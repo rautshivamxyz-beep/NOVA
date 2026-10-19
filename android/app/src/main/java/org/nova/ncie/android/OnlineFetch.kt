@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.app.AlertDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,7 +62,7 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
         }
     }
 
@@ -160,7 +162,7 @@ object OnlineFetch {
             act.adapter.add(um)
             act.scrollToEnd()
             act.scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
             }
         }
         act.scope.launch(Dispatchers.IO) {
@@ -254,7 +256,7 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
         }
     }
 
@@ -347,11 +349,23 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
         }
     }
 
     private fun fetchWiki(act: MainActivity, q: String): Pair<String, String>? {
+        // v9.33.15 "Name it exactly": a "who is X" question is first looked up
+        // as a page TITLE. Full-text search ranked "Radha Bhatt" first for
+        // "physics wallah" because her page mentions it; the page actually
+        // CALLED that ("PhysicsWallah") is the right answer, and a title
+        // lookup finds it directly.
+        if (entityQuestion(q)) {
+            val phrase = EntityMatch.entityPhrase(q)
+            if (phrase.isNotBlank()) {
+                val exact = try { pageByTitle(act, phrase) } catch (e: Exception) { null }
+                if (exact != null && EntityMatch.titleMatchesEntity(exact.first, q)) return exact
+            }
+        }
         // v9.16.2: try the top few search hits and keep the FIRST with a
         // real intro - the old code only looked at hit #1, so a
         // disambiguation or stub page meant "nothing good found".
@@ -385,6 +399,22 @@ object OnlineFetch {
             } catch (e: Exception) { null }
             if (rest != null && rest.length >= 60) return title to rest
         }
+        return null
+    }
+
+    /** The page whose TITLE is (or redirects to) [title], or null when there
+     *  is no such page or it has no usable intro. */
+    private fun pageByTitle(act: MainActivity, title: String): Pair<String, String>? {
+        val page = http(act, "https://en.wikipedia.org/w/api.php?action=query&format=json" +
+            "&redirects=1&prop=extracts&explaintext=1&exintro=1&titles=" +
+            URLEncoder.encode(title, "UTF-8"))
+        val pages = JSONObject(page).getJSONObject("query").getJSONObject("pages")
+        val o = pages.getJSONObject(pages.keys().next())
+        if (o.has("missing")) return null
+        val resolved = o.optString("title").ifBlank { title }
+        val extract = o.optString("extract")
+        if (extract.length >= 60 && !extract.contains("may refer to:", ignoreCase = true))
+            return resolved to extract
         return null
     }
 
@@ -458,7 +488,7 @@ object OnlineFetch {
             val kept = f.readLines().toMutableList()
             kept.add(line)
             f.writeText(kept.takeLast(500).joinToString("\n") + "\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
     }
 
     /** v9.15.0 "Private Fetch": one raw request, routed through the

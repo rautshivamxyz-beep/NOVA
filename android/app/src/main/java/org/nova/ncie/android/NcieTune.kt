@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -155,7 +157,7 @@ object NcieTune {
                 val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
                 if (k in KEYS) custom[k] = v
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
         val fam = defaultsFor(familyOf(modelFile), NcieChat.tinyModelFile(modelFile))
         val values = LinkedHashMap<String, Double>()
         for (k in KEYS) values[k] = custom[k] ?: fam.getValue(k)
@@ -272,7 +274,7 @@ object NcieTune {
     fun resetCommand(c: Context): String {
         val m = currentModel(c)
             ?: return "No model yet - download one from the Models screen first."
-        try { fileFor(c, m.first).delete() } catch (e: Exception) { }
+        try { fileFor(c, m.first).delete() } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
         return "Model settings reset to " + familyOf(m.first) +
             " family defaults for " + m.second
     }
@@ -297,7 +299,7 @@ object NcieTune {
                 val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
                 if (k in KEYS) vals[k] = v
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
         return vals
     }
 
@@ -347,7 +349,7 @@ object NcieTune {
         msgs.clear()
         msgs.addAll(keep)
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, chat) } catch (e: Exception) { }
+            try { ChatStore.save(act, chat) } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
         }
         return true
     }

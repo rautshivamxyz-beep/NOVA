@@ -398,7 +398,7 @@ class KnowledgeActivity : Activity() {
                 com.google.android.gms.tasks.Tasks.await(rec.process(img)).text
             } finally {
                 // v7.6: the recognizer leaked on every photo import
-                try { rec.close() } catch (e: Exception) { }
+                try { rec.close() } catch (e: Exception) { NovaLog.quiet("KnowledgeActivity", e) }
             }
         } catch (e: Exception) { "" }
     } catch (e: Exception) { "" }

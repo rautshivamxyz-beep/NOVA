@@ -100,7 +100,7 @@ object ModelDownloader {
                 .setProgress(100, if (pct >= 0) pct else 0, pct < 0)
                 .build()
             nm.notify(NOTIF_ID, n)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("ModelDownloader", e) }
     }
 
     private fun dismissProgress(ctx: android.content.Context) {
@@ -108,7 +108,7 @@ object ModelDownloader {
             val nm = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
                 as android.app.NotificationManager
             nm.cancel(NOTIF_ID)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("ModelDownloader", e) }
         lastNotifiedPct = -1
         lastNotifiedDone = -1L
     }
@@ -135,7 +135,7 @@ object ModelDownloader {
             } catch (e: Exception) {
                 _state.value = State.Failed(fileNameFromUrl(url), e.message ?: "download failed")
             } finally {
-                try { appCtx?.let { dismissProgress(it) } } catch (e: Exception) { }
+                try { appCtx?.let { dismissProgress(it) } } catch (e: Exception) { NovaLog.quiet("ModelDownloader", e) }
             }
         }
     }

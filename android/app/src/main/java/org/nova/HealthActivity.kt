@@ -86,6 +86,6 @@ class HealthActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // a permission may have been granted while we were away
-        try { render() } catch (e: Exception) { }
+        try { render() } catch (e: Exception) { NovaLog.quiet("HealthActivity", e) }
     }
 }

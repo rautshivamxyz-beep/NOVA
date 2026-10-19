@@ -151,7 +151,7 @@ class UpdateActivity : ListActivity() {
         try {
             startActivity(Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://github.com/rautshivamxyz-beep/NOVA-APK/releases")))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
     }
 
     // ------------------------------------------------------------------
@@ -250,10 +250,10 @@ class UpdateActivity : ListActivity() {
                 builtUri = storeUri
                 savedToDownloads = true
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
         if (savedToDownloads) {
             // the permanent copy exists - the cache original is redundant
-            try { out.delete() } catch (e: Exception) { }
+            try { out.delete() } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
             toast("NOVA-update.apk saved in Downloads")
         } else {
             toast("NOVA-update.apk saved at " + out.path)
@@ -268,7 +268,7 @@ class UpdateActivity : ListActivity() {
                 startActivityForResult(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + packageName)), REQ_INSTALL_PERM)
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
             return
         }
         installNow()
@@ -307,7 +307,7 @@ class UpdateActivity : ListActivity() {
     } catch (e: Exception) { null }
 
     private fun toast(s: String) {
-        try { Toast.makeText(this, s, Toast.LENGTH_LONG).show() } catch (e: Exception) { }
+        try { Toast.makeText(this, s, Toast.LENGTH_LONG).show() } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
     }
 
     companion object {

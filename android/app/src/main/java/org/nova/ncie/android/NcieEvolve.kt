@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import java.io.File
 import java.text.SimpleDateFormat
@@ -57,7 +59,7 @@ object NcieEvolve {
                     val lines = f.readLines()
                     if (lines.size > MAX_LINES) f.writeText(lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
         }
     }
 
@@ -66,7 +68,7 @@ object NcieEvolve {
         io.execute {
             try {
                 file(ctx).appendText(System.currentTimeMillis().toString() + "\tskill+\t" + name + "\n")
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
         }
     }
 
@@ -80,7 +82,7 @@ object NcieEvolve {
         try {
             NcieLearn.memoryDistill(ctx) { distill ->
                 val body = report(ctx, distill)
-                try { File(ctx.filesDir, "growth_report.txt").writeText(body) } catch (e: Exception) { }
+                try { File(ctx.filesDir, "growth_report.txt").writeText(body) } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
                 onReport?.invoke(body)
             }
         } catch (e: Exception) {

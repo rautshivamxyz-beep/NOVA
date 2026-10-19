@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
@@ -257,19 +259,19 @@ object NcieEmbed {
                 tmp.delete()
             }
         } catch (t: Throwable) {
-            try { f.delete() } catch (e: Exception) { }
+            try { f.delete() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
         }
     }
 
     /** Drop one source's embedding index (source removed or edited to
      *  nothing). */
     fun deleteIndex(ctx: Context, name: String) {
-        try { indexFile(ctx, name).delete() } catch (e: Exception) { }
+        try { indexFile(ctx, name).delete() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
     }
 
     /** The whole wiki store was replaced: drop every embedding index. */
     fun resetIndexes(ctx: Context) {
-        try { File(ctx.filesDir, "embeddings").deleteRecursively() } catch (e: Exception) { }
+        try { File(ctx.filesDir, "embeddings").deleteRecursively() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
     }
 
     /** The top [topK] (chunkIdx, cosine-score) pairs for a query unit

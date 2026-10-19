@@ -15,6 +15,6 @@ class DreamReceiver : BroadcastReceiver() {
         try {
             NcieDream.run(context)
             NcieDream.schedule(context)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("DreamReceiver", e) }
     }
 }

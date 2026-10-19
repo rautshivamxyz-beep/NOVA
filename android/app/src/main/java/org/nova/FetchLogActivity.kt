@@ -127,9 +127,9 @@ class FetchLogActivity : ListActivity() {
             .setPositiveButton("Delete all") { _, _ ->
                 Thread {
                     for (e in entries) {
-                        try { WikiCore.removeArticle(this, e.title) } catch (x: Exception) { }
+                        try { WikiCore.removeArticle(this, e.title) } catch (x: Exception) { NovaLog.quiet("FetchLogActivity", x) }
                     }
-                    try { logFile().delete() } catch (x: Exception) { }
+                    try { logFile().delete() } catch (x: Exception) { NovaLog.quiet("FetchLogActivity", x) }
                     runOnUiThread { reload() }
                 }.start()
             }
@@ -143,7 +143,7 @@ class FetchLogActivity : ListActivity() {
                 it.split('\t').getOrNull(1)?.equals(title, ignoreCase = true) != true
             }
             logFile().writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("FetchLogActivity", e) }
     }
 
     private inner class EntryAdapter : BaseAdapter() {

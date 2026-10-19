@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -65,8 +67,8 @@ object NovaHandsfree {
 
     fun stop() {
         on = false
-        try { rec?.stopListening() } catch (e: Exception) { }
-        try { rec?.destroy() } catch (e: Exception) { }
+        try { rec?.stopListening() } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        try { rec?.destroy() } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
         rec = null
     }
 
@@ -127,7 +129,7 @@ object NovaNudge {
         try { state(ctx).readText().trim().toLong() } catch (e: Exception) { 0L }
 
     private fun mark(ctx: Context) {
-        try { state(ctx).writeText(System.currentTimeMillis().toString()) } catch (e: Exception) { }
+        try { state(ctx).writeText(System.currentTimeMillis().toString()) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** Schedule the periodic nudge check (idempotent). */
@@ -139,7 +141,7 @@ object NovaNudge {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + EVERY_MS, pi)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** Speak whatever is worth speaking, if anything. Returns the line or "". */
@@ -157,7 +159,7 @@ object NovaNudge {
             val now2 = System.currentTimeMillis()
             val due = org.nova.ReminderStore.load(ctx).count { t -> t.first in 1..now2 }
             if (due > 0) parts.add(if (due == 1) "You have a reminder due." else "You have $due reminders due.")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
 
         // a low battery
         try {
@@ -166,12 +168,12 @@ object NovaNudge {
             val charging = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 ?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING
             if (!charging && pct in 1..15) parts.add("Battery is at $pct percent.")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
 
         if (parts.isEmpty()) return ""
         mark(ctx)
         val line = parts.joinToString(" ")
-        try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(line) } catch (e: Exception) { }
+        try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(line) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
         return line
     }
 }
@@ -191,14 +193,14 @@ object NovaTriggers {
     } catch (e: Exception) { emptyList() }
 
     fun add(ctx: Context, cond: String, what: String) {
-        try { file(ctx).appendText(cond.trim() + "\t" + what.trim() + "\n") } catch (e: Exception) { }
+        try { file(ctx).appendText(cond.trim() + "\t" + what.trim() + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     fun removeAt(ctx: Context, index: Int) {
         try {
             val l = all(ctx).toMutableList()
             if (index in l.indices) { l.removeAt(index); file(ctx).writeText(l.joinToString("\n") { it.cond + "\t" + it.what } + "\n") }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** The last fire time per trigger, so nothing repeats within the hour. */
@@ -209,13 +211,13 @@ object NovaTriggers {
                 val p = l.split('\t', limit = 2)
                 if (p.size == 2) p[1].toLongOrNull()?.let { m[p[0]] = it }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
         return m
     }
 
     private fun saveFired(ctx: Context, m: Map<String, Long>) {
         try { File(ctx.filesDir, "triggers_fired.txt")
-            .writeText(m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { }
+            .writeText(m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** Fire any trigger whose condition now holds. Returns what it said. */
@@ -249,7 +251,7 @@ object NovaTriggers {
         }
         if (said.isNotEmpty()) {
             saveFired(ctx, f)
-            try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(said) } catch (e: Exception) { }
+            try { org.nova.NcieVoice.init(ctx); org.nova.NcieVoice.speak(said) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
         }
         return said
     }
@@ -266,7 +268,7 @@ object NovaTriggers {
                     m[p[0].trim().lowercase()] = la to lo
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
         return m
     }
 
@@ -302,8 +304,8 @@ object NovaTriggers {
 /** The periodic tick: nudges + triggers. Also re-arms itself. */
 class NovaTriggerReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        try { NovaNudge.check(ctx) } catch (e: Exception) { }
-        try { NovaTriggers.check(ctx) } catch (e: Exception) { }
-        try { NovaNudge.schedule(ctx) } catch (e: Exception) { }
+        try { NovaNudge.check(ctx) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        try { NovaTriggers.check(ctx) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        try { NovaNudge.schedule(ctx) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 }

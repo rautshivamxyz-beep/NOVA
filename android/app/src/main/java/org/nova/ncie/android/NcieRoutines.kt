@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -124,7 +126,7 @@ object NcieRoutines {
                 val i = l.indexOf(SEP)
                 i > 0 && l.substring(0, i).isNotBlank() && l.substring(i + 1).isNotBlank()
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieRoutines", e) }
         sb.append(if (cards > 0) "flashcards: $cards" else "flashcards: none yet").append('\n')
         // v9.10.0 "Revision Planner": the exam countdown and today's
         // revision topic, when an exam date is set. The topic is the
@@ -139,14 +141,14 @@ object NcieRoutines {
                     sb.append("revision today: ").append(it).append('\n')
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieRoutines", e) }
         // v9.19.0 "Polish": the leftover features (expiring documents,
         // today's reminders, open promises, an armed guardian) join the
         // briefing, so one screen shows the whole day.
         try {
             val digest = NcieLeftovers.dailyDigest(ctx)
             if (digest.isNotBlank()) sb.append(digest)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieRoutines", e) }
         // v9.16.11 "Dream mode": the overnight consolidation, shown here so
         // the day's picture is ready before you start.
         sb.append("\n\n").append(NcieDream.run(ctx)).append('\n')

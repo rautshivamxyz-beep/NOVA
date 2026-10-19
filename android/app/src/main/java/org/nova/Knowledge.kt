@@ -48,7 +48,7 @@ object Knowledge {
                     list.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
         cache = list
         return list
     }
@@ -63,7 +63,7 @@ object Knowledge {
             tmp.writeText(arr.toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
             cache = chunks
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
     }
 
     fun hasDocs(ctx: Context): Boolean = load(ctx).isNotEmpty()
@@ -103,7 +103,7 @@ object Knowledge {
                 chunks.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
             }
             save(ctx, chunks)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
     }
 
     fun removeDoc(ctx: Context, name: String) {
@@ -118,7 +118,7 @@ object Knowledge {
             File(ctx.filesDir, "summary_cache").apply { mkdirs() }
                 .listFiles { f: File -> f.name.startsWith("qa_") }
                 ?.forEach { it.delete() }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
     }
 
     /** Splits text into ~700-char pieces, breaking at paragraphs/sentences. */
