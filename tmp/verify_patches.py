@@ -214,7 +214,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.14: version bumped for the reliability pass", bg.count("versionName '9.33.14'") == 1 and bg.count("versionCode 182") == 1)
+check("v9.33.15: version bumped for the nothing-fails-silently pass", bg.count("versionName '9.33.15'") == 1 and bg.count("versionCode 183") == 1)
+
+# ---- v9.33.15: nothing fails silently, fresh context for generation, name it exactly ----
+check("v9.33.15: swallowed exceptions are recorded (NovaLog)",
+      open(os.path.join(ROOT, BASE + "NovaLog.kt")).read().count("fun quiet(") == 1 and
+      ma.count("NovaLog.quiet(") >= 40)
+check("v9.33.15: the health report surfaces the swallowed count",
+      load("NovaHealth.kt").count("NovaLog.summary()") == 1)
+check("v9.33.15: a generation task starts a clean context",
+      nc.count("freshForCode") == 3 and ma.count("var lastTurnWasCode") == 1)
+check("v9.33.15: an entity is looked up as a page title first",
+      load("ncie/android/OnlineFetch.kt").count("EntityMatch.entityPhrase(q)") == 1 and
+      open(os.path.join(ROOT, BASE + "ncie/knowledge/EntityMatch.kt")).read().count("fun entityPhrase(") == 1)
 
 # ---- v9.33.14 "reliability": right entity or nothing, no invented lyrics, real tests ----
 check("v9.33.14: the entity-title gate ships (EntityMatch)",
@@ -641,7 +653,7 @@ check("v8.4.0: failures noted, gaps logged (NcieLearn)",
 check("v8.4.0: weak topics surface on the Memory screen (NcieLearn)",
       nl.count("weakTopics") == 1)
 check("v8.4.0: the fetcher gates with Coverage and sends keywords only",
-      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 3)
+      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 4)
 check("v8.4.0: skills parsed by the kernel (NcieSkills)",
       nsk.count("SkillStore.parse") == 2)
 check("v8.4.0: kernel stage files synced (Coverage, SkillStore, GapStore)",
@@ -820,7 +832,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt"))]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
