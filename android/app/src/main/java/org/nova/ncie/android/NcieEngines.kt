@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import java.io.File
 
@@ -62,7 +64,7 @@ object NcieEngines {
                 while (lines.size > CAP) lines.removeAt(0)
                 experienceFile(ctx).writeText(lines.joinToString("\n") + "\n")
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }
 
     /** True when [question] (case-insensitive, trimmed) is one the user
@@ -117,7 +119,7 @@ object NcieEngines {
                 while (lines.size > CAP) lines.removeAt(0)
                 answerFile(ctx).writeText(lines.joinToString("\n") + "\n")
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }
 
     /** One line per entry: backslashes double, newlines become \n - the
