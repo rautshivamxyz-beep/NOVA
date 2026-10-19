@@ -130,7 +130,7 @@ class CameraActivity : ComponentActivity() {
         shutter?.isEnabled = false
         val dir = File(cacheDir, "camera").apply { mkdirs() }
         val out = File(dir, "capture.jpg")
-        try { if (out.exists()) out.delete() } catch (e: Exception) { }
+        try { if (out.exists()) out.delete() } catch (e: Exception) { NovaLog.quiet("CameraActivity", e) }
         val opts = ImageCapture.OutputFileOptions.Builder(out).build()
         cap.takePicture(opts, ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
