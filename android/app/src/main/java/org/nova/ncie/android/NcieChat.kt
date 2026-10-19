@@ -365,6 +365,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // A3 "Weekly review" (v9.33.10): "weekly review" / "week ahead" /
         // "sunday review" - deterministic, fully offline, no permission.
         if (answerWeekly(text)) { input.setText(""); return }
+        // A4 "Watchdog" (v9.33.11): "watchdog" / "system check" / "keep
+        // nova alive" - deterministic, fully offline, no new permission:
+        // re-arms the reminders and reports the notification listener.
+        if (answerWatchdog(text)) { input.setText(""); return }
         // v9.6.0 "Engine Pack": "what have you learned" - the Experience
         // Engine's deterministic view of the questions whose answers the
         // user regenerated; "connections" / "related documents" - the
@@ -1897,6 +1901,26 @@ private fun MainActivity.answerWeekly(text: String): Boolean {
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
     scope.launch(Dispatchers.IO) {
         val body = try { NcieWeekly.review(activity) } catch (e: Exception) { "Weekly review unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
+// A4 "Watchdog" (v9.33.11): "watchdog" / "system check" / "keep nova
+// alive" - the offline self-heal: re-arm the reminders, confirm the
+// nightly alarm, and report the notification listener.
+private val WATCHDOG_Q = Regex(
+    "(?i)^\\s*(?:watchdog|system\\s+check|keep\\s+nova\\s+alive|is\\s+nova\\s+alive|" +
+        "check\\s+nova|nova\\s+watchdog)\\s*[.!?]*\\s*$")
+
+private fun MainActivity.answerWatchdog(text: String): Boolean {
+    if (text.length > 80 || !WATCHDOG_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try { NcieWatchdog.run(activity) } catch (e: Exception) { "Watchdog unavailable." }
         withContext(Dispatchers.Main) { postGroundReply(activity, body) }
     }
     return true
