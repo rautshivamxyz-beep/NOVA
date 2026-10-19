@@ -184,7 +184,7 @@ object WikiCore {
         // isReady() only marks "the full download finished". Without this,
         // every online lookup failed for anyone who skipped the Wikipedia
         // download ("couldn't find a reliable source").
-        try { dir(ctx).mkdirs() } catch (e: Exception) { }
+        try { dir(ctx).mkdirs() } catch (e: Exception) { NovaLog.quiet("WikiCore", e) }
         // one line per article: stray newlines would corrupt the format
         val paras = text.split("\n\n").map { it.replace("\n", " ").trim() }
             .filter { it.isNotEmpty() }
