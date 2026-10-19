@@ -178,7 +178,7 @@ object NovaEngine {
             } else {
                 engine.unloadDraftModel()
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NovaEngine", e) }
     }
 
     /**
