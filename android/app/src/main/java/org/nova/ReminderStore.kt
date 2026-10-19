@@ -40,7 +40,7 @@ object ReminderStore {
                     out.add(Triple(o.optLong("at"), o.getString("t"), o.optLong("rep")))
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         return out
     }
 
@@ -57,7 +57,7 @@ object ReminderStore {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(arr.toString())
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
     }
 
     /** v7.6: stable unique reminder IDs - the old hashCode() ids could
@@ -65,8 +65,8 @@ object ReminderStore {
     fun nextId(ctx: Context): Int {
         val f = File(ctx.filesDir, "reminder_id")
         var n = 1
-        try { if (f.exists()) n = f.readText().trim().toInt() + 1 } catch (e: Exception) { }
-        try { f.writeText(n.toString()) } catch (e: Exception) { }
+        try { if (f.exists()) n = f.readText().trim().toInt() + 1 } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        try { f.writeText(n.toString()) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         return n
     }
 }
@@ -91,14 +91,14 @@ class BootReceiver : android.content.BroadcastReceiver() {
         // v9.8.0: pending scheduled texts survive the reboot too - fire
         // anything that came due while the phone was off, then re-arm
         // the nearest future one
-        try { ScheduledSends.fireDue(context) } catch (e: Exception) { }
+        try { ScheduledSends.fireDue(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         // v9.21.0 "Reliable": re-arm the rest of NOVA's alarms too - the
         // nightly Dream consolidation and the daily recurring reminders
         // were armed only when the morning briefing ran, so a reboot
         // silently stopped them.
-        try { NovaHealth.armAll(context) } catch (e: Exception) { }
+        try { NovaHealth.armAll(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         // v9.31.2 "Jarvis": re-arm the spoken-nudge / trigger tick too, so a
         // reboot no longer silently stops them.
-        try { org.nova.ncie.android.NovaNudge.schedule(context) } catch (e: Exception) { }
+        try { org.nova.ncie.android.NovaNudge.schedule(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
     }
 }
