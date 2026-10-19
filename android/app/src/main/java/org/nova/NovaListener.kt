@@ -128,7 +128,7 @@ class NovaListener : NotificationListenerService() {
                                     try {
                                         if (fire(svc, target, written ?: canned))
                                             logAutoReply(svc, target.title)
-                                    } catch (e: Exception) { }
+                                    } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
                                 }
                             }
                         }
@@ -145,7 +145,7 @@ class NovaListener : NotificationListenerService() {
                     lastLine = key
                     lastTime = now
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
         }
     }
 
@@ -199,7 +199,7 @@ class NovaListener : NotificationListenerService() {
                     tmp.writeText(kept.joinToString("\n") + "\n")
                     if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
                 }
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
         }
 
         /** How many auto-replies went out since midnight. */
@@ -260,18 +260,18 @@ class NovaListener : NotificationListenerService() {
 
         /** Stop logging notifications ("pause notifications"). */
         fun pause(ctx: Context) {
-            try { pauseFlag(ctx).writeText("paused\n") } catch (e: Exception) { }
+            try { pauseFlag(ctx).writeText("paused\n") } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
         }
 
         /** Resume logging notifications ("resume notifications"). */
         fun resume(ctx: Context) {
-            try { pauseFlag(ctx).delete() } catch (e: Exception) { }
+            try { pauseFlag(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
         }
 
         /** Wipe the log ("clear my notifications"). */
         fun clearLog(ctx: Context) {
             synchronized(lock) {
-                try { logPath(ctx).delete() } catch (e: Exception) { }
+                try { logPath(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
                 lastLine = null
                 lastTime = 0L
             }
