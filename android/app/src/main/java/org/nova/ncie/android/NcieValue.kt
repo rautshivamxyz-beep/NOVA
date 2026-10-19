@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import java.io.File
 
@@ -55,7 +57,7 @@ object NcieValue {
                     }
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
         stats = m
         return m
     }
@@ -66,7 +68,7 @@ object NcieValue {
             val sb = StringBuilder()
             for ((k, v) in m) sb.append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
             file(ctx).writeText(sb.toString())
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
     }
 
     /** True when [source] may be injected this turn. A source with enough
@@ -105,6 +107,6 @@ object NcieValue {
     fun reset(ctx: Context) {
         stats = HashMap()
         turns = 0
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
     }
 }
