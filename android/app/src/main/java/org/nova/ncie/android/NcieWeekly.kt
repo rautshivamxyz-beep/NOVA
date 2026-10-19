@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.ReminderStore
 import java.text.SimpleDateFormat
@@ -39,11 +41,11 @@ object NcieWeekly {
                 if (rep > 0L) { while (fireAt < now) fireAt += rep }
                 if (fireAt in now..weekEnd) ahead.add(fireAt to t)
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieWeekly", e) }
         try {
             val dl = NcieExam.daysLeft(ctx)
             if (dl != null && dl in 0..7) ahead.add((today + dl * DAY_MS) to "exam")
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieWeekly", e) }
 
         sb.append("\nComing up (next 7 days):\n")
         if (ahead.isEmpty()) {
