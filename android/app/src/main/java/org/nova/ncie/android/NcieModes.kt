@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.Settings
 
@@ -12,13 +14,13 @@ import org.nova.Settings
 object NcieModes {
 
     fun away(ctx: Context): String {
-        try { Settings(ctx).autoReply = true } catch (e: Exception) { }
+        try { Settings(ctx).autoReply = true } catch (e: Exception) { NovaLog.quiet("NcieModes", e) }
         setRinger(ctx, android.media.AudioManager.RINGER_MODE_VIBRATE)
         return "Away mode ON - NOVA is auto-replying, phone on vibrate. Say \"i'm back\" to undo."
     }
 
     fun back(ctx: Context): String {
-        try { Settings(ctx).autoReply = false } catch (e: Exception) { }
+        try { Settings(ctx).autoReply = false } catch (e: Exception) { NovaLog.quiet("NcieModes", e) }
         setRinger(ctx, android.media.AudioManager.RINGER_MODE_NORMAL)
         return "Welcome back - auto-replies off, ringer normal."
     }
@@ -27,6 +29,6 @@ object NcieModes {
         try {
             val am = ctx.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
             am.ringerMode = mode
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieModes", e) }
     }
 }
