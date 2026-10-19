@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import org.nova.ChatStore
 import org.nova.NovaListener
@@ -29,7 +31,7 @@ object NcieTimeMachine {
                 val text = (p[2] + " - " + p[3]).trim()
                 if (matches(text, terms)) hits.add(Hit("notif", text.take(140)))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTimeMachine", e) }
 
         // saved chats
         try {
@@ -39,7 +41,7 @@ object NcieTimeMachine {
                     if (matches(m.text, terms)) hits.add(Hit("chat", m.text.take(140)))
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTimeMachine", e) }
 
         // indexed notes
         try {
@@ -48,7 +50,7 @@ object NcieTimeMachine {
                 val snip = snippet(txt, terms)
                 if (snip != null) hits.add(Hit("notes: " + d.first, snip))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTimeMachine", e) }
 
         // v9.19.0 "Polish": promises and tracked expiry dates are searchable
         // through the same Time Machine as everything else.
@@ -59,7 +61,7 @@ object NcieTimeMachine {
                 if (p.size < 2) continue
                 if (matches(p[1], terms)) hits.add(Hit("promise", p[1].take(140)))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTimeMachine", e) }
         try {
             val ef = java.io.File(ctx.filesDir, "expiry.txt")
             if (ef.exists()) for (l in ef.readLines()) {
@@ -72,7 +74,7 @@ object NcieTimeMachine {
                 val line = p[0] + " - expires " + d
                 if (matches(line, terms)) hits.add(Hit("expiry", line.take(140)))
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieTimeMachine", e) }
         if (hits.isEmpty()) return "Nothing in your stuff matches \"" + query + "\"."
 
         val sb = StringBuilder("Found " + hits.size + " for \"" + query + "\":\n")
