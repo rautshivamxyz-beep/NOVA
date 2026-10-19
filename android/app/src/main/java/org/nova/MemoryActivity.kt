@@ -53,7 +53,7 @@ class MemoryActivity : ListActivity() {
             // the same lazy learner boot the chat path gets.
             NcieLearn.memoryBoot(this)
         } catch (e: Exception) {
-            try { Toast.makeText(this, "Memory screen failed to load", Toast.LENGTH_LONG).show() } catch (x: Exception) { }
+            try { Toast.makeText(this, "Memory screen failed to load", Toast.LENGTH_LONG).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
             finish()
         }
     }
@@ -215,10 +215,10 @@ class MemoryActivity : ListActivity() {
                         facts = snapshot
                         statsLine?.text = stats
                         adapter?.notifyDataSetChanged()
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
 
     /** Tap: the full answer of an ellipsized row, read-only. */
@@ -230,7 +230,7 @@ class MemoryActivity : ListActivity() {
                 .setMessage(f.answer)
                 .setPositiveButton("Close", null)
                 .show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
 
     /** Long-press: forget exactly this memory, after a confirmation. */
@@ -246,7 +246,7 @@ class MemoryActivity : ListActivity() {
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
 
     private fun confirmWipe() {
@@ -260,7 +260,7 @@ class MemoryActivity : ListActivity() {
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
 
     private fun consolidateNow() {
@@ -269,11 +269,11 @@ class MemoryActivity : ListActivity() {
             NcieLearn.memoryDistill(this) { report ->
                 try {
                     Toast.makeText(this, report, Toast.LENGTH_LONG).show()
-                } catch (e: Exception) { }
+                } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
                 refresh()
             }
         } catch (e: Exception) {
-            try { Toast.makeText(this, "Consolidation failed", Toast.LENGTH_SHORT).show() } catch (x: Exception) { }
+            try { Toast.makeText(this, "Consolidation failed", Toast.LENGTH_SHORT).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
         }
     }
 
