@@ -146,6 +146,10 @@ object NovaNudge {
     fun check(ctx: Context): String {
         val now = System.currentTimeMillis()
         if (now - lastAt(ctx) < 10L * 60L * 1000L) return ""     // never nag twice in 10 min
+        // A5 completion (v9.33.13): focus mode holds the proactive
+        // nudges too - the session promises "no spoken nudges", so the
+        // 30-minute check is a no-op while it is active.
+        if (NcieFocus.active(ctx)) return ""
         val parts = ArrayList<String>()
 
         // reminders that are due

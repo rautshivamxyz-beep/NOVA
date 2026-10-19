@@ -10,8 +10,9 @@ import java.io.File
  * which is a separate ask (see the plan's WAITING-FOR-SHIVAM list).
  *
  * While a session is active NOVA stops interrupting the user itself - the
- * auto-responder stays silent (NovaListener checks [active]) and the spoken
- * nudges are held. A session is just a timestamp on disk, so it survives a
+ * auto-responder stays silent (NovaListener checks [active]) and the
+ * proactive spoken nudges are held (NovaNudge checks [active]). A session
+ * is just a timestamp on disk, so it survives a
  * restart and expires on its own; nothing else is needed to end it.
  */
 object NcieFocus {
