@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -168,7 +170,7 @@ object NcieExam {
         // v9.16.3: also record it in the Exams store (exams.json) so the
         // Exams screen shows it AND the model's exam line (Exams.promptLine)
         // includes it - the two stores used to be disconnected.
-        try { Exams.add(act, "Exam", ms) } catch (e: Exception) { }
+        try { Exams.add(act, "Exam", ms) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         val fmt = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(ms))
         val d = daysLeft(act) ?: 0
         postReply(act, "Exam date set: $fmt. $d days to go.")
@@ -326,7 +328,7 @@ object NcieExam {
         try {
             dateFile(act).delete()
             planFile(act).delete()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         postReply(act, "Exam planner cleared.")
     }
 
@@ -360,7 +362,7 @@ object NcieExam {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         }
     }
 }
