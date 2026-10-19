@@ -59,7 +59,7 @@ object NovaSms {
                     numberForContact(c, cur.getString(0))?.let { return it }
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
         // 3. last resort: a case-insensitive contains scan over the contacts
         try {
             val ql = q.lowercase()
@@ -73,7 +73,7 @@ object NovaSms {
                     if (dn.lowercase().contains(ql)) return cur.getString(1)
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
         return null
     }
 
@@ -163,7 +163,7 @@ object ScheduledSends {
                         out.add(Send(p[0], ms, p[2], p[3], p.getOrNull(4) == "n"))
                 }
             }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
         return out
     }
 
@@ -176,7 +176,7 @@ object ScheduledSends {
                     (if (s.notified) "\tn" else "")
             })
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
     }
 
     fun add(ctx: Context, atMillis: Long, name: String, message: String) {
@@ -188,7 +188,7 @@ object ScheduledSends {
 
     /** "cancel scheduled texts" - clears the file and the alarm. */
     fun clear(ctx: Context) {
-        try { file(ctx).delete() } catch (e: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
         cancelAlarm(ctx)
     }
 
@@ -200,7 +200,7 @@ object ScheduledSends {
         try {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             am.cancel(pi(ctx))
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
     }
 
     /** Arms ONE alarm at the nearest future pending send. */
@@ -247,7 +247,7 @@ object ScheduledSends {
                 .setAutoCancel(true)
                 .build()
             nm.notify(s.id.hashCode(), notif)
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
     }
 
     /**
