@@ -131,6 +131,6 @@ class HelpActivity : Activity() {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("NOVA", s))
             Toast.makeText(this, "Copied: " + s, Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) { }
+        } catch (e: Exception) { NovaLog.quiet("HelpActivity", e) }
     }
 }
