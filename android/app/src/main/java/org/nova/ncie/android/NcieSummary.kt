@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,8 +47,8 @@ object NcieSummary {
     /** v9.3.0: v9.2.0's global summary files - delete them if an old
      * install still has them (each run is a no-op once they are gone). */
     fun migrateLegacy(c: Context) {
-        try { File(c.filesDir, "chat_summary.txt").delete() } catch (e: Exception) { }
-        try { File(c.filesDir, "chat_count.txt").delete() } catch (e: Exception) { }
+        try { File(c.filesDir, "chat_summary.txt").delete() } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
+        try { File(c.filesDir, "chat_count.txt").delete() } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
     }
 
     /** The stored summary for [id]'s chat, or null when absent or blank. */
@@ -87,8 +89,8 @@ object NcieSummary {
     /** "forget our conversation": THIS chat's summary and its counter
      *  are gone - every other chat keeps its own. */
     fun clear(c: Context, id: String) {
-        try { summaryFile(c, id).delete() } catch (e: Exception) { }
-        try { countFile(c, id).delete() } catch (e: Exception) { }
+        try { summaryFile(c, id).delete() } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
+        try { countFile(c, id).delete() } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
     }
 
     /**
@@ -134,7 +136,7 @@ object NcieSummary {
         chat.messages.clear()
         chat.messages.addAll(keep)
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, chat) } catch (e: Exception) { }
+            try { ChatStore.save(act, chat) } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
         }
     }
 
@@ -143,6 +145,6 @@ object NcieSummary {
     } catch (e: Exception) { 0 }
 
     private fun writeCount(c: Context, id: String, n: Int) {
-        try { countFile(c, id).writeText(n.toString()) } catch (e: Exception) { }
+        try { countFile(c, id).writeText(n.toString()) } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
     }
 }
