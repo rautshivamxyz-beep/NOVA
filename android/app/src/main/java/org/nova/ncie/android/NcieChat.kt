@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.NovaLog
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,6 +35,13 @@ private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
  *  first; see the budget block in ncieSend. The current question, the
  *  base system prompt and the memory carry stay outside it. */
 private const val PREAMBLE_BUDGET_CHARS = 9000
+
+/** v9.33.15 "Fresh task, fresh context": a request to GENERATE something
+ *  (code, a program, a script, a function) - a new task rather than a
+ *  continuation of the conversation. */
+private val CODE_REQ = Regex(
+    "(?i)\\b(?:generate|write|create|make|build|give\\s+me)\\b[^.]{0,30}" +
+        "\\b(?:code|program|script|function|class|snippet|app)\\b|\\bcode\\s+(?:for|to)\\b")
 
 /** v9.12.1 "Context Diet": the process-wide generation signal.
  *  MainActivity's own `generating` flag is private and lives on the
@@ -189,6 +198,14 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         val preShown = offeredQuestionShown == text
         if (preShown) offeredQuestionShown = null
         val isChip = CHIP_PROMPTS.contains(text)
+        // v9.33.15: a generation request is a fresh task - NOVA answered
+        // "generate a code for a offline chatbot" with the previous turn's
+        // facts (Radha Bhatt) still in context, and echoed them into the code.
+        // Switching INTO a generation task starts a clean context; consecutive
+        // generation turns keep theirs (you are iterating on the same thing).
+        val codeReq = CODE_REQ.containsMatchIn(text)
+        val freshForCode = codeReq && !lastTurnWasCode
+        lastTurnWasCode = codeReq
         // v8.9.0: Tutor Mode's stateful continuation - while a quiz
         // answer, a flashcard flip or a right/wrong verdict is pending,
         // the user's next message belongs to that session BEFORE any
@@ -237,7 +254,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(freply); adapter.add(freply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
             }
             return
         }
@@ -253,7 +270,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(mreply); adapter.add(mreply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
             }
             return
         }
@@ -270,7 +287,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(lreply); adapter.add(lreply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
             }
             return
         }
@@ -498,7 +515,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 adapter.add(reply)
                 scrollToEnd()
                 scope.launch(Dispatchers.IO) {
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
                 }
                 return
             }
@@ -535,7 +552,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     adapter.add(reply)
                     scrollToEnd()
                     scope.launch(Dispatchers.IO) {
-                        try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
                     }
                     return
                 }
@@ -657,7 +674,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             adapter.add(reply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
             }
             return
         }
@@ -803,7 +820,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     currentChat.messages.add(cachedReply); adapter.add(cachedReply)
                     scrollToEnd()
                     toast("Answer (cached from last time)")
-                    try { ChatStore.save(this, currentChat) } catch (e: Exception) { }
+                    try { ChatStore.save(this, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
                     // v5.4.3 fix: the engine never saw this exchange - make
                     // the next real question carry the transcript, so
                     // follow-ups ("explain that again") aren't answered cold
@@ -954,7 +971,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // so a long chat never loses its beginning. Skills keep their
         // own instruction wrapper; the docPart logic above is untouched.
         var summaryPart = ""
-        if (skill == null) {
+        if (skill == null && !freshForCode) {
             // v9.12.1 "Context Diet": the summary sanitizer - the
             // summarizer sometimes preserves the meta markers of the
             // prompts it was fed ("New message:", "Nova:", "Answer:",
@@ -1170,7 +1187,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 scrollToEnd()
                 toast("Answer (cached - regenerate for a fresh one)")
                 scope.launch(Dispatchers.IO) {
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
                 }
                 needsContextCarry = true
                 return
@@ -1218,14 +1235,14 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     currentChat.messages.add(m)
                     adapter.add(m)
                     scrollToEnd()
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
                     return@launch
                 }
                 startGeneration(turnPrompt, if (preShown) null else text)
             }
         } else {
             NcieSummary.bump(this, currentChat.id)
-            if (ctxTrimmed && NovaEngine.contextDirty) {
+            if ((ctxTrimmed || freshForCode) && NovaEngine.contextDirty) {
                 // v9.11.0: the dropped turns are still in the engine's
                 // KV - reset first (the same suspend-then-generate shape
                 // as the greeting path above), then generate; this turn's
@@ -1424,7 +1441,7 @@ private fun MainActivity.answerMissed(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1461,7 +1478,7 @@ private fun MainActivity.answerNotifCmd(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1540,7 +1557,7 @@ private fun MainActivity.answerTune(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1600,7 +1617,7 @@ private fun MainActivity.answerFrom(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1624,7 +1641,7 @@ private fun MainActivity.answerBriefing(text: String): Boolean {
     // v9.16.15 "Voice briefing": speak it aloud when TTS is ready.
     speakNow(briefText)
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1643,7 +1660,7 @@ private fun MainActivity.answerStudy(text: String): Boolean {
     val routReply = Msg(Role.ASSISTANT, NcieRoutines.startStudy(this, this))
     currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1671,7 +1688,7 @@ private fun MainActivity.answerSummary(text: String): Boolean {
         else "No summary yet — it builds automatically as we talk.")
     currentChat.messages.add(sumReply); adapter.add(sumReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1698,7 +1715,7 @@ private fun MainActivity.answerForget(text: String): Boolean {
     val forgReply = Msg(Role.ASSISTANT, "Done — conversation cleared.")
     currentChat.messages.add(forgReply); adapter.add(forgReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
@@ -1718,7 +1735,7 @@ private fun postGroundReply(act: MainActivity, body: String) {
     val groundMsg = Msg(Role.ASSISTANT, body)
     act.currentChat.messages.add(groundMsg); act.adapter.add(groundMsg); act.scrollToEnd()
     act.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
 }
 
@@ -1864,7 +1881,7 @@ private fun groundDocsBody(ctx: android.content.Context): String {
     }
     if (wiki.isNotEmpty()) {
         sb.append("\nWiki:\n")
-        try { WikiCore.warmUp(ctx) } catch (e: Exception) { }
+        try { WikiCore.warmUp(ctx) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
         for (t in wiki) {
             val len = try { WikiCore.articleText(ctx, t)?.length ?: 0 } catch (e: Exception) { 0 }
             sb.append("  ").append(t).append(" — ").append(len).append(" chars\n")
@@ -2017,7 +2034,7 @@ private fun MainActivity.answerJarvis(text: String): Boolean {
             "Hands-free is on. I am listening - just talk. Say \"hands free off\" when you are done."
             else "Hands-free is off.")
         currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
-        try { if (on) org.nova.NcieVoice.init(this) } catch (e: Exception) { }
+        try { if (on) org.nova.NcieVoice.init(this) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
         return true
     }
     // v9.31.2: "remember this place as <name>" - the place trigger needs a spot
@@ -2210,7 +2227,7 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
         val r = Msg(Role.ASSISTANT, s)
         self.currentChat.messages.add(r); self.adapter.add(r); self.scrollToEnd()
         self.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(self, self.currentChat) } catch (e: Exception) { }
+            try { ChatStore.save(self, self.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
         }
     }
 
@@ -2306,7 +2323,7 @@ private fun MainActivity.answerLyrics(text: String): Boolean {
     adapter.add(reply)
     scrollToEnd()
     scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(act, currentChat) } catch (e: Exception) { }
+        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
     }
     return true
 }
