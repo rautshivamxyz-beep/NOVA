@@ -57,7 +57,7 @@ class SetupActivity : Activity() {
             "Open notification access") {
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            } catch (e: Exception) { }
+            } catch (e: Exception) { NovaLog.quiet("SetupActivity", e) }
         }
 
         step(3, "Allow phone, SMS and camera",
@@ -102,12 +102,12 @@ class SetupActivity : Activity() {
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        try { render() } catch (e: Exception) { }
+        try { render() } catch (e: Exception) { NovaLog.quiet("SetupActivity", e) }
     }
 
     override fun onResume() {
         super.onResume()
-        try { render() } catch (e: Exception) { }
+        try { render() } catch (e: Exception) { NovaLog.quiet("SetupActivity", e) }
     }
 
     private companion object { const val REQ_PERMS = 7001 }
