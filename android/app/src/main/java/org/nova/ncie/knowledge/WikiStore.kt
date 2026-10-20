@@ -1,5 +1,7 @@
 package org.nova.ncie.knowledge
 
+import org.nova.ncie.Tokens
+
 /**
  * v0.7.0 — the search half of the NOVA app's WikiCore (WikiCore.search),
  * ported kernel-side. The app keeps the I/O — the download, the
@@ -23,7 +25,7 @@ class WikiStore {
         "much", "some", "give", "list", "name", "then", "than", "into", "also")
 
     fun words(s: String): Set<String> =
-        s.lowercase().split(Regex("[^a-z0-9]+"))
+        Tokens.split(s)
             .filter { it.length > 2 && it !in STOP }.toSet()
 
     /**
@@ -47,7 +49,7 @@ class WikiStore {
         val tw = Array(index.size) { words(index[it].first) }
         val norms = Array(index.size) {
             val t = index[it].first.lowercase()
-            " " + t.replace(Regex("[^a-z0-9]+"), " ").trim() + " "
+            Tokens.norm(t)
         }
         val tokenMap = HashMap<String, ArrayList<Int>>()
         for (i in index.indices) {
@@ -95,7 +97,7 @@ class WikiStore {
         // in as background. Both sides are normalised to space-padded
         // whole words now: "nelson mandela" still earns the bonus inside
         // "who is nelson mandela", "hiv" no longer matches "shivam".
-        val qWords = " " + query.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim() + " "
+        val qWords = Tokens.norm(query)
         val scored = ArrayList<Triple<Int, String, Long>>()
         // v0.9.2 (opt #3): candidates are the titles a query token hits
         // (from the token map built once by prepare) plus titles earning
