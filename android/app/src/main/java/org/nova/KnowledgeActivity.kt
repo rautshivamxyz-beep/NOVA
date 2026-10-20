@@ -131,6 +131,7 @@ class KnowledgeActivity : Activity() {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(
                 tinted(R.drawable.ic_globe, NovaTheme.dim), null, null, null)
+            contentDescription = "Download offline Wikipedia"
             background = null
             setOnClickListener { startWiki() }
             setOnLongClickListener {
@@ -200,6 +201,7 @@ class KnowledgeActivity : Activity() {
                 isAllCaps = false
                 setCompoundDrawablesWithIntrinsicBounds(
                     tinted(R.drawable.ic_close, NovaTheme.dim), null, null, null)
+                contentDescription = "Remove this document"
                 background = null
                 setOnClickListener {
                     NcieKnowledge.removeDoc(this@KnowledgeActivity, name)
