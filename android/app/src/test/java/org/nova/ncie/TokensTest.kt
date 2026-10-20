@@ -1,0 +1,33 @@
+package org.nova.ncie
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+/** v9.33.19: the tokenizer keeps every script, and English is unchanged. */
+class TokensTest {
+
+    @Test
+    fun englishIsUnchanged() {
+        assertEquals(
+            listOf("who", "is", "physics", "wallah"),
+            Tokens.split("Who is physics wallah?"))
+        assertEquals(" who is physics wallah ", Tokens.norm("Who is physics wallah?"))
+    }
+
+    @Test
+    fun devanagariIsKept() {
+        // the whole point: a Hindi question must yield keywords, not zero
+        assertEquals(listOf("ताजमहल", "कहाँ", "है"), Tokens.split("ताजमहल कहाँ है?"))
+        assertEquals(3, Tokens.words("ताजमहल कहाँ है?", 2).size)
+    }
+
+    @Test
+    fun mixedScript() {
+        assertEquals(listOf("modi", "का", "जन्म"), Tokens.split("Modi का जन्म"))
+    }
+
+    @Test
+    fun punctuationAndDigitsSurviveAsWords() {
+        assertEquals(listOf("chapter", "10"), Tokens.split("chapter 10!"))
+    }
+}
