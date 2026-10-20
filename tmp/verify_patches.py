@@ -102,7 +102,7 @@ NC_MARKERS = [
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
     ("v7.6 input cleared only when consumed", 'if (solveArithmetic(text)) { input.setText("")', 1),
     ("Stage 5 collapse: the moved body is one function", "fun MainActivity.ncieSend(", 1),
-    ("Stage 5 collapse: body reached the act capture", "val act = this", 2),
+    ("Stage 5 collapse: body reached the act capture", "val act = this", 3),
     ("NCIE 7: Smart Skip recall in the chat turn", "NcieLearn.recall(this, text)", 1),
 ]
 for name, marker, n in NC_MARKERS:
@@ -214,7 +214,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.17: version bumped for the honest-modes pass", bg.count("versionName '9.33.17'") == 1 and bg.count("versionCode 185") == 1)
+check("v9.33.18: version bumped for the make-me-laugh / visible-degradation pass", bg.count("versionName '9.33.18'") == 1 and bg.count("versionCode 186") == 1)
+
+# ---- v9.33.18: a joke needs no model; silent degradations shown; a11y labels ----
+check("v9.33.18: a joke request is answered deterministically",
+      nc.count("answerJoke(text)") == 1 and
+      open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun at(") == 1)
+check("v9.33.18: the health report shows the silent degradations",
+      load("NovaHealth.kt").count("fun capabilities(") == 1 and
+      load("NovaHealth.kt").count("capabilities(ctx)") == 1)
+check("v9.33.18: the primary controls carry a spoken label",
+      ma.count("contentDescription = ") >= 5 and ma.count("fun setSendButton(") == 1)
+check("v9.33.18: the joke set has real unit tests",
+      os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/JokesTest.kt")))
 
 # ---- v9.33.17 "one-phrase modes, honest about a failed save" ----
 check("v9.33.17: the one-phrase modes report a failed save honestly",
@@ -741,10 +753,10 @@ check("v7.9.2: chats header matches the other screens (20f title, 36dp back)",
 # ---- v7.9.3: one smart button - mic when empty, send when typed ----
 check("v7.9.3: smart button morphs between mic and send",
       ma.count("micBtn") == 0 and
-      ma.count("icon(R.drawable.ic_mic, textDim)") == 1 and
+      ma.count('setSendButton(R.drawable.ic_mic, textDim, "Speak")') == 1 and
       ma.count("sendBtn.setOnClickListener { startSpeech() }") == 1 and
-      ma.index("icon(R.drawable.ic_send, Color.WHITE)") <
-      ma.index("icon(R.drawable.ic_mic, textDim)"))
+      ma.index('setSendButton(R.drawable.ic_send, Color.WHITE, "Send")') <
+      ma.index('setSendButton(R.drawable.ic_mic, textDim, "Speak")'))
 
 # ---- v8.0.0: UI overhaul - midnight palette + cards everywhere ----
 check("v8.0.0: midnight palette in NovaTheme (init + dark apply)",

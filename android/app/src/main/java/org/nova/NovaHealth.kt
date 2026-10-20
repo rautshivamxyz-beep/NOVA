@@ -128,7 +128,21 @@ object NovaHealth {
         // deliberately swallowed this session. Zero is the healthy answer;
         // anything else is the trail to why a feature looked like it did
         // nothing. Detail is in logcat under the NOVA tag.
-        return body + "\n\n" + NovaLog.summary()
+        // v9.33.18: features that quietly do LESS when a dependency is
+        // missing. Shown so a silent downgrade is visible, not surprising.
+        return body + "\n\n" + NovaLog.summary() + "\n" + capabilities(ctx)
+    }
+
+    /** v9.33.18: the two features that degrade silently - semantic search
+     *  (needs the bundled embedder) and offline Wikipedia (needs its
+     *  download). "On"/"ready" is the healthy answer. */
+    fun capabilities(ctx: Context): String {
+        val embedder = try {
+            ctx.assets.open("embedder.onnx").use { true }
+        } catch (e: Exception) { false }
+        val semantic = if (embedder) "on" else "off - keyword search only (embedder not bundled)"
+        val wiki = if (WikiCore.isReady(ctx)) "ready" else "not downloaded - lookups go online only"
+        return "semantic search: " + semantic + "\noffline Wikipedia: " + wiki
     }
 
     fun requestBattery(ctx: Context) {
