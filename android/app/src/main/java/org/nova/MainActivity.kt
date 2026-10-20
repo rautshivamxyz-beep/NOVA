@@ -1,5 +1,7 @@
 package org.nova
 
+import org.nova.ncie.Tokens
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
@@ -2120,7 +2122,7 @@ class MainActivity : Activity() {
         if (terms.isEmpty()) return emptyList()
         val scored = ArrayList<Pair<Int, Int>>()   // (score, chunk index)
         for ((i, c) in all.withIndex()) {
-            val norm = " " + c.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+            val norm = Tokens.norm(c)
             var s = 0
             for (t in terms) if (norm.contains(" " + t + " ")) s++
             if (s > 0) scored.add(s to i)
@@ -4127,7 +4129,7 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
         }
     }
     val ql = query.lowercase()
-    val qw = ql.split(Regex("[^a-z0-9]+"))
+    val qw = Tokens.split(ql)
         .filter { it.length > 2 && it !in docStop }.toSet()
     if (qw.isEmpty()) return doc.take(maxChars)
     val paras = doc.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
@@ -4332,8 +4334,8 @@ private fun tail300(t: String): String {
 private fun looksDerailed(t: String, source: String): Boolean {
     if (t.length < 30) return true
     if (Regex("(?i)step\\s*[0-9]+\\s*[:.]").containsMatchIn(t)) return true
-    val src = source.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }.toHashSet()
-    val out = t.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }
+    val src = Tokens.split(source).filter { it.length > 4 }.toHashSet()
+    val out = Tokens.split(t).filter { it.length > 4 }
     if (src.isEmpty() || out.size < 10) return false
     val hit = out.count { it in src }
     return hit * 10 < out.size * 3
@@ -4434,8 +4436,8 @@ private fun chatDerailed(t: String, source: String): Boolean {
     // overlap only makes sense against a notes-rich (grounded) prompt;
     // a plain short question shares too few words with any good answer
     if (source.length < 400) return false
-    val src = source.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }.toHashSet()
-    val out = t.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 4 }
+    val src = Tokens.split(source).filter { it.length > 4 }.toHashSet()
+    val out = Tokens.split(t).filter { it.length > 4 }
     if (src.isEmpty() || out.size < 12) return false
     val hit = out.count { it in src }
     return hit * 10 < out.size * 2
@@ -4447,7 +4449,7 @@ private fun dedupeLines(t: String): String {
     for (raw in t.lines()) {
         val line = raw.trim()
         if (line.isEmpty()) { out.add(""); continue }
-        val words = line.lowercase().split(Regex("[^a-z0-9]+"))
+        val words = Tokens.split(line)
             .filter { it.length > 3 }.toSet()
         var dup = false
         if (line.length >= 40 && words.size >= 4) {
