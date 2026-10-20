@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.Tokens
+
 import org.nova.NovaLog
 
 import kotlinx.coroutines.Dispatchers
@@ -697,7 +699,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
 
         val docPart = if (docContext != null) {
             val win = docSearch(text)
-            val qWords = text.lowercase().split(Regex("[^a-z0-9]+"))
+            val qWords = Tokens.split(text)
                 .filter { it.length > 2 && it !in docStop }
             val overlap = qWords.count { it in win.lowercase() }
             // user explicitly off the document ("don't search the notes")
@@ -892,6 +894,8 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         val seek = studyQ || text.contains("?") ||
             Regex("(?i)^(?:how|why|when|where|which|who|what|does|do|is|are|can|define|describe|compare)\\b")
                 .containsMatchIn(text) ||
+            // v9.33.19: a Hindi/Marathi question is knowledge-seeking too
+            Regex("[\\u0900-\\u097F]").containsMatchIn(text) ||
             // v9.13.2 "Small Model Honesty": comparison questions are
             // knowledge-seeking too - "difference between X and Y" and
             // "bmw vs bugatti" name no question word at the start
