@@ -1,5 +1,7 @@
 package org.nova.ncie.analyze
 
+import org.nova.ncie.Tokens
+
 import org.nova.ncie.model.Analysis
 import org.nova.ncie.model.Intent
 
@@ -40,7 +42,7 @@ class RuleBasedAnalyzer : Analyzer {
         }
 
         val lower = t.lowercase()
-        val words = lower.split(Regex("\\W+")).filter { it.length > 2 }
+        val words = Tokens.words(t, 3)
         // Knowledge-seeking questions — the port of the NOVA app's v5.4
         // "study question" gate — plus notes/document questions and short
         // keyword pulls ("bose") deserve a real context budget: the
@@ -50,7 +52,9 @@ class RuleBasedAnalyzer : Analyzer {
             lower.startsWith("who is ") || lower.startsWith("who was ") ||
             lower.startsWith("define ") || lower.startsWith("describe ") ||
             lower.startsWith("tell me about ") || lower.contains(" explain ") ||
-            lower.contains(" teach me ") || lower.contains(" what is ")
+            lower.contains(" teach me ") || lower.contains(" what is ") ||
+            // v9.33.19: a Hindi/Marathi question is knowledge-seeking too
+            Regex("[\\u0900-\\u097F]").containsMatchIn(lower)
         val keywordPull = words.isNotEmpty() && words.size <= 2 && t.length < 40
         val knowledgey = listOf("notes", "document", "pdf", "material").any { it in lower }
         val complexity = when {
