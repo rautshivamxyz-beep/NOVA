@@ -384,10 +384,12 @@ class MainActivity : Activity() {
         })
         header.addView(roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_add, textDim), null, null, null)
+            contentDescription = "New chat"
             setOnClickListener { newConversation() }
         }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { rightMargin = dp(7) })
         header.addView(roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_menu, textDim), null, null, null)
+            contentDescription = "Menu"
             setOnClickListener { openDrawer() }
         }, LinearLayout.LayoutParams(dp(36), dp(36)))
         root.addView(header, LinearLayout.LayoutParams(
@@ -564,6 +566,7 @@ class MainActivity : Activity() {
         }
         docBtn = roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_attach, textDim), null, null, null)
+            contentDescription = "Attach a document"
             setOnClickListener { openDocPicker() }
         }
         pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
@@ -593,6 +596,7 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 0)
             setCompoundDrawablesWithIntrinsicBounds(
                 icon(R.drawable.ic_camera, textDim), null, null, null)
+            contentDescription = "Take a photo"
             setOnClickListener { openCamera() }
         }, LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(4) })
         input = EditText(this).apply {
@@ -1289,8 +1293,7 @@ class MainActivity : Activity() {
         spokenLength = replyMsg.text.length   // speak only the new part
         scrollToEnd()
 
-        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setSendButton(R.drawable.ic_stop, stopColor, "Stop")
         // v9.16.2: the stop button actually stops. It used to only change
         // the icon - the click still ran send()/startSpeech(), so tapping
         // it never cancelled the reply. Now it cancels the running
@@ -1695,8 +1698,7 @@ class MainActivity : Activity() {
                 intArrayOf(accent, accentDeep)).apply {
                 cornerRadius = dp(21).toFloat()
             })
-            sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-                icon(R.drawable.ic_send, Color.WHITE), null, null, null)
+            setSendButton(R.drawable.ic_send, Color.WHITE, "Send")
             sendBtn.setOnClickListener { send() }
         } else {
             // v7.9.3: empty input turns the button into the mic - one
@@ -1706,8 +1708,7 @@ class MainActivity : Activity() {
                 setStroke(dp(1), NovaTheme.border)
                 cornerRadius = dp(21).toFloat()
             })
-            sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-                icon(R.drawable.ic_mic, textDim), null, null, null)
+            setSendButton(R.drawable.ic_mic, textDim, "Speak")
             sendBtn.setOnClickListener { startSpeech() }
         }
     }
@@ -1801,8 +1802,7 @@ class MainActivity : Activity() {
         else "Reading ${chunks.size} sections\u2026")
         generating = true
         NcieChat.generating = true
-        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setSendButton(R.drawable.ic_stop, stopColor, "Stop")
         setStatus()
         scope.launch {
             try {
@@ -1985,8 +1985,7 @@ class MainActivity : Activity() {
         adapter.setLastText("Reading ${sections.size} sections of $doc\u2026")
         generating = true
         NcieChat.generating = true
-        sendBtn.setCompoundDrawablesWithIntrinsicBounds(
-            icon(R.drawable.ic_stop, stopColor), null, null, null)
+        setSendButton(R.drawable.ic_stop, stopColor, "Stop")
         setStatus()
         scope.launch {
             try {
@@ -3854,6 +3853,13 @@ Study:
         setPadding(0, 0, 0, 0)
         minWidth = 0
         minimumWidth = 0
+    }
+
+    /** v9.33.18: set the smart button's icon AND its spoken label together,
+     *  so the morphing send/stop/mic button is usable with TalkBack. */
+    private fun setSendButton(res: Int, tint: Int, label: String) {
+        sendBtn.setCompoundDrawablesWithIntrinsicBounds(icon(res, tint), null, null, null)
+        sendBtn.contentDescription = label
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
