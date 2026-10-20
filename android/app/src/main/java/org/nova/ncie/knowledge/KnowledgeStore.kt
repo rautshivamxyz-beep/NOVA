@@ -1,5 +1,7 @@
 package org.nova.ncie.knowledge
 
+import org.nova.ncie.Tokens
+
 /**
  * Personal knowledge base — a faithful pure-JVM port of NOVA-android's
  * `Knowledge.kt` (v7.6.3): user documents split into chunks, keyword-searched
@@ -325,12 +327,12 @@ class KnowledgeStore(
      *  padded at both ends — " term " matching then hits whole words only
      *  ("art" no longer matches "start"). */
     private fun normOf(t: String): String =
-        " " + t.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        Tokens.norm(t)
 
     /** Query terms: >= 3 chars, stop words dropped, deduplicated. */
     fun tokenize(s: String): List<String> {
         val out = LinkedHashSet<String>()
-        for (w in s.lowercase().split(Regex("[^a-z0-9]+"))) {
+        for (w in Tokens.split(s)) {
             if (w.length >= 3 && w !in STOP) out.add(w)
         }
         return out.toList()
