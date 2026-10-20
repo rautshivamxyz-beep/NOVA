@@ -1,5 +1,7 @@
 package org.nova
 
+import org.nova.ncie.Tokens
+
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -285,12 +287,12 @@ object Knowledge {
      *  spaces, padded at both ends - " term " matching then hits whole
      *  words only ("art" no longer matches "start"). */
     private fun normOf(t: String): String =
-        " " + t.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        Tokens.norm(t)
 
     /** v7.6: public for the send()-side relevance gate. */
     fun tokenize(s: String): List<String> {
         val out = LinkedHashSet<String>()
-        for (w in s.lowercase().split(Regex("[^a-z0-9]+"))) {
+        for (w in Tokens.split(s)) {
             if (w.length >= 3 && w !in STOP) out.add(w)
         }
         return out.toList()
