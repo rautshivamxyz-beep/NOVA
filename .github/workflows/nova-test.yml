@@ -17,3 +17,60 @@ jobs:
       - name: Verify source integrity
         run: python3 tmp/verify_patches.py .
 
+  # v9.33.20: tmp/smoke_test.py existed but nothing ever ran it. It is a
+  # level-2 test - it installs the APK on a real (virtual) phone and checks
+  # the app launches, the onboarding can be dismissed, the calculator
+  # answers 2+2 instantly, and nothing crashed. Kept on this MANUAL workflow
+  # (not on every PR) because an emulator boot is slow and the first runs
+  # need watching before it guards anything.
+  smoke:
+    name: Emulator smoke test (level 2)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "emulator" > /dev/null
+
+      - name: Enable KVM (the emulator needs it)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build the debug APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Run the smoke test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          disable-animations: true
+          script: python3 tmp/smoke_test.py android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload the screen grab on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screen
+          path: screen.png
+          if-no-files-found: ignore
+          retention-days: 3
