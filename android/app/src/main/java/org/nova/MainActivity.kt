@@ -81,6 +81,7 @@ class MainActivity : Activity() {
     init {
         adapter.onContinue = { continueAnswer() }
         adapter.onEditResend = { showEditResend(it) }
+        adapter.onDelete = { deleteMessage(it) }
         adapter.onTool = { runTool(it) }
         adapter.onRegenerate = { regenerateLast() }
         adapter.onRunJs = { runJs(it) }
@@ -901,6 +902,16 @@ class MainActivity : Activity() {
         adapter.suppressSpeak = false
         if (currentChat.messages.isNotEmpty()) scrollToEnd()
         updateDocBanner()
+    }
+
+    /** v9.33.20: delete one message from this chat (long-press -> Delete).
+     *  Re-renders through displayChatMessages so a stored history is never
+     *  read aloud again. */
+    private fun deleteMessage(m: Msg) {
+        if (!currentChat.messages.remove(m)) return
+        ChatStore.save(this, currentChat)
+        displayChatMessages()
+        toast("Message deleted")
     }
 
     private fun newConversation() {
@@ -4544,6 +4555,8 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
     var onRegenerate: (() -> Unit)? = null
     var onRunJs: ((String) -> Unit)? = null
     var onEditResend: ((Msg) -> Unit)? = null
+    /** v9.33.20: remove one message from this chat. */
+    var onDelete: ((Msg) -> Unit)? = null
 
     fun add(m: Msg) {
         items.add(m)
@@ -4767,6 +4780,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             if (code.isNotBlank()) options += "Copy code"
             options += "Copy"
             options += "Share"
+            options += "Delete"
             val tools = if (user) linkedMapOf(
                 "Fix grammar" to "Fix the grammar and spelling of the text between the lines. Reply with ONLY the corrected text, nothing else:\n-----\n$msgText\n-----",
                 "Rewrite better" to "Rewrite the text between the lines to be clearer and better written. Keep the same meaning and the same language. Reply with ONLY the rewritten text:\n-----\n$msgText\n-----",
@@ -4807,6 +4821,7 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
                             Toast.makeText(ctx, "Saved to Knowledge: $nm", Toast.LENGTH_SHORT).show()
                         }
                         "Regenerate" -> onRegenerate?.invoke()
+                        "Delete" -> onDelete?.invoke(m)
                         "Make it sound like me" -> onTool?.invoke("__STYLE__" + msgText)
                         else -> tools[chosen]?.let { onTool?.invoke(it) }
                     }
