@@ -14,14 +14,31 @@ import org.nova.Settings
 object NcieModes {
 
     fun away(ctx: Context): String {
-        try { Settings(ctx).autoReply = true } catch (e: Exception) { NovaLog.quiet("NcieModes", e) }
+        // v9.33.17: report honestly when the setting could not be
+        // saved - v9.33.15 recorded swallowed failures, v9.33.16/17
+        // make the deterministic commands stop claiming success.
+        val saved = try {
+            Settings(ctx).autoReply = true
+            true
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieModes", e)
+            false
+        }
         setRinger(ctx, android.media.AudioManager.RINGER_MODE_VIBRATE)
+        if (!saved) return "Couldn't switch away mode on - NOVA could not save the setting."
         return "Away mode ON - NOVA is auto-replying, phone on vibrate. Say \"i'm back\" to undo."
     }
 
     fun back(ctx: Context): String {
-        try { Settings(ctx).autoReply = false } catch (e: Exception) { NovaLog.quiet("NcieModes", e) }
+        val saved = try {
+            Settings(ctx).autoReply = false
+            true
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieModes", e)
+            false
+        }
         setRinger(ctx, android.media.AudioManager.RINGER_MODE_NORMAL)
+        if (!saved) return "Couldn't switch away mode off - NOVA could not save the setting."
         return "Welcome back - auto-replies off, ringer normal."
     }
 

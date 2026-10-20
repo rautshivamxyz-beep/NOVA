@@ -214,7 +214,11 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.16: version bumped for the proven-core pass", bg.count("versionName '9.33.16'") == 1 and bg.count("versionCode 184") == 1)
+check("v9.33.17: version bumped for the honest-modes pass", bg.count("versionName '9.33.17'") == 1 and bg.count("versionCode 185") == 1)
+
+# ---- v9.33.17 "one-phrase modes, honest about a failed save" ----
+check("v9.33.17: the one-phrase modes report a failed save honestly",
+      load("ncie/android/NcieModes.kt").count("Couldn't switch away mode") == 2)
 
 # ---- v9.33.16 "the deterministic core, proven + honest" ----
 check("v9.33.16: focus mode does not claim success when the write fails",
