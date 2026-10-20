@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.Tokens
+
 import org.nova.NovaLog
 
 import android.app.AlertDialog
@@ -297,12 +299,11 @@ object OnlineFetch {
      *  the query's terms is a real hit even when it cannot cover the rest
      *  of a long question. */
     private fun hits(q: String, text: String): Int {
-        val terms = q.lowercase().split(Regex("[^a-z0-9]+"))
-            .filter { it.length > 2 }.distinct()
+        val terms = Tokens.split(q).filter { it.length > 2 }.distinct()
         if (terms.isEmpty()) return 0
         // v9.33.7: whole-word match - substring matching counted "art"
         // inside "start", inflating the 2+ keyword acceptance gate
-        val low = " " + text.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        val low = Tokens.norm(text)
         return terms.count { low.contains(" " + it + " ") }
     }
 
