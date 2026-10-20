@@ -71,6 +71,7 @@ class PlannerActivity : Activity() {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(
                 tinted(R.drawable.ic_back, NovaTheme.text), null, null, null)
+            contentDescription = "Back"
             background = null
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
