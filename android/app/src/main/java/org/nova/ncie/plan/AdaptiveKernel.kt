@@ -1,5 +1,7 @@
 package org.nova.ncie.plan
 
+import org.nova.ncie.Tokens
+
 import org.nova.ncie.learn.Learner
 import org.nova.ncie.model.Analysis
 import org.nova.ncie.model.Plan
@@ -70,5 +72,5 @@ class AdaptiveKernel(
 
     /** Whole-word tokens, lowercase — the struggle match's vocabulary. */
     private fun tokens(s: String): Set<String> =
-        s.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }.toSet()
+        Tokens.split(s).toSet()
 }
