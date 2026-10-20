@@ -213,7 +213,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.20: version bumped for the small-wins pass", bg.count("versionName '9.33.20'") == 1 and bg.count("versionCode 188") == 1)
+check("v9.33.21: version bumped for the accessibility pass", bg.count("versionName '9.33.21'") == 1 and bg.count("versionCode 189") == 1)
+
+# ---- v9.33.21: every icon-only control carries a spoken label ----
+check("v9.33.21: every icon-only control carries a spoken label",
+      ma.count("contentDescription = ") >= 8 and
+      load("NovaUi.kt").count('contentDescription = "Back"') == 1 and
+      load("ChatsActivity.kt").count('contentDescription = "Back"') == 1 and
+      load("PlannerActivity.kt").count('contentDescription = "Back"') == 1 and
+      load("KnowledgeActivity.kt").count("contentDescription = ") == 2)
 
 # ---- v9.33.20: delete a message; the smoke test is wired into CI ----
 check("v9.33.20: a message can be deleted from the chat",
