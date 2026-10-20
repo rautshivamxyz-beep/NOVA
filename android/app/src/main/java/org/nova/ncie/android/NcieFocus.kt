@@ -39,7 +39,17 @@ object NcieFocus {
     fun start(ctx: Context, minutes: Int): String {
         val mins = minutes.coerceIn(1, 480)
         val end = System.currentTimeMillis() + mins * 60_000L
-        try { file(ctx).writeText(end.toString()) } catch (e: Exception) { NovaLog.quiet("NcieFocus", e) }
+        // v9.33.16: a swallowed write failure used to be reported as
+        // "focus mode on" anyway - the session was never saved, so the next
+        // turn was not actually silent. Say so instead of lying.
+        val saved = try {
+            file(ctx).writeText(end.toString())
+            true
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieFocus", e)
+            false
+        }
+        if (!saved) return "Couldn't start focus mode - NOVA could not save the session. Try again."
         return "Focus mode on for " + mins +
             (if (mins == 1) " minute." else " minutes.") +
             "\nNOVA will stay quiet - no auto-replies, no spoken nudges - until then." +

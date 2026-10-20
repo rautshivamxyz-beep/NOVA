@@ -214,7 +214,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.15: version bumped for the nothing-fails-silently pass", bg.count("versionName '9.33.15'") == 1 and bg.count("versionCode 183") == 1)
+check("v9.33.16: version bumped for the proven-core pass", bg.count("versionName '9.33.16'") == 1 and bg.count("versionCode 184") == 1)
+
+# ---- v9.33.16 "the deterministic core, proven + honest" ----
+check("v9.33.16: focus mode does not claim success when the write fails",
+      load("ncie/android/NcieFocus.kt").count("Couldn't start focus mode") == 1)
+check("v9.33.16: the deadline date parser is unit-tested",
+      load("ncie/android/NcieDeadlines.kt").count("internal fun dateAt(") == 1 and
+      os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDeadlinesTest.kt")))
 
 # ---- v9.33.15: nothing fails silently, fresh context for generation, name it exactly ----
 check("v9.33.15: swallowed exceptions are recorded (NovaLog)",

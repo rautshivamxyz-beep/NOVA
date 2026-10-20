@@ -135,7 +135,7 @@ object NcieDeadlines {
     /** A date as millis, or null when the parts are not a real date. A
      *  date already past rolls to next year only when it carried no
      *  explicit year; a 2-digit year is 20xx. */
-    private fun dateAt(today: Long, day: Int?, month: Int?, year: String?): Long? {
+    internal fun dateAt(today: Long, day: Int?, month: Int?, year: String?): Long? {
         if (day == null || month == null) return null
         if (day !in 1..31 || month !in 1..12) return null
         val c = Calendar.getInstance()
