@@ -68,6 +68,7 @@ class ChatsActivity : Activity() {
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
+            contentDescription = "Back"
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(36), dp(36)))
         header.addView(TextView(this).apply {

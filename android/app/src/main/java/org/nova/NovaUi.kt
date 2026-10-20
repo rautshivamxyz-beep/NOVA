@@ -160,6 +160,8 @@ object NovaUi {
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
+            // v9.33.21: an icon-only control needs a spoken label
+            contentDescription = "Back"
             background = null
             setOnClickListener { onBack() }
         }

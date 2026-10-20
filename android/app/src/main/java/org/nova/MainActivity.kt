@@ -527,6 +527,7 @@ class MainActivity : Activity() {
         val docClear = Button(this).apply {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_close, textDim), null, null, null)
+            contentDescription = "Clear the document"
             background = rippleOverlay(null, dp(16).toFloat())
             minWidth = 0
             minimumWidth = 0
@@ -4672,11 +4673,13 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
             background = rippleOverlay(null, dp(ctx, 14).toFloat())
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 18), dp(ctx, 6))
             setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_copy), null, null, null)
+            contentDescription = "Copy this message"
         }
         val regenBtn = TextView(ctx).apply {
             background = rippleOverlay(null, dp(ctx, 14).toFloat())
             setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6))
             setCompoundDrawablesWithIntrinsicBounds(actIcon(R.drawable.ic_refresh), null, null, null)
+            contentDescription = "Regenerate the answer"
         }
         actions.addView(copyBtn)
         actions.addView(regenBtn)
