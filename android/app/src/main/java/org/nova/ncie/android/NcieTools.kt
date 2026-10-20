@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.Tokens
+
 import org.nova.NovaLog
 
 import android.content.Context
@@ -156,7 +158,7 @@ object NcieTools {
     private fun score(text: String, query: String): Int {
         if (query.isBlank() || text.isBlank()) return 0
         val t = text.lowercase()
-        val terms = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
+        val terms = Tokens.split(query).filter { it.length > 2 }
         if (terms.isEmpty()) return 0
         return terms.count { t.contains(it) } * 100 / terms.size
     }

@@ -1,5 +1,7 @@
 package org.nova
 
+import org.nova.ncie.Tokens
+
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -152,7 +154,7 @@ object WikiCore {
         "much", "some", "give", "list", "name", "then", "than", "into", "also")
 
     private fun words(s: String): Set<String> =
-        s.lowercase().split(Regex("[^a-z0-9]+"))
+        Tokens.split(s)
             .filter { it.length > 2 && it !in STOP }.toSet()
 
     /** In-memory title index: (title, byte offset of its line). */

@@ -1,5 +1,7 @@
 package org.nova.ncie.knowledge
 
+import org.nova.ncie.Tokens
+
 /**
  * v9.33.14 "The right entity or nothing".
  *
@@ -27,7 +29,7 @@ object EntityMatch {
 
     /** The significant words of the question - the entity it names. */
     fun entityTerms(question: String): List<String> =
-        question.lowercase().split(Regex("[^a-z0-9]+"))
+        Tokens.split(question)
             .filter { it.length > 1 && it !in STOP }
             .distinct()
 
@@ -46,7 +48,7 @@ object EntityMatch {
     fun titleMatchesEntity(title: String, question: String): Boolean {
         val terms = entityTerms(question).filter { it.length >= 3 }
         if (terms.isEmpty()) return false
-        val norm = title.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+        val norm = Tokens.norm(title).trim()
         val spaced = " " + norm + " "
         // v9.33.15: a title may run the entity together ("PhysicsWallah") -
         // a term is also accepted when it is contained in the de-spaced title.

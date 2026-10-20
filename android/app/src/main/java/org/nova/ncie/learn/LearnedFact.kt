@@ -1,5 +1,7 @@
 package org.nova.ncie.learn
 
+import org.nova.ncie.Tokens
+
 import java.util.Locale
 
 /**
@@ -135,7 +137,7 @@ data class LearnedFact(
          *  survive — "chapter 3" keeps its 3). Same shape as the tokens
          *  [PersistentLearner] matches on, minus the synonym classes. */
         fun topicTokensOf(question: String): Set<String> =
-            question.lowercase().split(Regex("[^a-z0-9]+"))
+            Tokens.split(question)
                 .filter { it.length > 1 || it.all(Char::isDigit) }
                 .filter { it !in stop }.toSet()
     }

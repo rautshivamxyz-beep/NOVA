@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.Tokens
+
 import org.nova.NovaLog
 
 import android.content.Context
@@ -18,7 +20,7 @@ object NcieTimeMachine {
     private class Hit(val source: String, val text: String)
 
     fun search(ctx: Context, query: String, limit: Int = 8): String {
-        val terms = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 2 }
+        val terms = Tokens.split(query).filter { it.length >= 2 }
         if (terms.isEmpty()) return "Give me a word or two to find."
 
         val hits = ArrayList<Hit>()
