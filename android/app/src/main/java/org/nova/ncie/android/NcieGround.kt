@@ -1,5 +1,7 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.Tokens
+
 import org.nova.NovaLog
 
 import android.content.Context
@@ -60,6 +62,10 @@ import java.io.File
  */
 object NcieGround {
 
+    /** v9.33.19: a question in a Latin script - the only kind the
+     *  English embedder can represent. */
+    private val LATIN = Regex("[A-Za-z]")
+
     /** The question's own stopwords - the same words the wiki search
      *  drops, so scoring counts content terms only ("what is the
      *  ozone layer" scores on ozone and layer, not on what and the). */
@@ -87,7 +93,7 @@ object NcieGround {
      *  by this - the user asked for it. */
     fun strongMatch(ctx: Context, question: String, candidate: String): Boolean {
         val terms = questionTerms(question)
-        val norm = " " + candidate.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        val norm = Tokens.norm(candidate)
         var matched = 0
         for (t in terms) if (norm.contains(" " + t + " ")) matched++
         if (matched >= 3) return true
@@ -206,7 +212,10 @@ object NcieGround {
         var dirty = idx == null || idx.size != names.size
         // the question's semantic vector, computed once per query;
         // null = embedder broken/failed -> keyword-only for everything
-        val qVec = queryVector(ctx, question)
+        // v9.33.19: the embedder is English (all-MiniLM) - a Devanagari
+        // question would embed as noise and match spuriously, so a
+        // non-Latin question goes keyword-only.
+        val qVec = if (LATIN.containsMatchIn(question)) queryVector(ctx, question) else null
         val best = ArrayList<Triple<Float, String, String>>()   // score, source, chunk
         for (name in names) {
             val cached = flashChunks[name]
@@ -232,7 +241,7 @@ object NcieGround {
             // normalization, verbatim as before)
             val kw = IntArray(chunks.size)
             for (i in chunks.indices) {
-                val norm = " " + chunks[i].lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+                val norm = Tokens.norm(chunks[i])
                 var score = 0
                 for (t in terms) if (norm.contains(" " + t + " ")) score++
                 kw[i] = score
@@ -320,8 +329,7 @@ object NcieGround {
     fun truthCheck(answer: String, chunks: List<Pair<String, String>>): Boolean {
         val terms = NcieKnowledge.keyTerms(answer)
         if (terms.isEmpty()) return true
-        val norm = " " + chunks.joinToString(" ") { it.second }
-            .lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        val norm = Tokens.norm(chunks.joinToString(" ") { it.second })
         var matched = 0
         for (t in terms) if (norm.contains(" " + t + " ")) matched++
         return matched * 10 >= terms.size * 3
