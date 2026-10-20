@@ -1,5 +1,7 @@
 package org.nova.ncie.learn
 
+import org.nova.ncie.Tokens
+
 import org.nova.ncie.model.NovaResponse
 import org.nova.ncie.model.Plan
 import org.nova.ncie.model.Route
@@ -320,7 +322,7 @@ class PersistentLearner(
      *  word, and longer than one character (single digits survive —
      *  "chapter 3" keeps its 3). */
     private fun sigTokens(s: String): Set<String> =
-        s.lowercase().split(Regex("[^a-z0-9]+"))
+        Tokens.split(s)
             .filter { it.length > 1 || it.all(Char::isDigit) }
             .filter { it !in queryStop }.toSet()
 
