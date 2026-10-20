@@ -214,7 +214,22 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.18: version bumped for the make-me-laugh / visible-degradation pass", bg.count("versionName '9.33.18'") == 1 and bg.count("versionCode 186") == 1)
+check("v9.33.19: version bumped for the Hindi/Marathi retrieval pass", bg.count("versionName '9.33.19'") == 1 and bg.count("versionCode 187") == 1)
+
+# ---- v9.33.19: one Unicode-aware tokenizer; Hindi/Marathi retrieval works ----
+check("v9.33.19: one Unicode-aware tokenizer (Tokens)",
+      open(os.path.join(ROOT, BASE + "ncie/Tokens.kt")).read().count("fun split(") == 1)
+check("v9.33.19: the retrieval tokenizers are Unicode-aware",
+      load("ncie/analyze/Analyzer.kt").count("Tokens.words(") == 1 and
+      load("ncie/knowledge/WikiStore.kt").count("Tokens.") == 3 and
+      load("ncie/android/NcieGround.kt").count("Tokens.norm(") == 3 and
+      load("WikiCore.kt").count("Tokens.split(") == 1)
+check("v9.33.19: a Devanagari question is knowledge-seeking",
+      nc.count("u0900-") == 1 and load("ncie/analyze/Analyzer.kt").count("u0900-") == 1)
+check("v9.33.19: the English embedder is skipped for non-Latin questions",
+      load("ncie/android/NcieGround.kt").count("LATIN.containsMatchIn(question)") == 1)
+check("v9.33.19: the tokenizer has unit tests",
+      os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/TokensTest.kt")))
 
 # ---- v9.33.18: a joke needs no model; silent degradations shown; a11y labels ----
 check("v9.33.18: a joke request is answered deterministically",
