@@ -233,6 +233,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // deterministically - the model has no lyrics to read and invents
         // them (and the artist/album with them).
         if (answerLyrics(text)) { input.setText(""); return }
+        // v9.33.18 "Make me laugh": a joke needs no model and cannot be got
+        // wrong - the model used to deflect the request instead.
+        if (answerJoke(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the
@@ -2319,6 +2322,28 @@ private fun MainActivity.answerLyrics(text: String): Boolean {
             "them to read, so anything I produced would be invented. I can tell " +
             "you about the song instead: the artist, the album, when it came out, " +
             "or what it is about.")
+    currentChat.messages.add(reply)
+    adapter.add(reply)
+    scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+    }
+    return true
+}
+
+/** v9.33.18: "make me laugh" / "tell me a joke" - a deterministic joke,
+ *  no model involved. Narrow, so ordinary chat still reaches the model. */
+private val JOKE_Q = Regex(
+    "(?i)\\b(?:make me laugh|tell me (?:a |another )?joke|say something funny|" +
+        "got any jokes?|joke please|know any jokes?)\\b")
+
+private fun MainActivity.answerJoke(text: String): Boolean {
+    if (!JOKE_Q.containsMatchIn(text)) return false
+    val act = this
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um)
+    adapter.add(um)
+    val reply = Msg(Role.ASSISTANT, Jokes.at(System.currentTimeMillis().toInt()))
     currentChat.messages.add(reply)
     adapter.add(reply)
     scrollToEnd()
