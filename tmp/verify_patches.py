@@ -21,7 +21,7 @@ import sys
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "."
 BASE = "android/app/src/main/java/org/nova/"
-FILES = ["MainActivity.kt", "NotifBrain.kt", "KnowledgeActivity.kt"]
+FILES = ["MainActivity.kt", "KnowledgeActivity.kt"]
 # Stage 5 (#1): send() collapsed - its body moved verbatim to
 # ncie/android/NcieChat.kt (MainActivity.ncieSend). The markers that
 # lived inside send() are checked against NcieChat.kt now; everything
@@ -43,7 +43,6 @@ nc = load("ncie/android/NcieChat.kt")
 # v9.4.0 "Audit Fixes II": Backup.kt (the legacy JSON backup) is deleted -
 # the full zip backup in BackupActivity replaced it, so its checks are
 # retired here with it.
-nb = load("NotifBrain.kt")
 ka = load("KnowledgeActivity.kt")
 ca = load("ChatsActivity.kt")
 sa = load("SettingsActivity.kt")
@@ -110,11 +109,11 @@ for name, marker, n in NC_MARKERS:
 check("Stage 5 collapse: send() is the thin dispatch", ma.count("ncieSend()") == 1)
 check("v7.6 streaming turn through NovaEngineAdapter (all 6 generations now)", ma.count("NovaEngineAdapter.stream(") == 6)
 
-# v9.33.7: NotifBrain runs on a SHARED executor now (a fresh Thread per
-# notification was unbounded) - the marker follows the fix.
-check("v7.4 notification thread fix (NotifBrain.kt)",
-      nb.count("io.execute") == 1 and nb.count("return@execute") == 1 and
-      nb.count("newSingleThreadExecutor") == 1)
+# v9.33.20: NotifBrain was a second NotificationListenerService that was
+# never registered (the manifest kept only NovaListener), so its code never
+# ran. The dead file is gone; NovaListener is the single source of truth.
+check("v9.33.20: the dead NotifBrain file is gone",
+      not os.path.exists(os.path.join(ROOT, BASE + "NotifBrain.kt")))
 check("v7.4 bounded import (KnowledgeActivity.kt)", ka.count("bound the read") == 1)
 check("NCIE polish: import UI through the boundary", ka.count("NcieKnowledge.addDoc(this, name, text)") == 1)
 nk = load("ncie/android/NcieKnowledge.kt")
@@ -214,7 +213,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.19: version bumped for the Hindi/Marathi retrieval pass", bg.count("versionName '9.33.19'") == 1 and bg.count("versionCode 187") == 1)
+check("v9.33.20: version bumped for the small-wins pass", bg.count("versionName '9.33.20'") == 1 and bg.count("versionCode 188") == 1)
+
+# ---- v9.33.20: delete a message; the smoke test is wired into CI ----
+check("v9.33.20: a message can be deleted from the chat",
+      ma.count("fun deleteMessage(") == 1 and
+      ma.count('options += "Delete"') == 1 and
+      ma.count('"Delete" -> onDelete?.invoke(m)') == 1)
+check("v9.33.20: the smoke test is wired into CI",
+      "smoke_test.py" in open(os.path.join(ROOT, ".github/workflows/nova-test.yml")).read())
 
 # ---- v9.33.19: one Unicode-aware tokenizer; Hindi/Marathi retrieval works ----
 check("v9.33.19: one Unicode-aware tokenizer (Tokens)",
@@ -870,7 +877,7 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("NotifBrain.kt", nb), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt"))]:
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
