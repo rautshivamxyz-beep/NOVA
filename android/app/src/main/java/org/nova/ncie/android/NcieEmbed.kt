@@ -1,5 +1,6 @@
 package org.nova.ncie.android
 
+import org.nova.DeviceCapabilities
 import org.nova.NovaLog
 
 import android.content.Context
@@ -48,6 +49,8 @@ object NcieEmbed {
     @Volatile private var session: OrtSession? = null
     @Volatile private var vocab: HashMap<String, Int>? = null
     @Volatile private var broken = false
+    /** v9.33.33 "Lite mode": skipped (or released) to save RAM on a small phone. */
+    @Volatile private var lite = false
     @Volatile private var initDone = false
     private val initLock = Any()
 
@@ -62,6 +65,19 @@ object NcieEmbed {
     fun ensure(ctx: Context) {
         if (broken || initDone) return
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return
+        // v9.33.33 "Lite mode": a low-RAM phone cannot afford a second model.
+        // The embedder is a ~23 MB ONNX graph plus its session and a 30k-entry
+        // vocab, and it only powers semantic document matching - keyword
+        // scoring is the fallback and needs none of it. On a 4 GB phone that
+        // RAM is far better spent keeping the chat model resident, which is
+        // what stops Android killing NOVA mid-answer.
+        if (DeviceCapabilities.isLowRam(ctx)) {
+            lite = true
+            broken = true
+            initDone = true
+            android.util.Log.i("NOVA", "lite mode: semantic embedder skipped (low RAM)")
+            return
+        }
         synchronized(initLock) {
             if (broken || initDone) return
             try {
@@ -94,6 +110,23 @@ object NcieEmbed {
     /** True when the embedder is unusable - callers use this to pick the
      *  keyword-only path without even trying. */
     fun isBroken(): Boolean = broken
+
+    /** v9.33.33: true when the embedder was given up to save RAM. */
+    fun liteMode(): Boolean = lite
+
+    /** v9.33.33 "Lite mode": hand the ONNX session back the moment Android is
+     *  short of memory. Semantic matching falls back to keyword scoring for
+     *  the rest of the session - far better than being killed mid-answer. */
+    fun release() {
+        if (session == null && vocab == null) return
+        try { session?.close() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
+        session = null
+        vocab = null
+        broken = true
+        initDone = true
+        lite = true
+        android.util.Log.i("NOVA", "lite mode: embedder released under memory pressure")
+    }
 
     // ------------------------------------------------------------ tokenizer
 
