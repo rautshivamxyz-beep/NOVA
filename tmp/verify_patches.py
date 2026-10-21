@@ -213,7 +213,10 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.27: version bumped for the i18n sweep", bg.count("versionName '9.33.27'") == 1 and bg.count("versionCode 195") == 1)
+check("v9.33.28: version bumped for the planner sweep", bg.count("versionName '9.33.28'") == 1 and bg.count("versionCode 196") == 1)
+
+check("v9.33.28: the Planner screen reads from resources",
+      load("PlannerActivity.kt").count("getString(R.string.") >= 25)
 
 # ---- v9.33.27: the Chats, Health, Exams and Memory screens are translatable ----
 check("v9.33.27: the four screens read from resources",
@@ -236,7 +239,7 @@ check("v9.33.21: every icon-only control carries a spoken label",
       ma.count("contentDescription = ") >= 8 and
       load("NovaUi.kt").count('contentDescription = "Back"') == 1 and
       load("ChatsActivity.kt").count("contentDescription = getString(R.string.action_back)") == 1 and
-      load("PlannerActivity.kt").count('contentDescription = "Back"') == 1 and
+      load("PlannerActivity.kt").count("contentDescription = getString(R.string.action_back)") == 1 and
       load("KnowledgeActivity.kt").count("contentDescription = ") == 2)
 
 # ---- v9.33.22: the multilingual pass, completed (strength gate + one tokenizer) ----
