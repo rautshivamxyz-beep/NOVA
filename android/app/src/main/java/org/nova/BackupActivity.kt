@@ -97,7 +97,7 @@ class BackupActivity : ListActivity() {
             setOnClickListener { pickSaveTarget() }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(Button(this).apply {
-            text = getString(R.string.backup_restore)
+            text = getString(R.string.backup_restore_btn)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.dim)
