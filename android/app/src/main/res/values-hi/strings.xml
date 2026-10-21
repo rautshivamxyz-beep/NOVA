@@ -213,7 +213,7 @@
     <string name="backup_title">बैकअप</string>
     <string name="backup_hint">NOVA जो कुछ जानता है उसे zip में सेव करें, या zip से वापस लाएँ। कुछ भी फ़ोन से बाहर नहीं जाता।</string>
     <string name="backup_save">बैकअप सेव करें</string>
-    <string name="backup_restore">बैकअप रिस्टोर करें</string>
+    <string name="backup_restore_btn">बैकअप रिस्टोर करें</string>
     <string name="toast_backup_saved">बैकअप सेव हो गया</string>
     <string name="backup_failed">बैकअप विफल - ज़िप लिखी नहीं जा सकी</string>
     <string name="backup_saved_hint">बैकअप सेव हो गया: %1$d फ़ाइलें, %2$s।\nज़िप कहीं भी रखें - Downloads, क्लाउड, लैपटॉप।</string>
