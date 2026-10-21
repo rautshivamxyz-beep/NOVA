@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v9.33.26: Hindi (hi) translations of the Settings screen. A phone set
+         to Hindi now shows these instead of the English fallback. -->
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="section_voice">आवाज़</string>
+    <string name="read_aloud">जवाब बोलकर सुनाएँ</string>
+    <string name="auto_listen">ऑटो-सुनना (बातचीत मोड)</string>
+    <string name="section_auto_reply">ऑटो-जवाब</string>
+    <string name="auto_reply_busy">व्यस्त होने पर ऑटो-जवाब</string>
+    <string name="auto_reply_hint">हर व्यक्ति के लिए %1$d अलग जवाब तक, फिर रुक जाता है। शांत घंटों में चुप रहना ऊपर सेट है।</string>
+    <string name="replies_per_person">प्रति व्यक्ति जवाब</string>
+    <string name="replies_per_person_n">प्रति व्यक्ति जवाब: %1$d</string>
+    <string name="busy_replies_label">आपके व्यस्त-समय के जवाब (हर पंक्ति में एक):</string>
+    <string name="busy_replies_hint">जल्दी बताओ, मैं कुछ कर रहा हूँ</string>
+    <string name="generate_style">मेरी शैली में बनाएँ</string>
+    <string name="section_memory">याददाश्त</string>
+    <string name="memory_label">वे तथ्य जो NOVA हमेशा याद रखता है</string>
+    <string name="memory_hint">जैसे: मेरी परीक्षा 12 मई को है</string>
+    <string name="section_personality">व्यक्तित्व</string>
+    <string name="personality_label">NOVA कैसे व्यवहार करे</string>
+    <string name="section_answers">जवाब</string>
+    <string name="use_wiki">ऑफ़लाइन विकिपीडिया इस्तेमाल करें</string>
+    <string name="learn_online">ऑनलाइन सीखें (लाने से पहले पूछता है)</string>
+    <string name="strict_answers">सख्त जवाब (केवल नोट्स और विकिपीडिया)</string>
+    <string name="adaptive_context">अनुकूल संदर्भ (जो स्रोत कभी काम न आएँ उन्हें छोड़ें)</string>
+    <string name="spec_decoding">सट्टा डिकोडिंग (केवल Qwen3)</string>
+    <string name="spec_on">Qwen3 मॉडल + Qwen3 0.6B डाउनलोड होना चाहिए - अगली बार मॉडल लोड होने पर सक्रिय</string>
+    <string name="spec_off">अगली बार मॉडल लोड होने पर बंद</string>
+    <string name="response_length_title">जवाब की लंबाई</string>
+    <string name="response_length_n">जवाब की लंबाई: %1$d टोकन</string>
+    <string name="tokens_n">%1$d टोकन</string>
+    <string name="cancel">रद्द करें</string>
+    <string name="section_privacy">निजता</string>
+    <string name="proxy_explainer">ऑनलाइन खोजें SOCKS प्रॉक्सी (Orbot/Tor) से भेजें ताकि NOVA जिन साइटों को पढ़ता है उन्हें इस फ़ोन का IP न दिखे। पहले Orbot चालू करें।</string>
+    <string name="proxy_switch">फ़ेच SOCKS प्रॉक्सी से भेजें</string>
+    <string name="proxy_hint">प्रॉक्सी होस्ट:पोर्ट (Orbot = 127.0.0.1:9050)</string>
+    <string name="section_appearance">रूप</string>
+    <string name="light_theme">हल्की थीम</string>
+    <string name="theme_toast">वापस जाने पर थीम बदलेगी</string>
+    <string name="section_data">डेटा</string>
+    <string name="delete_all_chats">सभी चैट मिटाएँ</string>
+    <string name="delete_all_chats_q">सभी चैट मिटाएँ?</string>
+    <string name="cannot_undo">इसे वापस नहीं लाया जा सकता।</string>
+    <string name="delete">मिटाएँ</string>
+    <string name="all_deleted">सभी चैट मिट गईं</string>
+    <string name="section_backup">बैकअप</string>
+    <string name="backup_restore">बैकअप और रिस्टोर</string>
+    <string name="backup_sub">आपकी लोकल स्थिति की पूरी एन्क्रिप्टेड ज़िप</string>
+    <string name="section_about">परिचय</string>
+    <string name="about_text" formatted="false">NOVA - आपका निजी AI.\nपूरी तरह इस फ़ोन पर चलता है। कुछ भी बाहर नहीं जाता।</string>
+    <string name="load_model_first">पहले एक मॉडल डाउनलोड करें</string>
+    <string name="style_need_samples">पहले NOVA से थोड़ी और बात करें, ताकि वह आपकी लेखन-शैली सीख सके</string>
+    <string name="writing_replies">आपके व्यस्त-समय के जवाब लिख रहा हूँ...</string>
+    <string name="write_failed">लिख नहीं सका - फिर कोशिश करें</string>
+    <string name="replies_saved">हो गया - %1$d जवाब सहेजे गए</string>
+</resources>
