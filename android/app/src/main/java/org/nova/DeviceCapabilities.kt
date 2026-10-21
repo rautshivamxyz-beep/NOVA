@@ -18,6 +18,19 @@ object DeviceCapabilities {
 
     fun totalRamGb(context: Context): Double = memoryInfo(context).totalMem / 1e9
 
+    /** Below this the phone cannot afford a second model in memory. */
+    const val LOW_RAM_GB = 5.0
+
+    /** v9.33.33 "Lite mode": a 4 GB phone holds the chat model and very little
+     *  else. Cached - totalMem cannot change while the process lives. */
+    @Volatile private var lowRamCache: Boolean? = null
+    fun isLowRam(context: Context): Boolean {
+        lowRamCache?.let { return it }
+        val low = try { totalRamGb(context) < LOW_RAM_GB } catch (e: Exception) { false }
+        lowRamCache = low
+        return low
+    }
+
     fun availableRamGb(context: Context): Double = memoryInfo(context).availMem / 1e9
 
     fun cpuDescription(): String {
