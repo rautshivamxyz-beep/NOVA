@@ -33,11 +33,11 @@ class HealthActivity : Activity() {
             setBackgroundColor(NovaTheme.bg)
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
-        col.addView(NovaUi.header(this, "Setup & health") { finish() })
+        col.addView(NovaUi.header(this, getString(R.string.health_title)) { finish() })
         col.addView(NovaUi.small(this,
-            "Everything NOVA needs, in one place. Tap a red row to fix it.")
+            getString(R.string.health_hint))
             .apply { setPadding(dp(4), 0, dp(4), dp(4)) })
-        col.addView(NovaUi.primaryButton(this, "Re-arm everything") {
+        col.addView(NovaUi.primaryButton(this, getString(R.string.health_rearm)) {
             NovaHealth.armAll(this)
             render()
         })
@@ -55,7 +55,7 @@ class HealthActivity : Activity() {
         val checks = NovaHealth.checks(this)
         val bad = checks.count { !it.ok }
         col.addView(NovaUi.sectionLabel(this,
-            if (bad == 0) "All good" else bad.toString() + " need attention"))
+            if (bad == 0) getString(R.string.health_all_good) else getString(R.string.health_need_attention, bad)))
 
         for (c in checks) {
             val card = NovaUi.card(this)
@@ -77,7 +77,7 @@ class HealthActivity : Activity() {
             card.addView(head)
             card.addView(NovaUi.small(this, c.detail).apply { setPadding(0, dp(4), 0, 0) })
             if (!c.ok && c.fix != null) {
-                card.addView(NovaUi.ghostButton(this, "Fix this") { c.fix.invoke(); render() })
+                card.addView(NovaUi.ghostButton(this, getString(R.string.health_fix)) { c.fix.invoke(); render() })
             }
             col.addView(card)
         }

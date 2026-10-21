@@ -53,7 +53,7 @@ class MemoryActivity : ListActivity() {
             // the same lazy learner boot the chat path gets.
             NcieLearn.memoryBoot(this)
         } catch (e: Exception) {
-            try { Toast.makeText(this, "Memory screen failed to load", Toast.LENGTH_LONG).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
+            try { Toast.makeText(this, getString(R.string.memory_load_failed), Toast.LENGTH_LONG).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
             finish()
         }
     }
@@ -78,7 +78,7 @@ class MemoryActivity : ListActivity() {
         }
 
         val title = TextView(this).apply {
-            text = "NOVA Memory"
+            text = getString(R.string.memory_title)
             // v8.0.0: 20f + NovaTheme, like every other screen title
             textSize = 20f
             letterSpacing = 0.06f
@@ -89,7 +89,7 @@ class MemoryActivity : ListActivity() {
         root.addView(title)
 
         statsLine = TextView(this).apply {
-            text = "loading…"
+            text = getString(R.string.memory_loading)
             textSize = 12f
             setTextColor(NovaTheme.dim)
             setPadding(pad(16), 0, pad(16), pad(4))
@@ -102,7 +102,7 @@ class MemoryActivity : ListActivity() {
         }
         // v8.0.0: styled buttons - default Material buttons stuck out
         val consolidate = Button(this).apply {
-            text = "Consolidate now"
+            text = getString(R.string.memory_consolidate)
             isAllCaps = false
             textSize = 14f
             setTextColor(Color.WHITE)
@@ -116,7 +116,7 @@ class MemoryActivity : ListActivity() {
         buttons.addView(consolidate,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val wipe = Button(this).apply {
-            text = "Wipe all memory"
+            text = getString(R.string.memory_wipe)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.dim)
@@ -133,7 +133,7 @@ class MemoryActivity : ListActivity() {
         root.addView(buttons)
 
         val empty = TextView(this).apply {
-            text = "Nothing learned yet — chat with NOVA and verified answers will appear here."
+            text = getString(R.string.memory_none)
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(NovaTheme.dim)
@@ -228,7 +228,7 @@ class MemoryActivity : ListActivity() {
             AlertDialog.Builder(this)
                 .setTitle(f.question)
                 .setMessage(f.answer)
-                .setPositiveButton("Close", null)
+                .setPositiveButton(R.string.action_close, null)
                 .show()
         } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
@@ -238,13 +238,13 @@ class MemoryActivity : ListActivity() {
         val f = facts.getOrNull(position) ?: return
         try {
             AlertDialog.Builder(this)
-                .setTitle("Forget this memory?")
+                .setTitle(R.string.memory_forget_q)
                 .setMessage(f.question)
-                .setPositiveButton("Forget") { _, _ ->
+                .setPositiveButton(R.string.action_forget) { _, _ ->
                     NcieLearn.memoryForget(f.question)
                     refresh()
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.action_cancel, null)
                 .show()
         } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
@@ -252,20 +252,20 @@ class MemoryActivity : ListActivity() {
     private fun confirmWipe() {
         try {
             AlertDialog.Builder(this)
-                .setTitle("Wipe all memory?")
-                .setMessage("Every learned fact and cached answer will be deleted. This cannot be undone.")
-                .setPositiveButton("Wipe") { _, _ ->
+                .setTitle(R.string.memory_wipe_q)
+                .setMessage(R.string.memory_wipe_msg)
+                .setPositiveButton(R.string.action_wipe) { _, _ ->
                     NcieLearn.memoryClear()
                     refresh()
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.action_cancel, null)
                 .show()
         } catch (e: Exception) { NovaLog.quiet("MemoryActivity", e) }
     }
 
     private fun consolidateNow() {
         try {
-            Toast.makeText(this, "Consolidating…", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.memory_consolidating), Toast.LENGTH_SHORT).show()
             NcieLearn.memoryDistill(this) { report ->
                 try {
                     Toast.makeText(this, report, Toast.LENGTH_LONG).show()
@@ -273,7 +273,7 @@ class MemoryActivity : ListActivity() {
                 refresh()
             }
         } catch (e: Exception) {
-            try { Toast.makeText(this, "Consolidation failed", Toast.LENGTH_SHORT).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
+            try { Toast.makeText(this, getString(R.string.memory_consolidate_failed), Toast.LENGTH_SHORT).show() } catch (x: Exception) { NovaLog.quiet("MemoryActivity", x) }
         }
     }
 
