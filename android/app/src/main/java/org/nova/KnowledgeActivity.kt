@@ -52,7 +52,7 @@ class KnowledgeActivity : Activity() {
         }
 
         // header
-        col.addView(NovaUi.header(this, "Knowledge") { finish() })
+        col.addView(NovaUi.header(this, getString(R.string.knowledge_title)) { finish() })
 
         // switch
         val row = LinearLayout(this).apply {
@@ -61,7 +61,7 @@ class KnowledgeActivity : Activity() {
             setPadding(dp(4), dp(10), dp(4), dp(2))
         }
         row.addView(TextView(this).apply {
-            text = "Answer using my documents"
+            text = getString(R.string.knowledge_switch)
             textSize = 15f; setTextColor(NovaTheme.text)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
@@ -72,14 +72,14 @@ class KnowledgeActivity : Activity() {
         col.addView(row)
 
         col.addView(TextView(this).apply {
-            text = "Add textbooks, notes or PDFs. When you ask a question, NOVA searches them and answers from what it finds."
+            text = getString(R.string.knowledge_hint)
             textSize = 12f; setTextColor(NovaTheme.dim)
             setPadding(dp(4), dp(6), dp(4), dp(10))
         })
 
         // add button
         col.addView(Button(this).apply {
-            text = "Add documents"
+            text = getString(R.string.knowledge_add_docs)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.text)
@@ -99,14 +99,14 @@ class KnowledgeActivity : Activity() {
                     }
                     startActivityForResult(pick, 7800)
                 } catch (e: Exception) {
-                    toast("No file picker available")
+                    toast(getString(R.string.no_file_picker))
                 }
             }
         })
 
         // ---- offline Wikipedia card
         col.addView(TextView(this).apply {
-            text = "Offline Wikipedia"
+            text = getString(R.string.knowledge_wiki)
             textSize = 16f; setTextColor(NovaTheme.text)
             setPadding(dp(4), dp(26), 0, dp(4))
         })
@@ -131,20 +131,20 @@ class KnowledgeActivity : Activity() {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(
                 tinted(R.drawable.ic_globe, NovaTheme.dim), null, null, null)
-            contentDescription = "Download offline Wikipedia"
+            contentDescription = getString(R.string.knowledge_download_wiki)
             background = null
             setOnClickListener { startWiki() }
             setOnLongClickListener {
                 if (!WikiCore.isReady(this@KnowledgeActivity)) return@setOnLongClickListener true
                 AlertDialog.Builder(this@KnowledgeActivity)
-                    .setTitle("Remove Wikipedia?")
-                    .setMessage("Deletes the downloaded articles. NOVA will answer without them.")
-                    .setPositiveButton("Remove") { _, _ ->
+                    .setTitle(R.string.knowledge_remove_wiki_q)
+                    .setMessage(R.string.knowledge_remove_wiki_msg)
+                    .setPositiveButton(R.string.action_remove) { _, _ ->
                         WikiCore.remove(this@KnowledgeActivity)
                         refreshWiki()
-                        toast("Wikipedia removed")
+                        toast(getString(R.string.knowledge_wiki_removed))
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(R.string.action_cancel, null)
                     .show()
                 true
             }
@@ -167,7 +167,7 @@ class KnowledgeActivity : Activity() {
         val docs = NcieKnowledge.docs(this)
         if (docs.isEmpty()) {
             list.addView(TextView(this).apply {
-                text = "No documents yet."
+                text = getString(R.string.knowledge_no_docs)
                 textSize = 13f; setTextColor(NovaTheme.dim)
                 setPadding(dp(4), dp(14), dp(4), dp(4))
             })
@@ -201,7 +201,7 @@ class KnowledgeActivity : Activity() {
                 isAllCaps = false
                 setCompoundDrawablesWithIntrinsicBounds(
                     tinted(R.drawable.ic_close, NovaTheme.dim), null, null, null)
-                contentDescription = "Remove this document"
+                contentDescription = getString(R.string.knowledge_remove_doc)
                 background = null
                 setOnClickListener {
                     NcieKnowledge.removeDoc(this@KnowledgeActivity, name)
@@ -210,7 +210,7 @@ class KnowledgeActivity : Activity() {
             })
             list.addView(row)
             list.addView(TextView(this).apply {
-                text = "$chunks sections indexed"
+                text = getString(R.string.knowledge_chunks, chunks)
                 textSize = 11f; setTextColor(NovaTheme.dim)
                 setPadding(dp(30), 0, 0, 0)
             })
@@ -220,17 +220,17 @@ class KnowledgeActivity : Activity() {
     private fun refreshWiki() {
         when {
             WikiCore.downloading -> {
-                wikiStatus.text = WikiCore.state.value.second.ifBlank { "downloading…" }
+                wikiStatus.text = WikiCore.state.value.second.ifBlank { getString(R.string.knowledge_downloading) }
                 wikiBtn.visibility = View.GONE
             }
             WikiCore.isReady(this) -> {
-                wikiStatus.text = "${WikiCore.articleCount(this)} articles ready - NOVA answers with real facts"
+                wikiStatus.text = getString(R.string.knowledge_articles_ready, WikiCore.articleCount(this))
                 wikiBtn.visibility = View.VISIBLE
             }
             else -> {
                 wikiStatus.text = WikiCore.lastError
                     ?.let { "\u2717 $it" }
-                    ?: "Not downloaded (one time, ~25 MB)"
+                    ?: getString(R.string.knowledge_not_downloaded)
                 wikiBtn.visibility = View.VISIBLE
             }
         }
@@ -238,7 +238,7 @@ class KnowledgeActivity : Activity() {
 
     private fun startWiki() {
         if (WikiCore.downloading) return
-        toast("Downloading Wikipedia - keep NOVA open, Wi-Fi recommended")
+        toast(getString(R.string.knowledge_downloading_toast))
         Thread {
             kotlinx.coroutines.runBlocking { WikiCore.download(this@KnowledgeActivity) }
         }.start()
@@ -256,7 +256,7 @@ class KnowledgeActivity : Activity() {
 
     /** v5.4.9: per-document actions. */
     private fun docMenu(name: String) {
-        val options = arrayOf("View text", "Summarize in chat", "Export as .txt", "Remove")
+        val options = arrayOf(getString(R.string.knowledge_view_text), getString(R.string.knowledge_summarize_chat), getString(R.string.knowledge_export_txt), getString(R.string.action_remove))
         AlertDialog.Builder(this)
             .setTitle(name)
             .setItems(options) { _, which ->
@@ -272,12 +272,12 @@ class KnowledgeActivity : Activity() {
                     }
                     2 -> exportDoc(name)
                     3 -> AlertDialog.Builder(this)
-                        .setMessage("Remove \"$name\" from knowledge?")
-                        .setPositiveButton("Remove") { _, _ ->
+                        .setMessage(getString(R.string.knowledge_remove_doc_q, name))
+                        .setPositiveButton(R.string.action_remove) { _, _ ->
                             NcieKnowledge.removeDoc(this, name)
                             rebuildList()
                         }
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(R.string.action_cancel, null)
                         .show()
                 }
             }
@@ -323,8 +323,8 @@ class KnowledgeActivity : Activity() {
                     contentResolver.openOutputStream(uri)?.use {
                         it.write(NcieKnowledge.docText(this, nm).toByteArray())
                     }
-                    toast("Saved")
-                } catch (e: Exception) { toast("Export failed: ${e.message}") }
+                    toast(getString(R.string.toast_saved))
+                } catch (e: Exception) { toast(getString(R.string.export_failed, e.message ?: "")) }
             }
             exportName = null
         }
@@ -333,7 +333,7 @@ class KnowledgeActivity : Activity() {
         data.data?.let { uris.add(it) }
         data.clipData?.let { cd -> for (i in 0 until cd.itemCount) uris.add(cd.getItemAt(i).uri) }
         if (uris.isEmpty()) return
-        toast("Indexing ${uris.size} document(s)…")
+        toast(getString(R.string.knowledge_indexing, uris.size))
         Thread {
             var added = 0
             for (uri in uris) {
@@ -346,7 +346,7 @@ class KnowledgeActivity : Activity() {
             }
             runOnUiThread {
                 rebuildList()
-                toast(if (added > 0) "Added $added document(s)" else "Could not read those files")
+                toast(if (added > 0) getString(R.string.knowledge_added, added) else getString(R.string.knowledge_could_not_read))
             }
         }.start()
     }
