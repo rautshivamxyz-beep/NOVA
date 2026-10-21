@@ -213,7 +213,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.21: version bumped for the accessibility pass", bg.count("versionName '9.33.21'") == 1 and bg.count("versionCode 189") == 1)
+check("v9.33.22: version bumped for the multilingual-strength-gate pass", bg.count("versionName '9.33.22'") == 1 and bg.count("versionCode 190") == 1)
 
 # ---- v9.33.21: every icon-only control carries a spoken label ----
 check("v9.33.21: every icon-only control carries a spoken label",
@@ -222,6 +222,12 @@ check("v9.33.21: every icon-only control carries a spoken label",
       load("ChatsActivity.kt").count('contentDescription = "Back"') == 1 and
       load("PlannerActivity.kt").count('contentDescription = "Back"') == 1 and
       load("KnowledgeActivity.kt").count("contentDescription = ") == 2)
+
+# ---- v9.33.22: the multilingual pass, completed (strength gate + one tokenizer) ----
+check("v9.33.22: the strength gate skips the English embedder for a non-Latin question",
+      load("ncie/android/NcieGround.kt").count("non-Latin stays keyword-only") == 1)
+check("v9.33.22: the notes norm uses the one Unicode tokenizer",
+      nk.count("Tokens.norm(t)") == 1 and nk.count("[^a-z0-9]") == 0)
 
 # ---- v9.33.20: delete a message; the smoke test is wired into CI ----
 check("v9.33.20: a message can be deleted from the chat",
@@ -241,8 +247,8 @@ check("v9.33.19: the retrieval tokenizers are Unicode-aware",
       load("WikiCore.kt").count("Tokens.split(") == 1)
 check("v9.33.19: a Devanagari question is knowledge-seeking",
       nc.count("u0900-") == 1 and load("ncie/analyze/Analyzer.kt").count("u0900-") == 1)
-check("v9.33.19: the English embedder is skipped for non-Latin questions",
-      load("ncie/android/NcieGround.kt").count("LATIN.containsMatchIn(question)") == 1)
+check("v9.33.19/22: the English embedder is skipped for non-Latin questions (both sites)",
+      load("ncie/android/NcieGround.kt").count("LATIN.containsMatchIn(question)") == 2)
 check("v9.33.19: the tokenizer has unit tests",
       os.path.exists(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/TokensTest.kt")))
 

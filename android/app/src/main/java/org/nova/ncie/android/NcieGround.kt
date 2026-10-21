@@ -103,6 +103,13 @@ object NcieGround {
         // background, where keyword matching is enough - so skip the
         // embedder (and its 23 MB ONNX session) on a doc-less install.
         if (!NcieKnowledge.hasDocs(ctx)) return false
+        // v9.33.22: the bundled embedder is English (all-MiniLM). A
+        // Devanagari (or any non-Latin) question embeds as noise and can
+        // cross the 0.45 gate SPURIOUSLY, injecting an unrelated chunk
+        // into the prompt. retrieve() already guards this (v9.33.19);
+        // the strength gate must too - non-Latin stays keyword-only. The
+        // same rule, the one place it was missed.
+        if (!LATIN.containsMatchIn(question)) return false
         val qv = queryVector(ctx, question) ?: return false
         val cv = candidateVector(ctx, candidate) ?: return false
         return NcieEmbed.cosine(qv, cv) >= 0.45f

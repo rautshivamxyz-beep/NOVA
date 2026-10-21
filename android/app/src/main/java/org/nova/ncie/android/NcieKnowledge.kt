@@ -3,6 +3,7 @@ package org.nova.ncie.android
 import android.content.Context
 import org.nova.Knowledge
 import org.nova.Settings
+import org.nova.ncie.Tokens
 import org.nova.ncie.analyze.RuleBasedAnalyzer
 import org.nova.ncie.execute.ToolRegistry
 import org.nova.ncie.knowledge.KnowledgeStore
@@ -235,6 +236,11 @@ object NcieKnowledge {
         lastMtime = m
     }
 
+    /** v9.33.22: the one Unicode-aware tokenizer (Tokens.norm). This was
+     *  the last ASCII-only copy on the notes path - v9.33.19 unified the
+     *  rest, so a Hindi/Marathi chunk's norm dropped every Devanagari word
+     *  (zero terms) and the whole-word gates downstream could never match
+     *  it. Identical output for English; correct for every script now. */
     private fun normOf(t: String): String =
-        " " + t.lowercase().replace(Regex("[^a-z0-9]+"), " ") + " "
+        Tokens.norm(t)
 }
