@@ -460,7 +460,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // v7.6: a greeting sent into a dirty/stale context made the model
             // echo old strict-mode boilerplate ("From general knowledge...")
             // instead of saying hi. Reset first, then greet on a clean engine.
-            if (NovaEngine.contextDirty || needsContextCarry) {
+            if (needsContextCarry) {
                 needsContextCarry = false
                 scope.launch {
                     NovaEngine.resetConversation(act, settings.systemPrompt)
@@ -484,7 +484,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 "(The user is introducing themselves: '" + text + "' - acknowledge it naturally " +
                     "in one or two short sentences, use their name, and offer to help. Do not " +
                     "mention notes, documents, Wikipedia or summaries.)"
-            if (NovaEngine.contextDirty || needsContextCarry) {
+            if (needsContextCarry) {
                 needsContextCarry = false
                 scope.launch {
                     NovaEngine.resetConversation(act, settings.systemPrompt)
@@ -749,7 +749,13 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 }
                 "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
-            currentChat.messages.isNotEmpty() -> {
+            // v9.33.31 "Engine memory": the engine applies the model's own chat
+            // template and KEEPS the conversation in its KV cache, so replaying
+            // the last six messages here duplicated them - the model saw its own
+            // past answers as text inside a user turn, which is what made it
+            // continue an earlier reply instead of answering. History is now
+            // sent only when the engine genuinely does not have it.
+            needsContextCarry && currentChat.messages.isNotEmpty() -> {
                 val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
                     (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
                 }
