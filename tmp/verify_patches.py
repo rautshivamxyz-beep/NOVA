@@ -213,7 +213,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.26: version bumped for the translatable-Settings pass", bg.count("versionName '9.33.26'") == 1 and bg.count("versionCode 194") == 1)
+check("v9.33.27: version bumped for the i18n sweep", bg.count("versionName '9.33.27'") == 1 and bg.count("versionCode 195") == 1)
+
+# ---- v9.33.27: the Chats, Health, Exams and Memory screens are translatable ----
+check("v9.33.27: the four screens read from resources",
+      load("ChatsActivity.kt").count("getString(R.string.") >= 10 and
+      load("HealthActivity.kt").count("getString(R.string.") >= 5 and
+      load("ExamsActivity.kt").count("getString(R.string.") >= 12 and
+      load("MemoryActivity.kt").count("getString(R.string.") >= 8)
+check("v9.33.27: every string carries a Hindi translation",
+      open(os.path.join(ROOT, "android/app/src/main/res/values-hi/strings.xml")).read().count("<string name=") >= 100)
 
 # ---- v9.33.26: the Settings screen is translatable (resources + Hindi) ----
 check("v9.33.26: the Settings screen reads from resources",
@@ -226,7 +235,7 @@ check("v9.33.26: the strings live in strings.xml with a Hindi translation",
 check("v9.33.21: every icon-only control carries a spoken label",
       ma.count("contentDescription = ") >= 8 and
       load("NovaUi.kt").count('contentDescription = "Back"') == 1 and
-      load("ChatsActivity.kt").count('contentDescription = "Back"') == 1 and
+      load("ChatsActivity.kt").count("contentDescription = getString(R.string.action_back)") == 1 and
       load("PlannerActivity.kt").count('contentDescription = "Back"') == 1 and
       load("KnowledgeActivity.kt").count("contentDescription = ") == 2)
 
