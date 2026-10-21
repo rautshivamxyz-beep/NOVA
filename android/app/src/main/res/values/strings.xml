@@ -141,4 +141,50 @@
     <string name="planner_weak2">2 - weak</string>
     <string name="planner_weak3">3 - cannot do it yet</string>
     <string name="planner_weakness">weakness %1$s  (long-press to remove)</string>
+    <string name="setup_title">Set up NOVA</string>
+    <string name="setup_intro">Four steps and it is ready. Nothing leaves your phone.</string>
+    <string name="setup_step_n">Step %1$d</string>
+    <string name="setup_step1">Load a model</string>
+    <string name="setup_step1_sub">NOVA runs entirely on this phone. Download a model once, then load it.</string>
+    <string name="setup_step1_btn">Choose a model</string>
+    <string name="setup_step2">Allow notification access</string>
+    <string name="setup_step2_sub">Lets NOVA see missed messages, spot bank messages and scams, and auto-reply for you while you are busy.</string>
+    <string name="setup_step2_btn">Open notification access</string>
+    <string name="setup_step3">Allow phone, SMS and camera</string>
+    <string name="setup_step3_sub">So NOVA can place a call, send a text and read a photographed page.</string>
+    <string name="setup_step3_btn">Grant permissions</string>
+    <string name="setup_step4">Keep NOVA running in the background</string>
+    <string name="setup_step4_sub">Realme and Oppo phones kill background apps. Allow NOVA to keep working so reminders and auto-replies actually fire.</string>
+    <string name="setup_step4_btn">Allow background</string>
+    <string name="setup_finish">Finish setup</string>
+    <string name="update_title">Update</string>
+    <string name="update_hint">You are on v%1$s.
+Download the NOVA-delta-*.patch file from the latest
+release first, then apply it here - or grab the full APK.</string>
+    <string name="update_row_releases">OPEN RELEASES PAGE</string>
+    <string name="update_row_apply">APPLY UPDATE PATCH</string>
+    <string name="update_ver_line">v%1$s - Download the NOVA-delta-*.patch file from the latest release first</string>
+    <string name="update_diff_version">Different version?</string>
+    <string name="update_diff_msg">This patch is for a different version - apply anyway?</string>
+    <string name="update_apply_anyway">Apply anyway</string>
+    <string name="update_patch_failed">Patch failed</string>
+    <string name="update_patch_failed_msg">Patch failed - download the full APK instead.</string>
+    <string name="update_open_releases">Open releases</string>
+    <string name="update_applying">Applying the patch - this takes a moment</string>
+    <string name="update_saved_downloads">NOVA-update.apk saved in Downloads</string>
+    <string name="update_saved_at">NOVA-update.apk saved at %1$s</string>
+    <string name="update_allow_install">Allow install from NOVA in settings</string>
+    <string name="update_cant_install">Could not start the installer - open NOVA-update.apk from Downloads</string>
+    <string name="update_no_picker">No file picker available</string>
+    <string name="fetch_title">Fetches</string>
+    <string name="fetch_empty">Everything NOVA fetched online - offline forever.
+Tap to read, delete removes the article too.</string>
+    <string name="fetch_none_yet">Nothing fetched yet. When a study question has nothing local behind it, NOVA asks before going online.</string>
+    <string name="fetch_delete_all">Delete all</string>
+    <string name="fetch_delete_all_q">Delete all fetched articles?</string>
+    <string name="fetch_delete_all_msg">Every article NOVA fetched online will be removed from the offline store. This cannot be undone.</string>
+    <string name="fetch_article_unavailable">(article text unavailable)</string>
+    <string name="fetch_from">
+
+from: %1$s</string>
 </resources>
