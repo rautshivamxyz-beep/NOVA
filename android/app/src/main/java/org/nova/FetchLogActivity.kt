@@ -45,13 +45,12 @@ class FetchLogActivity : ListActivity() {
             setBackgroundColor(NovaTheme.bg)
             setPadding(dp(16), dp(18), dp(16), dp(12))
         }
-        root.addView(NovaUi.title(this, "Fetches"))
+        root.addView(NovaUi.title(this, getString(R.string.fetch_title)))
         hint = NovaUi.small(this,
-            "Everything NOVA fetched online - offline forever.\n" +
-                "Tap to read, delete removes the article too.")
+            getString(R.string.fetch_empty))
             .apply { setPadding(0, dp(4), 0, dp(10)) }
         root.addView(hint)
-        root.addView(NovaUi.ghostButton(this, "Delete all", NovaTheme.dim) { confirmClearAll() })
+        root.addView(NovaUi.ghostButton(this, getString(R.string.fetch_delete_all), NovaTheme.dim) { confirmClearAll() })
         // v8.5.1 crash fix: build our OWN ListView with the id ListActivity
         // requires. Grabbing `listView` before setContentView makes
         // ListActivity inflate its default layout, and re-adding that
@@ -83,10 +82,8 @@ class FetchLogActivity : ListActivity() {
                 entries = loaded.asReversed()   // newest first
                 adapter?.notifyDataSetChanged()
                 hint?.text = if (entries.isEmpty())
-                    "Nothing fetched yet. When a study question has nothing " +
-                    "local behind it, NOVA asks before going online."
-                else "Everything NOVA fetched online - offline forever.\n" +
-                    "Tap to read, delete removes the article too."
+                    getString(R.string.fetch_none_yet)
+                else getString(R.string.fetch_empty)
             }
         }.start()
     }
@@ -101,11 +98,11 @@ class FetchLogActivity : ListActivity() {
                     // v9.4.0 "Audit Fixes II": 4000 chars cut long
                     // articles off mid-sentence - the read dialog now
                     // shows up to 8000
-                    .setMessage((body ?: "(article text unavailable)")
-                        .take(8000) + "\n\nfrom: " +
-                        (if (e.url == "wikipedia") "Wikipedia" else e.url))
-                    .setPositiveButton("Delete") { _, _ -> confirmDelete(e.title) }
-                    .setNegativeButton("Close", null)
+                    .setMessage((body ?: getString(R.string.fetch_article_unavailable))
+                        .take(8000) + getString(R.string.fetch_from,
+                        if (e.url == "wikipedia") "Wikipedia" else e.url))
+                    .setPositiveButton(R.string.action_delete) { _, _ -> confirmDelete(e.title) }
+                    .setNegativeButton(R.string.action_close, null)
                     .show()
             }
         }.start()
@@ -121,10 +118,9 @@ class FetchLogActivity : ListActivity() {
 
     private fun confirmClearAll() {
         AlertDialog.Builder(this)
-            .setTitle("Delete all fetched articles?")
-            .setMessage("Every article NOVA fetched online will be removed " +
-                "from the offline store. This cannot be undone.")
-            .setPositiveButton("Delete all") { _, _ ->
+            .setTitle(R.string.fetch_delete_all_q)
+            .setMessage(R.string.fetch_delete_all_msg)
+            .setPositiveButton(R.string.fetch_delete_all) { _, _ ->
                 Thread {
                     for (e in entries) {
                         try { WikiCore.removeArticle(this, e.title) } catch (x: Exception) { NovaLog.quiet("FetchLogActivity", x) }
@@ -133,7 +129,7 @@ class FetchLogActivity : ListActivity() {
                     runOnUiThread { reload() }
                 }.start()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
