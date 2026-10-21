@@ -40,11 +40,11 @@ class ExamsActivity : Activity() {
             setBackgroundColor(NovaTheme.bg)
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
-        col.addView(NovaUi.header(this, "Exams") { finish() })
+        col.addView(NovaUi.header(this, getString(R.string.exams_title)) { finish() })
         col.addView(NovaUi.small(this,
-            "NOVA counts down for you and keeps them in mind when you chat.")
+            getString(R.string.exams_hint))
             .apply { setPadding(dp(4), 0, dp(4), dp(12)) })
-        col.addView(NovaUi.primaryButton(this, "Add exam") { showAdd() })
+        col.addView(NovaUi.primaryButton(this, getString(R.string.exams_add)) { showAdd() })
         list = NovaUi.column(this)
         col.addView(list)
         rebuild()
@@ -57,7 +57,7 @@ class ExamsActivity : Activity() {
         list.removeAllViews()
         val exams = Exams.load(this).sortedBy { it.dateMs }
         if (exams.isEmpty()) {
-            list.addView(NovaUi.empty(this, "No exams yet.\nAdd one and NOVA keeps the countdown."))
+            list.addView(NovaUi.empty(this, getString(R.string.exams_empty)))
             return
         }
         for (e in exams) {
@@ -70,10 +70,10 @@ class ExamsActivity : Activity() {
             row.addView(NovaUi.heading(this, e.name))
             row.addView(TextView(this).apply {
                 text = when {
-                    days < 0 -> "done - $dateStr"
-                    days == 0 -> "TODAY"
-                    days == 1 -> "tomorrow - $dateStr"
-                    else -> "in $days days - $dateStr"
+                    days < 0 -> getString(R.string.exams_done, dateStr)
+                    days == 0 -> getString(R.string.exams_today)
+                    days == 1 -> getString(R.string.exams_tomorrow, dateStr)
+                    else -> getString(R.string.exams_in_days, days, dateStr)
                 }
                 textSize = NovaTheme.T_SMALL
                 setTextColor(if (days in 0..3) NovaTheme.accent else NovaTheme.dim)
@@ -81,12 +81,12 @@ class ExamsActivity : Activity() {
             })
             row.setOnLongClickListener {
                 AlertDialog.Builder(this)
-                    .setTitle("Delete '${e.name}'?")
-                    .setPositiveButton("Delete") { _, _ ->
+                    .setTitle(getString(R.string.exams_delete_confirm, e.name))
+                    .setPositiveButton(R.string.action_delete) { _, _ ->
                         Exams.save(this, Exams.load(this).filter { it != e })
                         rebuild()
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(R.string.action_cancel, null)
                     .show()
                 true
             }
@@ -96,11 +96,11 @@ class ExamsActivity : Activity() {
 
     private fun showAdd() {
         val name = EditText(this).apply {
-            hint = "Subject (e.g. Physics)"; setHintTextColor(NovaTheme.faint)
+            hint = getString(R.string.exams_subject_hint); setHintTextColor(NovaTheme.faint)
             setTextColor(NovaTheme.text); textSize = NovaTheme.T_BODY
         }
         val date = EditText(this).apply {
-            hint = "Date (e.g. 14/5/2026)"; setHintTextColor(NovaTheme.faint)
+            hint = getString(R.string.exams_date_hint); setHintTextColor(NovaTheme.faint)
             setTextColor(NovaTheme.text); textSize = NovaTheme.T_BODY
             inputType = InputType.TYPE_CLASS_TEXT
         }
@@ -109,23 +109,23 @@ class ExamsActivity : Activity() {
             addView(name); addView(date)
         }
         AlertDialog.Builder(this)
-            .setTitle("Add exam")
+            .setTitle(R.string.exams_add)
             .setView(box)
-            .setPositiveButton("Add") { _, _ ->
+            .setPositiveButton(R.string.action_add) { _, _ ->
                 val n = name.text.toString().trim()
                 // v7.6: reject impossible dates - lenient parsing silently
                 // accepted "14/13/2026" and rolled it into the next month
                 val ms = SimpleDateFormat("d/M/yyyy", Locale.US).apply { isLenient = false }
                     .parse(date.text.toString().trim())?.time ?: 0L
                 if (n.isEmpty() || ms <= 0L) {
-                    toast("Fill both fields (date like 14/5/2026)")
+                    toast(getString(R.string.exams_fill_both))
                     return@setPositiveButton
                 }
                 Exams.add(this, n, ms)
                 rebuild()
-                toast("'$n' added")
+                toast(getString(R.string.exams_added, n))
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
