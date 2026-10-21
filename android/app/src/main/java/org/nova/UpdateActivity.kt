@@ -66,15 +66,13 @@ class UpdateActivity : ListActivity() {
             setPadding(pad(20), pad(18), pad(20), pad(12))
         }
         root.addView(TextView(this).apply {
-            text = "Update"
+            text = getString(R.string.update_title)
             textSize = 22f
             setTextColor(NovaTheme.text)
             typeface = Typeface.DEFAULT_BOLD
         })
         hint = TextView(this).apply {
-            text = "You are on v" + currentVersion + ".\n" +
-                "Download the NOVA-delta-*.patch file from the latest\n" +
-                "release first, then apply it here - or grab the full APK."
+            text = getString(R.string.update_hint, currentVersion)
             textSize = 13f
             setTextColor(NovaTheme.dim)
             setPadding(0, pad(4), 0, pad(10))
@@ -116,10 +114,9 @@ class UpdateActivity : ListActivity() {
             }
             row.addView(TextView(this@UpdateActivity).apply {
                 when (position) {
-                    ROW_RELEASES -> { text = "OPEN RELEASES PAGE"; setTextColor(NovaTheme.text) }
-                    ROW_APPLY -> { text = "APPLY UPDATE PATCH"; setTextColor(Color.WHITE) }
-                    else -> { text = "v" + currentVersion + " - Download the " +
-                        "NOVA-delta-*.patch file from the latest release first"
+                    ROW_RELEASES -> { text = getString(R.string.update_row_releases); setTextColor(NovaTheme.text) }
+                    ROW_APPLY -> { text = getString(R.string.update_row_apply); setTextColor(Color.WHITE) }
+                    else -> { text = getString(R.string.update_ver_line, currentVersion)
                         setTextColor(NovaTheme.dim) }
                 }
                 textSize = if (position == ROW_INFO) 12f else 15f
@@ -169,7 +166,7 @@ class UpdateActivity : ListActivity() {
         try {
             startActivityForResult(i, REQ_PICK_PATCH)
         } catch (e: Exception) {
-            toast("No file picker available")
+            toast(getString(R.string.update_no_picker))
         }
     }
 
@@ -195,10 +192,10 @@ class UpdateActivity : ListActivity() {
         val name = displayName(uri)
         if (name != null && !name.lowercase().contains("delta-v" + currentVersion)) {
             AlertDialog.Builder(this)
-                .setTitle("Different version?")
-                .setMessage("This patch is for a different version - apply anyway?")
-                .setPositiveButton("Apply anyway") { _, _ -> runApply(uri) }
-                .setNegativeButton("Cancel", null)
+                .setTitle(R.string.update_diff_version)
+                .setMessage(R.string.update_diff_msg)
+                .setPositiveButton(R.string.update_apply_anyway) { _, _ -> runApply(uri) }
+                .setNegativeButton(R.string.action_cancel, null)
                 .show()
             return
         }
@@ -206,7 +203,7 @@ class UpdateActivity : ListActivity() {
     }
 
     private fun runApply(uri: Uri) {
-        toast("Applying the patch - this takes a moment")
+        toast(getString(R.string.update_applying))
         Thread {
             val dir = File(cacheDir, "updates").apply { mkdirs() }
             val out = File(dir, "NOVA-update.apk")
@@ -214,10 +211,10 @@ class UpdateActivity : ListActivity() {
             runOnUiThread {
                 if (!ok) {
                     AlertDialog.Builder(this)
-                        .setTitle("Patch failed")
-                        .setMessage("Patch failed - download the full APK instead.")
-                        .setPositiveButton("Open releases") { _, _ -> openReleases() }
-                        .setNegativeButton("Close", null)
+                        .setTitle(R.string.update_patch_failed)
+                        .setMessage(R.string.update_patch_failed_msg)
+                        .setPositiveButton(R.string.update_open_releases) { _, _ -> openReleases() }
+                        .setNegativeButton(R.string.action_close, null)
                         .show()
                     return@runOnUiThread
                 }
@@ -254,16 +251,16 @@ class UpdateActivity : ListActivity() {
         if (savedToDownloads) {
             // the permanent copy exists - the cache original is redundant
             try { out.delete() } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
-            toast("NOVA-update.apk saved in Downloads")
+            toast(getString(R.string.update_saved_downloads))
         } else {
-            toast("NOVA-update.apk saved at " + out.path)
+            toast(getString(R.string.update_saved_at, out.path))
         }
         checkInstallPermission()
     }
 
     private fun checkInstallPermission() {
         if (!packageManager.canRequestPackageInstalls()) {
-            toast("Allow install from NOVA in settings")
+            toast(getString(R.string.update_allow_install))
             try {
                 startActivityForResult(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -286,7 +283,7 @@ class UpdateActivity : ListActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             })
         } catch (e: Exception) {
-            toast("Could not start the installer - open NOVA-update.apk from Downloads")
+            toast(getString(R.string.update_cant_install))
         }
     }
 
