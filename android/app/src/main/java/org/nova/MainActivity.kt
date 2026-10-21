@@ -41,6 +41,7 @@ import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
 import org.nova.ncie.android.NcieSummary
+import org.nova.ncie.android.NcieTune
 import org.nova.ncie.android.NcieValue
 import org.nova.ncie.android.NovaEngineAdapter
 import org.nova.ncie.verify.Coverage
@@ -1624,10 +1625,19 @@ class MainActivity : Activity() {
                                 Coverage.ratio(replyMsg.text, lastWikiText) >= 0.3)
                             lastWikiText = ""
                         }
-                        // auto-compact: compress old turns once the chat grows
+                        // v9.33.32: the engine keeps the conversation now, so
+                        // compaction is an OVERFLOW guard, not a routine chore.
+                        // It used to fire every 8 messages, which capped the
+                        // model's real memory at eight turns however much room it
+                        // had. It now fires when the history actually approaches
+                        // the engine's window - and never more than once per 12
+                        // new messages, so a long chat is not re-summarised on
+                        // every single turn.
+                        val historyChars = currentChat.messages.sumOf { it.text.length }
                         if (!speechCancelled && !compacting &&
-                            currentChat.messages.size > 20 &&
-                            currentChat.messages.size - compactedAtCount >= 8
+                            currentChat.messages.size > 12 &&
+                            historyChars > NcieTune.CONTEXT_BUDGET_CHARS &&
+                            currentChat.messages.size - compactedAtCount >= 12
                         ) {
                             compactOldTurns()
                         }
@@ -3642,15 +3652,23 @@ Study:
             // v9.33.31: the chat no longer shrinks (the trim stopped deleting),
             // so summarize a BOUNDED window of the older turns instead of the
             // whole ever-growing history.
-            val old = currentChat.messages.dropLast(6).takeLast(40)
+            val old = currentChat.messages.dropLast(10).takeLast(40)
                 .joinToString("\n") { m ->
                     (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(250)
                 }
             val sb = StringBuilder()
             try {
                 NovaEngineAdapter.stream(
-                    "Summarize this conversation in one short paragraph. " +
-                        "Keep all key facts, decisions, names and numbers:\n\n$old",
+                    // v9.33.32: a structured carry-over keeps names, dates and
+                    // open threads that a free-form paragraph drops - same
+                    // 256-token budget, far better recall.
+                    "Summarize the conversation below so it can be carried forward. " +
+                        "Reply with SHORT labelled lines only - no preamble:\n" +
+                        "FACTS: what the user told you about themselves, and anything " +
+                        "they asked you to remember (keep names, dates and numbers exact).\n" +
+                        "DECIDED: anything settled or agreed.\n" +
+                        "OPEN: questions left unanswered, or things promised for later.\n" +
+                        "Write 'none' for a line with nothing to report.\n\n$old",
                     256
                 ).collect { sb.append(it) }
                 val summary = stripThinking(sb.toString()).trim()
