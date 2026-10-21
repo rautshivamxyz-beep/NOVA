@@ -1,3 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NOVA</string>
+
+    <!-- v9.33.26 "Translatable": the Settings screen, moved out of the code.
+         This is the first surface; the rest follow the same pattern. -->
+    <string name="settings_title">Settings</string>
+    <string name="section_voice">Voice</string>
+    <string name="read_aloud">Read replies aloud</string>
+    <string name="auto_listen">Auto-listen (conversation mode)</string>
+    <string name="section_auto_reply">Auto-reply</string>
+    <string name="auto_reply_busy">Auto-reply when I\'m busy</string>
+    <string name="auto_reply_hint">Up to %1$d different replies per person, then it stops. Stay silent in quiet hours is set above.</string>
+    <string name="replies_per_person">Replies per person</string>
+    <string name="replies_per_person_n">Replies per person: %1$d</string>
+    <string name="busy_replies_label">Your busy replies (one per line):</string>
+    <string name="busy_replies_hint">tell me fast, I\'m doing something</string>
+    <string name="generate_style">Generate in my style</string>
+    <string name="section_memory">Memory</string>
+    <string name="memory_label">Facts NOVA always remembers</string>
+    <string name="memory_hint">e.g. My exam is on 12 May</string>
+    <string name="section_personality">Personality</string>
+    <string name="personality_label">How NOVA should behave</string>
+    <string name="section_answers">Answers</string>
+    <string name="use_wiki">Use offline Wikipedia</string>
+    <string name="learn_online">Learn online (asks before fetching)</string>
+    <string name="strict_answers">Strict answers (notes &amp; Wikipedia only)</string>
+    <string name="adaptive_context">Adaptive context (skip sources that never help)</string>
+    <string name="spec_decoding">Speculative decoding (Qwen3 only)</string>
+    <string name="spec_on">Needs a Qwen3 model + Qwen3 0.6B downloaded - active on next model load</string>
+    <string name="spec_off">Off after the next model load</string>
+    <string name="response_length_title">Response length</string>
+    <string name="response_length_n">Response length: %1$d tokens</string>
+    <string name="tokens_n">%1$d tokens</string>
+    <string name="cancel">Cancel</string>
+    <string name="section_privacy">Privacy</string>
+    <string name="proxy_explainer">Route online lookups through a SOCKS proxy (Orbot/Tor) so the sites NOVA reads never see this phone\'s IP. Turn Orbot on first.</string>
+    <string name="proxy_switch">Route fetches through a SOCKS proxy</string>
+    <string name="proxy_hint">Proxy host:port (Orbot = 127.0.0.1:9050)</string>
+    <string name="section_appearance">Appearance</string>
+    <string name="light_theme">Light theme</string>
+    <string name="theme_toast">Theme changes when you go back</string>
+    <string name="section_data">Data</string>
+    <string name="delete_all_chats">Delete all chats</string>
+    <string name="delete_all_chats_q">Delete all chats?</string>
+    <string name="cannot_undo">This cannot be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="all_deleted">All chats deleted</string>
+    <string name="section_backup">Backup</string>
+    <string name="backup_restore">Backup &amp; restore</string>
+    <string name="backup_sub">Full encrypted zip of your local state</string>
+    <string name="section_about">About</string>
+    <string name="about_text" formatted="false">NOVA - your private AI.\nRuns 100% on this phone. Nothing leaves it.</string>
+    <string name="load_model_first">Load a model first</string>
+    <string name="style_need_samples">Chat with NOVA a bit more first, so it can learn how you write</string>
+    <string name="writing_replies">Writing your busy replies...</string>
+    <string name="write_failed">Couldn\'t write them - try again</string>
+    <string name="replies_saved">Done - %1$d replies saved</string>
 </resources>
