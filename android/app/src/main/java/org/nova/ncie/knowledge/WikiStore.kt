@@ -22,11 +22,17 @@ class WikiStore {
     private val STOP = setOf("what", "who", "when", "where", "why", "how", "the", "and",
         "for", "are", "was", "were", "is", "does", "did", "do", "with", "about",
         "tell", "explain", "describe", "which", "that", "this", "from", "many",
-        "much", "some", "give", "list", "name", "then", "than", "into", "also")
+        "much", "some", "give", "list", "name", "then", "than", "into", "also",
+        // v9.33.24: the Devanagari function words - v9.33.19 made a
+        // Hindi/Marathi question yield keywords; these are grammar words.
+        "है", "हैं", "था", "थी", "थे", "का", "की", "के", "को", "में", "से", "पर", "और", "या", "यह", "ये", "वह", "वो", "कि", "क्या", "कौन", "कब", "कहाँ", "कहां", "क्यों", "कैसे", "ने", "भी", "तो", "ही", "नहीं", "न", "कर", "करें", "हो", "होता", "होती", "होते", "जो", "लिए", "कुछ", "कोई", "इस", "उस", "इन", "उन", "वाला", "वाली", "वाले", "मेरा", "मेरी", "मेरे", "तुम", "आप", "मैं", "हम", "अपना", "अपनी", "आहे", "आहेत", "चा", "ची", "चे", "ला", "मध्ये", "आणि", "किंवा", "नाही", "हा", "ती", "ते")
 
     fun words(s: String): Set<String> =
         Tokens.split(s)
-            .filter { it.length > 2 && it !in STOP }.toSet()
+            // v9.33.24: a Devanagari word is short in CHARACTER count
+            // (matras are separate code points) - keep a 2-char word
+            // when it carries a non-ASCII letter; pure ASCII keeps > 2.
+            .filter { (it.length > 2 || (it.length == 2 && it.any { c -> c.code > 127 })) && it !in STOP }.toSet()
 
     /**
      * v0.9.2 (opt #3): the title index PRE-TOKENIZED once, instead of

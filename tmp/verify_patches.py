@@ -213,7 +213,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.23: version bumped for the Hindi/Marathi notes-retrieval pass", bg.count("versionName '9.33.23'") == 1 and bg.count("versionCode 191") == 1)
+check("v9.33.24: version bumped for the Hindi/Marathi wiki-retrieval pass", bg.count("versionName '9.33.24'") == 1 and bg.count("versionCode 192") == 1)
 
 # ---- v9.33.21: every icon-only control carries a spoken label ----
 check("v9.33.21: every icon-only control carries a spoken label",
@@ -235,6 +235,13 @@ check("v9.33.23: short non-Latin words survive the query tokenizer",
 check("v9.33.23: the retrieval stopword lists carry the Devanagari function words",
       kstore.count('"का"') == 1 and
       load("ncie/android/NcieGround.kt").count('"का"') == 1)
+
+# ---- v9.33.24: Hindi/Marathi WIKI retrieval - the same two fixes ----
+check("v9.33.24: the wiki query tokenizers keep short non-Latin words",
+      ws.count("it.length == 2 && it.any { c -> c.code > 127 }") == 1 and
+      wc.count("it.length == 2 && it.any { c -> c.code > 127 }") == 1)
+check("v9.33.24: the wiki stopword lists carry the Devanagari function words",
+      ws.count('"का"') == 1 and wc.count('"का"') == 1)
 
 # ---- v9.33.20: delete a message; the smoke test is wired into CI ----
 check("v9.33.20: a message can be deleted from the chat",
