@@ -213,7 +213,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.31: version bumped for the chat-memory pass", bg.count("versionName '9.33.31'") == 1 and bg.count("versionCode 199") == 1)
+check("v9.33.32: version bumped for the compaction pass", bg.count("versionName '9.33.32'") == 1 and bg.count("versionCode 200") == 1)
+
+# ---- v9.33.32: compaction guards overflow instead of capping memory ----
+check("v9.33.32: compaction fires on the context budget, not every 8 messages",
+      ma.count("historyChars > NcieTune.CONTEXT_BUDGET_CHARS") == 1 and
+      ma.count("messages.size - compactedAtCount >= 12") == 1)
+check("v9.33.32: the carry keeps more turns raw and summarises structurally",
+      nc.count("takeLast(10).joinToString") == 2 and
+      ma.count("FACTS: what the user told you") == 1)
 
 # ---- v9.33.31: chat memory + LFM sampling ----
 check("v9.33.31: the LFM profile uses the vendor's sampling numbers",
