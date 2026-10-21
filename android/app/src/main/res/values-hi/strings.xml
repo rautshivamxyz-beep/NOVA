@@ -139,4 +139,50 @@
     <string name="planner_weak2">2 - कमज़ोर</string>
     <string name="planner_weak3">3 - अभी नहीं कर सकते</string>
     <string name="planner_weakness">कमज़ोरी %1$s  (हटाने के लिए देर तक दबाएँ)</string>
+    <string name="setup_title">NOVA सेट अप करें</string>
+    <string name="setup_intro">चार कदम और यह तैयार है। आपके फ़ोन से कुछ भी बाहर नहीं जाता।</string>
+    <string name="setup_step_n">कदम %1$d</string>
+    <string name="setup_step1">मॉडल लोड करें</string>
+    <string name="setup_step1_sub">NOVA पूरी तरह इसी फ़ोन पर चलता है। एक बार मॉडल डाउनलोड करें, फिर उसे लोड करें।</string>
+    <string name="setup_step1_btn">मॉडल चुनें</string>
+    <string name="setup_step2">नोटिफ़िकेशन एक्सेस की अनुमति दें</string>
+    <string name="setup_step2_sub">इससे NOVA छूटे संदेश देख सकता है, बैंक संदेश और धोखाधड़ी पहचान सकता है, और आपके व्यस्त होने पर आपकी ओर से जवाब दे सकता है।</string>
+    <string name="setup_step2_btn">नोटिफ़िकेशन एक्सेस खोलें</string>
+    <string name="setup_step3">फ़ोन, SMS और कैमरा की अनुमति दें</string>
+    <string name="setup_step3_sub">ताकि NOVA कॉल कर सके, संदेश भेज सके और खींचे गए पेज को पढ़ सके।</string>
+    <string name="setup_step3_btn">अनुमतियाँ दें</string>
+    <string name="setup_step4">NOVA को बैकग्राउंड में चलते रहने दें</string>
+    <string name="setup_step4_sub">Realme और Oppo फ़ोन बैकग्राउंड ऐप्स बंद कर देते हैं। NOVA को काम करते रहने दें ताकि रिमाइंडर और ऑटो-जवाब सही समय पर चलें।</string>
+    <string name="setup_step4_btn">बैकग्राउंड की अनुमति दें</string>
+    <string name="setup_finish">सेटअप पूरा करें</string>
+    <string name="update_title">अपडेट</string>
+    <string name="update_hint">आप v%1$s पर हैं।
+पहले नई रिलीज़ से NOVA-delta-*.patch फ़ाइल डाउनलोड करें,
+फिर उसे यहाँ लागू करें - या पूरा APK ले लें।</string>
+    <string name="update_row_releases">रिलीज़ पेज खोलें</string>
+    <string name="update_row_apply">अपडेट पैच लागू करें</string>
+    <string name="update_ver_line">v%1$s - पहले नई रिलीज़ से NOVA-delta-*.patch फ़ाइल डाउनलोड करें</string>
+    <string name="update_diff_version">अलग वर्शन?</string>
+    <string name="update_diff_msg">यह पैच किसी और वर्शन के लिए है - फिर भी लागू करें?</string>
+    <string name="update_apply_anyway">फिर भी लागू करें</string>
+    <string name="update_patch_failed">पैच विफल रहा</string>
+    <string name="update_patch_failed_msg">पैच विफल रहा - इसके बजाय पूरा APK डाउनलोड करें।</string>
+    <string name="update_open_releases">रिलीज़ खोलें</string>
+    <string name="update_applying">पैच लागू हो रहा है - इसमें थोड़ा समय लगेगा</string>
+    <string name="update_saved_downloads">NOVA-update.apk Downloads में सेव हो गया</string>
+    <string name="update_saved_at">NOVA-update.apk %1$s पर सेव हो गया</string>
+    <string name="update_allow_install">सेटिंग्स में NOVA से इंस्टॉल की अनुमति दें</string>
+    <string name="update_cant_install">इंस्टॉलर शुरू नहीं हो सका - Downloads से NOVA-update.apk खोलें</string>
+    <string name="update_no_picker">कोई फ़ाइल पिकर उपलब्ध नहीं</string>
+    <string name="fetch_title">फ़ेच</string>
+    <string name="fetch_empty">NOVA ने जो कुछ ऑनलाइन लाया - हमेशा के लिए ऑफ़लाइन।
+पढ़ने के लिए टैप करें, हटाने पर लेख भी चला जाता है।</string>
+    <string name="fetch_none_yet">अभी कुछ नहीं लाया गया। जब किसी सवाल का लोकल जवाब न हो, तो NOVA ऑनलाइन जाने से पहले पूछता है।</string>
+    <string name="fetch_delete_all">सब हटाएँ</string>
+    <string name="fetch_delete_all_q">सब फ़ेच किए गए लेख हटाएँ?</string>
+    <string name="fetch_delete_all_msg">NOVA ने जो भी लेख ऑनलाइन लाए, वे ऑफ़लाइन स्टोर से हट जाएँगे। इसे वापस नहीं लाया जा सकता।</string>
+    <string name="fetch_article_unavailable">(लेख का टेक्स्ट उपलब्ध नहीं)</string>
+    <string name="fetch_from">
+
+स्रोत: %1$s</string>
 </resources>
