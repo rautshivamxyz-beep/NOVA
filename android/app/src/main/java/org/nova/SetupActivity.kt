@@ -33,9 +33,9 @@ class SetupActivity : Activity() {
             setBackgroundColor(NovaTheme.bg)
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
-        col.addView(NovaUi.display(this, "Set up NOVA"))
+        col.addView(NovaUi.display(this, getString(R.string.setup_title)))
         col.addView(NovaUi.small(this,
-            "Four steps and it is ready. Nothing leaves your phone.")
+            getString(R.string.setup_intro))
             .apply { setPadding(0, dp(6), 0, dp(4)) })
         render()
         scroll.addView(col, LinearLayout.LayoutParams(
@@ -47,30 +47,28 @@ class SetupActivity : Activity() {
         // keep only the title + subtitle
         while (col.childCount > 2) col.removeViewAt(col.childCount - 1)
 
-        step(1, "Load a model", NovaHealth.modelOk(this),
-            "NOVA runs entirely on this phone. Download a model once, then load it.",
-            "Choose a model") { NovaHealth.openModels(this) }
+        step(1, getString(R.string.setup_step1), NovaHealth.modelOk(this),
+            getString(R.string.setup_step1_sub),
+            getString(R.string.setup_step1_btn)) { NovaHealth.openModels(this) }
 
-        step(2, "Allow notification access", NovaHealth.notificationsOk(this),
-            "Lets NOVA see missed messages, spot bank messages and scams, and " +
-                "auto-reply for you while you are busy.",
-            "Open notification access") {
+        step(2, getString(R.string.setup_step2), NovaHealth.notificationsOk(this),
+            getString(R.string.setup_step2_sub),
+            getString(R.string.setup_step2_btn)) {
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             } catch (e: Exception) { NovaLog.quiet("SetupActivity", e) }
         }
 
-        step(3, "Allow phone, SMS and camera",
+        step(3, getString(R.string.setup_step3),
             NovaHealth.smsOk(this) && NovaHealth.phoneOk(this) && NovaHealth.cameraOk(this),
-            "So NOVA can place a call, send a text and read a photographed page.",
-            "Grant permissions") { askPerms() }
+            getString(R.string.setup_step3_sub),
+            getString(R.string.setup_step3_btn)) { askPerms() }
 
-        step(4, "Keep NOVA running in the background", NovaHealth.batteryOk(this),
-            "Realme and Oppo phones kill background apps. Allow NOVA to keep " +
-                "working so reminders and auto-replies actually fire.",
-            "Allow background") { NovaHealth.requestBattery(this) }
+        step(4, getString(R.string.setup_step4), NovaHealth.batteryOk(this),
+            getString(R.string.setup_step4_sub),
+            getString(R.string.setup_step4_btn)) { NovaHealth.requestBattery(this) }
 
-        col.addView(NovaUi.primaryButton(this, "Finish setup") {
+        col.addView(NovaUi.primaryButton(this, getString(R.string.setup_finish)) {
             Settings(this).setupDone = true
             NovaHealth.armAll(this)
             finish()
@@ -79,7 +77,7 @@ class SetupActivity : Activity() {
 
     private fun step(n: Int, title: String, ok: Boolean, body: String,
                      action: String, onAction: () -> Unit) {
-        col.addView(NovaUi.sectionLabel(this, "Step " + n))
+        col.addView(NovaUi.sectionLabel(this, getString(R.string.setup_step_n, n)))
         val card = NovaUi.card(this)
         card.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
