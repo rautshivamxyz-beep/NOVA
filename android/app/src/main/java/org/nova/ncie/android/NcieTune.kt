@@ -68,9 +68,14 @@ object NcieTune {
     val QWEN_DEFAULTS: Map<String, Double> = mapOf(
         "temperature" to 0.7, "top_p" to 0.8, "top_k" to 20.0,
         "min_p" to 0.0, "repeat_penalty" to 1.05)
+    // v9.33.31 "Quality": Liquid's model card for LFM 2.5 1.2B Instruct
+    // specifies temperature 0.1 / top_k 50 / repetition_penalty 1.05. The old
+    // 0.6 ran the model SIX TIMES hotter than its maker specifies - on a 1.2B
+    // instruct model that is exactly where rambling and invented facts come
+    // from. 0.2 keeps a little naturalness above the vendor's 0.1.
     val LFM_DEFAULTS: Map<String, Double> = mapOf(
-        "temperature" to 0.6, "top_p" to 0.9, "top_k" to 40.0,
-        "min_p" to 0.05, "repeat_penalty" to 1.1)
+        "temperature" to 0.2, "top_p" to 0.9, "top_k" to 50.0,
+        "min_p" to 0.05, "repeat_penalty" to 1.05)
     val OTHER_DEFAULTS: Map<String, Double> = mapOf(
         "temperature" to 0.8, "top_p" to 0.9, "top_k" to 40.0,
         "min_p" to 0.05, "repeat_penalty" to 1.1)
@@ -94,7 +99,10 @@ object NcieTune {
      * the prefill side needs to keep the writing speed up.
      */
     const val CONTEXT_WINDOW_CHARS = 16000
-    const val CONTEXT_BUDGET_CHARS = 6400
+    // v9.33.31: 6400 chars is only ~1600 tokens - the model can hold 32K. The
+    // engine now keeps the conversation in its KV cache, so this budget only
+    // bounds when we reset + carry a summary, not what the model can remember.
+    const val CONTEXT_BUDGET_CHARS = 10000
 
     /** v9.13.2 "Small Model Honesty": a 230M-class tiny model trims at
      *  HALF the regular budget - garbage replayed from recent history
@@ -344,13 +352,12 @@ object NcieTune {
             }
         }
         if (drop == 0) return false
-        val keep = ArrayList<Msg>(msgs.size - drop)
-        for (i in drop until msgs.size) keep.add(msgs[i])
-        msgs.clear()
-        msgs.addAll(keep)
-        act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, chat) } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
-        }
+        // v9.33.31: this used to DELETE the oldest turns from the chat and save
+        // the truncated list, so a long conversation permanently lost its own
+        // history - the user could not scroll back, and the data was gone from
+        // disk. The trim's job is to decide what the PROMPT carries, never what
+        // we keep. The chat stays whole; the prompt takes only the recent
+        // window, and the engine's own context is bounded by compaction.
         return true
     }
 }

@@ -213,7 +213,22 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.30: version bumped for the knowledge/backup sweep", bg.count("versionName '9.33.30'") == 1 and bg.count("versionCode 198") == 1)
+check("v9.33.31: version bumped for the chat-memory pass", bg.count("versionName '9.33.31'") == 1 and bg.count("versionCode 199") == 1)
+
+# ---- v9.33.31: chat memory + LFM sampling ----
+check("v9.33.31: the LFM profile uses the vendor's sampling numbers",
+      load("ncie/android/NcieTune.kt").count('"temperature" to 0.2') == 1 and
+      load("ncie/android/NcieTune.kt").count('"top_k" to 50.0') == 1)
+check("v9.33.31: the engine keeps the conversation (no per-turn reset)",
+      ma.count("if (newBubble && needsContextCarry)") == 1)
+check("v9.33.31: history is replayed only when the engine lacks it",
+      nc.count("needsContextCarry && currentChat.messages.isNotEmpty() -> {") == 1 and
+      nc.count("needsContextCarry && compactSummary != null") == 1)
+check("v9.33.31: the trim never deletes the user's history",
+      load("ncie/android/NcieTune.kt").count("msgs.addAll(keep)") == 0 and
+      load("ncie/android/NcieTune.kt").count("msgs.clear()") == 0)
+check("v9.33.31: the bigger history budget is in place",
+      load("ncie/android/NcieTune.kt").count("CONTEXT_BUDGET_CHARS = 10000") == 1)
 
 check("v9.33.30: Knowledge and Backup read from resources",
       load("KnowledgeActivity.kt").count("getString(R.string.") >= 18 and
