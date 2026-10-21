@@ -71,18 +71,18 @@ class PlannerActivity : Activity() {
             isAllCaps = false
             setCompoundDrawablesWithIntrinsicBounds(
                 tinted(R.drawable.ic_back, NovaTheme.text), null, null, null)
-            contentDescription = "Back"
+            contentDescription = getString(R.string.action_back)
             background = null
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(44), LinearLayout.LayoutParams.WRAP_CONTENT))
         header.addView(TextView(this).apply {
-            text = "Study plan"; textSize = 20f; setTypeface(typeface, Typeface.BOLD)
+            text = getString(R.string.planner_title); textSize = 20f; setTypeface(typeface, Typeface.BOLD)
             setTextColor(NovaTheme.text)
         })
         col.addView(header)
 
         col.addView(TextView(this).apply {
-            text = "Your minutes follow your exams. Add exams and weak topics - the plan rebuilds itself every day."
+            text = getString(R.string.planner_hint)
             textSize = 12f
             setTextColor(NovaTheme.dim)
             setPadding(dp(4), dp(6), dp(4), dp(10))
@@ -101,13 +101,13 @@ class PlannerActivity : Activity() {
         }
         col.addView(budgetBtn)
 
-        col.addView(sectionLabel("TODAY'S PLAN"))
+        col.addView(sectionLabel(getString(R.string.planner_today_header)))
         planList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(planList)
 
-        col.addView(sectionLabel("WEAK TOPICS"))
+        col.addView(sectionLabel(getString(R.string.planner_weak_header)))
         col.addView(Button(this).apply {
-            text = "Add weak topic"
+            text = getString(R.string.planner_add_weak)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.text)
@@ -121,15 +121,15 @@ class PlannerActivity : Activity() {
         topicsList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(topicsList)
 
-        col.addView(sectionLabel("DOUBT JOURNAL"))
+        col.addView(sectionLabel(getString(R.string.planner_doubt_header)))
         col.addView(TextView(this).apply {
-            text = "Questions that hit you at odd hours. Tap one to copy it into the chat."
+            text = getString(R.string.planner_doubt_hint)
             textSize = 12f
             setTextColor(NovaTheme.dim)
             setPadding(dp(4), dp(0), dp(4), dp(8))
         })
         col.addView(Button(this).apply {
-            text = "Log a doubt"
+            text = getString(R.string.planner_log_doubt)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.text)
@@ -155,24 +155,24 @@ class PlannerActivity : Activity() {
         val labels = options.map { "$it min" }.toTypedArray()
         val current = Planner.minutes(this)
         AlertDialog.Builder(this)
-            .setTitle("Daily study time")
+            .setTitle(R.string.planner_daily_time)
             .setSingleChoiceItems(labels, options.indexOf(current)) { d, which ->
                 Planner.setMinutes(this, options[which])
                 d.dismiss()
                 rebuild()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun rebuild() {
         val t = Planner.today(this)
-        budgetBtn.text = "Daily study time: ${t.budget} min"
+        budgetBtn.text = getString(R.string.planner_daily_time_n, t.budget)
 
         planList.removeAllViews()
         if (t.entries.isEmpty() && t.weakTopics.isEmpty()) {
             planList.addView(TextView(this).apply {
-                text = "Nothing to plan yet. Add exams (drawer - More - Exams) or weak topics below."
+                text = getString(R.string.planner_nothing)
                 textSize = 13f
                 setTextColor(NovaTheme.dim)
                 setPadding(dp(4), dp(10), dp(4), dp(4))
@@ -187,10 +187,11 @@ class PlannerActivity : Activity() {
                     setTextColor(NovaTheme.text)
                 })
                 addView(TextView(this@PlannerActivity).apply {
-                    text = if (e.daysLeft < 0) "no exam date - steady revision"
-                    else if (e.daysLeft == 0) "exam is TODAY"
-                    else "in ${e.daysLeft} day${if (e.daysLeft == 1) "" else "s"}" +
-                        if (e.urgency.isEmpty()) "" else " - urgency ${e.urgency}"
+                    text = if (e.daysLeft < 0) getString(R.string.planner_no_exam_date)
+                    else if (e.daysLeft == 0) getString(R.string.planner_exam_today)
+                    else getString(if (e.daysLeft == 1) R.string.planner_in_days_one
+                                   else R.string.planner_in_days_other, e.daysLeft) +
+                        if (e.urgency.isEmpty()) "" else getString(R.string.planner_urgency, e.urgency)
                     textSize = 12f
                     setTextColor(if (e.daysLeft in 1..7) NovaTheme.accent else NovaTheme.dim)
                     setPadding(dp(0), dp(3), dp(0), dp(0))
@@ -200,7 +201,7 @@ class PlannerActivity : Activity() {
         if (t.cardsTotal > 0) {
             planList.addView(card().apply {
                 addView(Button(this@PlannerActivity).apply {
-                    text = "Study cards: ${t.cardsDue} of ${t.cardsTotal} due - review now"
+                    text = getString(R.string.planner_cards, t.cardsDue, t.cardsTotal)
                     isAllCaps = false
                     textSize = 14f
                     setTextColor(NovaTheme.accent)
@@ -214,7 +215,7 @@ class PlannerActivity : Activity() {
         topicsList.removeAllViews()
         if (t.weakTopics.isEmpty()) {
             topicsList.addView(TextView(this).apply {
-                text = "No weak topics marked."
+                text = getString(R.string.planner_no_weak)
                 textSize = 13f
                 setTextColor(NovaTheme.dim)
                 setPadding(dp(4), dp(10), dp(4), dp(4))
@@ -228,23 +229,23 @@ class PlannerActivity : Activity() {
                     setTextColor(NovaTheme.text)
                 })
                 addView(TextView(this@PlannerActivity).apply {
-                    text = "weakness " + "\u25CF".repeat(topic.weak) + "\u25CB".repeat(3 - topic.weak) +
-                        "  (long-press to remove)"
+                    text = getString(R.string.planner_weakness,
+                        "\u25CF".repeat(topic.weak) + "\u25CB".repeat(3 - topic.weak))
                     textSize = 12f
                     setTextColor(NovaTheme.dim)
                     setPadding(dp(0), dp(3), dp(0), dp(0))
                 })
                 setOnLongClickListener {
                     AlertDialog.Builder(this@PlannerActivity)
-                        .setTitle("Remove weak topic?")
+                        .setTitle(R.string.planner_remove_weak_q)
                         .setMessage(topic.name)
-                        .setPositiveButton("Remove") { _, _ ->
+                        .setPositiveButton(R.string.action_remove) { _, _ ->
                             val all = Planner.topics(this@PlannerActivity)
                             all.removeAll { it.subject == topic.subject && it.name == topic.name }
                             Planner.saveTopics(this@PlannerActivity, all)
                             rebuild()
                         }
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(R.string.action_cancel, null)
                         .show()
                     true
                 }
@@ -257,7 +258,7 @@ class PlannerActivity : Activity() {
         val open = all.filter { !it.done && it.text.isNotBlank() }
         if (open.isEmpty()) {
             doubtsList.addView(TextView(this).apply {
-                text = "No open doubts."
+                text = getString(R.string.planner_no_doubts)
                 textSize = 13f
                 setTextColor(NovaTheme.dim)
                 setPadding(dp(4), dp(10), dp(4), dp(4))
@@ -280,16 +281,16 @@ class PlannerActivity : Activity() {
      *  entry's timestamp is part of the key, so each logged doubt
      *  stays its own item. */
     private fun doubtActions(text: String, ts: Long) {
-        val options = arrayOf("Copy for NOVA chat", "Mark solved", "Delete")
+        val options = arrayOf(getString(R.string.planner_copy_for_chat), getString(R.string.planner_mark_solved), getString(R.string.action_delete))
         AlertDialog.Builder(this)
-            .setTitle("Doubt")
+            .setTitle(R.string.planner_doubt)
             .setMessage(text)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> {
                         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.setPrimaryClip(ClipData.newPlainText("doubt", text))
-                        Toast.makeText(this, "Copied - paste it in the chat", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.planner_copied), Toast.LENGTH_SHORT).show()
                     }
                     1 -> {
                         val all = Planner.doubts(this)
@@ -310,12 +311,12 @@ class PlannerActivity : Activity() {
     private fun showAddTopic() {
         val pad = dp(10)
         val subject = EditText(this).apply {
-            hint = "Subject (e.g. Physics)"
+            hint = getString(R.string.planner_subject_hint)
             setSingleLine()
             setPadding(pad, pad, pad, pad)
         }
         val name = EditText(this).apply {
-            hint = "Topic (e.g. Ray optics)"
+            hint = getString(R.string.planner_topic_hint)
             setSingleLine()
             setPadding(pad, pad, pad, pad)
         }
@@ -326,18 +327,18 @@ class PlannerActivity : Activity() {
             addView(name)
         }
         AlertDialog.Builder(this)
-            .setTitle("Add weak topic")
+            .setTitle(R.string.planner_add_weak)
             .setView(wrap)
-            .setPositiveButton("Add") { _, _ ->
+            .setPositiveButton(R.string.action_add) { _, _ ->
                 val s = subject.text.toString().trim()
                 val n = name.text.toString().trim()
                 if (s.isEmpty() || n.isEmpty()) {
-                    Toast.makeText(this, "Fill both fields", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.planner_fill_both), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 AlertDialog.Builder(this)
-                    .setTitle("How weak is it?")
-                    .setItems(arrayOf("1 - shaky", "2 - weak", "3 - cannot do it yet")) { _, w ->
+                    .setTitle(R.string.planner_how_weak)
+                    .setItems(arrayOf(getString(R.string.planner_weak1), getString(R.string.planner_weak2), getString(R.string.planner_weak3))) { _, w ->
                         val all = Planner.topics(this)
                         all.add(Planner.Topic(s, n, w + 1))
                         Planner.saveTopics(this, all)
@@ -345,21 +346,21 @@ class PlannerActivity : Activity() {
                     }
                     .show()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun showAddDoubt() {
         val input = EditText(this).apply {
-            hint = "What did you wonder about?"
+            hint = getString(R.string.planner_doubt_field_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             val pad = dp(10)
             setPadding(pad, pad, pad, pad)
         }
         AlertDialog.Builder(this)
-            .setTitle("Log a doubt")
+            .setTitle(R.string.planner_log_doubt)
             .setView(input)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(R.string.action_save) { _, _ ->
                 val t = input.text.toString().trim()
                 if (t.isEmpty()) return@setPositiveButton
                 val all = Planner.doubts(this)
@@ -367,7 +368,7 @@ class PlannerActivity : Activity() {
                 Planner.saveDoubts(this, all)
                 rebuild()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 }
