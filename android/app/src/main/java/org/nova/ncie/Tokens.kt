@@ -24,9 +24,19 @@ object Tokens {
     fun split(s: String): List<String> =
         s.lowercase().split(SPLIT).filter { it.isNotEmpty() }
 
-    /** Lowercased words of at least [minLen] characters. */
+    /** Lowercased words of at least [minLen] characters.
+     *  v9.33.25: a Devanagari word is short in CHARACTER count - the
+     *  vowel signs (matras) are separate code points - so a 2-char word
+     *  is a real content word ("घर" = house). With a minLen above 2 a
+     *  2-char word now qualifies when it carries a non-ASCII letter, so
+     *  a Hindi/Marathi question's content words reach the keyword set
+     *  (the online fetch, the truth check, the grounding terms). Pure
+     *  ASCII keeps the plain ">= minLen" rule, unchanged. */
     fun words(s: String, minLen: Int = 1): List<String> =
-        split(s).filter { it.length >= minLen }
+        split(s).filter {
+            it.length >= minLen ||
+                (minLen > 2 && it.length == 2 && it.any { c -> c.code > 127 })
+        }
 
     /** Space-padded normalized form for whole-word matching (" term "). */
     fun norm(s: String): String = " " + split(s).joinToString(" ") + " "
