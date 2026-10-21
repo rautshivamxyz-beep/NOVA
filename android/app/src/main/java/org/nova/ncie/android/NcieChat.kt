@@ -744,8 +744,8 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         } else ""
         val basePrompt: String = docPart + when {
             needsContextCarry && compactSummary != null && currentChat.messages.isNotEmpty() -> {
-                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
-                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
+                val recent = currentChat.messages.takeLast(10).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
                 }
                 "(Summary of earlier conversation: $compactSummary)\n\n(Recent messages:\n$recent\n— end)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
@@ -756,8 +756,8 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // continue an earlier reply instead of answering. History is now
             // sent only when the engine genuinely does not have it.
             needsContextCarry && currentChat.messages.isNotEmpty() -> {
-                val recent = currentChat.messages.takeLast(6).joinToString("\n") { m ->
-                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
+                val recent = currentChat.messages.takeLast(10).joinToString("\n") { m ->
+                    (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
                 }
                 "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\nNew message: $text\n(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
             }
