@@ -47,7 +47,11 @@ class KnowledgeStore(
         // v7.8.1: "name" matched half the knowledge base ("my name is
         // shivam" injected random notes that happened to contain the
         // word "name") - it is never a discriminative keyword
-        "name", "names"
+        "name", "names",
+        // v9.33.23: the Devanagari function words - v9.33.19 made a
+        // Hindi/Marathi question yield keywords, but these were treated
+        // as content terms. Same role as the English list above.
+        "है", "हैं", "था", "थी", "थे", "का", "की", "के", "को", "में", "से", "पर", "और", "या", "यह", "ये", "वह", "वो", "कि", "क्या", "कौन", "कब", "कहाँ", "कहां", "क्यों", "कैसे", "ने", "भी", "तो", "ही", "नहीं", "न", "कर", "करें", "हो", "होता", "होती", "होते", "जो", "लिए", "कुछ", "कोई", "इस", "उस", "इन", "उन", "वाला", "वाली", "वाले", "मेरा", "मेरी", "मेरे", "तुम", "आप", "मैं", "हम", "अपना", "अपनी", "आहे", "आहेत", "चा", "ची", "चे", "ला", "मध्ये", "आणि", "किंवा", "नाही", "हा", "ती", "ते"
     )
 
     private val chunks = ArrayList<Chunk>()
@@ -329,11 +333,18 @@ class KnowledgeStore(
     private fun normOf(t: String): String =
         Tokens.norm(t)
 
-    /** Query terms: >= 3 chars, stop words dropped, deduplicated. */
+    /** Query terms: stop words dropped, deduplicated.
+     *  v9.33.23: Devanagari words are short in CHARACTER count - the
+     *  vowel signs (matras) are separate code points, so "घर" (house)
+     *  is 2 chars and the old ">= 3 chars" gate dropped it, costing a
+     *  Hindi/Marathi question its content words. A 2-char word now
+     *  survives when it carries a non-ASCII letter; pure-ASCII keeps
+     *  the >= 3 rule exactly as before. */
     fun tokenize(s: String): List<String> {
         val out = LinkedHashSet<String>()
         for (w in Tokens.split(s)) {
-            if (w.length >= 3 && w !in STOP) out.add(w)
+            val keep = w.length >= 3 || (w.length == 2 && w.any { it.code > 127 })
+            if (keep && w !in STOP) out.add(w)
         }
         return out.toList()
     }
