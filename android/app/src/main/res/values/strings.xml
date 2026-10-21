@@ -215,7 +215,7 @@ from: %1$s</string>
     <string name="backup_title">Backup</string>
     <string name="backup_hint">Save everything NOVA knows to a zip, or bring it\nback from one. Nothing leaves the phone.</string>
     <string name="backup_save">SAVE BACKUP</string>
-    <string name="backup_restore">RESTORE BACKUP</string>
+    <string name="backup_restore_btn">RESTORE BACKUP</string>
     <string name="toast_backup_saved">Backup saved</string>
     <string name="backup_failed">Backup failed - could not write the zip</string>
     <string name="backup_saved_hint">Backup saved: %1$d files, %2$s.\nKeep the zip anywhere - Downloads, the cloud, a laptop.</string>
