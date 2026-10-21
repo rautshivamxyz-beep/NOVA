@@ -68,18 +68,18 @@ class ChatsActivity : Activity() {
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
-            contentDescription = "Back"
+            contentDescription = getString(R.string.action_back)
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(36), dp(36)))
         header.addView(TextView(this).apply {
-            text = "Chats"
+            text = getString(R.string.chats_title)
             // v7.9.2: 20f everywhere - matches the Knowledge screen title
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(textMain)
             setPadding(dp(8), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(smallButton("New", accent).apply {
+        header.addView(smallButton(getString(R.string.action_new), accent).apply {
             val d = getDrawable(R.drawable.ic_add)!!.mutate()
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 accent, android.graphics.PorterDuff.Mode.SRC_IN)
@@ -98,7 +98,7 @@ class ChatsActivity : Activity() {
 
         // v5.4.8: search across all chats - names and message text
         val search = EditText(this).apply {
-            hint = "Search chats"
+            hint = getString(R.string.chats_search_hint)
             setTextColor(textMain)
             setHintTextColor(textDim)
             textSize = 14f
@@ -162,8 +162,8 @@ class ChatsActivity : Activity() {
 
         if (chats.isEmpty()) {
             listInner.addView(TextView(this).apply {
-                text = if (q.isNotEmpty()) "No chats match \"$q\""
-                       else "No saved chats yet.\nEverything you talk about is kept on this phone only."
+                text = if (q.isNotEmpty()) getString(R.string.chats_none_match, q)
+                       else getString(R.string.chats_none_yet)
                 setTextColor(textDim)
                 textSize = 13f
                 setPadding(0, dp(10), 0, dp(10))
@@ -175,7 +175,7 @@ class ChatsActivity : Activity() {
         for (chat in chats) {
             val active = chat.id == currentId
             val preview = chat.messages.lastOrNull { it.text.isNotBlank() }?.text
-                ?.replace('\n', ' ')?.take(60) ?: "empty"
+                ?.replace('\n', ' ')?.take(60) ?: getString(R.string.chats_preview_empty)
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -206,7 +206,7 @@ class ChatsActivity : Activity() {
             })
             row.addView(titleRow)
             row.addView(TextView(this).apply {
-                text = "$preview  ·  ${chat.messages.size} messages"
+                text = getString(R.string.chats_preview, preview, chat.messages.size)
                 setTextColor(textDim)
                 textSize = 12f
                 setPadding(0, dp(2), 0, 0)
@@ -223,7 +223,7 @@ class ChatsActivity : Activity() {
     }
 
     private fun chatMenu(chat: Chat) {
-        val options = arrayOf("Rename", "Export as text", "Delete")
+        val options = arrayOf(getString(R.string.action_rename), getString(R.string.action_export_text), getString(R.string.action_delete))
         AlertDialog.Builder(this)
             .setTitle(chat.name)
             .setItems(options) { _, which ->
@@ -240,8 +240,8 @@ class ChatsActivity : Activity() {
                         startActivityForResult(intent, REQ_EXPORT)
                     }
                     2 -> AlertDialog.Builder(this)
-                        .setMessage("Delete \"${chat.name}\"? This cannot be undone.")
-                        .setPositiveButton("Delete") { _, _ ->
+                        .setMessage(getString(R.string.chats_delete_confirm, chat.name))
+                        .setPositiveButton(R.string.action_delete) { _, _ ->
                             val wasCurrent = settings.currentChatId == chat.id
                             ChatStore.delete(this, chat.id)
                             if (wasCurrent) {
@@ -254,7 +254,7 @@ class ChatsActivity : Activity() {
                                 refresh()
                             }
                         }
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(R.string.action_cancel, null)
                         .show()
                 }
             }
@@ -271,9 +271,9 @@ class ChatsActivity : Activity() {
             setSingleLine()
         }
         AlertDialog.Builder(this)
-            .setTitle("Rename chat")
+            .setTitle(R.string.chats_rename_title)
             .setView(edit)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(R.string.action_save) { _, _ ->
                 val name = edit.text.toString().trim()
                 if (name.isNotBlank()) {
                     chat.name = name
@@ -281,7 +281,7 @@ class ChatsActivity : Activity() {
                     refresh()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
@@ -295,9 +295,9 @@ class ChatsActivity : Activity() {
                 contentResolver.openOutputStream(uri)?.use { out ->
                     out.write(ChatStore.transcript(chat).toByteArray())
                 }
-                toast("Saved")
+                toast(getString(R.string.toast_saved))
             } catch (e: Exception) {
-                toast("Export failed: ${e.message}")
+                toast(getString(R.string.chats_export_failed, e.message ?: ""))
             }
             exportChat = null
         }
