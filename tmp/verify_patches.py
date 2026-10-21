@@ -213,7 +213,11 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.29: version bumped for the setup/update/fetch sweep", bg.count("versionName '9.33.29'") == 1 and bg.count("versionCode 197") == 1)
+check("v9.33.30: version bumped for the knowledge/backup sweep", bg.count("versionName '9.33.30'") == 1 and bg.count("versionCode 198") == 1)
+
+check("v9.33.30: Knowledge and Backup read from resources",
+      load("KnowledgeActivity.kt").count("getString(R.string.") >= 18 and
+      load("BackupActivity.kt").count("getString(R.string.") >= 13)
 
 check("v9.33.29: Setup, Update and FetchLog read from resources",
       load("SetupActivity.kt").count("getString(R.string.") >= 15 and

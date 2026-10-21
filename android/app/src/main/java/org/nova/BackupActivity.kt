@@ -70,14 +70,13 @@ class BackupActivity : ListActivity() {
             setPadding(pad(20), pad(18), pad(20), pad(12))
         }
         root.addView(TextView(this).apply {
-            text = "Backup"
+            text = getString(R.string.backup_title)
             textSize = 22f
             setTextColor(NovaTheme.text)
             typeface = Typeface.DEFAULT_BOLD
         })
         hint = TextView(this).apply {
-            text = "Save everything NOVA knows to a zip, or bring it\n" +
-                "back from one. Nothing leaves the phone."
+            text = getString(R.string.backup_hint)
             textSize = 13f
             setTextColor(NovaTheme.dim)
             setPadding(0, pad(4), 0, pad(10))
@@ -88,7 +87,7 @@ class BackupActivity : ListActivity() {
             setPadding(0, 0, 0, pad(12))
         }
         actions.addView(Button(this).apply {
-            text = "SAVE BACKUP"
+            text = getString(R.string.backup_save)
             isAllCaps = false
             textSize = 14f
             setTextColor(Color.WHITE)
@@ -98,7 +97,7 @@ class BackupActivity : ListActivity() {
             setOnClickListener { pickSaveTarget() }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(Button(this).apply {
-            text = "RESTORE BACKUP"
+            text = getString(R.string.backup_restore_btn)
             isAllCaps = false
             textSize = 14f
             setTextColor(NovaTheme.dim)
@@ -139,7 +138,7 @@ class BackupActivity : ListActivity() {
         try {
             startActivityForResult(i, REQ_SAVE)
         } catch (e: Exception) {
-            toast("No file picker available")
+            toast(getString(R.string.no_file_picker))
         }
     }
 
@@ -210,11 +209,10 @@ class BackupActivity : ListActivity() {
             } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
             runOnUiThread {
                 if (ok) {
-                    hint?.text = "Backup saved: $count files, " + kb(bytes) + ".\n" +
-                        "Keep the zip anywhere - Downloads, the cloud, a laptop."
-                    toast("Backup saved")
+                    hint?.text = getString(R.string.backup_saved_hint, count, kb(bytes))
+                    toast(getString(R.string.toast_backup_saved))
                 } else {
-                    toast("Backup failed - could not write the zip")
+                    toast(getString(R.string.backup_failed))
                 }
             }
         }.start()
@@ -234,7 +232,7 @@ class BackupActivity : ListActivity() {
         try {
             startActivityForResult(i, REQ_RESTORE)
         } catch (e: Exception) {
-            toast("No file picker available")
+            toast(getString(R.string.no_file_picker))
         }
     }
 
@@ -269,11 +267,9 @@ class BackupActivity : ListActivity() {
                 entries = loaded
                 adapter?.notifyDataSetChanged()
                 if (loaded.isEmpty()) {
-                    hint?.text = "That file is not a NOVA backup " +
-                        "(no readable zip entries)."
+                    hint?.text = getString(R.string.backup_not_a_backup)
                 } else {
-                    hint?.text = loaded.size.toString() + " files in this backup.\n" +
-                        "Restore replaces what is on the phone now."
+                    hint?.text = getString(R.string.backup_files_in, loaded.size)
                     confirmRestore(uri, password)
                 }
             }
@@ -282,13 +278,12 @@ class BackupActivity : ListActivity() {
 
     private fun confirmRestore(uri: Uri, password: String?) {
         AlertDialog.Builder(this)
-            .setTitle("Restore this backup?")
+            .setTitle(R.string.backup_restore_q)
             // v9.4.0 "Audit Fixes II": the restore is a true replace now -
             // the warning must say exactly what that means
-            .setMessage("This wipes NOVA's current memory, wiki, knowledge, " +
-                "chats and settings and restores the backup exactly.")
-            .setPositiveButton("Restore") { _, _ -> restoreBackup(uri, password) }
-            .setNegativeButton("Cancel", null)
+            .setMessage(R.string.backup_restore_msg)
+            .setPositiveButton(R.string.action_restore) { _, _ -> restoreBackup(uri, password) }
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
@@ -360,18 +355,17 @@ class BackupActivity : ListActivity() {
                     // could be written back over the restored files): the
                     // old "restart NOVA yourself" toast became a forced
                     // restart - every old store and singleton dies here
-                    hint?.text = "Restored $restored files."
+                    hint?.text = getString(R.string.backup_restored, restored)
                     AlertDialog.Builder(this)
-                        .setMessage("Restore complete — NOVA will now close. " +
-                            "Reopen it.")
+                        .setMessage(R.string.backup_restore_complete)
                         .setCancelable(false)
-                        .setPositiveButton("OK") { _, _ ->
+                        .setPositiveButton(R.string.action_ok) { _, _ ->
                             finishAffinity()
                             System.exit(0)
                         }
                         .show()
                 } else {
-                    toast("Restore failed - the zip could not be read")
+                    toast(getString(R.string.backup_restore_failed))
                 }
             }
         }.start()
@@ -391,26 +385,25 @@ class BackupActivity : ListActivity() {
 
     private fun askPasswordForSave(uri: Uri) {
         val box = android.widget.EditText(this)
-        box.hint = "leave blank for a plain zip"
+        box.hint = getString(R.string.backup_password_hint)
         AlertDialog.Builder(this)
-            .setTitle("Backup password (optional)")
-            .setMessage("Set a password to ENCRYPT this backup (AES-256). " +
-                "Leave it blank to save a plain zip.")
+            .setTitle(R.string.backup_password_optional)
+            .setMessage(R.string.backup_password_msg)
             .setView(box)
-            .setPositiveButton("Save") { _, _ -> saveBackup(uri, box.text.toString().trim()) }
-            .setNegativeButton("Cancel", null)
+            .setPositiveButton(R.string.action_save) { _, _ -> saveBackup(uri, box.text.toString().trim()) }
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun askPasswordForRestore(uri: Uri) {
         val box = android.widget.EditText(this)
-        box.hint = "the password you set"
+        box.hint = getString(R.string.backup_password_set_hint)
         AlertDialog.Builder(this)
-            .setTitle("Encrypted backup")
-            .setMessage("This backup is encrypted - enter its password to open it.")
+            .setTitle(R.string.backup_encrypted)
+            .setMessage(R.string.backup_encrypted_msg)
             .setView(box)
-            .setPositiveButton("Open") { _, _ -> inspectBackup(uri, box.text.toString().trim()) }
-            .setNegativeButton("Cancel", null)
+            .setPositiveButton(R.string.action_open) { _, _ -> inspectBackup(uri, box.text.toString().trim()) }
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
