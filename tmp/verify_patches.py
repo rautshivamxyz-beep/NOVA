@@ -213,7 +213,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.25: version bumped for the Hindi/Marathi keyword pass", bg.count("versionName '9.33.25'") == 1 and bg.count("versionCode 193") == 1)
+check("v9.33.26: version bumped for the translatable-Settings pass", bg.count("versionName '9.33.26'") == 1 and bg.count("versionCode 194") == 1)
+
+# ---- v9.33.26: the Settings screen is translatable (resources + Hindi) ----
+check("v9.33.26: the Settings screen reads from resources",
+      load("SettingsActivity.kt").count("getString(R.string.") >= 40)
+check("v9.33.26: the strings live in strings.xml with a Hindi translation",
+      open(os.path.join(ROOT, "android/app/src/main/res/values/strings.xml")).read().count("<string name=") >= 50 and
+      os.path.exists(os.path.join(ROOT, "android/app/src/main/res/values-hi/strings.xml")))
 
 # ---- v9.33.21: every icon-only control carries a spoken label ----
 check("v9.33.21: every icon-only control carries a spoken label",
