@@ -1338,17 +1338,19 @@ class MainActivity : Activity() {
         }
 
         generationJob = scope.launch {
-            // v9.33.1 "Clean context": the native engine accumulates every turn
-            // and never forgets it, so the previous answer bled into the next -
-            // the calculator example came back glued to a World Cup question,
-            // and the model continued the earlier promise instead of answering.
-            // The prompt already carries the recent history (currentChat
-            // takeLast(6)), so the engine's own memory is redundant. Clear it
-            // for a fresh answer; a continuation (newBubble = false) keeps it,
-            // because it is finishing the answer that is still in there.
-            if (newBubble && NovaEngine.contextDirty) {
+            // v9.33.31 "Engine memory": v9.33.1 cleared the engine's context on
+            // every turn. That did stop the bleed, but it also threw away the
+            // conversation AND forced a full re-prefill of the prompt every
+            // single turn - worse memory and slower at the same time. The bleed
+            // was really caused by the prompt REPLAYING the last six messages on
+            // top of an engine that already held them; that replay is gone now
+            // (NcieChat sends history only when the engine lacks it). So the
+            // engine keeps the conversation - real memory, and no re-prefill -
+            // and we reset only when the history genuinely has to be re-sent.
+            if (newBubble && needsContextCarry) {
                 try {
                     NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
+                    needsContextCarry = false
                 } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }
             // v5.4.2: performance timers (time-to-first-token + total)
@@ -3637,7 +3639,10 @@ Study:
         scope.launch {
             // v7.6: remember which chat this compaction belongs to
             val chatAtStart = currentChat
-            val old = currentChat.messages.dropLast(6)
+            // v9.33.31: the chat no longer shrinks (the trim stopped deleting),
+            // so summarize a BOUNDED window of the older turns instead of the
+            // whole ever-growing history.
+            val old = currentChat.messages.dropLast(6).takeLast(40)
                 .joinToString("\n") { m ->
                     (if (m.role == Role.USER) "User: " else "NOVA: ") + m.text.take(250)
                 }
