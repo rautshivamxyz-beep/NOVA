@@ -142,7 +142,11 @@ object NovaHealth {
         } catch (e: Exception) { false }
         val semantic = if (embedder) "on" else "off - keyword search only (embedder not bundled)"
         val wiki = if (WikiCore.isReady(ctx)) "ready" else "not downloaded - lookups go online only"
-        return "semantic search: " + semantic + "\noffline Wikipedia: " + wiki
+        val lite = if (DeviceCapabilities.isLowRam(ctx))
+            "on - semantic search is skipped to keep the model in RAM on this phone"
+        else "off"
+        return "semantic search: " + semantic + "\noffline Wikipedia: " + wiki +
+            "\nlite mode: " + lite
     }
 
     fun requestBattery(ctx: Context) {

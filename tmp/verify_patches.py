@@ -213,7 +213,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.32: version bumped for the compaction pass", bg.count("versionName '9.33.32'") == 1 and bg.count("versionCode 200") == 1)
+check("v9.33.33: version bumped for the low-RAM pass", bg.count("versionName '9.33.33'") == 1 and bg.count("versionCode 201") == 1)
+
+# ---- v9.33.33: Lite mode for low-RAM phones ----
+check("v9.33.33: one place decides the phone is small",
+      load("DeviceCapabilities.kt").count("fun isLowRam(") == 1 and
+      load("DeviceCapabilities.kt").count("LOW_RAM_GB = 5.0") == 1)
+check("v9.33.33: the embedder is skipped on a low-RAM phone",
+      load("ncie/android/NcieEmbed.kt").count("DeviceCapabilities.isLowRam(ctx)") == 1)
+check("v9.33.33: the embedder is released under memory pressure",
+      load("ncie/android/NcieEmbed.kt").count("fun release()") == 1 and
+      ma.count("TRIM_MEMORY_RUNNING_CRITICAL") == 1)
+check("v9.33.33: lite mode is reported, not silent",
+      load("NovaHealth.kt").count("lite mode: ") == 1)
 
 # ---- v9.33.32: compaction guards overflow instead of capping memory ----
 check("v9.33.32: compaction fires on the context budget, not every 8 messages",

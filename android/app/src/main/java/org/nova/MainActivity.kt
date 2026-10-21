@@ -37,6 +37,7 @@ import org.nova.ncie.android.NcieArithmetic
 import org.nova.ncie.android.NcieChat
 import org.nova.ncie.android.NcieEngines
 import org.nova.ncie.android.NcieGround
+import org.nova.ncie.android.NcieEmbed
 import org.nova.ncie.android.NcieKnowledge
 import org.nova.ncie.android.NcieLearn
 import org.nova.ncie.android.NcieSkills
@@ -319,6 +320,18 @@ class MainActivity : Activity() {
         try { org.nova.ncie.android.NovaNudge.schedule(this) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
     }
 
+
+    /** v9.33.33 "Lite mode": on a 4 GB phone the system is always close to
+     *  the edge. When it says it is short of memory while we are still in the
+     *  foreground, drop the semantic embedder at once and answer from keyword
+     *  scoring instead of letting Android kill the app mid-reply. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            NcieEmbed.release()
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
