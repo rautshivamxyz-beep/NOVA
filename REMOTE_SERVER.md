@@ -94,6 +94,40 @@ server.
 If NOVA is not certain a prompt is clean, it does not send it at all: it answers
 on the phone instead. It never guesses in that direction.
 
+### Can I run an 8B model for free?
+
+Yes — but not free *and* always-on *and* fast. Pick two, and know which two
+you picked.
+
+**Always-on and free: Oracle.** The free Ampere machine has 12 GB of RAM, and
+an 8B at Q4 needs about 5 GB, so it fits. Get it with:
+
+```
+MODEL=8b bash setup-oracle.sh
+```
+
+Be honest with yourself about the speed first: **a free Oracle machine has no
+GPU.** Two CPU cores running an 8B gives you a few tokens a second — a short
+paragraph can take half a minute. It works, it is free, it is not snappy. The
+3B default is roughly two to three times quicker and is what I would run here.
+
+**Fast and free: a GPU notebook.** Kaggle gives about **30 GPU-hours a week**,
+free, on a real GPU (a P100 or two T4s), with sessions up to around 12 hours.
+Colab's free tier hands you a T4 when capacity allows, with a shorter idle
+timeout. On either of those an 8B is genuinely quick.
+
+The catch is the same for both: **a notebook is not a server.** The session
+ends, the machine is recycled, and your model goes with it. There is no
+permanent address to point NOVA at unless you keep a session alive and tunnel
+to it, which is fragile and against the spirit of those terms.
+
+**So:**
+
+| What you want | Where | What it costs you |
+| --- | --- | --- |
+| Up whenever you ask | Oracle Always Free | Slow — a few tokens a second |
+| 8B at real speed | Kaggle (30 h/week) or Colab | It disconnects; not a permanent server |
+
 ### Running it on Oracle Cloud (free)
 
 Your laptop is the easy option. If you want a server that is up even when your
