@@ -243,4 +243,11 @@ from: %1$s</string>
     <string name="speed_test_model">Model: %1$s</string>
     <string name="speed_test_result">Time to first token: %1$s s\nDecode: %2$d tokens in %3$s s\nThat is %4$s tokens per second.</string>
     <string name="share_diagnostics">Share diagnostics</string>
+    <string name="section_remote">Remote model</string>
+    <string name="remote_enable">Use a model on my own network</string>
+    <string name="remote_hint">Point NOVA at llama-server on your laptop or another phone, on the same Wi-Fi. Your question and the notes it uses are sent to that machine - nothing goes to a third party. If it is unreachable, NOVA falls back to the model on this phone.</string>
+    <string name="remote_url_hint">Address, e.g. http://192.168.1.5:8080</string>
+    <string name="remote_model_hint">Model name (optional)</string>
+    <string name="remote_on">NOVA will use that machine when it answers</string>
+    <string name="remote_off">Back to the model on this phone</string>
 </resources>
