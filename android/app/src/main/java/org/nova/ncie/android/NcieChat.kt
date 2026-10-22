@@ -29,7 +29,6 @@ import java.io.File
  *  a silent regression to the fat prompt stack. Anything up to 2B is a
  *  tiny model that drowns in stacked instructions; a label with no
  *  parseable size (a custom file name) stays a big model, as before. */
-private val MODEL_PARAMS = Regex("(\\d+(?:\\.\\d+)?)\\s*b\\b")
 
 /** v9.12.1 "Context Diet": the cap on the assembled non-skill preamble
  *  (docPart + notes + wiki + rolling summary + experience line) - about
@@ -777,9 +776,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
         // get ONE background source, no exam line, and short injections
         val mlabel = NovaEngine.activeModelLabel.lowercase()
-        // v8.3.1: parse the size out of the label instead of matching
-        // strings by hand - covers 1.5B, 1.7B and 2B the list never knew
-        val tiny = MODEL_PARAMS.find(mlabel)?.let { it.groupValues[1].toDouble() <= 2.0 } ?: false
+        // v8.3.1: parse the size out of the label instead of matching strings by
+        // hand - covers 1.5B, 1.7B and 2B the list never knew.
+        // v9.33.52: the rule now lives in ModelProfile, so the health screen can
+        // report which profile a model gets and a test can pin it.
+        val tiny = ModelProfile.isTiny(mlabel)
 
         // NCIE Stage 6 (#1): the kernel's context budget now picks the
         // injection profile. Plain short chat gets the lean caps (the
