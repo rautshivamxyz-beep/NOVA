@@ -2689,7 +2689,16 @@ class MainActivity : Activity() {
         val email = Regex("(?i)^(?:nova\\s*,?\\s*)?(?:send\\s+)?(?:an?\\s+)?email\\s+(?:to\\s+)?(.+)$").find(t2)
         // v8.5.2: volume control - the phone control everyone reaches for first
         val volume = Regex("(?i)^(?:set\\s+)?(?:the\\s+)?volume\\s+(?:to\\s+)?(.+)$").find(t2)
-        val phoneHelp = Regex("(?i)what\\s+(?:can|do)\\s+you\\s+(?:do|control)|^phone\\s+commands$|^list\\s+commands").containsMatchIn(t2)
+        // v9.33.53: "what things you can do" missed this - the pattern wanted
+        // "what can you do" and the words in that order, so the question fell
+        // through to the model, which answered by reciting the user's own memory
+        // back ("Shivam is in class 10 and interested in..."). "what all can you
+        // do" and "what else can you do" are the same question.
+        val phoneHelp = Regex(
+            "(?i)what\\s+(?:can|do)\\s+you\\s+(?:do|control)" +
+                "|^what\\s+(?:all\\s+|things?\\s+|else\\s+)*you\\s+can\\s+do\\b" +
+                "|^what\\s+(?:all\\s+|things?\\s+|else\\s+)*(?:can|could)\\s+you\\s+(?:do|control)" +
+                "|^phone\\s+commands$|^list\\s+commands").containsMatchIn(t2)
         when {
             // v8.5.2: "what can you do" answered in chat, no model needed
             phoneHelp -> {

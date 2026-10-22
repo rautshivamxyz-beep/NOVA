@@ -1033,6 +1033,13 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             "unless you also give a real fact.\n" +
             "ANSWER WHAT WAS ASKED: answer only the question you were given. Never answer a different " +
             "question, and never invent or restate a request the user did not make.\n" +
+            // v9.33.53: asked "what things you can do" NOVA replied "Shivam is in
+            // class 10 and interested in...", and asked "solve this" it did the
+            // same - it was writing the background notes back instead of
+            // answering. The facts about the user are for USING, not reciting.
+            "NEVER RECITE: never reply with a description of the user or a summary of the " +
+            "conversation. Background facts are for you to use, not to write back. If the " +
+            "question is unclear, ask ONE short question instead.\n" +
             "FOLLOW-UPS: when the user says \"he\", \"him\", \"she\", \"it\", \"the character\", " +
             "\"the topic\" or similar, they mean the SAME subject as the previous turn. Keep that subject - " +
             "never switch to a different person or thing.\n" +

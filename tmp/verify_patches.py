@@ -219,7 +219,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.52: version bumped for the profile-visibility pass", bg.count("versionName '9.33.52'") == 1 and bg.count("versionCode 220") == 1)
+check("v9.33.53: version bumped for the recital pass", bg.count("versionName '9.33.53'") == 1 and bg.count("versionCode 221") == 1)
+
+# ---- v9.33.53: the capability question, and the recital ----
+check("v9.33.53: the capability question is caught in the wordings people use",
+      ma.count("what things you can do") == 1 and
+      ma.count("|^what") == 2)
+check("v9.33.53: NOVA is told not to recite the background back",
+      load("ncie/android/NcieChat.kt").count("NEVER RECITE") == 1 and
+      load("ncie/android/NcieChat.kt").count("Background facts are for you to use") == 1)
 
 # ---- v9.33.52: the "tiny" decision is one rule, and it is visible ----
 check("v9.33.52: one definition of the lean profile",
