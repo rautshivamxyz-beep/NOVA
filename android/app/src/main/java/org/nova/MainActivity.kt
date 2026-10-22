@@ -226,6 +226,8 @@ class MainActivity : Activity() {
         settings = Settings(this)
         applyTheme()
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
+        // v9.33.42: pick up the remote-model settings for this run
+        RemoteEngine.configure(this)
 
         currentChat = if (settings.currentChatId.isNotBlank()) {
             ChatStore.load(this, settings.currentChatId) ?: ChatStore.newChat()
