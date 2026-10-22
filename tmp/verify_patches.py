@@ -217,7 +217,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.48: version bumped for the 8B pass", bg.count("versionName '9.33.48'") == 1 and bg.count("versionCode 216") == 1)
+check("v9.33.49: version bumped for the keep-it-alive pass", bg.count("versionName '9.33.49'") == 1 and bg.count("versionCode 217") == 1)
+
+# ---- v9.33.49: the instance has to survive Oracle ----
+check("v9.33.49: the guide carries Oracle's own fix for reclamation",
+      open(os.path.join(ROOT, "REMOTE_SERVER.md")).read().count("Pay As You Go (PAYG)") == 1)
+check("v9.33.49: and the 2-OCPU trap that deletes every A1 instance",
+      open(os.path.join(ROOT, "REMOTE_SERVER.md")).read().count("within\n2 OCPUs and 12 GB") == 1)
+check("v9.33.49: the server names its thread count",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("-t $(nproc)") == 1)
 
 # ---- v9.33.48: an 8B model, honestly offered ----
 check("v9.33.48: the script can actually run an 8B",
