@@ -90,19 +90,44 @@ server.
 If NOVA is not certain a prompt is clean, it does not send it at all: it answers
 on the phone instead. It never guesses in that direction.
 
-### Using a free cloud server (Oracle and friends)
+### Running it on Oracle Cloud (free)
 
-The same server works on a rented machine — that is what the Oracle Cloud
-"Always Free" tier is for. Two things to know before you go:
+Your laptop is the easy option. If you want a server that is up even when your
+laptop is closed, Oracle's Always Free tier gives you one — free, with no time
+limit.
 
-- **Put a password on it.** A cloud server is on the open internet, so use
-  `password.txt` (see above) — this is not optional there.
-- **Leave Private questions only ON.** A cloud VM is not your machine. Only your
-  question goes to it.
+**You do three things. The script does everything else.**
 
-And one honest warning: Oracle reclaims an Always Free instance when it looks
-idle for 7 days — CPU, network and memory all under 20%. A personal AI is idle
-almost all the time, so expect it to be stopped unless you keep it busy.
+**1. Make the machine.** In the Oracle website: *Create Instance* → image
+**Ubuntu** → shape **Ampere A1** (the ARM one — 2 CPUs and 12 GB is the free
+allowance) → save the SSH key it offers you.
+
+**2. Open the door.** Still in the website: your subnet's **Security List** →
+*Add Ingress Rule* → Source `0.0.0.0/0`, IP Protocol **TCP**, Destination Port
+**8080**. Without this the phone cannot reach it, and nothing else will tell you
+that.
+
+**3. Run the script.** Connect to the machine (the website has a *Cloud Shell*
+button, so you do not even need a terminal app) and paste one line:
+
+```
+curl -fsSL https://raw.githubusercontent.com/rautshivamxyz-beep/NOVA/main/setup-oracle.sh | bash
+```
+
+It installs llama.cpp, downloads a model, **makes a password for you**, starts
+the server, and sets it to come back after a reboot. When it finishes it prints
+two lines — an address and a password. Type those into NOVA:
+
+**Settings → Remote model →** switch ON → Address and Password. Leave **Private
+questions only** ON. A cloud machine is not your machine.
+
+It takes a while the first time (the model is about 2 GB, and it may have to
+build llama.cpp — 15 to 30 minutes on a free machine). Leave it running.
+
+**One warning worth knowing:** Oracle reclaims an Always Free instance when it
+looks idle for 7 days — CPU, network and memory all under 20%. A personal AI is
+idle almost all the time, so expect it to be stopped unless you keep it busy.
+A laptop you own has no such rule.
 
 ---
 
