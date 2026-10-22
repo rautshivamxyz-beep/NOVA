@@ -134,6 +134,14 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_REMOTE_URL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_REMOTE_URL, value).apply()
 
+    /** v9.33.44: the password the server was started with (llama-server
+     *  --api-key). Only needed once the server is reachable from outside the
+     *  home Wi-Fi - through a tunnel or a port forward. On the LAN it is
+     *  optional, because only the LAN can reach it. */
+    var remoteKey: String
+        get() = prefs.getString(KEY_REMOTE_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_REMOTE_KEY, value).apply()
+
     var remoteModel: String
         get() = prefs.getString(KEY_REMOTE_MODEL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_REMOTE_MODEL, value).apply()
@@ -270,6 +278,7 @@ class Settings(context: Context) {
         private const val KEY_REMOTE_ON = "remote_on"
         private const val KEY_REMOTE_URL = "remote_url"
         private const val KEY_REMOTE_MODEL = "remote_model"
+        private const val KEY_REMOTE_KEY = "remote_key"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small
