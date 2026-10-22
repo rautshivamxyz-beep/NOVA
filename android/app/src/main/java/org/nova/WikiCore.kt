@@ -15,6 +15,7 @@ import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import org.nova.ncie.android.NcieGround
+import org.nova.ncie.knowledge.EntityMatch
 import org.nova.ncie.knowledge.WikiStore
 
 /**
@@ -265,8 +266,20 @@ object WikiCore {
         // v8.1.0 (opt #3): the PREPARED index - one WikiStore instance,
         // its titles tokenized once at warm-up, not once per query
         val p = prepared ?: return emptyList()
-        return wikiStore.search(p, query, maxResults) { off -> readLineAt(ctx, off) }
+        val hits = wikiStore.search(p, query, maxResults) { off -> readLineAt(ctx, off) }
             .map { Hit(it.title, it.text) }
+        // v9.33.38 "The right entity, offline too": the ONLINE path has refused
+        // an article whose title does not name the thing asked about since
+        // v9.33.14 - but THIS offline path served whatever scored highest, so a
+        // downloaded Wikipedia could still answer "who is physics wallah" with
+        // the Radha Bhatt intro (her page merely mentions it) and "who is mia
+        // ham" with Mia Tomlinson. Same rule here: for a plain "who is X"
+        // lookup only a title that NAMES X is an answer. Abstaining is always
+        // better than serving the wrong person, and this is a string check on
+        // at most two hits - no speed cost.
+        return if (EntityMatch.isEntityQuestion(query))
+            hits.filter { EntityMatch.titleMatchesEntity(it.title, query) }
+        else hits
     }
 
     private fun buildIndex(ctx: Context): List<Pair<String, Long>> {
