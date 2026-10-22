@@ -217,7 +217,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.45: version bumped for the nothing-private pass", bg.count("versionName '9.33.45'") == 1 and bg.count("versionCode 213") == 1)
+check("v9.33.46: version bumped for the Oracle setup pass", bg.count("versionName '9.33.46'") == 1 and bg.count("versionCode 214") == 1)
+
+# ---- v9.33.46: the Oracle move, server side ----
+check("v9.33.46: one command sets up the whole Oracle server",
+      os.path.exists(os.path.join(ROOT, "setup-oracle.sh")) and
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("--api-key $KEY") == 1 and
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("systemctl enable nova-server") == 1)
+check("v9.33.46: a cloud server always gets a password",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("/dev/urandom") == 1)
 
 # ---- v9.33.45: only the question leaves the phone ----
 check("v9.33.45: the private blocks are stripped, and the set is pinned",
