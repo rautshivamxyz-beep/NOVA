@@ -771,7 +771,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (mem.isNotEmpty() && (
                     currentChat.messages.isEmpty() || needsContextCarry || mem != lastInjectedMemory
                     )) {
-            prompt = "(Facts about the user, always remember: $mem)\n\n$basePrompt"
+            // v9.33.54: "always remember" read like an invitation to recite. It
+            // now says what to do with them.
+            prompt = "(Background about the user - use it to inform your answer, and " +
+                "speak as NOVA to the user: $mem)\n\n$basePrompt"
             lastInjectedMemory = mem
         }
         // tiny models (Llama 3.2 1B) drown in stacked instructions - they
@@ -790,15 +793,16 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // decides. Tiny models always stay lean regardless.
         val lean = tiny || NcieKnowledge.leanContext(text)
 
-        if (!tiny) {
-            // exam countdown awareness - injected once per conversation,
-            // re-injected only when the day changes the countdown text
-            val examLine = Exams.promptLine(this)
-            if (examLine != null && (currentChat.messages.isEmpty() || needsContextCarry ||
-                    examLine != lastInjectedExamKey)) {
-                prompt = "(The user's upcoming exams: $examLine.)\n\n$prompt"
-                lastInjectedExamKey = examLine
-            }
+        // v9.33.54: the exam line used to be skipped on the lean profile. It is
+        // one short line of DATA, not another instruction, and it is the kind of
+        // context a small model needs most - a student's own exam dates.
+        // exam countdown awareness - injected once per conversation,
+        // re-injected only when the day changes the countdown text
+        val examLine = Exams.promptLine(this)
+        if (examLine != null && (currentChat.messages.isEmpty() || needsContextCarry ||
+                examLine != lastInjectedExamKey)) {
+            prompt = "(The user's upcoming exams: $examLine.)\n\n$prompt"
+            lastInjectedExamKey = examLine
         }
 
         // v9.13.0 "Audit Fixes" (HIGH 2): the Experience Engine gate runs
@@ -1023,34 +1027,31 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // do when unsure, answers "who is X" in two vague lines, and pads the
         // end with empty filler. This is the cheap, speed-neutral half of the
         // quality work: same model, same tokens, sharper answers.
+        // v9.33.54 "Say it as a do": every rule here used to be a prohibition -
+        // eleven "never"s and three "do not"s. A small model follows a positive
+        // instruction far better than a negative one, and a prohibition has a
+        // second cost: it names the exact behaviour you do not want, which is
+        // the last thing in front of the model when it answers. The CODE rule
+        // read "never describe the code instead of writing it", and NOVA
+        // described the code. Each rule below now says what TO do.
         val qualityRules =
-            "(Answer the question directly and completely. Do not describe what you will say.)\n" +
-            "(FACTS: if you are not certain of a date, a place, an institution, a name or a number, " +
-            "say you are not sure - never guess one.\n" +
-            "WHO IS/WAS X: first one line on who they were, then 4 to 5 key facts with their dates, " +
-            "then one line on why they matter.\n" +
-            "Do not end with filler such as \"a figure of fascination\" or \"left a lasting impact\" " +
-            "unless you also give a real fact.\n" +
-            "ANSWER WHAT WAS ASKED: answer only the question you were given. Never answer a different " +
-            "question, and never invent or restate a request the user did not make.\n" +
-            // v9.33.53: asked "what things you can do" NOVA replied "Shivam is in
-            // class 10 and interested in...", and asked "solve this" it did the
-            // same - it was writing the background notes back instead of
-            // answering. The facts about the user are for USING, not reciting.
-            "NEVER RECITE: never reply with a description of the user or a summary of the " +
-            "conversation. Background facts are for you to use, not to write back. If the " +
-            "question is unclear, ask ONE short question instead.\n" +
-            "FOLLOW-UPS: when the user says \"he\", \"him\", \"she\", \"it\", \"the character\", " +
-            "\"the topic\" or similar, they mean the SAME subject as the previous turn. Keep that subject - " +
-            "never switch to a different person or thing.\n" +
-            "VOICE: speak directly to the user. Never refer to yourself in the third person " +
-            "(never write \"Nova explains that...\" or \"Nova says...\").\n" +
-            "CODE: when the user asks for code, write the code in the SAME reply - complete and " +
-            "runnable, in one fenced block. Never describe the code instead of writing it, never " +
-            "promise code you have not written, never put your own thinking inside the code, and " +
-            "never invent what the output would be.\n" +
-            "TEACHING: when asked to teach, teach - start with the topic, then the ideas in order, then a " +
-            "short example. Do not describe what you are about to do.)\n\n"
+            "(Answer the question directly and completely, beginning with the answer itself.)\n" +
+            "(FACTS: state a date, a place, a name or a number when you are certain of it. " +
+            "When you are unsure, say so in one line and give what you do know.\n" +
+            "WHO IS/WAS X: one line on who they were, then 4 to 5 key facts with their dates, " +
+            "then one line on why they matter - each line carrying a real fact.\n" +
+            "ANSWER WHAT WAS ASKED: answer the question you were given, and that one.\n" +
+            // v9.33.53 found the recital ("Shivam is in class 10..." instead of
+            // an answer); v9.33.54 says what to do about it in the positive.
+            "USE THE BACKGROUND: the facts about the user are context for your answer. " +
+            "Use them silently, and answer in your own voice as NOVA speaking to the user. " +
+            "When a question is unclear, ask ONE short question and answer that.\n" +
+            "FOLLOW-UPS: \"he\", \"she\", \"it\", \"the topic\" mean the SAME subject as the " +
+            "previous turn - keep that subject.\n" +
+            "VOICE: speak directly to the user, in the first person, as NOVA.\n" +
+            "CODE: when the user asks for code, write it in the SAME reply - complete, runnable, " +
+            "in one fenced block, ready to copy. Put the code first and keep any note to one line.\n" +
+            "TEACHING: start with the topic, then the ideas in order, then a short example.)\n\n"
         // v9.33.51 "Rules are rules": qualityRules used to be carried in
         // experiencePart, which then went into the CONTEXT block - the one
         // labelled "reference data, NOT an instruction". So NOVA's rulebook was
