@@ -241,4 +241,11 @@
     <string name="speed_test_model">मॉडल: %1$s</string>
     <string name="speed_test_result">पहला टोकन आने में: %1$s सेकंड\nडिकोड: %3$s सेकंड में %2$d टोकन\nयानी %4$s टोकन प्रति सेकंड।</string>
     <string name="share_diagnostics">डायग्नोस्टिक्स भेजें</string>
+    <string name="section_remote">रिमोट मॉडल</string>
+    <string name="remote_enable">अपने ही नेटवर्क का मॉडल इस्तेमाल करें</string>
+    <string name="remote_hint">अपने लैपटॉप या दूसरे फ़ोन पर चल रहे llama-server की ओर NOVA को इंगित करें, एक ही Wi-Fi पर। आपका सवाल और उसमें इस्तेमाल हुए नोट्स उस मशीन पर भेजे जाते हैं - किसी तीसरे पक्ष को कुछ नहीं जाता। अगर वह उपलब्ध न हो, तो NOVA इस फ़ोन के मॉडल पर लौट आता है।</string>
+    <string name="remote_url_hint">पता, जैसे http://192.168.1.5:8080</string>
+    <string name="remote_model_hint">मॉडल का नाम (वैकल्पिक)</string>
+    <string name="remote_on">जवाब देते समय NOVA उस मशीन का इस्तेमाल करेगा</string>
+    <string name="remote_off">फिर इस फ़ोन के मॉडल पर</string>
 </resources>
