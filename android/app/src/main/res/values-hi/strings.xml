@@ -253,4 +253,5 @@
     <string name="remote_searching">आपके Wi-Fi पर खोज रहे हैं…</string>
     <string name="remote_none">कुछ नहीं मिला। क्या लैपटॉप पर सर्वर चल रहा है? और क्या दोनों एक ही Wi-Fi पर हैं?</string>
     <string name="remote_found">मिल गया: %1$s</string>
+    <string name="remote_key_hint">पासवर्ड, केवल अगर आप सर्वर तक घर के Wi-Fi से बाहर से पहुँचते हैं</string>
 </resources>
