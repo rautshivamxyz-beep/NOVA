@@ -217,7 +217,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.39: version bumped for the diagnostics pass", bg.count("versionName '9.33.39'") == 1 and bg.count("versionCode 207") == 1)
+check("v9.33.40: version bumped for the real-numbers pass", bg.count("versionName '9.33.40'") == 1 and bg.count("versionCode 208") == 1)
+
+# ---- v9.33.40: the measurement travels, so the catalogue improves ----
+check("v9.33.40: the measurement is kept so the report can carry it",
+      load("Settings.kt").count("var lastSpeedReport") == 1 and
+      load("SpeedTest.kt").count("lastSpeedReport =") == 1)
+check("v9.33.40: the report carries content-free numbers only",
+      load("NovaHealth.kt").count("measured speed: ") == 1 and
+      load("NovaHealth.kt").count("auto-replies sent today: ") == 1)
 
 # ---- v9.33.39: a content-free report the user sends to improve NOVA ----
 check("v9.33.39: the diagnostics report says what it does NOT contain",
