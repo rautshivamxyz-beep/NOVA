@@ -217,7 +217,17 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.42: version bumped for the borrowed-brain pass", bg.count("versionName '9.33.42'") == 1 and bg.count("versionCode 210") == 1)
+check("v9.33.43: version bumped for the find-my-computer pass", bg.count("versionName '9.33.43'") == 1 and bg.count("versionCode 211") == 1)
+
+# ---- v9.33.43: nobody types an IP address ----
+check("v9.33.43: the phone finds the computer by itself",
+      load("RemoteEngine.kt").count("fun discover(") == 1 and
+      load("RemoteEngine.kt").count("/v1/models") >= 1 and
+      load("RemoteEngine.kt").count("fun find(") == 1 and
+      load("SettingsActivity.kt").count("private fun findComputer()") == 1)
+check("v9.33.43: one double-click starts the laptop half",
+      os.path.exists(os.path.join(ROOT, "start-nova-server.bat")) and
+      os.path.exists(os.path.join(ROOT, "start-nova-server.sh")))
 
 # ---- v9.33.42: a bigger model on the user's own network ----
 check("v9.33.42: the bigger machine is preferred, this phone is the fallback",
