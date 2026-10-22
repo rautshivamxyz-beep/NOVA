@@ -217,7 +217,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.36: version bumped for the adaptive-test pass", bg.count("versionName '9.33.36'") == 1 and bg.count("versionCode 204") == 1)
+check("v9.33.37: version bumped for the measured-speed pass", bg.count("versionName '9.33.37'") == 1 and bg.count("versionCode 205") == 1)
+
+# ---- v9.33.37: a measured speed test (real tokens, not chars/4) ----
+check("v9.33.37: the speed test measures a real generation",
+      load("SpeedTest.kt").count("NovaEngineAdapter.stream(PROMPT, TOKENS)") == 1 and
+      load("SpeedTest.kt").count("tokensPerSecond") >= 1)
+check("v9.33.37: a benchmark never costs the chat its memory",
+      load("SpeedTest.kt").count("NovaEngine.contextResetExternally = true") == 1 and
+      load("NovaEngine.kt").count("var contextResetExternally") == 1)
+check("v9.33.37: the Models screen offers the measurement",
+      load("ModelsActivity.kt").count("SpeedTest.run(") == 1)
+check("v9.33.37: the speed-test strings have a Hindi translation",
+      open(os.path.join(ROOT, "android/app/src/main/res/values-hi/strings.xml")).read().count('name="speed_test">') == 1)
 
 # ---- v9.33.36: unit tests for the ADAPTIVE planner ----
 akt = load_test("plan/AdaptiveKernelTest.kt")
@@ -275,7 +287,7 @@ check("v9.33.31: the LFM profile uses the vendor's sampling numbers",
       load("ncie/android/NcieTune.kt").count('"temperature" to 0.2') == 1 and
       load("ncie/android/NcieTune.kt").count('"top_k" to 50.0') == 1)
 check("v9.33.31: the engine keeps the conversation (no per-turn reset)",
-      ma.count("if (newBubble && needsContextCarry)") == 1)
+      ma.count("if (newBubble && (needsContextCarry || NovaEngine.contextResetExternally))") == 1)
 check("v9.33.31: history is replayed only when the engine lacks it",
       nc.count("needsContextCarry && currentChat.messages.isNotEmpty() -> {") == 1 and
       nc.count("needsContextCarry && compactSummary != null") == 1)
