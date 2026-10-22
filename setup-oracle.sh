@@ -123,7 +123,7 @@ fi
 KEY="$(cat "$KEYFILE")"
 
 # ---- 5. start it now, and again at every boot ----------------------
-say "Setting it up to start at boot..."
+say "Setting it up to start at boot (using $(nproc) threads)..."
 sudo tee /etc/systemd/system/nova-server.service >/dev/null <<UNIT
 [Unit]
 Description=NOVA model server
@@ -131,7 +131,7 @@ After=network-online.target
 
 [Service]
 User=$USER
-ExecStart=$DIR/llama-server -m $MODEL_FILE --host 0.0.0.0 --port $PORT -c 8192 --api-key $KEY
+ExecStart=$DIR/llama-server -m $MODEL_FILE --host 0.0.0.0 --port $PORT -c 8192 -t $(nproc) --api-key $KEY
 Restart=always
 RestartSec=5
 
