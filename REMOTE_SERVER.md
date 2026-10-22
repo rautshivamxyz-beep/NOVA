@@ -99,12 +99,17 @@ on the phone instead. It never guesses in that direction.
 Yes — but not free *and* always-on *and* fast. Pick two, and know which two
 you picked.
 
-**Always-on and free: Oracle.** The free Ampere machine has 12 GB of RAM, and
-an 8B at Q4 needs about 5 GB, so it fits. Get it with:
+**Always-on and free: Oracle.** The free Ampere machine has 12 GB of RAM, and a
+7B at Q4 needs about 5 GB, so it fits. Get it with:
 
 ```
-MODEL=8b bash setup-oracle.sh
+MODEL=7b bash setup-oracle.sh
 ```
+
+To be exact about the name: that option used to be called `8b`, and it never was
+one. It downloads **Qwen 2.5 7B**. The true 8B models are mostly gated behind a
+Hugging Face login that a script cannot pass, so a 7B is what is actually
+reachable — and the difference is smaller than the label suggested.
 
 Be honest with yourself about the speed first: **a free Oracle machine has no
 GPU.** Two CPU cores running an 8B gives you a few tokens a second — a short
@@ -130,9 +135,24 @@ to it, which is fragile and against the spirit of those terms.
 
 ### Running it on Oracle Cloud (free)
 
-Your laptop is the easy option. If you want a server that is up even when your
-laptop is closed, Oracle's Always Free tier gives you one — free, with no time
-limit.
+Oracle's Always Free tier gives you a server that is up on its own — free, with
+no time limit.
+
+> **Read this before you expose anything.** A password does not encrypt a
+> connection. NOVA sends the password as a bearer token and the question as the
+> body, so over plain `http` across the open internet both are readable by
+> anything on the path, and the token can simply be replayed.
+>
+> **So NOVA refuses it.** Plain `http` to a public address is rejected and the
+> answer is produced on the phone instead. Plain `http` to your *own* network —
+> your Wi-Fi, or **Tailscale** — is allowed, because there it is your cable.
+>
+> The practical answer: **use Tailscale.** Install it on the server and the
+> phone, sign both into the same account, and point NOVA at the Tailscale
+> address (it starts with `100.`, which NOVA treats as your own network). It is
+> free for personal use and only your devices can reach it. If you would rather
+> stay on the public internet, put the server behind an HTTPS reverse proxy and
+> use the `https://` address.
 
 **You do three things. The script does everything else.**
 
