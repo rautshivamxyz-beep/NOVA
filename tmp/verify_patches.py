@@ -217,7 +217,17 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.47: version bumped for the cloud-first pass", bg.count("versionName '9.33.47'") == 1 and bg.count("versionCode 215") == 1)
+check("v9.33.48: version bumped for the 8B pass", bg.count("versionName '9.33.48'") == 1 and bg.count("versionCode 216") == 1)
+
+# ---- v9.33.48: an 8B model, honestly offered ----
+check("v9.33.48: the script can actually run an 8B",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MODEL=8b") >= 1 and
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("Qwen2.5-7B-Instruct-Q4_K_M.gguf") == 1)
+check("v9.33.48: it refuses a model the machine cannot hold",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MemTotal") == 1 and
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("NEED_MB") >= 3)
+check("v9.33.48: the guide says free+always-on+fast is pick-two",
+      open(os.path.join(ROOT, "REMOTE_SERVER.md")).read().count("30 GPU-hours a week") == 1)
 
 # ---- v9.33.47: the cloud path is not a second-class path ----
 check("v9.33.47: the find button does not mislead a cloud user",
