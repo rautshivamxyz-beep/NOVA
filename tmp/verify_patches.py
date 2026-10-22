@@ -219,15 +219,26 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.53: version bumped for the recital pass", bg.count("versionName '9.33.53'") == 1 and bg.count("versionCode 221") == 1)
+check("v9.33.54: version bumped for the say-it-as-a-do pass", bg.count("versionName '9.33.54'") == 1 and bg.count("versionCode 222") == 1)
+
+# ---- v9.33.54: what makes it dumber ----
+check("v9.33.54: the rules say what to do, not what not to do",
+      load("ncie/android/NcieChat.kt").count("beginning with the answer itself") == 1 and
+      load("ncie/android/NcieChat.kt").count("Put the code first and keep any note to one line") == 1 and
+      load("ncie/android/NcieChat.kt").count("NEVER RECITE") == 0)
+check("v9.33.54: the background is labelled for use, not for recital",
+      load("ncie/android/NcieChat.kt").count("Background about the user - use it to inform your answer") == 1)
+check("v9.33.54: the exam line reaches every model, lean profile included",
+      load("ncie/android/NcieChat.kt").count("if (!tiny) {") == 0)
 
 # ---- v9.33.53: the capability question, and the recital ----
 check("v9.33.53: the capability question is caught in the wordings people use",
       ma.count("what things you can do") == 1 and
       ma.count("|^what") == 2)
-check("v9.33.53: NOVA is told not to recite the background back",
-      load("ncie/android/NcieChat.kt").count("NEVER RECITE") == 1 and
-      load("ncie/android/NcieChat.kt").count("Background facts are for you to use") == 1)
+# v9.33.54 restated this rule in the positive - the marker follows it.
+check("v9.33.53: NOVA is told what to do with the background",
+      load("ncie/android/NcieChat.kt").count("USE THE BACKGROUND") == 1 and
+      load("ncie/android/NcieChat.kt").count("Use them silently") == 1)
 
 # ---- v9.33.52: the "tiny" decision is one rule, and it is visible ----
 check("v9.33.52: one definition of the lean profile",
