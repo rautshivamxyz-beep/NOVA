@@ -217,7 +217,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.44: version bumped for the away-from-home pass", bg.count("versionName '9.33.44'") == 1 and bg.count("versionCode 212") == 1)
+check("v9.33.45: version bumped for the nothing-private pass", bg.count("versionName '9.33.45'") == 1 and bg.count("versionCode 213") == 1)
+
+# ---- v9.33.45: only the question leaves the phone ----
+check("v9.33.45: the private blocks are stripped, and the set is pinned",
+      load("ncie/PrivatePrompt.kt").count("fun strip(prompt: String): String?") == 1 and
+      load("ncie/PrivatePrompt.kt").count("(The user shared a document titled") == 2 and
+      load("ncie/PrivatePrompt.kt").count("if (out.contains(m)) return null") == 2)
+check("v9.33.45: private-only is ON by default",
+      load("Settings.kt").count("getBoolean(KEY_REMOTE_PRIVATE, true)") == 1)
+check("v9.33.45: an unclean prompt is never sent",
+      load("RemoteEngine.kt").count("PrivatePrompt.strip(prompt) ?: throw") == 1)
+check("v9.33.45: the guarantee is unit-tested",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/PrivatePromptTest.kt")).read().count("@Test") >= 8)
 
 # ---- v9.33.44: a server reachable from outside must have a password ----
 check("v9.33.44: the password is sent on the call AND on the search",
