@@ -351,7 +351,6 @@ object NovaEngine {
 
     fun send(message: String, predictLength: Int): Flow<String> {
         val engine = requireNotNull(engineRef) { "No model loaded" }
-        contextDirty = true   // the conversation context now holds this prompt
         // v9.16.7 "Smaller-model quality": a 230M-class model fills a long
         // budget with filler. Cap its reply so answers stay tight.
         val budget = if (org.nova.ncie.android.NcieChat.tinyModelFile(
@@ -363,6 +362,26 @@ object NovaEngine {
         // and the turn is lost. Wait for the engine to leave the processing
         // states before issuing the prompt, so a retry or continuation can
         // never be dropped.
+        // v9.33.42 "Borrowed brain": when a bigger model is reachable on the
+        // user's own network, prefer it - and fall back to this phone the moment
+        // it is not. A laptop that is asleep, or off the Wi-Fi, must never turn
+        // into a chat that does not answer.
+        if (RemoteEngine.enabled()) {
+            return flow {
+                var got = false
+                try {
+                    RemoteEngine.stream(message, budget).collect { got = true; emit(it) }
+                } catch (e: Exception) {
+                    NovaLog.quiet("NovaEngine", e)
+                    if (!got) {
+                        contextDirty = true
+                        awaitEngineReady(engine)
+                        emitAll(engine.sendUserPrompt(message, budget))
+                    }
+                }
+            }
+        }
+        contextDirty = true   // the conversation context now holds this prompt
         return flow {
             awaitEngineReady(engine)
             emitAll(engine.sendUserPrompt(message, budget))

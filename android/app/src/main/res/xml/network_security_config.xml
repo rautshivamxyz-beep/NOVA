@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- v9.15.0 "Private Fetch": no cleartext anywhere. Every online lookup
-     must be https, so a query is never sent in the clear. -->
+     must be https, so a query is never sent in the clear.
+
+     v9.33.42 "Borrowed brain": ONE exception, and it is a real trade. A model
+     server on the user's own Wi-Fi speaks plain http, so a LAN address cannot
+     be reached at all while this is false. Android's config cannot scope
+     cleartext to private address ranges - it takes hostnames - so the choice
+     is either this, or the feature cannot exist.
+
+     What it costs: the app itself would now be ALLOWED to make a cleartext
+     call. It does not - the only cleartext connection in the codebase is the
+     one to the address the user typed on their own network (RemoteEngine).
+     Every other lookup still goes through the https-only helper in
+     OnlineFetch. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

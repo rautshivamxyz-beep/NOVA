@@ -124,6 +124,20 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_LAST_SPEED, "") ?: ""
         set(value) = prefs.edit().putString(KEY_LAST_SPEED, value).apply()
 
+    /** v9.33.42 "Borrowed brain": run the model on a machine that can afford
+     *  a bigger one - a laptop on the same Wi-Fi, or another phone. */
+    var remoteEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REMOTE_ON, false)
+        set(value) = prefs.edit().putBoolean(KEY_REMOTE_ON, value).apply()
+
+    var remoteUrl: String
+        get() = prefs.getString(KEY_REMOTE_URL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_REMOTE_URL, value).apply()
+
+    var remoteModel: String
+        get() = prefs.getString(KEY_REMOTE_MODEL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_REMOTE_MODEL, value).apply()
+
     var adaptiveContext: Boolean
         get() = prefs.getBoolean(KEY_ADAPTIVE_CTX, true)
         set(value) = prefs.edit().putBoolean(KEY_ADAPTIVE_CTX, value).apply()
@@ -253,6 +267,9 @@ class Settings(context: Context) {
         // v9.21.0 "Easy"
         private const val KEY_SETUP_DONE = "setup_done"
         private const val KEY_LAST_SPEED = "last_speed_report"
+        private const val KEY_REMOTE_ON = "remote_on"
+        private const val KEY_REMOTE_URL = "remote_url"
+        private const val KEY_REMOTE_MODEL = "remote_model"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small

@@ -217,7 +217,20 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.41: version bumped for the self-correction pass", bg.count("versionName '9.33.41'") == 1 and bg.count("versionCode 209") == 1)
+check("v9.33.42: version bumped for the borrowed-brain pass", bg.count("versionName '9.33.42'") == 1 and bg.count("versionCode 210") == 1)
+
+# ---- v9.33.42: a bigger model on the user's own network ----
+check("v9.33.42: the bigger machine is preferred, this phone is the fallback",
+      load("NovaEngine.kt").count("if (RemoteEngine.enabled())") == 1 and
+      load("NovaEngine.kt").count("if (!got)") == 1)
+check("v9.33.42: the client speaks the llama-server protocol",
+      load("RemoteEngine.kt").count("/v1/chat/completions") >= 2 and
+      load("RemoteEngine.kt").count("text/event-stream") == 1)
+check("v9.33.42: the cleartext exception is explained where it is made",
+      open(os.path.join(ROOT, "android/app/src/main/res/xml/network_security_config.xml"))
+        .read().count("Borrowed brain") == 1)
+check("v9.33.42: the laptop setup is written down",
+      os.path.exists(os.path.join(ROOT, "REMOTE_SERVER.md")))
 
 # ---- v9.33.41: the app corrects itself on a regenerate ----
 check("v9.33.41: a rejected answer leaves memory, fact and cache",
@@ -764,8 +777,17 @@ check("v9.16.0: the proxy toggle is in settings (SettingsActivity)",
 check("v9.16.0: online fetch goes through the proxy helper (OnlineFetch)",
       of_.count("NovaNet") == 2 and of_.count('startsWith("https")') == 1)
 _vamf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
-check("v9.16.0: cleartext is off in the manifest (AndroidManifest.xml)",
-      _vamf.count('android:usesCleartextTraffic="false"') == 1)
+# v9.33.42 "Borrowed brain": this guarantee was NARROWED, on purpose, and it
+# is worth being explicit about. A model server on the user's own Wi-Fi speaks
+# plain http, and Android's network security config cannot scope cleartext to
+# private address ranges (it takes hostnames), so the feature cannot exist
+# while this is false. What still holds: the app's OWN lookups go through the
+# https-only helper in OnlineFetch, and the only cleartext connection in the
+# codebase is the one to the address the user typed on their own network.
+check("v9.33.42: cleartext is permitted, for the user's own LAN model server",
+      _vamf.count('android:usesCleartextTraffic="true"') == 1 and
+      open(os.path.join(ROOT, "android/app/src/main/res/xml/network_security_config.xml"))
+        .read().count('cleartextTrafficPermitted="true"') == 1)
 # ---- v9.14.0 "Sharp Memory": learn each context source's value; skip the dead ones ----
 nval = load("ncie/android/NcieValue.kt")
 check("v9.14.0: the adaptive context value tracker ships (NcieValue)",
@@ -810,10 +832,12 @@ nr = load("ncie/android/NcieRoutines.kt")
 # (variable names tun/nev/st: nt stays NovaTheme below, ne stays NcieExam)
 tun = load("ncie/android/NcieTune.kt")
 nev = load("NovaEngine.kt")
+# v9.33.42: there are two paths now - the remote machine, and the fallback to
+# this phone - and BOTH await the engine before firing. The rule is unchanged.
 check("v9.13.9: a prompt is never fired into a busy engine (NovaEngine)",
       nev.count("private suspend fun awaitEngineReady(") == 1 and
-      nev.count("awaitEngineReady(engine)") == 1 and
-      nev.count("emitAll(engine.sendUserPrompt(") == 1)
+      nev.count("awaitEngineReady(engine)") == 2 and
+      nev.count("emitAll(engine.sendUserPrompt(") == 2)
 check("v9.13.7: draft matcher covers Qwen and LFM families (NovaEngine)",
       nev.count('"qwen" in target') == 1 and nev.count('"lfm" in target') == 1)
 # ---- v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking ----
