@@ -154,6 +154,26 @@ class SettingsActivity : Activity() {
         answers.addView(lengthRow())
         col.addView(answers)
 
+        // v9.33.42 "Borrowed brain"
+        col.addView(NovaUi.sectionLabel(this, getString(R.string.section_remote)))
+        val remote = NovaUi.card(this)
+        remote.addView(NovaUi.switchRow(this, getString(R.string.remote_enable), settings.remoteEnabled) {
+            settings.remoteEnabled = it
+            RemoteEngine.configure(this@SettingsActivity)
+            toast(if (it) getString(R.string.remote_on) else getString(R.string.remote_off))
+        })
+        remote.addView(NovaUi.small(this, getString(R.string.remote_hint))
+            .apply { setPadding(0, 0, 0, dp(8)) })
+        remote.addView(field(settings.remoteUrl, getString(R.string.remote_url_hint)) { v ->
+            settings.remoteUrl = v.trim()
+            RemoteEngine.configure(this@SettingsActivity)
+        })
+        remote.addView(field(settings.remoteModel, getString(R.string.remote_model_hint)) { v ->
+            settings.remoteModel = v.trim()
+            RemoteEngine.configure(this@SettingsActivity)
+        })
+        col.addView(remote)
+
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))
         val privacy = NovaUi.card(this)
         privacy.addView(NovaUi.small(this, getString(R.string.proxy_explainer)).apply { setPadding(0, 0, 0, dp(8)) })
