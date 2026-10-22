@@ -149,6 +149,50 @@ object NovaHealth {
             "\nlite mode: " + lite
     }
 
+    /**
+     * v9.33.39 "Improve NOVA": a report the user can send to the developer so
+     * NOVA gets better on THEIR kind of phone.
+     *
+     * It carries NO personal content - no message text, no chats, no contacts,
+     * no phone numbers, nothing read from notifications. Only what NOVA knows
+     * about its own state: the device, the model, which features work and which
+     * are degraded. The user sees the whole thing before it goes anywhere, and
+     * sends it only if they choose to.
+     *
+     * This is the safe half of "learn from every install": a chat upload would
+     * ship the user's friends' messages and their bank's SMS, which nobody
+     * consented to. What actually tells you where NOVA is weak is this - the
+     * shape of the device and the list of features that are silently failing.
+     */
+    fun diagnostics(ctx: Context): String {
+        val sb = StringBuilder()
+        sb.append("NOVA diagnostics\n")
+        sb.append("No messages, no chats, no personal data - only NOVA's own state.\n\n")
+        val ver = try {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "?"
+        } catch (e: Exception) { "?" }
+        sb.append("app: ").append(ver).append('\n')
+        sb.append("android: ").append(android.os.Build.VERSION.RELEASE)
+            .append(" (sdk ").append(android.os.Build.VERSION.SDK_INT).append(")\n")
+        sb.append("device: ").append(DeviceCapabilities.cpuDescription()).append('\n')
+        sb.append(String.format(java.util.Locale.US, "ram: %.1f GB total, %.1f GB free\n",
+            DeviceCapabilities.totalRamGb(ctx), DeviceCapabilities.availableRamGb(ctx)))
+        sb.append("lite mode: ").append(if (DeviceCapabilities.isLowRam(ctx)) "on" else "off").append('\n')
+        val label = try { NovaEngine.activeModelLabel } catch (e: Exception) { "" }
+        sb.append("model: ").append(label.ifBlank { "none loaded" }).append('\n')
+        val fileName = try {
+            val p = Settings(ctx).lastModelPath
+            if (p.isNullOrBlank()) "none" else File(p).name
+        } catch (e: Exception) { "unknown" }
+        sb.append("model file: ").append(fileName).append('\n')
+        sb.append('\n').append("features:\n")
+        for (c in checks(ctx)) {
+            sb.append(if (c.ok) "  ok   " else "  BAD  ").append(c.label).append('\n')
+        }
+        sb.append('\n').append(capabilities(ctx)).append('\n')
+        return sb.toString()
+    }
+
     fun requestBattery(ctx: Context) {
         try {
             val i = Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
