@@ -2222,7 +2222,18 @@ class MainActivity : Activity() {
         // satisfied with this answer; the question is logged (capped) so
         // future answers to it try harder. File work off the main thread.
         val expQ = lastUser.text
-        scope.launch(Dispatchers.IO) { NcieEngines.logExperience(this@MainActivity, expQ) }
+        scope.launch(Dispatchers.IO) {
+            NcieEngines.logExperience(this@MainActivity, expQ)
+            // v9.33.41 "Self-correction": the answer the user just rejected was
+            // ALREADY recorded as a graded fact and cached BEFORE they saw it.
+            // So the loop was rewarding the bad answer - and a later ask could
+            // even be served the very reply they refused, straight out of the
+            // predictive cache. Regenerate is the clearest quality signal NOVA
+            // gets without asking the user for anything: drop the rejected
+            // answer from memory and disk, and let the fresh one be learned on
+            // its own merit. No extra tokens, no extra time.
+            NcieLearn.memoryForget(expQ)
+        }
         // v5.4.3 fix: the old answer is still in the engine's context. The old
         // code just re-sent the question, leaving "Q, A, Q" (and a growing
         // pile of duplicates after every regenerate tap) in the context.
