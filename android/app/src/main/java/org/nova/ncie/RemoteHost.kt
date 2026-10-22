@@ -50,8 +50,10 @@ object RemoteHost {
         val h = host.lowercase().trim()
         if (h.isEmpty()) return false
         if (h == "localhost" || h == "::1" || h.endsWith(".local") || h.endsWith(".internal")) return true
-        // a name with no dot cannot resolve on the public internet
-        if (!h.contains('.')) return true
+        // A name with no dot cannot resolve on the public internet - but it has
+        // to at least LOOK like a hostname. "not a host" is not one, and treating
+        // it as private would be guessing in the permissive direction.
+        if (!h.contains('.')) return h.all { it.isLetterOrDigit() || it == '-' || it == '_' }
         val parts = h.split('.')
         if (parts.size != 4) return false
         val n = parts.map { it.toIntOrNull() ?: return false }
