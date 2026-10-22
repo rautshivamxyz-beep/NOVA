@@ -100,8 +100,9 @@ android {
         // and PLAN gates) is pinned by real unit tests, so a silent re-route
         // or a starved context budget is caught in CI instead of in the app.
         // v9.33.35: the VERIFY gate joins them (MathVerifier + answer quality).
-        versionCode 203
-        versionName '9.33.35'
+        // v9.33.36: the ADAPTIVE planner joins them (mastery + struggle rules).
+        versionCode 204
+        versionName '9.33.36'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

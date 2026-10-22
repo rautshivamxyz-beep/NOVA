@@ -217,7 +217,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.35: version bumped for the verify-test pass", bg.count("versionName '9.33.35'") == 1 and bg.count("versionCode 203") == 1)
+check("v9.33.36: version bumped for the adaptive-test pass", bg.count("versionName '9.33.36'") == 1 and bg.count("versionCode 204") == 1)
+
+# ---- v9.33.36: unit tests for the ADAPTIVE planner ----
+akt = load_test("plan/AdaptiveKernelTest.kt")
+check("v9.33.36: the ADAPTIVE planner is pinned by a unit test",
+      akt.count("class AdaptiveKernelTest") == 1 and akt.count("AdaptiveKernel(") >= 1)
+check("v9.33.36: both adaptive rules are exercised",
+      akt.count("fun aHalfLearnedTopicGetsOneMoreTier") == 1 and
+      akt.count("fun aStrugglingTopicGetsOneMoreTier") == 1 and
+      akt.count("fun theStruggleMatchIsWholeWordNotSubstring") == 1)
 
 # ---- v9.33.35: unit tests for the VERIFY gate ----
 vf = load_test("verify/VerifierTest.kt")
