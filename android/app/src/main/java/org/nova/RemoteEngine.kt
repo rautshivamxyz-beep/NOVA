@@ -42,6 +42,70 @@ object RemoteEngine {
     /** The address as the user typed it, for messages and diagnostics. */
     fun address(): String = cfg.getOrNull(0) ?: ""
 
+    private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /**
+     * v9.33.43 "Find my computer": look for the model server on the same Wi-Fi
+     * so nobody has to read an IP address off a laptop and type it into a
+     * phone. That one step was the whole difficulty of this feature.
+     *
+     * Probes `/v1/models` - the standard OpenAI endpoint every llama.cpp
+     * server answers - across the phone's own /24, 48 addresses at a time.
+     * A tap that takes a few seconds beats a number that must be right.
+     */
+    fun find(onDone: (List<String>) -> Unit) {
+        io.execute {
+            val found = try { discover() } catch (e: Exception) {
+                NovaLog.quiet("RemoteEngine", e); emptyList()
+            }
+            try { onDone(found) } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
+        }
+    }
+
+    /** Every address on this Wi-Fi that answers like a model server. */
+    fun discover(port: Int = 8080, timeoutMs: Int = 350): List<String> {
+        val me = localIpv4() ?: return emptyList()
+        val base = me.substringBeforeLast('.')
+        val found = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(48)
+        try {
+            for (i in 1..254) {
+                val host = "$base.$i"
+                pool.execute { if (probe(host, port, timeoutMs)) found.add("http://$host:$port") }
+            }
+            pool.shutdown()
+            pool.awaitTermination(timeoutMs.toLong() * 8 + 6000,
+                java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            NovaLog.quiet("RemoteEngine", e)
+        } finally {
+            try { pool.shutdownNow() } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
+        }
+        return found.sorted()
+    }
+
+    /** This phone's own address on the local network - the subnet to scan. */
+    private fun localIpv4(): String? = try {
+        java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { java.util.Collections.list(it.inetAddresses) }
+            .filterIsInstance<java.net.Inet4Address>()
+            .firstOrNull { it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e); null }
+
+    /** Does this address answer like a model server? Never throws. */
+    private fun probe(host: String, port: Int, timeoutMs: Int): Boolean = try {
+        val c = (URL("http://$host:$port/v1/models").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+        }
+        try { c.responseCode == 200 } finally {
+            try { c.disconnect() } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
+        }
+    } catch (e: Exception) { false }
+
     private fun endpoint(): String {
         val base = (cfg.getOrNull(0) ?: "").trim().trimEnd('/')
         return if (base.endsWith("/v1/chat/completions")) base else "$base/v1/chat/completions"
