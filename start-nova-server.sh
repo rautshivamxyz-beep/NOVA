@@ -48,6 +48,13 @@ if [ -z "$MODEL" ]; then
   exit 1
 fi
 
+# Optional password: if a file called password.txt sits next to this
+# script, its contents become the server's password. Only needed if you
+# reach the server from OUTSIDE your home Wi-Fi.
+KEY=""
+[ -f ./password.txt ] && KEY="$(head -n1 ./password.txt | tr -d '\r\n')"
+[ -n "$KEY" ] && echo "  Password: on (from password.txt)"
+
 echo "  Server : $SERVER"
 echo "  Model  : $MODEL"
 echo
@@ -55,4 +62,8 @@ echo "  Starting. Your phone can now find this laptop."
 echo "  Leave this terminal OPEN while you use NOVA."
 echo
 
-"$SERVER" -m "$MODEL" --host 0.0.0.0 --port "$PORT" -c 8192
+if [ -n "$KEY" ]; then
+  "$SERVER" -m "$MODEL" --host 0.0.0.0 --port "$PORT" -c 8192 --api-key "$KEY"
+else
+  "$SERVER" -m "$MODEL" --host 0.0.0.0 --port "$PORT" -c 8192
+fi
