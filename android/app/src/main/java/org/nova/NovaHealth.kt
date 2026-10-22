@@ -185,6 +185,12 @@ object NovaHealth {
             if (p.isNullOrBlank()) "none" else File(p).name
         } catch (e: Exception) { "unknown" }
         sb.append("model file: ").append(fileName).append('\n')
+        // v9.33.40: the measured speed, and the one content-free number the
+        // notification features already keep. A count is not a message.
+        val speed = try { Settings(ctx).lastSpeedReport } catch (e: Exception) { "" }
+        sb.append("measured speed: ").append(speed.ifBlank { "not measured yet" }).append('\n')
+        val replies = try { NovaListener.autoRepliesToday(ctx) } catch (e: Exception) { 0 }
+        sb.append("auto-replies sent today: ").append(replies).append('\n')
         sb.append('\n').append("features:\n")
         for (c in checks(ctx)) {
             sb.append(if (c.ok) "  ok   " else "  BAD  ").append(c.label).append('\n')

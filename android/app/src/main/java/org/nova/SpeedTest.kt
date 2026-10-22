@@ -68,6 +68,17 @@ object SpeedTest {
         } catch (e: Exception) { NovaLog.quiet("SpeedTest", e) }
         val r = Result(firstTokenMs = first, tokens = tokens,
             decodeMs = if (first == 0L) 0L else last - first)
+        // v9.33.40: keep the number. A device + model + tok/s line is exactly
+        // what tells the developer which model suits which phone - it is
+        // content-free, so the diagnostics report can carry it.
+        if (r.usable) {
+            try {
+                Settings(ctx.applicationContext).lastSpeedReport =
+                    String.format(java.util.Locale.US,
+                        "%.1f tok/s (%d tokens, %.1fs to first token)",
+                        r.tokensPerSecond, r.tokens, r.firstTokenMs / 1000.0)
+            } catch (e: Exception) { NovaLog.quiet("SpeedTest", e) }
+        }
         return if (r.tokens == 0) null else r
     }
 }

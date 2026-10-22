@@ -117,6 +117,13 @@ class Settings(context: Context) {
      *  many times and never contributed is skipped, so the prompt shrinks
      *  (faster prefill) with no loss to answers. Default ON; off means
      *  every source is always injected, exactly as before. */
+    /** v9.33.40 "Real numbers": the last measured speed. Device + model +
+     *  tok/s is the data that improves the model catalogue for EVERY phone -
+     *  and it contains nothing personal, which is why it can travel. */
+    var lastSpeedReport: String
+        get() = prefs.getString(KEY_LAST_SPEED, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_SPEED, value).apply()
+
     var adaptiveContext: Boolean
         get() = prefs.getBoolean(KEY_ADAPTIVE_CTX, true)
         set(value) = prefs.edit().putBoolean(KEY_ADAPTIVE_CTX, value).apply()
@@ -245,6 +252,7 @@ class Settings(context: Context) {
         private const val KEY_QUIET_END = "quiet_end"
         // v9.21.0 "Easy"
         private const val KEY_SETUP_DONE = "setup_done"
+        private const val KEY_LAST_SPEED = "last_speed_report"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small
