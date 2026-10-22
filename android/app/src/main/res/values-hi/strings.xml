@@ -240,4 +240,5 @@
     <string name="speed_test_failed">नाप नहीं सका — मॉडल ने कुछ भी नहीं बनाया।</string>
     <string name="speed_test_model">मॉडल: %1$s</string>
     <string name="speed_test_result">पहला टोकन आने में: %1$s सेकंड\nडिकोड: %3$s सेकंड में %2$d टोकन\nयानी %4$s टोकन प्रति सेकंड।</string>
+    <string name="share_diagnostics">डायग्नोस्टिक्स भेजें</string>
 </resources>

@@ -41,6 +41,11 @@ class HealthActivity : Activity() {
             NovaHealth.armAll(this)
             render()
         })
+        // v9.33.39 "Improve NOVA": send a content-free report so NOVA gets
+        // better on this kind of phone. The user sees the whole report first.
+        col.addView(NovaUi.ghostButton(this, getString(R.string.share_diagnostics)) {
+            shareDiagnostics()
+        })
         render()
         scroll.addView(col, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -49,8 +54,8 @@ class HealthActivity : Activity() {
 
     /** Rebuild the check rows (called after a fix, and on resume). */
     private fun render() {
-        // drop everything after the header block (header, hint, button)
-        while (col.childCount > 3) col.removeViewAt(col.childCount - 1)
+        // drop everything after the header block (header, hint, two buttons)
+        while (col.childCount > 4) col.removeViewAt(col.childCount - 1)
 
         val checks = NovaHealth.checks(this)
         val bad = checks.count { !it.ok }
@@ -81,6 +86,21 @@ class HealthActivity : Activity() {
             }
             col.addView(card)
         }
+    }
+
+    /** v9.33.39: hand the report to any app the user chooses - mail, chat,
+     *  GitHub. Nothing is sent by NOVA itself. */
+    private fun shareDiagnostics() {
+        try {
+            val i = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, getString(R.string.share_diagnostics))
+                putExtra(android.content.Intent.EXTRA_TEXT,
+                    NovaHealth.diagnostics(this@HealthActivity))
+            }
+            startActivity(android.content.Intent.createChooser(i,
+                getString(R.string.share_diagnostics)))
+        } catch (e: Exception) { NovaLog.quiet("HealthActivity", e) }
     }
 
     override fun onResume() {

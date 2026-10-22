@@ -242,4 +242,5 @@ from: %1$s</string>
     <string name="speed_test_failed">Could not measure — the model did not generate anything.</string>
     <string name="speed_test_model">Model: %1$s</string>
     <string name="speed_test_result">Time to first token: %1$s s\nDecode: %2$d tokens in %3$s s\nThat is %4$s tokens per second.</string>
+    <string name="share_diagnostics">Share diagnostics</string>
 </resources>
