@@ -34,8 +34,15 @@ fun MainActivity.answerProfile(text: String): Boolean {
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
     NcieLearn.memorySnapshot { facts, _ ->
         val told = settings.memory.trim().lines().map { it.trim() }.filter { it.isNotBlank() }
+        // v9.33.38 "Earned, not dumped": this listed EVERY one-off answer the
+        // quality gate let through, so "who am i" answered with a trivia list -
+        // jokes, and half-sentences cut mid-word ("It can", "maintaining a b").
+        // A fact belongs under "what NOVA knows about you" only once it has
+        // earned confidence: confirmed more than once, or scored above the
+        // neutral 0.5 floor. Truncation now happens at a word boundary too.
+        val graded = facts.filter { it.interactions >= 2 || it.score >= 0.6 }
         val sb = StringBuilder("(from NOVA's memory - verified facts only, no guessing)\n\n")
-        if (told.isEmpty() && facts.isEmpty()) {
+        if (told.isEmpty() && graded.isEmpty()) {
             sb.append("Honestly? Nothing yet. I only keep what you ask me to " +
                 "remember and the answers that passed my quality gate.\n\n" +
                 "Tell me something with 'remember that ...' and it will stick.")
@@ -44,12 +51,12 @@ fun MainActivity.answerProfile(text: String): Boolean {
                 sb.append("What you've told me:\n")
                 for (l in told.take(10)) sb.append("- ").append(l).append('\n')
             }
-            if (facts.isNotEmpty()) {
+            if (graded.isNotEmpty()) {
                 if (told.isNotEmpty()) sb.append('\n')
-                sb.append("From our study chats (answers that passed the quality gate):\n")
-                for (f in facts.take(6)) {
-                    sb.append("- ").append(f.question.trim().take(90))
-                        .append(" -> ").append(f.answer.trim().take(110)).append('\n')
+                sb.append("From our study chats (answers confirmed more than once):\n")
+                for (f in graded.take(6)) {
+                    sb.append("- ").append(clip(f.question.trim(), 90))
+                        .append(" -> ").append(clip(f.answer.trim(), 110)).append('\n')
                 }
             }
             sb.append("\nNothing else. If it is not on this list, I do not know it.")
@@ -61,4 +68,12 @@ fun MainActivity.answerProfile(text: String): Boolean {
         }
     }
     return true
+}
+
+/** v9.33.38: cut at a word boundary, so a listed fact never ends mid-word. */
+private fun clip(s: String, max: Int): String {
+    if (s.length <= max) return s
+    val cut = s.lastIndexOf(' ', max)
+    val head = if (cut > max / 2) s.substring(0, cut) else s.substring(0, max)
+    return head.trimEnd() + "…"
 }
