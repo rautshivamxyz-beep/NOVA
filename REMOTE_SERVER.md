@@ -5,6 +5,10 @@ laptop instead of the phone. Better answers, and the phone stays cool.
 
 **Two steps. That's all.**
 
+> **Not using a laptop at all?** Then skip straight to
+> **[Running it on Oracle Cloud](#running-it-on-oracle-cloud-free)** below — it
+> is a complete path on its own, and nothing in it needs a laptop.
+
 ---
 
 ## Step 1 — on the laptop
