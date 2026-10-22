@@ -62,6 +62,28 @@ class SettingsActivity : Activity() {
         return f
     }
 
+    /**
+     * v9.33.43 "Find my computer": look for the model server on this Wi-Fi and
+     * fill the address in. The whole point is that nobody has to read an IP
+     * address off a laptop and type it into a phone.
+     */
+    private fun findComputer() {
+        toast(getString(R.string.remote_searching))
+        RemoteEngine.find { found ->
+            runOnUiThread {
+                if (found.isEmpty()) {
+                    toast(getString(R.string.remote_none))
+                } else {
+                    settings.remoteUrl = found.first()
+                    settings.remoteEnabled = true
+                    RemoteEngine.configure(this@SettingsActivity)
+                    toast(getString(R.string.remote_found, found.first()))
+                    recreate()
+                }
+            }
+        }
+    }
+
     private fun group(col: LinearLayout, label: String, vararg rows: View) {
         col.addView(NovaUi.sectionLabel(this, label))
         val c = NovaUi.card(this)
@@ -154,16 +176,22 @@ class SettingsActivity : Activity() {
         answers.addView(lengthRow())
         col.addView(answers)
 
-        // v9.33.42 "Borrowed brain"
+        // v9.33.42 "Borrowed brain", v9.33.43 "Find my computer"
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_remote)))
         val remote = NovaUi.card(this)
         remote.addView(NovaUi.switchRow(this, getString(R.string.remote_enable), settings.remoteEnabled) {
             settings.remoteEnabled = it
             RemoteEngine.configure(this@SettingsActivity)
             toast(if (it) getString(R.string.remote_on) else getString(R.string.remote_off))
+            // v9.33.43: turning it on with nothing filled in must not leave the
+            // user staring at an empty box - go and find the computer.
+            if (it && settings.remoteUrl.isBlank()) findComputer()
         })
         remote.addView(NovaUi.small(this, getString(R.string.remote_hint))
             .apply { setPadding(0, 0, 0, dp(8)) })
+        remote.addView(NovaUi.primaryButton(this, getString(R.string.remote_find)) { findComputer() })
+        remote.addView(NovaUi.small(this, getString(R.string.remote_find_hint))
+            .apply { setPadding(dp(4), dp(4), dp(4), dp(8)) })
         remote.addView(field(settings.remoteUrl, getString(R.string.remote_url_hint)) { v ->
             settings.remoteUrl = v.trim()
             RemoteEngine.configure(this@SettingsActivity)
