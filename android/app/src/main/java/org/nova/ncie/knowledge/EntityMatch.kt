@@ -57,6 +57,30 @@ object EntityMatch {
     }
 
     /**
+     * v9.33.38: the SHAPE of question a source lookup is for - a short
+     * question naming one thing ("who is X", "what is X").
+     *
+     * This rule lived in OnlineFetch only, so the ONLINE Wikipedia path
+     * refused an article that did not name the entity while the OFFLINE path
+     * served whatever scored highest. It lives here now, so both paths apply
+     * exactly the same test.
+     *
+     * v9.33.0: it used to ask "does it start with what/who", which sent "what
+     * things you can do for me" to Wikipedia and answered with the plot of a
+     * film called "You Can Count on Me". A source answer is for a SHORT
+     * question naming one thing, so the shape AND the length are required.
+     */
+    fun isEntityQuestion(q: String): Boolean {
+        val t = q.trim()
+        if (t.length > 60) return false
+        // a question about NOVA itself ("what can you do") is not a lookup
+        val low = " " + t.lowercase()
+        if (low.contains(" you") || low.contains("your")) return false
+        return Regex("(?i)^(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(t) ||
+            Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
+    }
+
+    /**
      * v9.33.15: the entity phrase a "who is X" question names - the question
      * with its lead-in words stripped, so it can be looked up as a page TITLE
      * ("who is physics wallah" -> "physics wallah").
