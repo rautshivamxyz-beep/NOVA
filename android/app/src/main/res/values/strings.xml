@@ -250,4 +250,9 @@ from: %1$s</string>
     <string name="remote_model_hint">Model name (optional)</string>
     <string name="remote_on">NOVA will use that machine when it answers</string>
     <string name="remote_off">Back to the model on this phone</string>
+    <string name="remote_find">Find my computer</string>
+    <string name="remote_find_hint">One tap. NOVA looks for the model server on your Wi-Fi and fills in the address for you. Your laptop has to be running it already - see the setup guide.</string>
+    <string name="remote_searching">Looking on your Wi-Fi…</string>
+    <string name="remote_none">Nothing found. Is the server running on the laptop? And are both on the same Wi-Fi?</string>
+    <string name="remote_found">Found it: %1$s</string>
 </resources>
