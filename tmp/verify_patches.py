@@ -37,6 +37,10 @@ def check(name, cond):
 def load(f):
     return open(os.path.join(ROOT, BASE + f), encoding="utf-8").read()
 
+def load_test(f):
+    # v9.33.34: the pure-JVM unit tests live in the test source set.
+    return open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/" + f), encoding="utf-8").read()
+
 
 ma = load("MainActivity.kt")
 nc = load("ncie/android/NcieChat.kt")
@@ -213,7 +217,20 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.33: version bumped for the low-RAM pass", bg.count("versionName '9.33.33'") == 1 and bg.count("versionCode 201") == 1)
+check("v9.33.34: version bumped for the kernel-test pass", bg.count("versionName '9.33.34'") == 1 and bg.count("versionCode 202") == 1)
+
+# ---- v9.33.34: unit tests for the ANALYZE and PLAN gates ----
+an = load_test("analyze/AnalyzerTest.kt")
+dk = load_test("plan/DecisionKernelTest.kt")
+check("v9.33.34: the ANALYZE gate is pinned by a unit test",
+      an.count("class AnalyzerTest") == 1 and an.count("RuleBasedAnalyzer()") == 1 and
+      an.count("fun aHindiOrMarathiQuestionIsKnowledgeSeekingToo") == 1)
+check("v9.33.34: the PLAN gate is pinned by a unit test",
+      dk.count("class DecisionKernelTest") == 1 and dk.count("DecisionKernel(") >= 1 and
+      dk.count("fun thinkingAndContextBudgetsScaleInThreeTiers") == 1)
+check("v9.33.34: the four routes are all exercised",
+      dk.count("Route.CACHE") == 1 and dk.count("Route.TOOL,") == 1 and
+      dk.count("Route.TOOL_THEN_LLM") == 1 and dk.count("Route.LLM") == 1)
 
 # ---- v9.33.33: Lite mode for low-RAM phones ----
 check("v9.33.33: one place decides the phone is small",
