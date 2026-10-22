@@ -82,6 +82,24 @@ class PrivatePromptTest {
         assertTrue(out.contains("what should i do tonight"))
     }
 
+    // ---- v9.33.50: the SYSTEM prompt is a leak path too ----
+
+    @Test
+    fun theUsersOwnInstructionsNeverReachARemoteMachine() {
+        // free text the user wrote - people put personal facts in it
+        val mine = "You are NOVA. I live in Pune and I bank with HDFC. Be brief."
+        val sent = PrivatePrompt.systemPromptFor(mine, privateOnly = true)
+        assertFalse(sent.contains("Pune"))
+        assertFalse(sent.contains("HDFC"))
+        assertEquals(PrivatePrompt.REMOTE_SYSTEM_PROMPT, sent)
+    }
+
+    @Test
+    fun onTheUsersOwnMachineTheirInstructionsAreKept() {
+        val mine = "Be brief."
+        assertEquals(mine, PrivatePrompt.systemPromptFor(mine, privateOnly = false))
+    }
+
     // ---- the failure direction: unknown means DO NOT SEND ----
 
     /**
