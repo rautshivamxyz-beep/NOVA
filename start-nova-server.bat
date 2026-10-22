@@ -58,6 +58,14 @@ echo   Server : %SERVER%
 echo   Model  : %MODEL%
 echo.
 
+rem ---- optional password ---------------------------------------------
+rem  If a file called password.txt sits next to this one, its contents
+rem  become the server's password. Only needed if you reach the server
+rem  from OUTSIDE your home Wi-Fi. Type the same password into NOVA.
+set "KEY="
+if exist "%~dp0password.txt" set /p KEY=<"%~dp0password.txt"
+if defined KEY echo   Password: on ^(from password.txt^)
+
 rem ---- let the phone through the firewall (ignored if not admin) ------
 netsh advfirewall firewall add rule name="NOVA model server" dir=in action=allow protocol=TCP localport=8080 >nul 2>&1
 
@@ -65,7 +73,11 @@ echo   Starting. Your phone can now find this laptop.
 echo   Leave this window OPEN while you use NOVA.
 echo.
 
-"%SERVER%" -m "%MODEL%" --host 0.0.0.0 --port 8080 -c 8192
+if defined KEY (
+  "%SERVER%" -m "%MODEL%" --host 0.0.0.0 --port 8080 -c 8192 --api-key "%KEY%"
+) else (
+  "%SERVER%" -m "%MODEL%" --host 0.0.0.0 --port 8080 -c 8192
+)
 
 echo.
 echo   The server stopped.
