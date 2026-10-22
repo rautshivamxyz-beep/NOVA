@@ -217,7 +217,12 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.40: version bumped for the real-numbers pass", bg.count("versionName '9.33.40'") == 1 and bg.count("versionCode 208") == 1)
+check("v9.33.41: version bumped for the self-correction pass", bg.count("versionName '9.33.41'") == 1 and bg.count("versionCode 209") == 1)
+
+# ---- v9.33.41: the app corrects itself on a regenerate ----
+check("v9.33.41: a rejected answer leaves memory, fact and cache",
+      ma.count("NcieLearn.memoryForget(expQ)") == 1 and
+      ma.count("NcieEngines.logExperience(this@MainActivity, expQ)") == 1)
 
 # ---- v9.33.40: the measurement travels, so the catalogue improves ----
 check("v9.33.40: the measurement is kept so the report can carry it",
