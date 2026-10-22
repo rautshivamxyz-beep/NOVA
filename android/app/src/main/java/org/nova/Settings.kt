@@ -134,6 +134,14 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_REMOTE_URL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_REMOTE_URL, value).apply()
 
+    /** v9.33.45 "Nothing private leaves": send ONLY the question the user
+     *  typed - never their notes, documents, learned facts or conversation -
+     *  to a machine they do not own. On by default, because the safe default
+     *  is the one that cannot leak. Turn it off for your own laptop. */
+    var remotePrivateOnly: Boolean
+        get() = prefs.getBoolean(KEY_REMOTE_PRIVATE, true)
+        set(value) = prefs.edit().putBoolean(KEY_REMOTE_PRIVATE, value).apply()
+
     /** v9.33.44: the password the server was started with (llama-server
      *  --api-key). Only needed once the server is reachable from outside the
      *  home Wi-Fi - through a tunnel or a port forward. On the LAN it is
@@ -279,6 +287,7 @@ class Settings(context: Context) {
         private const val KEY_REMOTE_URL = "remote_url"
         private const val KEY_REMOTE_MODEL = "remote_model"
         private const val KEY_REMOTE_KEY = "remote_key"
+        private const val KEY_REMOTE_PRIVATE = "remote_private_only"
 
         // v9.11.0 "Inference Quality": a strong, concise base prompt
         // (under 70 words) replaces the old 7-rule stack - the small

@@ -1,6 +1,7 @@
 package org.nova
 
 import kotlinx.coroutines.Dispatchers
+import org.nova.ncie.PrivatePrompt
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -27,12 +28,14 @@ object RemoteEngine {
     /** enabled, base url, model name, system prompt. */
     @Volatile private var cfg: Array<String> = arrayOf("", "", "", "")
     @Volatile private var on = false
+    @Volatile private var privateOnly = true
 
     /** Read the current settings once. Called at app start and on every edit. */
     fun configure(ctx: android.content.Context) {
         try {
             val s = Settings(ctx)
             cfg = arrayOf(s.remoteUrl.trim(), s.remoteModel.trim(), s.systemPrompt, s.remoteKey)
+            privateOnly = s.remotePrivateOnly
             on = s.remoteEnabled && s.remoteUrl.isNotBlank()
         } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
     }
@@ -142,13 +145,20 @@ object RemoteEngine {
      * network never turns into a chat that does not answer.
      */
     fun stream(prompt: String, maxTokens: Int): Flow<String> = flow {
+        // v9.33.45: on a machine we do not own, send the question and nothing
+        // else. If it cannot be made certain, this throws and the answer is
+        // produced on the phone. The logic itself lives in PrivatePrompt, which
+        // is pure Kotlin and unit-tested - see PrivatePromptTest.
+        val ask = if (privateOnly) {
+            PrivatePrompt.strip(prompt) ?: throw java.io.IOException("private material in prompt")
+        } else prompt
         val sys = systemPrompt()
         val body = buildString {
             append("{\"model\":").append(q(modelName()))
             append(",\"max_tokens\":").append(maxTokens)
             append(",\"stream\":true,\"messages\":[")
             if (sys.isNotBlank()) append("{\"role\":\"system\",\"content\":").append(q(sys)).append("},")
-            append("{\"role\":\"user\",\"content\":").append(q(prompt)).append("}]}")
+            append("{\"role\":\"user\",\"content\":").append(q(ask)).append("}]}")
         }
         val conn = (URL(endpoint()).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"

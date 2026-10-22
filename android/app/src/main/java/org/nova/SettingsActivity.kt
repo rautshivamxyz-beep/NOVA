@@ -200,6 +200,14 @@ class SettingsActivity : Activity() {
             settings.remoteModel = v.trim()
             RemoteEngine.configure(this@SettingsActivity)
         })
+        remote.addView(NovaUi.switchRow(this, getString(R.string.remote_private),
+            settings.remotePrivateOnly) {
+            settings.remotePrivateOnly = it
+            RemoteEngine.configure(this@SettingsActivity)
+            toast(if (it) getString(R.string.remote_private_on) else getString(R.string.remote_private_off))
+        })
+        remote.addView(NovaUi.small(this, getString(R.string.remote_private_hint))
+            .apply { setPadding(0, 0, 0, dp(8)) })
         remote.addView(field(settings.remoteKey, getString(R.string.remote_key_hint)) { v ->
             settings.remoteKey = v.trim()
             RemoteEngine.configure(this@SettingsActivity)

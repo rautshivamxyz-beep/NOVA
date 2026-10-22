@@ -254,4 +254,8 @@
     <string name="remote_none">कुछ नहीं मिला। क्या लैपटॉप पर सर्वर चल रहा है? और क्या दोनों एक ही Wi-Fi पर हैं?</string>
     <string name="remote_found">मिल गया: %1$s</string>
     <string name="remote_key_hint">पासवर्ड, केवल अगर आप सर्वर तक घर के Wi-Fi से बाहर से पहुँचते हैं</string>
+    <string name="remote_private">सिर्फ़ सवाल भेजें</string>
+    <string name="remote_private_hint">NOVA सिर्फ़ आपका लिखा सवाल भेजता है। आपके नोट्स, दस्तावेज़, यादें और पुरानी बातचीत इसी फ़ोन पर रहती हैं। जो सर्वर आपका नहीं है, उसके लिए इसे चालू ही रखें।</string>
+    <string name="remote_private_on">सिर्फ़ आपका सवाल इस फ़ोन से बाहर जाएगा</string>
+    <string name="remote_private_off">नोट्स और दस्तावेज़ उस मशीन पर भेजे जाएँगे</string>
 </resources>
