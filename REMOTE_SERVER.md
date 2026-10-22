@@ -162,10 +162,32 @@ questions only** ON. A cloud machine is not your machine.
 It takes a while the first time (the model is about 2 GB, and it may have to
 build llama.cpp — 15 to 30 minutes on a free machine). Leave it running.
 
-**One warning worth knowing:** Oracle reclaims an Always Free instance when it
-looks idle for 7 days — CPU, network and memory all under 20%. A personal AI is
-idle almost all the time, so expect it to be stopped unless you keep it busy.
-A laptop you own has no such rule.
+### Keep it from being swept up (do this one)
+
+Oracle reclaims an Always Free instance when it looks idle for 7 days — CPU,
+network **and** memory all under the threshold (20% in their current docs; it
+has been raised over the years). A personal AI is idle almost all the time, so
+yours will look exactly like that.
+
+**Oracle's own fix is to convert your account to Pay As You Go.** Their notice
+to affected users says it plainly: *"You can keep idle compute instances from
+being stopped by converting your account to Pay As You Go (PAYG). With PAYG,
+you will not be charged as long as your usage for all OCI resources remains
+within the Always Free limits."*
+
+So PAYG here is not "start paying". It is "prove you are a real account", and
+your Always Free resources stay free. It asks for a card and a small
+verification hold that comes back.
+
+**And one trap while you are in there:** keep your total Ampere A1 use **within
+2 OCPUs and 12 GB**. Oracle's FAQ is blunt about the alternative — if you
+provision more A1 than an Always Free tenancy allows, *all* your A1 instances
+are disabled and then deleted after 30 days. Some older guides quote 4 OCPUs
+and 24 GB; that is not the current allowance, and following them can cost you
+the machine.
+
+Also: log into the account now and then. An unused account can be treated as
+abandoned and suspended.
 
 ---
 
