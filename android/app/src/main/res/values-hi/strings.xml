@@ -233,4 +233,11 @@
     <string name="backup_encrypted_msg">यह बैकअप एन्क्रिप्टेड है - इसे खोलने के लिए इसका पासवर्ड डालें।</string>
     <string name="backup_password_set_hint">आपका सेट किया पासवर्ड</string>
     <string name="action_open">खोलें</string>
+    <string name="speed_test">गति नापें</string>
+    <string name="speed_test_running">नाप रहा हूँ…</string>
+    <string name="speed_test_no_model">पहले एक मॉडल डाउनलोड करें</string>
+    <string name="speed_test_wait">पहले चालू जवाब पूरा होने दें</string>
+    <string name="speed_test_failed">नाप नहीं सका — मॉडल ने कुछ भी नहीं बनाया।</string>
+    <string name="speed_test_model">मॉडल: %1$s</string>
+    <string name="speed_test_result">पहला टोकन आने में: %1$s सेकंड\nडिकोड: %3$s सेकंड में %2$d टोकन\nयानी %4$s टोकन प्रति सेकंड।</string>
 </resources>

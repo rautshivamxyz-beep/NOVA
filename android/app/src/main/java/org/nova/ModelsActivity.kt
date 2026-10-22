@@ -41,6 +41,7 @@ import java.util.Locale
 class ModelsActivity : Activity() {
 
     private lateinit var deviceText: TextView
+    private lateinit var speedBtn: Button
     private lateinit var localInner: LinearLayout
     private lateinit var progressText: TextView
     private lateinit var progressBar: ProgressBar
@@ -102,6 +103,11 @@ class ModelsActivity : Activity() {
             setLineSpacing(dp(2).toFloat(), 1f)
         }
         root.addView(cardWith(deviceText), params())
+
+        // v9.33.34 "Measured speed": an estimate is useless on a phone - run a
+        // real generation and show what THIS device does with the loaded model.
+        speedBtn = NovaUi.ghostButton(this, getString(R.string.speed_test)) { runSpeedTest() }
+        root.addView(speedBtn, params())
 
         // ---- Progress area
         progressText = TextView(this).apply {
@@ -274,6 +280,31 @@ class ModelsActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(8) })
         return row
+    }
+
+    /** v9.33.34: measure this phone with the model that is loaded right now. */
+    private fun runSpeedTest() {
+        if (!NovaEngine.isModelLoaded) { toast(getString(R.string.speed_test_no_model)); return }
+        if (NovaEngine.isGenerating) { toast(getString(R.string.speed_test_wait)); return }
+        speedBtn.isEnabled = false
+        speedBtn.text = getString(R.string.speed_test_running)
+        scope.launch {
+            val r = try { SpeedTest.run(this@ModelsActivity) } catch (e: Exception) { null }
+            speedBtn.isEnabled = true
+            speedBtn.text = getString(R.string.speed_test)
+            val body = if (r == null || !r.usable) getString(R.string.speed_test_failed)
+            else getString(R.string.speed_test_result,
+                String.format(Locale.US, "%.1f", r.firstTokenMs / 1000.0),
+                r.tokens,
+                String.format(Locale.US, "%.1f", r.decodeMs / 1000.0),
+                String.format(Locale.US, "%.1f", r.tokensPerSecond))
+            AlertDialog.Builder(this@ModelsActivity)
+                .setTitle(getString(R.string.speed_test))
+                .setMessage(getString(R.string.speed_test_model, NovaEngine.activeModelLabel) +
+                    "\n\n" + body)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     private fun refreshDeviceCard() {

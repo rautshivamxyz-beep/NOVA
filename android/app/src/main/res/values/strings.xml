@@ -235,4 +235,11 @@ from: %1$s</string>
     <string name="backup_encrypted_msg">This backup is encrypted - enter its password to open it.</string>
     <string name="backup_password_set_hint">the password you set</string>
     <string name="action_open">Open</string>
+    <string name="speed_test">Measure speed</string>
+    <string name="speed_test_running">Measuring…</string>
+    <string name="speed_test_no_model">Load a model first</string>
+    <string name="speed_test_wait">Wait for the current reply to finish</string>
+    <string name="speed_test_failed">Could not measure — the model did not generate anything.</string>
+    <string name="speed_test_model">Model: %1$s</string>
+    <string name="speed_test_result">Time to first token: %1$s s\nDecode: %2$d tokens in %3$s s\nThat is %4$s tokens per second.</string>
 </resources>
