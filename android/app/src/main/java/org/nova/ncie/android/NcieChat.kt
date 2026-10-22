@@ -1,5 +1,6 @@
 package org.nova.ncie.android
 
+import org.nova.ncie.ModelProfile
 import org.nova.ncie.Tokens
 
 import org.nova.NovaLog
