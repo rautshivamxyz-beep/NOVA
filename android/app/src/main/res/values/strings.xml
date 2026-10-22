@@ -256,4 +256,8 @@ from: %1$s</string>
     <string name="remote_none">Nothing found. Is the server running on the laptop? And are both on the same Wi-Fi?</string>
     <string name="remote_found">Found it: %1$s</string>
     <string name="remote_key_hint">Password, only if you reach the server from outside your home Wi-Fi</string>
+    <string name="remote_private">Private questions only</string>
+    <string name="remote_private_hint">NOVA sends just the question you typed. Your notes, documents, memories and past conversation stay on this phone. Leave this on for any server you do not own.</string>
+    <string name="remote_private_on">Only your question leaves this phone</string>
+    <string name="remote_private_off">Notes and documents will be sent to that machine</string>
 </resources>
