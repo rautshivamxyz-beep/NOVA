@@ -68,6 +68,12 @@ object NovaEngine {
      *  skip a wasteful multi-second reload when the engine is already clean. */
     @Volatile
     var contextDirty: Boolean = false
+
+    /** v9.33.34: set when something OUTSIDE the chat clears the engine (the
+     *  speed test), so the next chat turn re-sends its own history instead of
+     *  answering into an empty context. A benchmark must not cost the user
+     *  their conversation. */
+    @Volatile var contextResetExternally: Boolean = false
         private set
 
     suspend fun get(context: Context): InferenceEngine =
