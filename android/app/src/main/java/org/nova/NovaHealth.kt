@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
+import org.nova.ncie.ModelProfile
 import org.nova.ncie.android.NcieDream
 import org.nova.ncie.android.NcieLeftovers
 import java.io.File
@@ -187,6 +188,12 @@ object NovaHealth {
         sb.append("model file: ").append(fileName).append('\n')
         // v9.33.40: the measured speed, and the one content-free number the
         // notification features already keep. A count is not a message.
+        // v9.33.52: which prompt profile the loaded model gets. It decides
+        // whether the model sees one background source or two, and whether the
+        // exam line is there at all - so it should be visible, not assumed.
+        val profile = if (label.isBlank()) "no model loaded"
+            else try { ModelProfile.describe(label) } catch (e: Exception) { "unknown" }
+        sb.append("prompt profile: ").append(profile).append('\n')
         val speed = try { Settings(ctx).lastSpeedReport } catch (e: Exception) { "" }
         sb.append("measured speed: ").append(speed.ifBlank { "not measured yet" }).append('\n')
         val replies = try { NovaListener.autoRepliesToday(ctx) } catch (e: Exception) { 0 }

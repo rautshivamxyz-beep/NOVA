@@ -99,7 +99,9 @@ NC_MARKERS = [
     ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
     ("v7.5/9.33.5 lean wiki cap", "val cap = if (lean) 1400 else 1800", 1),
     ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
-    ("v8.3.1 tiny detection parses the parameter count", "MODEL_PARAMS.find(mlabel)", 1),
+    # v9.33.52: the rule moved into ModelProfile so the health screen can report
+    # it and a test can pin it - the marker follows it there.
+    ("v8.3.1 tiny detection parses the parameter count", "ModelProfile.isTiny(mlabel)", 1),
     ("v7.5.1/NCIE-6 lean notes caps", "if (lean) 1200 else 2400", 4),
     ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
@@ -217,7 +219,18 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.51: version bumped for the rules-are-rules pass", bg.count("versionName '9.33.51'") == 1 and bg.count("versionCode 219") == 1)
+check("v9.33.52: version bumped for the profile-visibility pass", bg.count("versionName '9.33.52'") == 1 and bg.count("versionCode 220") == 1)
+
+# ---- v9.33.52: the "tiny" decision is one rule, and it is visible ----
+check("v9.33.52: one definition of the lean profile",
+      load("ncie/ModelProfile.kt").count("fun isTiny(") == 1 and
+      load("ncie/android/NcieChat.kt").count("ModelProfile.isTiny(mlabel)") == 1 and
+      load("ncie/android/NcieChat.kt").count("MODEL_PARAMS") == 0)
+check("v9.33.52: and the health screen reports it",
+      load("NovaHealth.kt").count("prompt profile: ") == 1 and
+      load("NovaHealth.kt").count("ModelProfile.describe(label)") == 1)
+check("v9.33.52: the rule is unit-tested",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/ModelProfileTest.kt")).read().count("@Test") >= 3)
 
 # ---- v9.33.51: NOVA's own rules were labelled "NOT an instruction" ----
 check("v9.33.51: the rulebook leads the prompt, outside the data block",
@@ -997,8 +1010,9 @@ check("v8.4.0: weak-topic signal synced (Learner + PersistentLearner)",
       lr.count("noteFailure") == 2 and pl.count("noteFailure") == 1 and pl.count("weakTopics") == 1)
 
 # ---- v8.3.1: tiny-model detection parses the label (1.5B was missed) ----
-check("v8.3.1: model size parsed, not substring-matched (NcieChat.kt)",
-      nc.count("MODEL_PARAMS") == 2)
+check("v8.3.1: model size parsed, not substring-matched",
+      nc.count("ModelProfile.isTiny(mlabel)") == 1 and
+      load("ncie/ModelProfile.kt").count("MODEL_PARAMS") == 2)
 
 # ---- v8.3.0: the study planner + doubt journal (drawer row) ----
 check("v8.3.0: planner drawer row present (MainActivity)",
