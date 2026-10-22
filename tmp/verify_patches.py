@@ -217,7 +217,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.46: version bumped for the Oracle setup pass", bg.count("versionName '9.33.46'") == 1 and bg.count("versionCode 214") == 1)
+check("v9.33.47: version bumped for the cloud-first pass", bg.count("versionName '9.33.47'") == 1 and bg.count("versionCode 215") == 1)
+
+# ---- v9.33.47: the cloud path is not a second-class path ----
+check("v9.33.47: the find button does not mislead a cloud user",
+      load("SettingsActivity.kt").count("R.string.remote_find_hint") == 1 and
+      open(os.path.join(ROOT, "android/app/src/main/res/values/strings.xml")).read().count("Using a cloud server like Oracle? Skip this") == 1)
+check("v9.33.47: the guide points a laptop-less reader at the cloud path",
+      open(os.path.join(ROOT, "REMOTE_SERVER.md")).read().count("Not using a laptop at all?") == 1)
 
 # ---- v9.33.46: the Oracle move, server side ----
 check("v9.33.46: one command sets up the whole Oracle server",
