@@ -217,7 +217,19 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.37: version bumped for the measured-speed pass", bg.count("versionName '9.33.37'") == 1 and bg.count("versionCode 205") == 1)
+check("v9.33.38: version bumped for the answer-quality pass", bg.count("versionName '9.33.38'") == 1 and bg.count("versionCode 206") == 1)
+
+# ---- v9.33.38: right answers, and a profile that is not a trivia dump ----
+check("v9.33.38: the OFFLINE Wikipedia path applies the entity rule too",
+      load("WikiCore.kt").count("EntityMatch.isEntityQuestion(query)") == 1 and
+      load("WikiCore.kt").count("EntityMatch.titleMatchesEntity(it.title, query)") == 1)
+check("v9.33.38: one shared lookup-shape rule, not two copies",
+      load("ncie/knowledge/EntityMatch.kt").count("fun isEntityQuestion(") == 1 and
+      load("ncie/android/OnlineFetch.kt").count("= EntityMatch.isEntityQuestion(q)") == 1)
+check("v9.33.38: the profile shows earned facts, not a trivia dump",
+      load("ncie/android/NcieProfile.kt").count("it.interactions >= 2 || it.score >= 0.6") == 1)
+check("v9.33.38: the shared rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/knowledge/EntityMatchTest.kt")).read().count("isEntityQuestion") >= 6)
 
 # ---- v9.33.37: a measured speed test (real tokens, not chars/4) ----
 check("v9.33.37: the speed test measures a real generation",

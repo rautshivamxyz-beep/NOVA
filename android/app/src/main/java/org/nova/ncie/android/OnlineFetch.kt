@@ -320,27 +320,11 @@ object OnlineFetch {
      * generation, so the answer is also instant. Every other question still
      * goes through the model.
      */
-    private fun entityQuestion(q: String): Boolean {
-        // v9.33.0: this asked "does it start with what/who", which sent
-        // "what things you can do for me" to Wikipedia and answered with the
-        // plot of a film called "You Can Count on Me". A source answer is for
-        // a SHORT question naming one thing ("who is X", "when was X born"),
-        // so the shape and the length are both required now.
-        val t = q.trim()
-        if (t.length > 60) return false
-        // a question about NOVA itself ("what can you do") is not a lookup
-        val low = " " + t.lowercase()
-        if (low.contains(" you") || low.contains("your")) return false
-        // v9.33.1: "who won the 2026 World Cup" was answered with an invented
-        // winner - the article was fetched and then rewritten from memory. The
-        // verb list makes these factual asks answer FROM the article too.
-        // v9.33.7: this grew to where/when/which/tell-me-about/won/did/has and
-        // NOVA started quoting articles instead of answering - the user's exact
-        // complaint, "it behaves like a search engine, not a brain". Verbatim is
-        // for a plain lookup only; anything that needs thought goes to the model.
-        return Regex("(?i)^(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(t) ||
-            Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(t)
-    }
+    /** v9.33.38: the rule now lives in EntityMatch, so the OFFLINE Wikipedia
+     *  path can apply exactly the same test instead of serving the wrong
+     *  article. See [EntityMatch.isEntityQuestion] for why the shape and the
+     *  length are both required. */
+    private fun entityQuestion(q: String): Boolean = EntityMatch.isEntityQuestion(q)
 
     /** Posts the source text as the answer. Deterministic - no model call. */
     private fun directAnswer(act: MainActivity, body: String, source: String) {

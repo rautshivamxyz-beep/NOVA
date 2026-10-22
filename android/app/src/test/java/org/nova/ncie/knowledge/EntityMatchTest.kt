@@ -38,4 +38,29 @@ class EntityMatchTest {
     fun aQuestionWithNoEntityNeverMatches() {
         assertFalse(EntityMatch.titleMatchesEntity("Anything At All", "who is the"))
     }
+
+    // ---- v9.33.38: the lookup-shape rule is now shared with the OFFLINE
+    // Wikipedia path, which used to serve the wrong article for these ----
+
+    @Test
+    fun onlyAPlainLookupIsAnEntityQuestion() {
+        assertTrue(EntityMatch.isEntityQuestion("who is rasputin"))
+        assertTrue(EntityMatch.isEntityQuestion("what is photosynthesis?"))
+        assertTrue(EntityMatch.isEntityQuestion("who was mia hamm"))
+    }
+
+    @Test
+    fun aQuestionAboutNovaItselfIsNotALookup() {
+        assertFalse(EntityMatch.isEntityQuestion("what can you do"))
+        assertFalse(EntityMatch.isEntityQuestion("what are your skills"))
+    }
+
+    @Test
+    fun aLongOrConversationalQuestionIsNotALookup() {
+        // v9.33.0: this exact shape once fetched the plot of a film called
+        // "You Can Count on Me"
+        assertFalse(EntityMatch.isEntityQuestion("what things you can do for me"))
+        assertFalse(EntityMatch.isEntityQuestion(
+            "who is the person in the photograph I attached earlier today please"))
+    }
 }
