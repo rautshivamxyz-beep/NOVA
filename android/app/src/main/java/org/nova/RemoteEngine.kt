@@ -149,7 +149,7 @@ object RemoteEngine {
         // else. If it cannot be made certain, this throws and the answer is
         // produced on the phone. The logic itself lives in PrivatePrompt, which
         // is pure Kotlin and unit-tested - see PrivatePromptTest.
-        val body = if (privateOnly) {
+        val ask = if (privateOnly) {
             PrivatePrompt.strip(prompt) ?: throw java.io.IOException("private material in prompt")
         } else prompt
         val sys = systemPrompt()
@@ -158,7 +158,7 @@ object RemoteEngine {
             append(",\"max_tokens\":").append(maxTokens)
             append(",\"stream\":true,\"messages\":[")
             if (sys.isNotBlank()) append("{\"role\":\"system\",\"content\":").append(q(sys)).append("},")
-            append("{\"role\":\"user\",\"content\":").append(q(body)).append("}]}")
+            append("{\"role\":\"user\",\"content\":").append(q(ask)).append("}]}")
         }
         val conn = (URL(endpoint()).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
