@@ -217,7 +217,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.34: version bumped for the kernel-test pass", bg.count("versionName '9.33.34'") == 1 and bg.count("versionCode 202") == 1)
+check("v9.33.35: version bumped for the verify-test pass", bg.count("versionName '9.33.35'") == 1 and bg.count("versionCode 203") == 1)
+
+# ---- v9.33.35: unit tests for the VERIFY gate ----
+vf = load_test("verify/VerifierTest.kt")
+check("v9.33.35: the VERIFY gate is pinned by a unit test",
+      vf.count("class VerifierTest") == 1 and vf.count("MathVerifier(") >= 1)
+check("v9.33.35: both halves of verify are exercised",
+      vf.count("fun anAnswerWithTheComputedValuePasses") == 1 and
+      vf.count("fun anAnswerThatDriftsFromItsSourcesFails") == 1 and
+      vf.count("fun leakedChatBoilerplateFails") == 1)
 
 # ---- v9.33.34: unit tests for the ANALYZE and PLAN gates ----
 an = load_test("analyze/AnalyzerTest.kt")
