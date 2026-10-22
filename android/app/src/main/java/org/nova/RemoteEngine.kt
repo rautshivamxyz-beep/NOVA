@@ -2,6 +2,7 @@ package org.nova
 
 import kotlinx.coroutines.Dispatchers
 import org.nova.ncie.PrivatePrompt
+import org.nova.ncie.RemoteHost
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -145,6 +146,14 @@ object RemoteEngine {
      * network never turns into a chat that does not answer.
      */
     fun stream(prompt: String, maxTokens: Int): Flow<String> = flow {
+        // v9.33.50 "Nothing in the clear": a bearer token and a question sent
+        // over plain http across the open internet are readable by anyone on the
+        // path, and the token can simply be replayed. On the user's OWN network
+        // that is a fair trade; across the internet it is a leak. Refuse, and the
+        // answer is produced on the phone. Tailscale's 100.64/10 addresses pass.
+        if (privateOnly && RemoteHost.isInsecurePublic(cfg.getOrNull(0) ?: "")) {
+            throw java.io.IOException("refusing plain http to a public address")
+        }
         // v9.33.45: on a machine we do not own, send the question and nothing
         // else. If it cannot be made certain, this throws and the answer is
         // produced on the phone. The logic itself lives in PrivatePrompt, which
@@ -152,7 +161,8 @@ object RemoteEngine {
         val ask = if (privateOnly) {
             PrivatePrompt.strip(prompt) ?: throw java.io.IOException("private material in prompt")
         } else prompt
-        val sys = systemPrompt()
+        // v9.33.50: never the user's custom instructions - see systemPromptFor
+        val sys = PrivatePrompt.systemPromptFor(systemPrompt(), privateOnly)
         val body = buildString {
             append("{\"model\":").append(q(modelName()))
             append(",\"max_tokens\":").append(maxTokens)

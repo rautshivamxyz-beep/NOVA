@@ -17,22 +17,22 @@ set -euo pipefail
 PORT="${PORT:-8080}"
 DIR="$HOME/nova-server"
 
-# Which model?  3b = quicker (the default).  8b = smarter, and slower here.
-#     MODEL=8b bash setup-oracle.sh
+# Which model?  3b = quicker (the default).  7b = smarter, and slower here.
+#     MODEL=7b bash setup-oracle.sh
 # Any GGUF of your own also works:
 #     MODEL_URL=https://.../your-model.gguf bash setup-oracle.sh
 MODEL="${MODEL:-3b}"
 case "$MODEL" in
   3b) DEFAULT_URL="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
       NEED_MB=3000 ;;
-  8b) DEFAULT_URL="https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+  7b) DEFAULT_URL="https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
       NEED_MB=6500 ;;
   *)  DEFAULT_URL=""
       NEED_MB=3000 ;;
 esac
 MODEL_URL="${MODEL_URL:-$DEFAULT_URL}"
 if [ -z "$MODEL_URL" ]; then
-  echo "MODEL must be 3b or 8b - or set MODEL_URL to a .gguf address."
+  echo "MODEL must be 3b or 7b - or set MODEL_URL to a .gguf address."
   exit 1
 fi
 MODEL_FILE="$DIR/models/$(basename "$MODEL_URL")"
@@ -51,8 +51,8 @@ if [ "$HAVE_MB" -gt 0 ] && [ "$HAVE_MB" -lt "$NEED_MB" ]; then
   say "Run it again with MODEL=3b, or pick a smaller .gguf."
   exit 1
 fi
-if [ "$MODEL" = "8b" ]; then
-  say "8B it is. Worth knowing: a free Oracle machine has no GPU, so this"
+if [ "$MODEL" = "7b" ]; then
+  say "A 7B model it is. Worth knowing: a free Oracle machine has no GPU, so this"
   say "runs on CPU. Expect a few tokens a second - it works, it is free, and"
   say "it is not fast. A free GPU notebook (Kaggle, Colab) is fast but only"
   say "lives for a session."

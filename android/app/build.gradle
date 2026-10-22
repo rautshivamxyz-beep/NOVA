@@ -101,8 +101,8 @@ android {
         // or a starved context budget is caught in CI instead of in the app.
         // v9.33.35: the VERIFY gate joins them (MathVerifier + answer quality).
         // v9.33.36: the ADAPTIVE planner joins them (mastery + struggle rules).
-        versionCode 217
-        versionName '9.33.49'
+        versionCode 218
+        versionName '9.33.50'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

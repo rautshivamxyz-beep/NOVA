@@ -74,8 +74,12 @@ class SettingsActivity : Activity() {
                 if (found.isEmpty()) {
                     toast(getString(R.string.remote_none))
                 } else {
+                    // v9.33.50: fill the address in, but do NOT switch it on.
+                    // Anything on the network can answer /v1/models, so a
+                    // discovered server is a stranger until the user says
+                    // otherwise - and starting to send questions to it on the
+                    // strength of a scan is exactly the wrong default.
                     settings.remoteUrl = found.first()
-                    settings.remoteEnabled = true
                     RemoteEngine.configure(this@SettingsActivity)
                     toast(getString(R.string.remote_found, found.first()))
                     recreate()
