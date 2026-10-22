@@ -1,91 +1,90 @@
-# Run a bigger model on your laptop, and use it from your phone
+# Make NOVA use your laptop's brain
 
-NOVA can answer from a model running on another machine on your own Wi-Fi — your
-Lenovo LOQ, or a second phone. Nothing goes to a third party: the address is one
-you type, on your own network.
+Your phone is small. Your laptop is strong. This makes NOVA answer with the
+laptop instead of the phone. Better answers, and the phone stays cool.
 
-Why bother: a 4 GB phone can hold about a 1.2B model. A laptop can hold an 8B or
-a 14B. That is the single biggest quality jump available — and it costs the phone
-nothing, because the laptop does the work.
+**Two steps. That's all.**
 
 ---
 
-## 1. On the laptop — start the server
+## Step 1 — on the laptop
 
-Download **llama.cpp** (the Windows or Linux release from
-`github.com/ggml-org/llama.cpp/releases`), then run `llama-server` with a model.
+**Double-click `start-nova-server.bat`** (Windows) or run
+`bash start-nova-server.sh` (Linux/Mac).
 
-**Windows (PowerShell, from the folder you unzipped):**
+A black window opens and starts the model. **Leave it open.** Closing it stops
+the model.
 
-```powershell
-.\llama-server.exe -m C:\models\Qwen3-8B-Q4_K_M.gguf --host 0.0.0.0 --port 8080 -c 8192
+If it says it can't find something, it tells you exactly what to do and opens
+the right download page for you. Follow the two lines it prints.
+
+## Step 2 — on the phone
+
+NOVA → **Settings → Remote model** → turn **Use a model on my own network** on.
+
+**That's it.** NOVA looks around your Wi-Fi, finds the laptop, and fills the
+address in by itself. You never type a number.
+
+Ask something. The laptop answers.
+
+---
+
+## If it doesn't work
+
+**NOVA says "Nothing found."**
+The black window isn't running, or the phone is on a different Wi-Fi. Check both.
+
+**It worked yesterday, not today.**
+Tap **Find my computer** again. Your laptop's address can change when it
+restarts, and this re-finds it.
+
+**Nothing at all happens.**
+Make sure the black window is still open on the laptop.
+
+---
+
+## Making the laptop do this by itself (since it's always on)
+
+So you never double-click anything again:
+
+**Windows** — press Start, type *Task Scheduler*, open it.
+Create Task → **Triggers** tab → *At startup*. → **Actions** tab → *Start a
+program* → point it at `start-nova-server.bat`. Save.
+
+**Linux** — ask me and I'll write you the systemd unit; it's four lines.
+
+---
+
+## What leaves your phone
+
+Your question, and the notes NOVA would have used to answer it — to your own
+laptop, over your own Wi-Fi. Nothing goes to any company. That's the whole
+point of doing it this way.
+
+---
+
+<details>
+<summary><b>For the curious: what is actually happening</b></summary>
+
+`start-nova-server.bat` runs **llama.cpp's `llama-server`** with a model of your
+choosing, listening on port 8080. NOVA talks to it using the standard
+OpenAI-style `/v1/chat/completions` protocol, streaming, so the answer appears
+as it's written.
+
+**Find my computer** probes `/v1/models` across your Wi-Fi's address range and
+takes the first machine that answers like a model server.
+
+If the laptop is asleep or off the Wi-Fi, NOVA falls back to the model on the
+phone mid-sentence — you never get a dead chat.
+
+**Want a bigger model?** Drop a larger `.gguf` into the `models` folder and
+restart the script. An 8B or 14B runs well on a gaming laptop. If your laptop
+has an NVIDIA GPU, use the CUDA build of llama.cpp — it's several times faster.
+
+**Want the manual version?** It's just:
+
+```
+llama-server -m models/your-model.gguf --host 0.0.0.0 --port 8080 -c 8192
 ```
 
-**Linux:**
-
-```bash
-./llama-server -m ~/models/Qwen3-8B-Q4_K_M.gguf --host 0.0.0.0 --port 8080 -c 8192
-```
-
-- `--host 0.0.0.0` is what lets the phone reach it. Without it the server only
-  listens on the laptop itself.
-- `-c 8192` is the context size. Bigger = more memory.
-- Any GGUF works. Qwen 3 8B, LFM 2.5 8B-A1B, Llama 3.1 8B — whatever fits.
-
-Leave that window open. It prints a line when it is ready.
-
-## 2. Find the laptop's address on the Wi-Fi
-
-**Windows:** `ipconfig` → look for *IPv4 Address* under your Wi-Fi adapter, e.g.
-`192.168.1.5`.
-
-**Linux:** `hostname -I` or `ip addr`.
-
-## 3. In NOVA
-
-**Settings → Remote model**
-
-- Turn **Use a model on my own network** on.
-- **Address:** `http://192.168.1.5:8080` (your laptop's IP, port 8080).
-- **Model name:** optional. Leave blank unless the server complains.
-
-Ask something. NOVA uses the laptop. If the laptop is asleep or off the Wi-Fi,
-NOVA quietly falls back to the model on the phone — you never get a dead chat.
-
----
-
-## Two things worth knowing
-
-**Both devices must be on the same Wi-Fi.** Guest networks and "client
-isolation" block device-to-device traffic; if it does not connect, that is the
-usual reason.
-
-**Windows Firewall will ask.** Allow `llama-server` on *private* networks when
-the prompt appears, or the phone cannot reach it.
-
-## Making it come up on its own
-
-So you do not have to start it by hand every time:
-
-**Windows** — Task Scheduler → *Create Task* → trigger **At log on** → action:
-start `llama-server.exe` with the arguments above.
-
-**Linux** — a systemd unit with `ExecStart=` the same command and
-`WantedBy=multi-user.target`.
-
-## If you want a second phone to serve instead
-
-The same thing works. Run the same `llama-server` build for Android (or any
-OpenAI-compatible server) on the other phone, note its IP, and point NOVA at it.
-"Bigger model" simply means "a machine that has more room than this one".
-
----
-
-## What is sent, exactly
-
-Your question, plus the notes and documents NOVA would have used to answer it —
-to the address you typed. That is why this is your own machine and not a cloud
-service: the whole point is that the text never leaves your network.
-
-If you ever point it at a *cloud* address instead, that is a different promise,
-and NOVA would need to say so plainly and take an API key. That is not built.
+</details>
