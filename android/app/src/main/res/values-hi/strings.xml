@@ -249,7 +249,7 @@
     <string name="remote_on">जवाब देते समय NOVA उस मशीन का इस्तेमाल करेगा</string>
     <string name="remote_off">फिर इस फ़ोन के मॉडल पर</string>
     <string name="remote_find">मेरा कंप्यूटर ढूँढो</string>
-    <string name="remote_find_hint">बस एक टैप। NOVA आपके Wi-Fi पर मॉडल सर्वर ढूँढता है और पता खुद भर देता है। आपके लैपटॉप पर वह पहले से चल रहा होना चाहिए - सेटअप गाइड देखें।</string>
+    <string name="remote_find_hint">बस एक टैप। NOVA आपके ही Wi-Fi पर मॉडल सर्वर ढूँढता है और पता खुद भर देता है - सर्वर पहले से चल रहा होना चाहिए। Oracle जैसे क्लाउड सर्वर इस्तेमाल कर रहे हैं? इसे छोड़ें और नीचे उसका पता लिखें।</string>
     <string name="remote_searching">आपके Wi-Fi पर खोज रहे हैं…</string>
     <string name="remote_none">कुछ नहीं मिला। क्या लैपटॉप पर सर्वर चल रहा है? और क्या दोनों एक ही Wi-Fi पर हैं?</string>
     <string name="remote_found">मिल गया: %1$s</string>
