@@ -200,6 +200,10 @@ class SettingsActivity : Activity() {
             settings.remoteModel = v.trim()
             RemoteEngine.configure(this@SettingsActivity)
         })
+        remote.addView(field(settings.remoteKey, getString(R.string.remote_key_hint)) { v ->
+            settings.remoteKey = v.trim()
+            RemoteEngine.configure(this@SettingsActivity)
+        })
         col.addView(remote)
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))

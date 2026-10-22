@@ -255,4 +255,5 @@ from: %1$s</string>
     <string name="remote_searching">Looking on your Wi-Fi…</string>
     <string name="remote_none">Nothing found. Is the server running on the laptop? And are both on the same Wi-Fi?</string>
     <string name="remote_found">Found it: %1$s</string>
+    <string name="remote_key_hint">Password, only if you reach the server from outside your home Wi-Fi</string>
 </resources>

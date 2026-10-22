@@ -32,7 +32,7 @@ object RemoteEngine {
     fun configure(ctx: android.content.Context) {
         try {
             val s = Settings(ctx)
-            cfg = arrayOf(s.remoteUrl.trim(), s.remoteModel.trim(), s.systemPrompt, "")
+            cfg = arrayOf(s.remoteUrl.trim(), s.remoteModel.trim(), s.systemPrompt, s.remoteKey)
             on = s.remoteEnabled && s.remoteUrl.isNotBlank()
         } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
     }
@@ -100,6 +100,9 @@ object RemoteEngine {
             requestMethod = "GET"
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
+            // a server started with --api-key answers 401 without this, so the
+            // search would miss the very machine it is looking for
+            if (key().isNotBlank()) setRequestProperty("Authorization", "Bearer " + key())
         }
         try { c.responseCode == 200 } finally {
             try { c.disconnect() } catch (e: Exception) { NovaLog.quiet("RemoteEngine", e) }
@@ -114,6 +117,9 @@ object RemoteEngine {
     private fun modelName(): String = cfg.getOrNull(1)?.ifBlank { "local" } ?: "local"
 
     private fun systemPrompt(): String = cfg.getOrNull(2) ?: ""
+
+    /** The server's password, if one was set. Sent as a bearer token. */
+    private fun key(): String = cfg.getOrNull(3) ?: ""
 
     /** Minimal JSON string escaping - the prompt is arbitrary text. */
     private fun q(s: String): String = buildString(s.length + 16) {
@@ -151,6 +157,8 @@ object RemoteEngine {
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "text/event-stream")
+            // v9.33.44: a server exposed beyond the LAN must have a password.
+            if (key().isNotBlank()) setRequestProperty("Authorization", "Bearer " + key())
         }
         try {
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }

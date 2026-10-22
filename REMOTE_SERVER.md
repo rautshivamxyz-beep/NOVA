@@ -29,6 +29,28 @@ Ask something. The laptop answers.
 
 ---
 
+## Using it when you're not at home
+
+At home, that is all you need. Away from home, your phone cannot see your
+laptop directly, so you need a way in. Two ways, easiest first:
+
+**Tailscale (recommended, free for personal use).** Install it on the laptop
+and on the phone, sign both into the same account. It gives your laptop a
+private address that works from anywhere. Put that address into NOVA instead
+(ask me and I will walk you through it). Only your own devices can reach it.
+
+**A tunnel or port forward.** This makes the server reachable from the open
+internet, so **it must have a password**:
+
+1. Put a file called `password.txt` next to `start-nova-server.bat`, and type a
+   password into it. The script picks it up automatically.
+2. Type the same password into NOVA: **Settings -> Remote model -> Password**.
+
+Without a password, anyone who finds the address can use your laptop's model.
+With one, only you can.
+
+---
+
 ## If it doesn't work
 
 **NOVA says "Nothing found."**
