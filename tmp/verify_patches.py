@@ -217,7 +217,16 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.38: version bumped for the answer-quality pass", bg.count("versionName '9.33.38'") == 1 and bg.count("versionCode 206") == 1)
+check("v9.33.39: version bumped for the diagnostics pass", bg.count("versionName '9.33.39'") == 1 and bg.count("versionCode 207") == 1)
+
+# ---- v9.33.39: a content-free report the user sends to improve NOVA ----
+check("v9.33.39: the diagnostics report says what it does NOT contain",
+      load("NovaHealth.kt").count("fun diagnostics(ctx: Context): String") == 1 and
+      load("NovaHealth.kt").count("No messages, no chats, no personal data") == 1)
+check("v9.33.39: the report is user-sent, never auto-sent",
+      load("HealthActivity.kt").count("Intent.ACTION_SEND") == 1 and
+      load("HealthActivity.kt").count("createChooser") == 1 and
+      load("HealthActivity.kt").count("http") == 0)
 
 # ---- v9.33.38: right answers, and a profile that is not a trivia dump ----
 check("v9.33.38: the OFFLINE Wikipedia path applies the entity rule too",
@@ -284,7 +293,7 @@ check("v9.33.33: the embedder is released under memory pressure",
       load("ncie/android/NcieEmbed.kt").count("fun release()") == 1 and
       ma.count("TRIM_MEMORY_RUNNING_CRITICAL") == 1)
 check("v9.33.33: lite mode is reported, not silent",
-      load("NovaHealth.kt").count("lite mode: ") == 1)
+      load("NovaHealth.kt").count('"\\nlite mode: "') == 1)
 
 # ---- v9.33.32: compaction guards overflow instead of capping memory ----
 check("v9.33.32: compaction fires on the context budget, not every 8 messages",
@@ -398,7 +407,7 @@ check("v9.33.18: a joke request is answered deterministically",
       open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun at(") == 1)
 check("v9.33.18: the health report shows the silent degradations",
       load("NovaHealth.kt").count("fun capabilities(") == 1 and
-      load("NovaHealth.kt").count("capabilities(ctx)") == 1)
+      load("NovaHealth.kt").count("capabilities(ctx)") >= 1)
 check("v9.33.18: the primary controls carry a spoken label",
       ma.count("contentDescription = ") >= 5 and ma.count("fun setSendButton(") == 1)
 check("v9.33.18: the joke set has real unit tests",
