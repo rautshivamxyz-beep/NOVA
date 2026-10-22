@@ -46,6 +46,23 @@ object PrivatePrompt {
         "Recent messages:",
     )
 
+    /**
+     * v9.33.50: the ONLY system prompt a machine we do not own may see.
+     *
+     * The user's own instructions are free text THEY wrote, and people put
+     * personal facts in them ("I live in Pune, I bank with X"). Filtering the
+     * question while forwarding that unchanged would have been a hole in the
+     * guarantee, so on a remote machine the user's custom prompt is not sent
+     * at all - NOVA's own generic prompt goes instead.
+     */
+    val REMOTE_SYSTEM_PROMPT =
+        "You are NOVA, a helpful assistant. Answer clearly and concisely. " +
+            "If you do not know something, say so instead of guessing."
+
+    /** Which system prompt may leave the phone. */
+    fun systemPromptFor(userPrompt: String, privateOnly: Boolean): String =
+        if (privateOnly) REMOTE_SYSTEM_PROMPT else userPrompt
+
     /** Everything except NOVA's instructions and the user's question. */
     fun strip(prompt: String): String? {
         var out = prompt
