@@ -79,9 +79,30 @@ program* → point it at `start-nova-server.bat`. Save.
 
 ## What leaves your phone
 
-Your question, and the notes NOVA would have used to answer it — to your own
-laptop, over your own Wi-Fi. Nothing goes to any company. That's the whole
-point of doing it this way.
+**Private questions only is ON by default.** NOVA sends just the question you
+typed. Your notes, your documents, the facts you asked it to remember, your
+exam dates and your earlier conversation all stay on the phone.
+
+On your own laptop you can turn it off for better answers — it is your machine.
+**Leave it on for anything you do not own**, and especially for a free cloud
+server.
+
+If NOVA is not certain a prompt is clean, it does not send it at all: it answers
+on the phone instead. It never guesses in that direction.
+
+### Using a free cloud server (Oracle and friends)
+
+The same server works on a rented machine — that is what the Oracle Cloud
+"Always Free" tier is for. Two things to know before you go:
+
+- **Put a password on it.** A cloud server is on the open internet, so use
+  `password.txt` (see above) — this is not optional there.
+- **Leave Private questions only ON.** A cloud VM is not your machine. Only your
+  question goes to it.
+
+And one honest warning: Oracle reclaims an Always Free instance when it looks
+idle for 7 days — CPU, network and memory all under 20%. A personal AI is idle
+almost all the time, so expect it to be stopped unless you keep it busy.
 
 ---
 
