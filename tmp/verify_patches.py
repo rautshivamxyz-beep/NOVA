@@ -217,7 +217,15 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.43: version bumped for the find-my-computer pass", bg.count("versionName '9.33.43'") == 1 and bg.count("versionCode 211") == 1)
+check("v9.33.44: version bumped for the away-from-home pass", bg.count("versionName '9.33.44'") == 1 and bg.count("versionCode 212") == 1)
+
+# ---- v9.33.44: a server reachable from outside must have a password ----
+check("v9.33.44: the password is sent on the call AND on the search",
+      load("RemoteEngine.kt").count('setRequestProperty("Authorization", "Bearer " + key())') == 2 and
+      load("Settings.kt").count("var remoteKey") == 1)
+check("v9.33.44: the start scripts pick up password.txt",
+      open(os.path.join(ROOT, "start-nova-server.bat")).read().count("--api-key") == 1 and
+      open(os.path.join(ROOT, "start-nova-server.sh")).read().count("--api-key") == 1)
 
 # ---- v9.33.43: nobody types an IP address ----
 check("v9.33.43: the phone finds the computer by itself",
