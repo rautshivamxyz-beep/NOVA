@@ -217,7 +217,23 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.49: version bumped for the keep-it-alive pass", bg.count("versionName '9.33.49'") == 1 and bg.count("versionCode 217") == 1)
+check("v9.33.50: version bumped for the audit-fix pass", bg.count("versionName '9.33.50'") == 1 and bg.count("versionCode 218") == 1)
+
+# ---- v9.33.50: the three findings the audit got right ----
+check("v9.33.50: the user's own instructions never go to a remote machine",
+      load("ncie/PrivatePrompt.kt").count("fun systemPromptFor(") == 1 and
+      load("RemoteEngine.kt").count("PrivatePrompt.systemPromptFor(systemPrompt(), privateOnly)") == 1)
+check("v9.33.50: plain http to a public address is refused",
+      load("ncie/RemoteHost.kt").count("fun isInsecurePublic(") == 1 and
+      load("RemoteEngine.kt").count("RemoteHost.isInsecurePublic(") == 1)
+check("v9.33.50: a discovered server is never switched on by itself",
+      load("SettingsActivity.kt").count("settings.remoteEnabled = true") == 0)
+check("v9.33.50: the model option says what it actually is",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MODEL=7b") == 1 and
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MODEL=8b") == 0)
+check("v9.33.50: both new guarantees are unit-tested",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/RemoteHostTest.kt")).read().count("@Test") >= 6 and
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/PrivatePromptTest.kt")).read().count("systemPromptFor") >= 2)
 
 # ---- v9.33.49: the instance has to survive Oracle ----
 check("v9.33.49: the guide carries Oracle's own fix for reclamation",
@@ -228,8 +244,9 @@ check("v9.33.49: the server names its thread count",
       open(os.path.join(ROOT, "setup-oracle.sh")).read().count("-t $(nproc)") == 1)
 
 # ---- v9.33.48: an 8B model, honestly offered ----
-check("v9.33.48: the script can actually run an 8B",
-      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MODEL=8b") >= 1 and
+# v9.33.50: the option was called 8b and never was one - it downloads a 7B.
+check("v9.33.48: the script can actually run a big model",
+      open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MODEL=7b") >= 1 and
       open(os.path.join(ROOT, "setup-oracle.sh")).read().count("Qwen2.5-7B-Instruct-Q4_K_M.gguf") == 1)
 check("v9.33.48: it refuses a model the machine cannot hold",
       open(os.path.join(ROOT, "setup-oracle.sh")).read().count("MemTotal") == 1 and
