@@ -1361,10 +1361,11 @@ class MainActivity : Activity() {
             // (NcieChat sends history only when the engine lacks it). So the
             // engine keeps the conversation - real memory, and no re-prefill -
             // and we reset only when the history genuinely has to be re-sent.
-            if (newBubble && needsContextCarry) {
+            if (newBubble && (needsContextCarry || NovaEngine.contextResetExternally)) {
                 try {
                     NovaEngine.resetConversation(this@MainActivity, settings.systemPrompt)
                     needsContextCarry = false
+                    NovaEngine.contextResetExternally = false
                 } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             }
             // v5.4.2: performance timers (time-to-first-token + total)
