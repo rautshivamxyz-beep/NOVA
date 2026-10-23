@@ -96,7 +96,9 @@ object PrivatePrompt {
     private fun cutLine(s: String, startsWith: String): String {
         val a = s.indexOf(startsWith)
         if (a < 0) return s
-        val b = s.indexOf("\n\n", a)
-        return if (b < 0) s.substring(0, a) else s.substring(0, a) + s.substring(b + 2)
+        // Memory text may itself contain blank lines. Cut through the final
+        // separator, not the first embedded one, to avoid leaking the tail.
+        val b = s.lastIndexOf("\n\n")
+        return if (b < a) s.substring(0, a) else s.substring(0, a) + s.substring(b + 2)
     }
 }
