@@ -41,7 +41,7 @@ class GapStoreTest {
         val s = empty()
         s.note("b", 1L)
         s.note("a", 1L)
-        s.note("c", 5L)
+        repeat(5) { s.note("c", 5L) }   // "c" is asked five times -> count 5
         assertEquals(listOf("c", "a", "b"), s.top(3).map { it.question })
     }
 
