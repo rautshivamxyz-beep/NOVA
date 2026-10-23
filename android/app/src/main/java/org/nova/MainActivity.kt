@@ -3228,9 +3228,12 @@ Study:
                     val dir = java.io.File(cacheDir, "updates").apply { mkdirs() }
                     val part = java.io.File(dir, "nova-update.patch.part")
                     val patch = java.io.File(dir, "nova-update.patch")
-                    java.net.URL(patchUrl).openStream().use { input ->
-                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
-                    }
+                    val patchConn = org.nova.NovaNet.open(this@MainActivity, patchUrl)
+                    try {
+                        patchConn.inputStream.use { input ->
+                            java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                        }
+                    } finally { patchConn.disconnect() }
                     if (patch.exists()) patch.delete()
                     if (!part.renameTo(patch)) throw RuntimeException("could not save the patch")
                     val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -3266,9 +3269,10 @@ Study:
         // downloaded NOVA-latest.apk, which never existed (404) - so the
         // check always claimed "up to date". The APK is now published to
         // NOVA-APK by CI (see nova-apk.yml's mirror step).
-        val conn = java.net.URL(
+        val conn = org.nova.NovaNet.open(
+            this,
             "https://api.github.com/repos/rautshivamxyz-beep/NOVA-APK/releases/latest"
-        ).openConnection() as java.net.HttpURLConnection
+        )
         conn.connectTimeout = 10000
         conn.readTimeout = 15000
         conn.setRequestProperty("User-Agent", "NOVA-Android")
@@ -3321,9 +3325,12 @@ Study:
                     dir.mkdirs()
                     val part = java.io.File(dir, "nova-update.apk.part")
                     val done = java.io.File(dir, "nova-update.apk")
-                    java.net.URL(apkUrl).openStream().use { input ->
-                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
-                    }
+                    val apkConn = org.nova.NovaNet.open(this@MainActivity, apkUrl)
+                    try {
+                        apkConn.inputStream.use { input ->
+                            java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                        }
+                    } finally { apkConn.disconnect() }
                     if (done.exists()) done.delete()
                     if (!part.renameTo(done)) {
                         part.delete()
