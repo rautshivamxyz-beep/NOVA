@@ -219,7 +219,18 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.54: version bumped for the say-it-as-a-do pass", bg.count("versionName '9.33.54'") == 1 and bg.count("versionCode 222") == 1)
+check("v9.33.55: version bumped for the core-tests pass", bg.count("versionName '9.33.55'") == 1 and bg.count("versionCode 223") == 1)
+
+# ---- v9.33.55: unit tests for the deterministic core ----
+# The two pure functions with the widest blast radius were still
+# untested: the app arithmetic gate (an instant, model-free answer - a
+# silent regression either shows a wrong number or drops the turn to
+# the LLM) and Coverage.ratio (the fetched/wiki background gate - a
+# silent regression either admits junk or discards a good answer).
+check("v9.33.55: the app arithmetic gate is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/ArithmeticToolTest.kt")).read().count("@Test") >= 6)
+check("v9.33.55: the coverage gate is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/verify/CoverageTest.kt")).read().count("@Test") >= 5)
 
 # ---- v9.33.54: what makes it dumber ----
 check("v9.33.54: the rules say what to do, not what not to do",
