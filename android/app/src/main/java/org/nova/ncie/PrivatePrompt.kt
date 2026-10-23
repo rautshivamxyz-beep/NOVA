@@ -85,8 +85,11 @@ object PrivatePrompt {
     private fun cutBetween(s: String, from: String, to: String): String {
         val a = s.indexOf(from)
         if (a < 0) return s
-        val b = s.indexOf(to, a)
-        return if (b < 0) s.substring(0, a) else s.substring(0, a) + s.substring(b + to.length)
+        // Private documents can contain the same marker text as the wrapper. Use
+        // the final closing marker so an embedded marker cannot expose the
+        // remainder of the private block to the remote model.
+        val b = s.lastIndexOf(to)
+        return if (b < a) s.substring(0, a) else s.substring(0, a) + s.substring(b + to.length)
     }
 
     /** Removes the one-paragraph line that [startsWith] opens. */
