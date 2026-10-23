@@ -439,11 +439,11 @@ object OnlineFetch {
         // guard both calls so neither can abort the search.
         val enc = URLEncoder.encode(q, "UTF-8")
         var links = try {
-            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc))
+            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc), q)
         } catch (e: Exception) { emptyList() }
         if (links.isEmpty()) {
             links = try {
-                parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc))
+                parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc), q)
             } catch (e: Exception) { emptyList() }
         }
         for ((url, title) in links.take(3)) {
@@ -457,7 +457,7 @@ object OnlineFetch {
 
     /** (url, title) pairs from DuckDuckGo lite's plain result HTML -
      *  ad and internal links filtered, uddg redirects unwrapped. */
-    private fun parseDdgLinks(html: String): List<Pair<String, String>> {
+    private fun parseDdgLinks(html: String, q: String): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         for (m in Regex("(?is)<a[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>").findAll(html)) {
             var url = m.groupValues[1]
