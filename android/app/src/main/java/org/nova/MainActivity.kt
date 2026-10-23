@@ -1513,7 +1513,7 @@ class MainActivity : Activity() {
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
                         (isDegenerateReply(stripThinking(replyMsg.text)) ||
                             chatDerailed(stripThinking(replyMsg.text), prompt) ||
-                            (isCodeRequestText(userText) && !looksLikeCompleteCode(stripThinking(replyMsg.text)))) {
+                            (isCodeRequestText(userText) && !looksLikeCompleteCode(stripThinking(replyMsg.text))))) {
                         replyRetried = true
                         pendingCitation = null
                         pendingQaKey = null
