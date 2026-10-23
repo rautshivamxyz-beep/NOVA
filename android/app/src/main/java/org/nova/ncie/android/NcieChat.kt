@@ -21,6 +21,7 @@ import org.nova.NovaListener
 import org.nova.Role
 import org.nova.SMALLTALK_REGEX
 import org.nova.WikiCore
+import org.nova.ncie.knowledge.EntityMatch
 import org.nova.ncie.verify.Coverage
 import java.io.File
 
@@ -199,6 +200,26 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // sent mid-fetch never consumes the flag.
         val preShown = offeredQuestionShown == text
         if (preShown) offeredQuestionShown = null
+        // v9.33.61: don't resolve an ambiguous surname to whichever local article
+        // happens to rank first (for example, "who is Modi" -> Jashodaben Modi).
+        val clarification = EntityMatch.clarificationFor(text)
+        if (clarification != null) {
+            input.setText("")
+            if (!preShown) {
+                val um = Msg(Role.USER, text)
+                currentChat.messages.add(um)
+                adapter.add(um)
+            }
+            val reply = Msg(Role.ASSISTANT, clarification)
+            currentChat.messages.add(reply)
+            adapter.add(reply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(this, currentChat) }
+                catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+            }
+            return
+        }
         val isChip = CHIP_PROMPTS.contains(text)
         // v9.33.15: a generation request is a fresh task - NOVA answered
         // "generate a code for a offline chatbot" with the previous turn's
