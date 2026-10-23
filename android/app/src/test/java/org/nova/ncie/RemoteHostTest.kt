@@ -63,7 +63,6 @@ class RemoteHostTest {
         assertFalse(RemoteHost.isPrivate("8.8.8.8"))
         assertFalse(RemoteHost.isPrivate("not a host"))
     }
-}
 
     @Test
     fun ipv6PrivateRangesAreRecognisedAndPublicIpv6IsRejected() {
@@ -81,3 +80,4 @@ class RemoteHostTest {
         assertEquals(null, RemoteHost.hostOf("http://user:pass@192.168.1.5:8080"))
         assertEquals(null, RemoteHost.hostOf("not a url"))
     }
+}
