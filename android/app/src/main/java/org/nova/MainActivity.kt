@@ -1510,19 +1510,27 @@ class MainActivity : Activity() {
                     if (newBubble) showFollowUps()
                     // blank, one-word or looping answers from tiny models:
                     // retry once with a firmer instruction instead of garbage
+                    val needsCodeRetry = isCodeRequestText(userText) &&
+                        !looksLikeCompleteCode(stripThinking(replyMsg.text))
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
                         (isDegenerateReply(stripThinking(replyMsg.text)) ||
-                            chatDerailed(stripThinking(replyMsg.text), prompt))) {
+                            chatDerailed(stripThinking(replyMsg.text), prompt) ||
+                            needsCodeRetry)) {
                         replyRetried = true
                         pendingCitation = null
                         pendingQaKey = null
                         replyMsg.text = ""
                         adapter.setLastText("")
-                        startGeneration(
+                        val retryPrompt = if (isCodeRequestText(userText)) {
+                            "Recheck the code you just attempted for this request: $userText\n" +
+                                "Return one complete, corrected, runnable code block. Verify imports, syntax, types, function calls, and missing sections. " +
+                                "Do not summarize the code, use placeholders, or repeat a broken draft. If the earlier draft was incomplete, replace it fully."
+                        } else {
                             "Question: $userText\nAnswer the question directly and clearly " +
                                 "in one to three sentences. If you don't know the answer, " +
-                                "say so honestly. Do not repeat the same point twice.",
-                            null, newBubble = false)
+                                "say so honestly. Do not repeat the same point twice."
+                        }
+                        startGeneration(retryPrompt, null, newBubble = false)
                         return@withContext
                     }
                     // a reply that still came out completely empty - say so
@@ -1675,6 +1683,23 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    /** Code-specific answer checks: retry obvious incomplete code once. */
+    private fun isCodeRequestText(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        return Regex("(?i)\\b(write|generate|create|make|build|give me)\\b[^.]{0,40}\\b(code|program|script|function|class|snippet|app)\\b|\\bcode\\s+(for|to)\\b").containsMatchIn(text)
+    }
+
+    private fun looksLikeCompleteCode(answer: String): Boolean {
+        val fences = Regex("\\x60{3}").findAll(answer).count()
+        if (fences < 2 || fences % 2 != 0) return false
+        val blocks = Regex("(?s)\\x60{3}[\\w+#.-]*\\s*(.*?)\\x60{3}").findAll(answer).map { it.groupValues[1].trim() }.toList()
+        if (blocks.isEmpty()) return false
+        val code = blocks.joinToString("\\n")
+        if (code.length < 30) return false
+        if (Regex("(?i)(rest of (the )?code|implementation omitted|insert code here|your code here|\\.\\.\\.)").containsMatchIn(code)) return false
+        return true
     }
 
     /** Word edit distance (capped at 3) - fuzzy matching for typed/spoken commands. */
@@ -3205,9 +3230,12 @@ Study:
                     val dir = java.io.File(cacheDir, "updates").apply { mkdirs() }
                     val part = java.io.File(dir, "nova-update.patch.part")
                     val patch = java.io.File(dir, "nova-update.patch")
-                    java.net.URL(patchUrl).openStream().use { input ->
-                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
-                    }
+                    val patchConn = org.nova.NovaNet.open(this@MainActivity, patchUrl)
+                    try {
+                        patchConn.inputStream.use { input ->
+                            java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                        }
+                    } finally { patchConn.disconnect() }
                     if (patch.exists()) patch.delete()
                     if (!part.renameTo(patch)) throw RuntimeException("could not save the patch")
                     val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -3243,9 +3271,10 @@ Study:
         // downloaded NOVA-latest.apk, which never existed (404) - so the
         // check always claimed "up to date". The APK is now published to
         // NOVA-APK by CI (see nova-apk.yml's mirror step).
-        val conn = java.net.URL(
+        val conn = org.nova.NovaNet.open(
+            this,
             "https://api.github.com/repos/rautshivamxyz-beep/NOVA-APK/releases/latest"
-        ).openConnection() as java.net.HttpURLConnection
+        )
         conn.connectTimeout = 10000
         conn.readTimeout = 15000
         conn.setRequestProperty("User-Agent", "NOVA-Android")
@@ -3298,9 +3327,12 @@ Study:
                     dir.mkdirs()
                     val part = java.io.File(dir, "nova-update.apk.part")
                     val done = java.io.File(dir, "nova-update.apk")
-                    java.net.URL(apkUrl).openStream().use { input ->
-                        java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
-                    }
+                    val apkConn = org.nova.NovaNet.open(this@MainActivity, apkUrl)
+                    try {
+                        apkConn.inputStream.use { input ->
+                            java.io.FileOutputStream(part).use { fs -> input.copyTo(fs) }
+                        }
+                    } finally { apkConn.disconnect() }
                     if (done.exists()) done.delete()
                     if (!part.renameTo(done)) {
                         part.delete()
