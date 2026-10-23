@@ -369,6 +369,10 @@ object OnlineFetch {
                 val k = pages.keys().next()
                 pages.getJSONObject(k).getString("extract")
             } catch (e: Exception) { null }
+            // v9.33.61: entity lookups must not accept a page merely because
+            // it mentions the requested name. Check the title before returning
+            // so a wrong first hit doesn't block a correct later result.
+            if (entityQuestion(q) && !EntityMatch.titleMatchesEntity(title, q)) continue
             // v9.29.5: skip disambiguation pages ("X may refer to:") - the top
             // hit for many names is one, and grounding on a list of unrelated
             // people is worse than trying the next hit.
