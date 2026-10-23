@@ -38,6 +38,14 @@ class CalculatorToolTest {
     }
 
     @Test
+    fun nonFiniteResultsAreRefusedByBothEvaluators() {
+        for (expression in listOf("10^1000", "0^-1", "(-1)^0.5")) {
+            assertNull("direct: $expression", calc.evaluateDirect(expression))
+            assertNull("RPN: $expression", calc.evaluateRpn(expression))
+        }
+    }
+
+    @Test
     fun divisionByZeroIsRefused() {
         assertNull(calc.evaluateDirect("1/0"))
     }
