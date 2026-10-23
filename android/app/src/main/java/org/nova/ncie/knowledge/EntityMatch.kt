@@ -56,6 +56,18 @@ object EntityMatch {
         return terms.all { spaced.contains(" " + it + " ") || deSpaced.contains(it) }
     }
 
+    /** Requests to locate another person's private/current position. */
+    fun isPrivateLocationTrackingRequest(question: String): Boolean {
+        val q = question.trim()
+        return Regex(
+            "(?i)\\b(?:find|track|locate|show|tell\\s+me|what\\s+is)\\b.{0,40}" +
+                "\\b(?:his|her|their|someone'?s|that\\s+person'?s)\\s+" +
+                "(?:(?:current|live|real[- ]time|exact)\\s+)?location\\b"
+        ).containsMatchIn(q) ||
+            Regex("(?i)\\bwhere\\s+is\\s+(?:he|she|they)\\s+(?:now|right\\s+now)\\b")
+                .containsMatchIn(q)
+    }
+
     /** Common surnames that are not enough to identify one person reliably. */
     private val AMBIGUOUS_SINGLE_NAMES = setOf(
         "modi", "singh", "kumar", "sharma", "gupta", "patel", "khan",
