@@ -219,7 +219,17 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.55: version bumped for the core-tests pass", bg.count("versionName '9.33.55'") == 1 and bg.count("versionCode 223") == 1)
+check("v9.33.56: version bumped for the second core-tests pass", bg.count("versionName '9.33.56'") == 1 and bg.count("versionCode 224") == 1)
+
+# ---- v9.33.56: more of the deterministic core pinned ----
+# WikiStore.search picks the article handed to the model as background
+# (the v7.8.1 whole-word title bonus lives there), and Distiller picks
+# which learned facts become permanent knowledge (the v0.9.2 opt#8
+# document-name fix lives there). Both are silent when they regress.
+check("v9.33.56: the offline-wiki ranking is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/knowledge/WikiStoreTest.kt")).read().count("@Test") >= 4)
+check("v9.33.56: the memory graduation ceremony is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/learn/DistillerTest.kt")).read().count("@Test") >= 6)
 
 # ---- v9.33.55: unit tests for the deterministic core ----
 # The two pure functions with the widest blast radius were still
