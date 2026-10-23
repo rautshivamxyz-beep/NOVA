@@ -98,7 +98,7 @@ object PrivatePrompt {
         if (a < 0) return s
         // The generated wrapper closes with ")" followed by the paragraph separator.
         // Embedded blank lines or close-like text inside memory must not be trusted.
-        val close = ")\\n\\n"
+        val close = ")\n\n"
         if (countOccurrences(s, close, a + startsWith.length) != 1) return null
         val b = s.indexOf(close, a + startsWith.length)
         if (b < 0) return null
