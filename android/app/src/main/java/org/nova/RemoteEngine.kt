@@ -30,10 +30,12 @@ object RemoteEngine {
     @Volatile private var cfg: Array<String> = arrayOf("", "", "", "")
     @Volatile private var on = false
     @Volatile private var privateOnly = true
+    @Volatile private var appContext: android.content.Context? = null
 
     /** Read the current settings once. Called at app start and on every edit. */
     fun configure(ctx: android.content.Context) {
         try {
+            appContext = ctx.applicationContext
             val s = Settings(ctx)
             cfg = arrayOf(s.remoteUrl.trim(), s.remoteModel.trim(), s.systemPrompt, s.remoteKey)
             privateOnly = s.remotePrivateOnly
@@ -174,7 +176,15 @@ object RemoteEngine {
             if (sys.isNotBlank()) append("{\"role\":\"system\",\"content\":").append(q(sys)).append("},")
             append("{\"role\":\"user\",\"content\":").append(q(ask)).append("}]}")
         }
-        val conn = (URL(endpoint()).openConnection() as HttpURLConnection).apply {
+        // Public remote inference follows the SOCKS setting too. User-owned LAN/loopback
+        // endpoints stay direct so a local laptop server remains reachable when Tor is on.
+        val remoteUrl = endpoint()
+        val remoteHost = RemoteHost.hostOf(remoteUrl)
+        val conn = if (remoteHost != null && !RemoteHost.isPrivate(remoteHost)) {
+            NovaNet.open(appContext, remoteUrl)
+        } else {
+            (URL(remoteUrl).openConnection() as HttpURLConnection)
+        }.apply {
             requestMethod = "POST"
             connectTimeout = 6000
             readTimeout = 180000
