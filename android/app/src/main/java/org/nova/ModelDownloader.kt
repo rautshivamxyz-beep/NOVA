@@ -227,8 +227,8 @@ object ModelDownloader {
                 val end = match.groupValues[2].toLongOrNull()
                     ?: throw IOException("invalid resume end")
                 val rangeTotal = match.groupValues[3].toLongOrNull()
-                if (start != existing || end < start ||
-                    (rangeTotal != null && end >= rangeTotal))
+                    ?: throw IOException("server omitted the full size in Content-Range; retry with a supported source")
+                if (start != existing || end < start || end >= rangeTotal)
                     throw IOException("server resumed at the wrong byte; partial file was not appended")
                 val expectedChunk = end - start + 1
                 if (conn.contentLengthLong > 0 && conn.contentLengthLong != expectedChunk)
