@@ -10,7 +10,7 @@ import java.net.URI
  * A bearer key is not encryption. Plain HTTP to a public host exposes both the
  * credential and prompt, so private-only mode refuses that route.
  *
- * This parser deliberately fails closed: malformed URLs, user-info credentials,
+ * This parser deliberately fails closed: malformed URLs, URL user-info,
  * missing hosts, and unrecognised address formats are not treated as private.
  */
 object RemoteHost {
@@ -20,8 +20,6 @@ object RemoteHost {
         val trimmed = url.trim()
         val uri = try { URI(trimmed) } catch (_: Exception) { return true }
         if (!uri.scheme.equals("http", ignoreCase = true)) return false
-        // User-info in a URL is unnecessary for NOVA and makes destination
-        // inspection easier to get wrong. Refuse it instead of guessing.
         if (uri.rawUserInfo != null) return true
         val host = hostOf(trimmed) ?: return true
         return !isPrivate(host)
@@ -39,8 +37,8 @@ object RemoteHost {
 
     /**
      * Recognise RFC1918 IPv4, loopback, link-local, Tailscale CGNAT, and IPv6
-     * loopback/ULA/link-local. Hostnames are allowed only for explicit local
-     * naming conventions; arbitrary dotted hostnames are not presumed private.
+     * loopback/ULA/link-local. Hostnames are allowed only for local naming
+     * conventions; arbitrary dotted hostnames are not presumed private.
      */
     fun isPrivate(host: String): Boolean {
         val h = host.lowercase().trim()
@@ -50,19 +48,15 @@ object RemoteHost {
         if (h.contains(':')) {
             val address = try { InetAddress.getByName(h) } catch (_: Exception) { return false }
             if (address !is Inet6Address) return false
-            val b = address.address
-            // ::1 loopback
-            if (b.dropLast(1).all { it.toInt() == 0 } && b.last().toInt() == 1) return true
-            val first = b[0].toInt() and 0xff
-            val second = b[1].toInt() and 0xff
-            // fc00::/7 unique-local and fe80::/10 link-local
+            val bytes = address.address
+            if (bytes.dropLast(1).all { it.toInt() == 0 } && bytes.last().toInt() == 1) return true
+            val first = bytes[0].toInt() and 0xff
+            val second = bytes[1].toInt() and 0xff
             return (first and 0xfe) == 0xfc ||
                 (first == 0xfe && (second and 0xc0) == 0x80)
         }
 
         if (!h.contains('.')) {
-            // Single-label machine names are used on home LANs, but malformed
-            // labels must not accidentally pass as a trusted destination.
             return h.all { it.isLetterOrDigit() || it == '-' } &&
                 h.firstOrNull()?.isLetterOrDigit() == true &&
                 h.lastOrNull()?.isLetterOrDigit() == true
