@@ -45,7 +45,9 @@ class PlannerActivity : Activity() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-    private fun tinted(res: Int, color: Int) = getDrawable(res)!!.mutate().apply {
+    private fun tinted(res: Int, color: Int) =
+        (androidx.core.content.ContextCompat.getDrawable(this, res)
+            ?: android.graphics.drawable.ColorDrawable(color)).mutate().apply {
         colorFilter = android.graphics.PorterDuffColorFilter(
             color, android.graphics.PorterDuff.Mode.SRC_IN)
     }

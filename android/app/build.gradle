@@ -109,8 +109,14 @@ android {
         // shape which background and which facts NOVA keeps.
         // v9.33.57: the capability-gap log joins them - the measured
         // evidence the improvement loop counts.
-        versionCode 225
-        versionName '9.33.57'
+        // v9.33.58 "Audit Pass": R8 shrinking on, cleartext scoped to the
+        //   LAN exception (no global manifest flag), the two giant files
+        //   split (MainActivity -> +ChatText/+MessageAdapter,
+        //   NcieChat -> +NcieChatExt), a sandboxed JS WebView, a bounded
+        //   fetch body, and a batch of null-safety + swallowed-log fixes.
+        //   Detail: NOVA-Improvements.md.
+        versionCode 226
+        versionName '9.33.58'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
@@ -139,7 +145,16 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // v9.33.58 (improvement pass): R8 shrinking + obfuscation, with
+            // resource shrinking. The keep rules in proguard-rules.pro cover
+            // the reflective surfaces (PDFBox, Prism4j/Markwon, ONNX Runtime,
+            // ML Kit, the llama AAR, the manifest components).
+            // IMPORTANT: smoke-test on a device before shipping - if anything
+            // breaks, add `-dontobfuscate` to proguard-rules.pro to isolate it.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                          'proguard-rules.pro'
             signingConfig System.getenv('NOVA_KEYSTORE_PASSWORD') ? signingConfigs.release : signingConfigs.debug
         }
     }

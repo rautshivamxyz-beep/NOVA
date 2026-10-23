@@ -54,11 +54,13 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_DISMISSED_UPDATE, "") ?: ""
         set(value) = prefs.edit().putString(KEY_DISMISSED_UPDATE, value).apply()
 
-    /** Conversation mode: auto-listen + auto-send after each reply. */
+    /** UI theme (only "dark" is currently implemented). v9.33.58: the old
+     *  comment here described auto-listen by mistake. */
     var theme: String
         get() = prefs.getString(KEY_THEME, "dark") ?: "dark"
         set(value) = prefs.edit().putString(KEY_THEME, value).apply()
 
+    /** Conversation mode: auto-listen + auto-send after each reply. */
     var autoListen: Boolean
         get() = prefs.getBoolean(KEY_AUTO_LISTEN, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_LISTEN, value).apply()
@@ -91,8 +93,8 @@ class Settings(context: Context) {
      *  facts. Turning this off restores the ask-first dialog.
      */
     var autoOnline: Boolean
-        get() = prefs.getBoolean("autoOnline", true)
-        set(v) = prefs.edit().putBoolean("autoOnline", v).apply()
+        get() = prefs.getBoolean(KEY_AUTO_ONLINE, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_ONLINE, value).apply()
 
     /** v5.5.0: strict mode - refuse instead of inventing when the
      *  answer is not in the user's notes or offline Wikipedia. */
@@ -260,6 +262,8 @@ class Settings(context: Context) {
         private const val KEY_AUTO_LISTEN = "auto_listen"
         private const val KEY_THEME = "theme"
         private const val KEY_KNOWLEDGE = "knowledge_enabled"
+        // v9.33.58: was a bare literal at every use site.
+        private const val KEY_AUTO_ONLINE = "autoOnline"
         private const val KEY_WIKI = "wiki_enabled"
         private const val KEY_ONLINE_LEARN = "online_learning"
         private const val KEY_STRICT = "strict_mode"

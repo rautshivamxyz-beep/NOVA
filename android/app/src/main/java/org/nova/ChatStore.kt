@@ -26,13 +26,16 @@ class Chat(
  */
 object ChatStore {
 
+    /** Default name of a fresh conversation (was a bare string literal). */
+    private const val NEW_CHAT_NAME = "New chat"
+
     private fun dir(context: Context): File =
         File(context.filesDir, "chats").apply { if (!exists()) mkdirs() }
 
     fun newChat(): Chat =
         Chat(
             id = java.util.UUID.randomUUID().toString(),
-            name = "New chat",
+            name = NEW_CHAT_NAME,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
@@ -40,9 +43,9 @@ object ChatStore {
     fun save(context: Context, chat: Chat) {
         try {
             // Auto-name from the first user message until renamed
-            if (chat.name == "New chat") {
+            if (chat.name == NEW_CHAT_NAME) {
                 chat.messages.firstOrNull { it.role == Role.USER && it.text.isNotBlank() }?.let {
-                    chat.name = it.text.take(28).replace('\n', ' ').ifBlank { "New chat" }
+                    chat.name = it.text.take(28).replace('\n', ' ').ifBlank { NEW_CHAT_NAME }
                 }
             }
             chat.updatedAt = System.currentTimeMillis()
@@ -64,6 +67,7 @@ object ChatStore {
             }
         } catch (e: Exception) {
             // best effort — never crash the app for storage
+            NovaLog.quiet("ChatStore", e)
         }
     }
 
@@ -87,12 +91,13 @@ object ChatStore {
         }
         Chat(
             id = json.optString("id", id),
-            name = json.optString("name", "New chat"),
+            name = json.optString("name", NEW_CHAT_NAME),
             createdAt = json.optLong("created", 0L),
             updatedAt = json.optLong("updated", 0L),
             messages = messages
         )
     } catch (e: Exception) {
+        NovaLog.quiet("ChatStore", e)
         null
     }
 
@@ -114,11 +119,11 @@ object ChatStore {
         val json = JSONObject(f.readText())
         Chat(
             id = json.optString("id", id),
-            name = json.optString("name", "New chat"),
+            name = json.optString("name", NEW_CHAT_NAME),
             createdAt = json.optLong("created", 0L),
             updatedAt = json.optLong("updated", 0L)
         )
-    } catch (e: Exception) { null }
+    } catch (e: Exception) { NovaLog.quiet("ChatStore", e); null }
 
     fun clearAll(context: Context) {
         dir(context).listFiles()?.forEach { it.delete() }
