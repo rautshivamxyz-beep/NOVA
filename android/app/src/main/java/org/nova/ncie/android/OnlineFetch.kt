@@ -199,6 +199,7 @@ object OnlineFetch {
                 if (reason.isEmpty()) reason = "wikipedia: no usable article"
             } else reason = "wikipedia: weak match"
             // 2. the open web - only when Wikipedia had nothing usable
+            var savedWeb: WebPage? = null
             if (saved == null) {
                 val page = try { fetchWeb(act, q) } catch (e: Exception) {
                     reason = joinReason(reason, "web: " + err(e)); null
@@ -209,11 +210,18 @@ object OnlineFetch {
                     val body = page.text + (if (page.code.isNotEmpty())
                         "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
                         else "")
-                    if ((Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
+                    // Entity lookups require both title identity and content coverage.
+                    // A page that merely mentions a name must never become a biography.
+                    val wrongWebEntity = entityQuestion(text) &&
+                        !EntityMatch.titleMatchesEntity(page.title, text)
+                    if (!wrongWebEntity &&
+                        (Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
-                    } else reason = joinReason(reason, "web: weak match")
+                        savedWeb = page
+                    } else reason = joinReason(reason,
+                        if (wrongWebEntity) "web: title does not match requested person" else "web: weak match")
                 } else reason = joinReason(reason, "web: no page")
             }
             // v9.17.1: diagnose the failure on the IO thread (a proxy
@@ -228,6 +236,11 @@ object OnlineFetch {
                     if (src != null && wiki.first == saved && entityQuestion(text)) {
                         act.toast("Found \"$saved\" - answering from it")
                         directAnswer(act, cleanSourceText(src), saved)
+                    } else if (savedWeb != null && savedWeb.title == saved && entityQuestion(text)) {
+                        val webSource = savedWeb!!
+                        act.toast("Found \"$saved\" - answering from the source")
+                        directAnswer(act, cleanSourceText(webSource.text),
+                            webSource.title + " — " + webSource.url, "Web")
                     } else {
                         act.toast("Saved \"$saved\" - now offline forever")
                         act.launchNcieSend(text, offered = true)
@@ -327,9 +340,10 @@ object OnlineFetch {
     private fun entityQuestion(q: String): Boolean = EntityMatch.isEntityQuestion(q)
 
     /** Posts the source text as the answer. Deterministic - no model call. */
-    private fun directAnswer(act: MainActivity, body: String, source: String) {
+    private fun directAnswer(act: MainActivity, body: String, source: String,
+                             sourceKind: String = "Wikipedia") {
         act.offeredQuestionShown = null
-        val reply = Msg(Role.ASSISTANT, body + "\n\n(Source: Wikipedia - " + source + ")")
+        val reply = Msg(Role.ASSISTANT, body + "\n\n(Source: " + sourceKind + " - " + source + ")")
         act.currentChat.messages.add(reply)
         act.adapter.add(reply)
         act.scrollToEnd()
@@ -369,6 +383,10 @@ object OnlineFetch {
                 val k = pages.keys().next()
                 pages.getJSONObject(k).getString("extract")
             } catch (e: Exception) { null }
+            // v9.33.61: entity lookups must not accept a page merely because
+            // it mentions the requested name. Check the title before returning
+            // so a wrong first hit doesn't block a correct later result.
+            if (entityQuestion(q) && !EntityMatch.titleMatchesEntity(title, q)) continue
             // v9.29.5: skip disambiguation pages ("X may refer to:") - the top
             // hit for many names is one, and grounding on a list of unrelated
             // people is worse than trying the next hit.
@@ -421,11 +439,11 @@ object OnlineFetch {
         // guard both calls so neither can abort the search.
         val enc = URLEncoder.encode(q, "UTF-8")
         var links = try {
-            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc))
+            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc), q)
         } catch (e: Exception) { emptyList() }
         if (links.isEmpty()) {
             links = try {
-                parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc))
+                parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc), q)
             } catch (e: Exception) { emptyList() }
         }
         for ((url, title) in links.take(3)) {
@@ -439,7 +457,7 @@ object OnlineFetch {
 
     /** (url, title) pairs from DuckDuckGo lite's plain result HTML -
      *  ad and internal links filtered, uddg redirects unwrapped. */
-    private fun parseDdgLinks(html: String): List<Pair<String, String>> {
+    private fun parseDdgLinks(html: String, q: String): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         for (m in Regex("(?is)<a[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>").findAll(html)) {
             var url = m.groupValues[1]
@@ -455,7 +473,9 @@ object OnlineFetch {
             // keep only real result pages: external http(s), not ads, with
             // a real title - the rest is the engine's own chrome
             if (url.startsWith("https") && !url.contains("duckduckgo.com") &&
-                title.length > 3) out.add(url to title)
+                title.length > 3 &&
+                (!entityQuestion(q) || EntityMatch.titleMatchesEntity(title, q)))
+                out.add(url to title)
         }
         return out.distinctBy { it.first }
     }
