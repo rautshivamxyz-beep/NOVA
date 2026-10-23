@@ -165,6 +165,7 @@ object NovaEngine {
                 engine.setSystemPrompt(prompt)
             } catch (e: Exception) {
                 // Not fatal: model still works without a system prompt
+                NovaLog.quiet("NovaEngine", e)
             }
         }
         activeModelPath = path
@@ -345,6 +346,7 @@ object NovaEngine {
                 engine.cleanUp()
             } catch (e: Exception) {
                 // best effort
+                NovaLog.quiet("NovaEngine", e)
             }
         }
     }

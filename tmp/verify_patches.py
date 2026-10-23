@@ -42,8 +42,8 @@ def load_test(f):
     return open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/" + f), encoding="utf-8").read()
 
 
-ma = load("MainActivity.kt")
-nc = load("ncie/android/NcieChat.kt")
+ma = load("MainActivity.kt") + load("ChatText.kt") + load("MessageAdapter.kt")
+nc = load("ncie/android/NcieChat.kt") + load("ncie/android/NcieChatExt.kt")
 # v9.4.0 "Audit Fixes II": Backup.kt (the legacy JSON backup) is deleted -
 # the full zip backup in BackupActivity replaced it, so its checks are
 # retired here with it.
@@ -94,8 +94,8 @@ for name, marker, n in MA_MARKERS:
 
 # markers that moved with send()'s body to ncie/android/NcieChat.kt
 NC_MARKERS = [
-    ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 2),
-    ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 2),
+    ("v7.3 greeting fast-path (use)", "SMALLTALK_REGEX", 3),
+    ("v7.4 chip prompt set (use)", "CHIP_PROMPTS", 3),
     ("v7.4 chip routing check", "val isChip = CHIP_PROMPTS.contains(text)", 1),
     ("v7.5/9.33.5 lean wiki cap", "val cap = if (lean) 1400 else 1800", 1),
     ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
@@ -219,7 +219,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.57: version bumped for the gap-log test pass", bg.count("versionName '9.33.57'") == 1 and bg.count("versionCode 225") == 1)
+check("v9.33.58: version bumped", bg.count("versionName '9.33.58'") == 1 and bg.count("versionCode 226") == 1)
 
 # ---- v9.33.57: the capability-gap log pinned ----
 check("v9.33.57: the capability-gap log is pinned by a unit test",
@@ -932,8 +932,11 @@ _vamf = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), enc
 # while this is false. What still holds: the app's OWN lookups go through the
 # https-only helper in OnlineFetch, and the only cleartext connection in the
 # codebase is the one to the address the user typed on their own network.
-check("v9.33.42: cleartext is permitted, for the user's own LAN model server",
-      _vamf.count('android:usesCleartextTraffic="true"') == 1 and
+check("v9.33.58: cleartext is scoped - NOT a global manifest flag",
+      # v9.33.58: the redundant app-wide android:usesCleartextTraffic flag was
+      # removed. The LAN exception now lives only in network_security_config,
+      # and NovaNet refuses an https->http redirect downgrade.
+      _vamf.count('android:usesCleartextTraffic="true"') == 0 and
       open(os.path.join(ROOT, "android/app/src/main/res/xml/network_security_config.xml"))
         .read().count('cleartextTrafficPermitted="true"') == 1)
 # ---- v9.14.0 "Sharp Memory": learn each context source's value; skip the dead ones ----

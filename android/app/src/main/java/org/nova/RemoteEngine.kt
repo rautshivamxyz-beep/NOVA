@@ -71,7 +71,11 @@ object RemoteEngine {
         val me = localIpv4() ?: return emptyList()
         val base = me.substringBeforeLast('.')
         val found = java.util.Collections.synchronizedList(mutableListOf<String>())
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(48)
+        // v9.33.58 (improvement pass): a phone does not need 48 sockets at
+        // once - 16 keeps the scan quick without exhausting the radio. The
+        // scan only runs when the phone has a site-local (LAN) address, so it
+        // never fires on cellular.
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(16)
         try {
             for (i in 1..254) {
                 val host = "$base.$i"

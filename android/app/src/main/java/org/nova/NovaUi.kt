@@ -156,7 +156,8 @@ object NovaUi {
         h.setPadding(0, dp(ctx, 4), 0, dp(ctx, 10))
         val back = Button(ctx).apply {
             isAllCaps = false
-            val d = ctx.getDrawable(R.drawable.ic_back)!!.mutate()
+            val d = (androidx.core.content.ContextCompat.getDrawable(ctx, R.drawable.ic_back)
+                ?: android.graphics.drawable.ColorDrawable(NovaTheme.text)).mutate()
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)

@@ -88,12 +88,33 @@ object NovaNet {
         }
     }
 
+    /** v9.33.58: hard cap on any response body - a hostile or huge page can
+     *  never OOM the app. 4 MB is far more than any article NOVA reads. */
+    private const val MAX_BODY = 4 * 1024 * 1024
+
     /** GET a URL as text, through the configured proxy (or direct). */
     fun getText(context: Context?, url: String, connectMs: Int = 10000,
                 readMs: Int = 20000): String {
         val conn = open(context, url, connectMs, readMs)
         try {
-            return conn.inputStream.bufferedReader().readText()
+            // v9.33.58 (improvement pass): force the connection (and any
+            // redirects) and refuse an https -> http downgrade, so a lookup
+            // can never silently fall back to cleartext.
+            conn.responseCode
+            val finalUrl = conn.url.toString()
+            if (url.startsWith("https", ignoreCase = true) &&
+                !finalUrl.startsWith("https", ignoreCase = true))
+                throw java.io.IOException("refusing cleartext redirect to " + finalUrl)
+            return conn.inputStream.bufferedReader().use { r ->
+                val buf = CharArray(64 * 1024)
+                val sb = StringBuilder()
+                while (sb.length < MAX_BODY) {
+                    val n = r.read(buf)
+                    if (n < 0) break
+                    sb.append(buf, 0, minOf(n, MAX_BODY - sb.length))
+                }
+                sb.toString()
+            }
         } finally {
             conn.disconnect()
         }

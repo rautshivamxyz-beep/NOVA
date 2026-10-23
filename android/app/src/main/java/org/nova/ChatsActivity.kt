@@ -64,7 +64,8 @@ class ChatsActivity : Activity() {
             minWidth = 0; minimumWidth = 0
             setPadding(dp(4), dp(4), dp(4), dp(4))
             gravity = Gravity.CENTER
-            val d = getDrawable(R.drawable.ic_back)!!.mutate()
+            val d = (androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_back)
+                ?: android.graphics.drawable.ColorDrawable(NovaTheme.text)).mutate()
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 NovaTheme.text, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
@@ -80,7 +81,8 @@ class ChatsActivity : Activity() {
             setPadding(dp(8), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(smallButton(getString(R.string.action_new), accent).apply {
-            val d = getDrawable(R.drawable.ic_add)!!.mutate()
+            val d = (androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_add)
+                ?: android.graphics.drawable.ColorDrawable(accent)).mutate()
             d.colorFilter = android.graphics.PorterDuffColorFilter(
                 accent, android.graphics.PorterDuff.Mode.SRC_IN)
             setCompoundDrawablesWithIntrinsicBounds(d, null, null, null)
