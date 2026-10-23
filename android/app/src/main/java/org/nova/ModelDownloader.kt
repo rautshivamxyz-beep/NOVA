@@ -181,6 +181,7 @@ object ModelDownloader {
                 partFile?.delete()
                 _state.value = State.Idle
             } catch (e: Exception) {
+                partFile?.delete()
                 _state.value = State.Failed(name, e.message ?: "import failed")
             }
         }
@@ -209,12 +210,40 @@ object ModelDownloader {
                 throw IOException("HTTP $code from server")
             }
 
-            // 200 = server ignored the range request -> restart from zero
+            // A 206 response is only safe to append when Content-Range proves
+            // the server resumed at exactly the requested byte. Otherwise a
+            // CDN/proxy error can silently corrupt a multi-GB GGUF.
+            if (code == 206 && existing == 0L)
+                throw IOException("unexpected partial response without a resume request")
             val resume = code == 206 && existing > 0
+            val contentRange = if (resume) conn.getHeaderField("Content-Range") else null
+            val rangeMatch = if (contentRange != null)
+                Regex("(?i)^bytes\\s+(\\d+)-(\\d+)/(\\d+|\\*)$").matchEntire(contentRange.trim())
+            else null
+            if (resume) {
+                val match = rangeMatch ?: throw IOException("server returned an invalid Content-Range; retry download")
+                val start = match.groupValues[1].toLongOrNull()
+                    ?: throw IOException("invalid resume start")
+                val end = match.groupValues[2].toLongOrNull()
+                    ?: throw IOException("invalid resume end")
+                val rangeTotal = match.groupValues[3].toLongOrNull()
+                if (start != existing || end < start ||
+                    (rangeTotal != null && end >= rangeTotal))
+                    throw IOException("server resumed at the wrong byte; partial file was not appended")
+                val expectedChunk = end - start + 1
+                if (conn.contentLengthLong > 0 && conn.contentLengthLong != expectedChunk)
+                    throw IOException("resume length does not match Content-Range")
+            }
+
+            // Use Content-Range's full object size when available; Content-Length
+            // on a 206 response is only the remaining chunk, not the whole file.
             val newBytes = conn.contentLengthLong
-            val total = if (newBytes > 0) {
-                (if (resume) existing + newBytes else newBytes)
-            } else -1L
+            val rangeTotal = rangeMatch?.groupValues?.get(3)?.toLongOrNull()
+            val total = when {
+                rangeTotal != null -> rangeTotal
+                newBytes > 0 -> if (resume) existing + newBytes else newBytes
+                else -> -1L
+            }
 
             // v7.6: refuse to start into a full disk - the old failure was
             // ENOSPC deep into a multi-GB download
@@ -237,7 +266,7 @@ object ModelDownloader {
                 }
             }
 
-            if (total > 0 && done < total) throw IOException("incomplete download")
+            if (total > 0 && done != total) throw IOException("incomplete or oversized download")
             if (!part.renameTo(dest)) {
                 // rename can fail across weird mount points; fall back to copy
                 part.copyTo(dest, overwrite = true)
