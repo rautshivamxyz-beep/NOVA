@@ -199,6 +199,7 @@ object OnlineFetch {
                 if (reason.isEmpty()) reason = "wikipedia: no usable article"
             } else reason = "wikipedia: weak match"
             // 2. the open web - only when Wikipedia had nothing usable
+            var savedWeb: WebPage? = null
             if (saved == null) {
                 val page = try { fetchWeb(act, q) } catch (e: Exception) {
                     reason = joinReason(reason, "web: " + err(e)); null
@@ -218,6 +219,7 @@ object OnlineFetch {
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
+                        savedWeb = page
                     } else reason = joinReason(reason,
                         if (wrongWebEntity) "web: title does not match requested person" else "web: weak match")
                 } else reason = joinReason(reason, "web: no page")
@@ -234,10 +236,11 @@ object OnlineFetch {
                     if (src != null && wiki.first == saved && entityQuestion(text)) {
                         act.toast("Found \"$saved\" - answering from it")
                         directAnswer(act, cleanSourceText(src), saved)
-                    } else if (page != null && page.title == saved && entityQuestion(text)) {
+                    } else if (savedWeb != null && savedWeb.title == saved && entityQuestion(text)) {
+                        val webSource = savedWeb!!
                         act.toast("Found \"$saved\" - answering from the source")
-                        directAnswer(act, cleanSourceText(page.text),
-                            page.title + " — " + page.url, "Web")
+                        directAnswer(act, cleanSourceText(webSource.text),
+                            webSource.title + " — " + webSource.url, "Web")
                     } else {
                         act.toast("Saved \"$saved\" - now offline forever")
                         act.launchNcieSend(text, offered = true)
