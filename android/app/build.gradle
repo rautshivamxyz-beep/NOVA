@@ -115,8 +115,17 @@ android {
         //   NcieChat -> +NcieChatExt), a sandboxed JS WebView, a bounded
         //   fetch body, and a batch of null-safety + swallowed-log fixes.
         //   Detail: NOVA-Improvements.md.
-        versionCode 229
-        versionName '9.33.61'
+        // v9.33.62 "First word sooner + to the point": the standing rules
+        //   moved out of every turn's user message into the SYSTEM prompt,
+        //   which the engine encodes once per model load and keeps in its KV
+        //   cache. Every turn used to re-prefill ~280 tokens of rules (and
+        //   store another copy in the KV cache); now it prefills only the
+        //   context and the question - the wait before the first word drops,
+        //   with the same rules and the same quality. The rulebook's first
+        //   line is the new "to the point" default: answer first, and stay
+        //   short unless the user asks for detail.
+        versionCode 230
+        versionName '9.33.62'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
