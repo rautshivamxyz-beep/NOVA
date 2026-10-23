@@ -1034,6 +1034,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // the last thing in front of the model when it answers. The CODE rule
         // read "never describe the code instead of writing it", and NOVA
         // described the code. Each rule below now says what TO do.
+        val asksForDetail = Regex("(?i)\\b(in detail|detailed|explain fully|step by step|thorough|elaborate|deep explanation|complete explanation)\\b").containsMatchIn(text)
+        val detailRule = if (asksForDetail) "(DETAIL REQUEST: teach the complete topic in logical steps, explain why each step works, include a worked example and important exceptions. Prefer a thorough answer over a short summary.)\\n" else ""
+        val codeTaskRule = if (codeReq) "(CODE TASK: deliver the actual implementation, not a description. Use one complete fenced code block with the correct language tag. Include imports, definitions, setup, and a runnable entry point when applicable. Do not use ellipses, TODO placeholders, or omit sections. Check syntax, names, types, edge cases, and consistency before replying. If something truly depends on missing information, state the assumption and still provide the most complete working version.)\\n" else ""
         val qualityRules =
             "(Answer the question directly and completely, beginning with the answer itself.)\n" +
             "(FACTS: state a date, a place, a name or a number when you are certain of it. " +
@@ -1112,7 +1115,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 contextData.trimEnd() + "\nEND CONTEXT\n\n"
         // v9.33.51: instructions first, then the retrieved reference block, then
         // the memory and exam lines, then the question.
-        prompt = qualityRules + skillPart + contextBlock + prompt
+        prompt = qualityRules + detailRule + codeTaskRule + skillPart + contextBlock + prompt
 
         // v8.2.0: the notes that grounded THIS answer — handed to LEARN
         // so the quality gate scores the answer against what it was built
