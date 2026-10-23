@@ -209,11 +209,17 @@ object OnlineFetch {
                     val body = page.text + (if (page.code.isNotEmpty())
                         "\n\nCode from the page:\n" + page.code.joinToString("\n---\n") { it }
                         else "")
-                    if ((Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
+                    // Entity lookups require both title identity and content coverage.
+                    // A page that merely mentions a name must never become a biography.
+                    val wrongWebEntity = entityQuestion(text) &&
+                        !EntityMatch.titleMatchesEntity(page.title, text)
+                    if (!wrongWebEntity &&
+                        (Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
-                    } else reason = joinReason(reason, "web: weak match")
+                    } else reason = joinReason(reason,
+                        if (wrongWebEntity) "web: title does not match requested person" else "web: weak match")
                 } else reason = joinReason(reason, "web: no page")
             }
             // v9.17.1: diagnose the failure on the IO thread (a proxy
@@ -228,6 +234,10 @@ object OnlineFetch {
                     if (src != null && wiki.first == saved && entityQuestion(text)) {
                         act.toast("Found \"$saved\" - answering from it")
                         directAnswer(act, cleanSourceText(src), saved)
+                    } else if (page != null && page.title == saved && entityQuestion(text)) {
+                        act.toast("Found \"$saved\" - answering from the source")
+                        directAnswer(act, cleanSourceText(page.text),
+                            page.title + " — " + page.url, "Web")
                     } else {
                         act.toast("Saved \"$saved\" - now offline forever")
                         act.launchNcieSend(text, offered = true)
@@ -327,9 +337,10 @@ object OnlineFetch {
     private fun entityQuestion(q: String): Boolean = EntityMatch.isEntityQuestion(q)
 
     /** Posts the source text as the answer. Deterministic - no model call. */
-    private fun directAnswer(act: MainActivity, body: String, source: String) {
+    private fun directAnswer(act: MainActivity, body: String, source: String,
+                             sourceKind: String = "Wikipedia") {
         act.offeredQuestionShown = null
-        val reply = Msg(Role.ASSISTANT, body + "\n\n(Source: Wikipedia - " + source + ")")
+        val reply = Msg(Role.ASSISTANT, body + "\n\n(Source: " + sourceKind + " - " + source + ")")
         act.currentChat.messages.add(reply)
         act.adapter.add(reply)
         act.scrollToEnd()
@@ -459,7 +470,9 @@ object OnlineFetch {
             // keep only real result pages: external http(s), not ads, with
             // a real title - the rest is the engine's own chrome
             if (url.startsWith("https") && !url.contains("duckduckgo.com") &&
-                title.length > 3) out.add(url to title)
+                title.length > 3 &&
+                (!entityQuestion(q) || EntityMatch.titleMatchesEntity(title, q)))
+                out.add(url to title)
         }
         return out.distinctBy { it.first }
     }
