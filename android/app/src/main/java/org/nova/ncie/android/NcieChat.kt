@@ -202,6 +202,24 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (preShown) offeredQuestionShown = null
         // v9.33.61: don't resolve an ambiguous surname to whichever local article
         // happens to rank first (for example, "who is Modi" -> Jashodaben Modi).
+        if (EntityMatch.isPrivateLocationTrackingRequest(text)) {
+            input.setText("")
+            if (!preShown) {
+                val um = Msg(Role.USER, text)
+                currentChat.messages.add(um)
+                adapter.add(um)
+            }
+            val reply = Msg(Role.ASSISTANT,
+                "I can help with publicly listed offices or general public information, but I can't locate or track someone's private or real-time whereabouts.")
+            currentChat.messages.add(reply)
+            adapter.add(reply)
+            scrollToEnd()
+            scope.launch(Dispatchers.IO) {
+                try { ChatStore.save(act, currentChat) }
+                catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+            }
+            return
+        }
         val clarification = EntityMatch.clarificationFor(text)
         if (clarification != null) {
             input.setText("")
