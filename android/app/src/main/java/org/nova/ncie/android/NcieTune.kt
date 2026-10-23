@@ -5,6 +5,7 @@ import org.nova.NovaLog
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.nova.Chat
 import org.nova.ChatStore
 import org.nova.MainActivity
@@ -163,7 +164,9 @@ object NcieTune {
                 if (i <= 0) continue
                 val k = l.substring(0, i).trim()
                 val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
-                if (k in KEYS) custom[k] = v
+                val range = RANGES[k] ?: continue
+                // Ignore corrupted, stale, NaN or infinite persisted values.
+                if (v.isFinite() && v >= range.start && v <= range.endInclusive) custom[k] = v
             }
         } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
         val fam = defaultsFor(familyOf(modelFile), NcieChat.tinyModelFile(modelFile))
@@ -171,7 +174,6 @@ object NcieTune {
         for (k in KEYS) values[k] = custom[k] ?: fam.getValue(k)
         return Pair(values, custom.keys)
     }
-
     /** The profile resolved for the model of the in-flight generation. */
     @Volatile
     var active: Map<String, Double> = emptyMap()
@@ -201,39 +203,31 @@ object NcieTune {
      * the main thread, and a failure only demotes the "model settings"
      * status reply to "staged" - it never blocks or crashes the turn.
      */
-    fun applyProfile(act: MainActivity) {
+    suspend fun applyProfile(act: MainActivity) {
         val m = currentModel(act) ?: return
-        // v9.13.0 "Audit Fixes" (HIGH 5a): the model changed - its fresh
-        // sampler starts at defaults, so the last-pushed set no longer holds
+        // A new model has a fresh sampler, so invalidate the prior model's
+        // successful push before comparing settings.
         if (m.first != activeModel) lastPushed = null
         val (values, _) = effective(act, m.first)
         active = values
         activeModel = m.first
-        // v9.13.0 (HIGH 5a): skip the push entirely when the effective
-        // values are the set already pushed - identical values rebuilt
-        // the sampler every single turn before
-        if (lastPushed == values) return
-        if (!NovaEngineAdapter.samplingBroken) {
-            act.scope.launch(Dispatchers.IO) {
-                // v9.13.0 (HIGH 5b): never push while a generation is in
-                // flight - an async push landing mid-generation is exactly
-                // what could throw against the live sampler. Defer to the
-                // next turn (lastPushed is still unset, so the next
-                // applyProfile retries). Re-check the values too: another
-                // push may have landed first.
-                if (NcieChat.generating) return@launch
-                if (lastPushed == values) return@launch
-                if (NovaEngineAdapter.setSampling(
-                        values.getValue("temperature").toFloat(),
-                        values.getValue("top_p").toFloat(),
-                        values.getValue("top_k").toInt(),
-                        values.getValue("min_p").toFloat(),
-                        values.getValue("repeat_penalty").toFloat()))
-                    lastPushed = values
+        if (lastPushed == values || NovaEngineAdapter.samplingBroken) return
+
+        // Apply and await the profile BEFORE starting this turn's generation.
+        // The old fire-and-forget launch raced startGeneration: on a cold
+        // first turn the model could decode with library defaults.
+        withContext(Dispatchers.IO) {
+            if (NcieChat.generating || lastPushed == values) return@withContext
+            if (NovaEngineAdapter.setSampling(
+                    values.getValue("temperature").toFloat(),
+                    values.getValue("top_p").toFloat(),
+                    values.getValue("top_k").toInt(),
+                    values.getValue("min_p").toFloat(),
+                    values.getValue("repeat_penalty").toFloat())) {
+                lastPushed = values
             }
         }
     }
-
     // ------------------------------------------------ chat commands
 
     /** The "set <knob> <value>" reply, or the honest usage reply when

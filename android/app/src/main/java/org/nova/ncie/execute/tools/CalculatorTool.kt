@@ -101,7 +101,7 @@ class CalculatorTool : Tool {
         val toks = tokenize(expr) ?: return null
         val pos = intArrayOf(0)
         val v = expr(toks, pos) ?: return null
-        return if (pos[0] == toks.size) v else null
+        return if (pos[0] == toks.size && v.isFinite()) v else null
     }
 
     private fun peek(toks: List<Tok>, pos: IntArray): Tok? = toks.getOrNull(pos[0])
