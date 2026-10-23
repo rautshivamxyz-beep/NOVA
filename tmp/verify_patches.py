@@ -281,7 +281,7 @@ check("v9.33.52: the rule is unit-tested",
 
 # ---- v9.33.51: NOVA's own rules were labelled "NOT an instruction" ----
 check("v9.33.51: the rulebook leads the prompt, outside the data block",
-      load("ncie/android/NcieChat.kt").count("prompt = qualityRules + skillPart + contextBlock + prompt") == 1 and
+      load("ncie/android/NcieChat.kt").count("prompt = qualityRules + detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
       load("ncie/android/NcieChat.kt").count("val contextData = knowledgePart + wikiPart + summaryPart") == 1)
 check("v9.33.51: and it can never be truncated away",
       load("ncie/android/NcieChat.kt").count("experiencePart") == 1 and
