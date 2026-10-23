@@ -35,6 +35,15 @@ class EntityMatchTest {
     }
 
     @Test
+    fun ambiguousSingleSurnamesAskForClarification() {
+        assertTrue(EntityMatch.clarificationFor("who is modi")!!.contains("Which Modi"))
+        assertTrue(EntityMatch.clarificationFor("who is singh")!!.contains("first name"))
+        assertEquals(null, EntityMatch.clarificationFor("who is Narendra Modi"))
+        assertEquals(null, EntityMatch.clarificationFor("who is Dhullu Mahato"))
+        assertEquals(null, EntityMatch.clarificationFor("what is photosynthesis"))
+    }
+
+    @Test
     fun aQuestionWithNoEntityNeverMatches() {
         assertFalse(EntityMatch.titleMatchesEntity("Anything At All", "who is the"))
     }
