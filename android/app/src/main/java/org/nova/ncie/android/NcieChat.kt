@@ -215,7 +215,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             adapter.add(reply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(this, currentChat) }
+                try { ChatStore.save(act, currentChat) }
                 catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
             }
             return
