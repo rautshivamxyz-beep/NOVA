@@ -231,6 +231,9 @@ check("v9.33.55: the app arithmetic gate is pinned by a unit test",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/ArithmeticToolTest.kt")).read().count("@Test") >= 6)
 check("v9.33.55: the coverage gate is pinned by a unit test",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/verify/CoverageTest.kt")).read().count("@Test") >= 5)
+check("v9.33.55: the instant answer drops Java's %g trailing zeros",
+      load("ncie/android/NcieArithmetic.kt").count("trimTrailingZeros(") >= 1 and
+      load("ncie/android/NcieArithmetic.kt").count("trimEnd('0')") == 1)
 
 # ---- v9.33.54: what makes it dumber ----
 check("v9.33.54: the rules say what to do, not what not to do",

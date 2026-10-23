@@ -153,7 +153,21 @@ class ArithmeticTool : Tool {
             if (Math.abs(v - Math.round(v)) < 1e-9)
                 Math.round(v).toString()
             else
-                String.format(java.util.Locale.US, "%.6g", v)
+                // v9.33.55: Java's %g keeps the trailing zeros ("100/8" came
+                // out "12.5000"), where C's %g trims them. An instant answer
+                // reads better trimmed - see trimTrailingZeros.
+                trimTrailingZeros(String.format(java.util.Locale.US, "%.6g", v))
         } catch (e: Exception) { null }
+    }
+
+    /** v9.33.55: drop the trailing zeros Java's %g leaves in the mantissa
+     *  ("12.5000" -> "12.5", "0.500000" -> "0.5"), never touching an
+     *  exponent ("1.23400e-06" -> "1.234e-06"). */
+    private fun trimTrailingZeros(s: String): String {
+        val e = s.indexOfFirst { it == 'e' || it == 'E' }
+        val mant = if (e >= 0) s.substring(0, e) else s
+        val exp = if (e >= 0) s.substring(e) else ""
+        val m = if (mant.contains('.')) mant.trimEnd('0').trimEnd('.') else mant
+        return m + exp
     }
 }
