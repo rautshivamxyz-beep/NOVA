@@ -67,38 +67,53 @@ object PrivatePrompt {
     fun strip(prompt: String): String? {
         var out = prompt
         // the delimited blocks first: retrieved context, then the document
-        out = cutBetween(out, "CONTEXT (reference data", "END CONTEXT")
-        out = cutBetween(out, "(The user shared a document titled", "End of document.)")
+        out = cutBetween(out, "CONTEXT (reference data", "END CONTEXT") ?: return null
+        out = cutBetween(out, "(The user shared a document titled", "End of document.)") ?: return null
         // the one-paragraph lines NOVA prepends
-        out = cutLine(out, "(Facts about the user, always remember:")
-        out = cutLine(out, "(The user's upcoming exams:")
+        out = cutLine(out, "(Facts about the user, always remember:") ?: return null
+        out = cutLine(out, "(The user's upcoming exams:") ?: return null
         // the two earlier-conversation forms
-        out = cutBetween(out, "(Summary of earlier conversation:", "\u2014 end)")
-        out = cutBetween(out, "(Earlier conversation for context:", "end of earlier conversation)")
+        out = cutBetween(out, "(Summary of earlier conversation:", "\u2014 end)") ?: return null
+        out = cutBetween(out, "(Earlier conversation for context:", "end of earlier conversation)") ?: return null
         // the safety net: anything still standing is something unrecognised
         for (m in OPEN) if (out.contains(m)) return null
         for (m in LEFTOVER) if (out.contains(m)) return null
         return out.trim().ifBlank { null }
     }
 
-    /** Removes [from]..[to] inclusive; a missing [to] removes to the end. */
-    private fun cutBetween(s: String, from: String, to: String): String {
+    /** Remove a wrapped private block only when its closing marker is unambiguous. */
+    private fun cutBetween(s: String, from: String, to: String): String? {
         val a = s.indexOf(from)
         if (a < 0) return s
-        // Private documents can contain the same marker text as the wrapper. Use
-        // the final closing marker so an embedded marker cannot expose the
-        // remainder of the private block to the remote model.
-        val b = s.lastIndexOf(to)
-        return if (b < a) s.substring(0, a) else s.substring(0, a) + s.substring(b + to.length)
+        val count = countOccurrences(s, to, a + from.length)
+        if (count != 1) return null
+        val b = s.indexOf(to, a + from.length)
+        if (b < 0) return null
+        return s.substring(0, a) + s.substring(b + to.length)
     }
 
-    /** Removes the one-paragraph line that [startsWith] opens. */
-    private fun cutLine(s: String, startsWith: String): String {
+    /** Remove a one-paragraph private wrapper only when its closing marker is unambiguous. */
+    private fun cutLine(s: String, startsWith: String): String? {
         val a = s.indexOf(startsWith)
         if (a < 0) return s
-        // Memory text may itself contain blank lines. Cut through the final
-        // separator, not the first embedded one, to avoid leaking the tail.
-        val b = s.lastIndexOf("\n\n")
-        return if (b < a) s.substring(0, a) else s.substring(0, a) + s.substring(b + 2)
+        // The generated wrapper closes with ")" followed by the paragraph separator.
+        // Embedded blank lines or close-like text inside memory must not be trusted.
+        val close = ")\\n\\n"
+        if (countOccurrences(s, close, a + startsWith.length) != 1) return null
+        val b = s.indexOf(close, a + startsWith.length)
+        if (b < 0) return null
+        return s.substring(0, a) + s.substring(b + close.length)
     }
+
+    private fun countOccurrences(s: String, token: String, startAt: Int): Int {
+        var index = startAt
+        var count = 0
+        while (true) {
+            index = s.indexOf(token, index)
+            if (index < 0) return count
+            count++
+            index += token.length
+        }
+    }
+
 }
