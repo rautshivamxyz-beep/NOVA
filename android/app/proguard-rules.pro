@@ -67,3 +67,12 @@
 # Uncomment to disable renaming (shrinking still applies) if obfuscation
 # breaks a reflective library you cannot pin down:
 # -dontobfuscate
+
+# --- transitive deps that reference JDK-only classes ---
+# v9.33.58: the first R8 (minifyReleaseWithR8) run failed on
+#   Missing class java.lang.reflect.AnnotatedType
+#   (referenced from org.apache.commons.lang3.reflect.TypeUtils.isCyclical)
+# commons-lang3 arrives transitively, and AnnotatedType exists only in the full
+# JDK, not on the Android classpath - so R8 is told not to worry about it.
+-dontwarn java.lang.reflect.AnnotatedType
+-dontwarn org.apache.commons.lang3.**
