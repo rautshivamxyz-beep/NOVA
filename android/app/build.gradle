@@ -107,8 +107,10 @@ android {
         // v9.33.56: the offline-wiki ranking and the memory graduation
         // ceremony join them - the two decision points that silently
         // shape which background and which facts NOVA keeps.
-        versionCode 224
-        versionName '9.33.56'
+        // v9.33.57: the capability-gap log joins them - the measured
+        // evidence the improvement loop counts.
+        versionCode 225
+        versionName '9.33.57'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
