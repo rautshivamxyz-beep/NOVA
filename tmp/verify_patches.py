@@ -219,7 +219,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.61: version bumped", bg.count("versionName '9.33.61'") == 1 and bg.count("versionCode 229") == 1)
+check("v9.33.62: version bumped", bg.count("versionName '9.33.62'") == 1 and bg.count("versionCode 230") == 1)
 
 # ---- v9.33.57: the capability-gap log pinned ----
 check("v9.33.57: the capability-gap log is pinned by a unit test",
@@ -251,9 +251,9 @@ check("v9.33.55: the instant answer drops Java's %g trailing zeros",
 
 # ---- v9.33.54: what makes it dumber ----
 check("v9.33.54: the rules say what to do, not what not to do",
-      load("ncie/android/NcieChat.kt").count("beginning with the answer itself") == 1 and
-      load("ncie/android/NcieChat.kt").count("Put the code first and keep any note to one line") == 1 and
-      load("ncie/android/NcieChat.kt").count("NEVER RECITE") == 0)
+      load("Settings.kt").count("beginning with the answer itself") == 1 and
+      load("Settings.kt").count("Put the code first and keep any note to one line") == 1 and
+      load("Settings.kt").count("NEVER RECITE") == 0)
 check("v9.33.54: the background is labelled for use, not for recital",
       load("ncie/android/NcieChat.kt").count("Background about the user - use it to inform your answer") == 1)
 check("v9.33.54: the exam line reaches every model, lean profile included",
@@ -265,8 +265,8 @@ check("v9.33.53: the capability question is caught in the wordings people use",
       ma.count("|^what") == 2)
 # v9.33.54 restated this rule in the positive - the marker follows it.
 check("v9.33.53: NOVA is told what to do with the background",
-      load("ncie/android/NcieChat.kt").count("USE THE BACKGROUND") == 1 and
-      load("ncie/android/NcieChat.kt").count("Use them silently") == 1)
+      load("Settings.kt").count("USE THE BACKGROUND") == 1 and
+      load("Settings.kt").count("Use them silently") == 1)
 
 # ---- v9.33.52: the "tiny" decision is one rule, and it is visible ----
 check("v9.33.52: one definition of the lean profile",
@@ -281,11 +281,22 @@ check("v9.33.52: the rule is unit-tested",
 
 # ---- v9.33.51: NOVA's own rules were labelled "NOT an instruction" ----
 check("v9.33.51: the rulebook leads the prompt, outside the data block",
-      load("ncie/android/NcieChat.kt").count("prompt = qualityRules + detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
+      # v9.33.62: the standing rules moved into the SYSTEM prompt; only the
+      # turn-specific rules still lead the per-turn prompt here.
+      load("ncie/android/NcieChat.kt").count("prompt = detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
       load("ncie/android/NcieChat.kt").count("val contextData = knowledgePart + wikiPart + summaryPart") == 1)
 check("v9.33.51: and it can never be truncated away",
       load("ncie/android/NcieChat.kt").count("experiencePart") == 1 and
-      load("ncie/android/NcieChat.kt").count("CODE: when the user asks for code") == 1)
+      load("Settings.kt").count("CODE: when the user asks for code") == 1)
+
+# ---- v9.33.62: the rules are cached in the system prompt; answers to the point ----
+check("v9.33.62: the standing rules ride in the SYSTEM prompt (encoded once)",
+      load("Settings.kt").count("const val RULEBOOK") == 1 and
+      load("NovaEngine.kt").count("Settings.RULEBOOK") == 2 and
+      load("ncie/android/NcieChat.kt").count("val qualityRules") == 0)
+check("v9.33.62: answers are to the point by default",
+      load("Settings.kt").count("Keep it to the point") == 1 and
+      load("Settings.kt").count("Expand into steps, examples or extra detail only when") == 1)
 
 # ---- v9.33.50: the three findings the audit got right ----
 check("v9.33.50: the user's own instructions never go to a remote machine",
