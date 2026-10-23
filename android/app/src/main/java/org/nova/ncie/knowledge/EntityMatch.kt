@@ -56,6 +56,23 @@ object EntityMatch {
         return terms.all { spaced.contains(" " + it + " ") || deSpaced.contains(it) }
     }
 
+    /** Common surnames that are not enough to identify one person reliably. */
+    private val AMBIGUOUS_SINGLE_NAMES = setOf(
+        "modi", "singh", "kumar", "sharma", "gupta", "patel", "khan",
+        "gandhi", "yadav", "verma", "das", "roy", "mahato", "mahto",
+        "jha", "mishra", "sinha", "reddy", "rao", "choudhary", "chowdhury",
+        "mehta", "kapoor", "malhotra", "joshi", "thakur", "bose"
+    )
+
+    /** Resolve common surname-only lookups before any local or online search. */
+    fun clarificationFor(question: String): String? {
+        if (!isEntityQuestion(question)) return null
+        val terms = Tokens.split(entityPhrase(question)).filter { it.length > 1 }
+        if (terms.size != 1 || terms[0] !in AMBIGUOUS_SINGLE_NAMES) return null
+        val name = terms[0].replaceFirstChar { it.uppercase() }
+        return "Which $name do you mean? Please give the person's first name or a little context so I don't identify the wrong person."
+    }
+
     /**
      * v9.33.38: the SHAPE of question a source lookup is for - a short
      * question naming one thing ("who is X", "what is X").
