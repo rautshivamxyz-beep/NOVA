@@ -1510,10 +1510,12 @@ class MainActivity : Activity() {
                     if (newBubble) showFollowUps()
                     // blank, one-word or looping answers from tiny models:
                     // retry once with a firmer instruction instead of garbage
+                    val needsCodeRetry = isCodeRequestText(userText) &&
+                        !looksLikeCompleteCode(stripThinking(replyMsg.text))
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
                         (isDegenerateReply(stripThinking(replyMsg.text)) ||
                             chatDerailed(stripThinking(replyMsg.text), prompt) ||
-                            (isCodeRequestText(userText) && !looksLikeCompleteCode(stripThinking(replyMsg.text))))) {
+                            needsCodeRetry)) {
                         replyRetried = true
                         pendingCitation = null
                         pendingQaKey = null
