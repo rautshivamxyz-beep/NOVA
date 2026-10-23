@@ -64,3 +64,20 @@ class RemoteHostTest {
         assertFalse(RemoteHost.isPrivate("not a host"))
     }
 }
+
+    @Test
+    fun ipv6PrivateRangesAreRecognisedAndPublicIpv6IsRejected() {
+        assertFalse(RemoteHost.isInsecurePublic("http://[::1]:8080"))
+        assertFalse(RemoteHost.isInsecurePublic("http://[fd12:3456::1]:8080"))
+        assertFalse(RemoteHost.isInsecurePublic("http://[fe80::1]:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://[2606:4700:4700::1111]:8080"))
+    }
+
+    @Test
+    fun malformedAndCredentialBearingHttpUrlsFailClosed() {
+        assertTrue(RemoteHost.isInsecurePublic("http://"))
+        assertTrue(RemoteHost.isInsecurePublic("http://user:pass@192.168.1.5:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://[not-ipv6]:8080"))
+        assertEquals(null, RemoteHost.hostOf("http://user:pass@192.168.1.5:8080"))
+        assertEquals(null, RemoteHost.hostOf("not a url"))
+    }
