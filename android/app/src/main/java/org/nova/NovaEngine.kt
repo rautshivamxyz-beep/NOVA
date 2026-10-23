@@ -386,7 +386,7 @@ object NovaEngine {
                         awaitEngineReady(engine)
                         emitAll(engine.sendUserPrompt(message, budget))
                     } else {
-                        emit("\\n\\n[Remote connection lost; this reply may be incomplete.]")
+                        emit("\n\n[Remote connection lost; this reply may be incomplete.]")
                     }
                 }
             }
