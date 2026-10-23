@@ -196,7 +196,7 @@ object ModelDownloader {
         var conn: HttpURLConnection? = null
         try {
             val existing = if (part.exists()) part.length() else 0L
-            conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            conn = NovaNet.open(appCtx, url).apply {
                 instanceFollowRedirects = true
                 connectTimeout = 20000
                 readTimeout = 30000
