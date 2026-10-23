@@ -1695,7 +1695,7 @@ class MainActivity : Activity() {
         val blocks = Regex("(?s)\\x60{3}[\\w+#.-]*\\s*(.*?)\\x60{3}").findAll(answer).map { it.groupValues[1].trim() }.toList()
         if (blocks.isEmpty()) return false
         val code = blocks.joinToString("\\n")
-        if (code.length < 80) return false
+        if (code.length < 30) return false
         if (Regex("(?i)(rest of (the )?code|implementation omitted|insert code here|your code here|\\.\\.\\.)").containsMatchIn(code)) return false
         return true
     }
