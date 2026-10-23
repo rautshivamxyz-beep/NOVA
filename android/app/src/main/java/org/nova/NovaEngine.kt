@@ -377,12 +377,20 @@ object NovaEngine {
                 var got = false
                 try {
                     RemoteEngine.stream(message, budget).collect { got = true; emit(it) }
+                } catch (e: CancellationException) {
+                    // Stop/cancel must never launch a second, local generation.
+                    throw e
                 } catch (e: Exception) {
                     NovaLog.quiet("NovaEngine", e)
+                    // A remote failure before the first chunk is safe to retry
+                    // locally. After output has started, retrying the whole prompt
+                    // would duplicate the answer, so mark the reply incomplete.
+                    contextDirty = true
                     if (!got) {
-                        contextDirty = true
                         awaitEngineReady(engine)
                         emitAll(engine.sendUserPrompt(message, budget))
+                    } else {
+                        emit("\n\n[Remote connection lost; this reply may be incomplete.]")
                     }
                 }
             }
@@ -406,7 +414,14 @@ object NovaEngine {
             // v9.14.1: was 90s - a wedged/lingering engine state could stall
             // every turn for a minute and a half. 5s is plenty for a normal
             // hand-off and can never be felt as a hang.
-            if (SystemClock.elapsedRealtime() - start > 5_000L) return
+            if (SystemClock.elapsedRealtime() - start > 5_000L) {
+                // Never submit into a still-processing engine: the native
+                // binding may silently discard that prompt. Fail this turn
+                // clearly so the user can retry instead of losing it silently.
+                throw IllegalStateException(
+                    "The local model is still busy. Wait a moment, then retry."
+                )
+            }
             delay(120)
         }
     }
