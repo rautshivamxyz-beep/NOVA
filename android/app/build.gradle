@@ -138,8 +138,8 @@ android {
         //   (NcieGround.chunksOf) and the deterministic grounding prompt
         //   (groundPrompt) - which decide how the user's own notes are split
         //   and quoted back - get their first unit tests. No behaviour change.
-        versionCode 233
-        versionName '9.33.65'
+        versionCode 234
+        versionName '9.33.66'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
