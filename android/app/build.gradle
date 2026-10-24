@@ -128,8 +128,14 @@ android {
         //   launches a duplicate local generation after a remote drop, and a
         //   still-busy local engine now fails the turn clearly instead of
         //   silently discarding the prompt.
-        versionCode 231
-        versionName '9.33.63'
+        // v9.33.64 "Dedup pinned": the reply-deduplication helpers
+        //   (dropRepeatedBlocks, cutPartialLine, stripRepeatJoin,
+        //   stripRepeatStart, dedupeLines, tail300) - run on every
+        //   auto-continued reply and every long summary - get their first
+        //   unit tests. No behaviour change; the guard against a silent
+        //   duplicate-paragraph regression.
+        versionCode 232
+        versionName '9.33.64'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
