@@ -124,8 +124,12 @@ android {
         //   with the same rules and the same quality. The rulebook's first
         //   line is the new "to the point" default: answer first, and stay
         //   short unless the user asks for detail.
-        versionCode 230
-        versionName '9.33.62'
+        // v9.33.63 "Streaming reliability": the streaming reply no longer
+        //   launches a duplicate local generation after a remote drop, and a
+        //   still-busy local engine now fails the turn clearly instead of
+        //   silently discarding the prompt.
+        versionCode 231
+        versionName '9.33.63'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

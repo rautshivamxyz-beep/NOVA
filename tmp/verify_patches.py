@@ -219,7 +219,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.62: version bumped", bg.count("versionName '9.33.62'") == 1 and bg.count("versionCode 230") == 1)
+check("v9.33.63: version bumped", bg.count("versionName '9.33.63'") == 1 and bg.count("versionCode 231") == 1)
 
 # ---- v9.33.57: the capability-gap log pinned ----
 check("v9.33.57: the capability-gap log is pinned by a unit test",
