@@ -134,8 +134,12 @@ android {
         //   auto-continued reply and every long summary - get their first
         //   unit tests. No behaviour change; the guard against a silent
         //   duplicate-paragraph regression.
-        versionCode 232
-        versionName '9.33.64'
+        // v9.33.65 "Grounding pinned": the document-grounding chunker
+        //   (NcieGround.chunksOf) and the deterministic grounding prompt
+        //   (groundPrompt) - which decide how the user's own notes are split
+        //   and quoted back - get their first unit tests. No behaviour change.
+        versionCode 233
+        versionName '9.33.65'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
