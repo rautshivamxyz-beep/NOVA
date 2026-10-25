@@ -219,7 +219,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.66: version bumped", bg.count("versionName '9.33.66'") == 1 and bg.count("versionCode 234") == 1)
+check("v9.33.67: version bumped", bg.count("versionName '9.33.67'") == 1 and bg.count("versionCode 235") == 1)
+
+# ---- v9.33.67: the busy-reply line parser pinned ----
+# NcieStyle.parseLines decides what actually reaches a contact in an
+# away-message: a silent regression ships a list marker or a stray quote,
+# or drops a good line when the length window moves.
+check("v9.33.67: the busy-reply line parser is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieStyleTest.kt")).read().count("@Test") >= 6)
 
 # ---- v9.33.57: the capability-gap log pinned ----
 check("v9.33.57: the capability-gap log is pinned by a unit test",

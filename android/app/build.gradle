@@ -138,8 +138,15 @@ android {
         //   (NcieGround.chunksOf) and the deterministic grounding prompt
         //   (groundPrompt) - which decide how the user's own notes are split
         //   and quoted back - get their first unit tests. No behaviour change.
-        versionCode 234
-        versionName '9.33.66'
+        // v9.33.66 "Concise factual answers": the standing rules answer first
+        //   and stay short, so a factual question no longer draws a preamble.
+        // v9.33.67 "Busy replies pinned": the away-message line parser
+        //   (NcieStyle.parseLines) - the pure function that turns the model's
+        //   raw reply into the short lines the auto-responder sends while the
+        //   user is away - gets its first unit tests. No behaviour change; the
+        //   guard against a list marker or stray quote reaching a contact.
+        versionCode 235
+        versionName '9.33.67'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
