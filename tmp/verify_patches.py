@@ -219,7 +219,7 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.70: version bumped", bg.count("versionName '9.33.70'") == 1 and bg.count("versionCode 238") == 1)
+check("v9.33.71: version bumped", bg.count("versionName '9.33.71'") == 1 and bg.count("versionCode 239") == 1)
 
 # ---- v9.33.70: the fetched-source text rule pinned ----
 # cleanSourceText is the single "turn a fetched source into a short, readable
