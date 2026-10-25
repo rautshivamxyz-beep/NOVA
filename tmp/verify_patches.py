@@ -219,7 +219,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.68: version bumped", bg.count("versionName '9.33.68'") == 1 and bg.count("versionCode 236") == 1)
+check("v9.33.69: version bumped", bg.count("versionName '9.33.69'") == 1 and bg.count("versionCode 237") == 1)
+
+# ---- v9.33.69: the HTML-to-text converter pinned ----
+# HtmlText turns every fetched page into the reading text NOVA stores and
+# quotes; a silent regression dumps chrome into the knowledge base or mangles
+# the entities the model answers from.
+check("v9.33.69: the HTML-to-text converter is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/knowledge/HtmlTextTest.kt")).read().count("@Test") >= 8)
 
 # ---- v9.33.68: the rolling-summary sanitizer pinned ----
 # NcieSummary.sanitize strips the summarizer's own prompt markers before the

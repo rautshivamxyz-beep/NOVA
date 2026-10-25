@@ -150,8 +150,13 @@ android {
         //   markers before the summary is re-injected - gets its first unit
         //   tests. No behaviour change; the guard against the model reciting
         //   "New message:" / "Answer:" back at the user.
-        versionCode 236
-        versionName '9.33.68'
+        // v9.33.69 "Fetch text pinned": the HTML-to-text converter (HtmlText)
+        //   - toText for the page body, codeBlocks for the <pre> sections kept
+        //   verbatim, decodeEntities for the entities - gets its first unit
+        //   tests. No behaviour change; the guard against page chrome or
+        //   mangled entities reaching the knowledge base on every lookup.
+        versionCode 237
+        versionName '9.33.69'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
