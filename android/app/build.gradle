@@ -145,8 +145,13 @@ android {
         //   raw reply into the short lines the auto-responder sends while the
         //   user is away - gets its first unit tests. No behaviour change; the
         //   guard against a list marker or stray quote reaching a contact.
-        versionCode 235
-        versionName '9.33.67'
+        // v9.33.68 "Summary pinned": the rolling-summary sanitizer
+        //   (NcieSummary.sanitize) - which strips the summarizer's own prompt
+        //   markers before the summary is re-injected - gets its first unit
+        //   tests. No behaviour change; the guard against the model reciting
+        //   "New message:" / "Answer:" back at the user.
+        versionCode 236
+        versionName '9.33.68'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

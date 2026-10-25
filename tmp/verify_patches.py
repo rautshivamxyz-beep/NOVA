@@ -219,7 +219,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.67: version bumped", bg.count("versionName '9.33.67'") == 1 and bg.count("versionCode 235") == 1)
+check("v9.33.68: version bumped", bg.count("versionName '9.33.68'") == 1 and bg.count("versionCode 236") == 1)
+
+# ---- v9.33.68: the rolling-summary sanitizer pinned ----
+# NcieSummary.sanitize strips the summarizer's own prompt markers before the
+# summary is re-injected; a silent regression puts them back into the model's
+# mouth ("New message:" / "Answer:").
+check("v9.33.68: the rolling-summary sanitizer is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieSummaryTest.kt")).read().count("@Test") >= 6)
 
 # ---- v9.33.67: the busy-reply line parser pinned ----
 # NcieStyle.parseLines decides what actually reaches a contact in an
