@@ -1512,9 +1512,14 @@ class MainActivity : Activity() {
                     // retry once with a firmer instruction instead of garbage
                     val needsCodeRetry = isCodeRequestText(userText) &&
                         !looksLikeCompleteCode(stripThinking(replyMsg.text))
+                    // A long, coherent reply can have low lexical overlap with a
+                    // notes-heavy prompt. Do not erase it and silently restart based
+                    // on that weak heuristic; reserve derailed-answer retries for
+                    // short outputs, where the signal is more useful.
+                    val retryCheckText = stripThinking(replyMsg.text)
                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
-                        (isDegenerateReply(stripThinking(replyMsg.text)) ||
-                            chatDerailed(stripThinking(replyMsg.text), prompt) ||
+                        (isDegenerateReply(retryCheckText) ||
+                            (retryCheckText.length < 600 && chatDerailed(retryCheckText, prompt)) ||
                             needsCodeRetry)) {
                         replyRetried = true
                         pendingCitation = null
