@@ -219,7 +219,14 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.69: version bumped", bg.count("versionName '9.33.69'") == 1 and bg.count("versionCode 237") == 1)
+check("v9.33.70: version bumped", bg.count("versionName '9.33.70'") == 1 and bg.count("versionCode 238") == 1)
+
+# ---- v9.33.70: the fetched-source text rule pinned ----
+# cleanSourceText is the single "turn a fetched source into a short, readable
+# answer" rule (v9.33.7 merged the two drifted copies); a silent regression
+# shows a search-result paragraph or a mid-sentence truncation.
+check("v9.33.70: the fetched-source text rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/SourceTextTest.kt")).read().count("@Test") >= 5)
 
 # ---- v9.33.69: the HTML-to-text converter pinned ----
 # HtmlText turns every fetched page into the reading text NOVA stores and

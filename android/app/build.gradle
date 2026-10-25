@@ -155,8 +155,13 @@ android {
         //   verbatim, decodeEntities for the entities - gets its first unit
         //   tests. No behaviour change; the guard against page chrome or
         //   mangled entities reaching the knowledge base on every lookup.
-        versionCode 237
-        versionName '9.33.69'
+        // v9.33.70 "Source rule pinned": cleanSourceText - the single
+        //   implementation of "turn a fetched source into a short, readable
+        //   answer" (v9.33.7 merged the two drifted copies into one) - gets
+        //   its first unit tests. No behaviour change; the guard against a
+        //   search-result paragraph or a mid-sentence truncation.
+        versionCode 238
+        versionName '9.33.70'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
