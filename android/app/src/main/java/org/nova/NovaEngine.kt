@@ -205,7 +205,8 @@ object NovaEngine {
         // memory. On a 4 GB phone Android already holds 2-3 GB, so the draft
         // pushes the device into swapping - the draft made those phones slower,
         // not faster. Below 5 GB the draft is skipped entirely.
-        val ramGb = try { org.nova.DeviceCapabilities.totalRamGb(ctx) } catch (e: Exception) { 8.0 }
+        // Fail closed: if RAM probing fails, do not load a second model.
+        val ramGb = try { org.nova.DeviceCapabilities.totalRamGb(ctx) } catch (e: Exception) { 0.0 }
         if (ramGb < 5.0) return null
         val target = (activeModelLabel + " " + (activeModelPath ?: "")).lowercase()
         val files = ModelCatalog.modelsDir(ctx).listFiles { f: java.io.File ->

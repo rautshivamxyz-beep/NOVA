@@ -26,7 +26,8 @@ object DeviceCapabilities {
     @Volatile private var lowRamCache: Boolean? = null
     fun isLowRam(context: Context): Boolean {
         lowRamCache?.let { return it }
-        val low = try { totalRamGb(context) < LOW_RAM_GB } catch (e: Exception) { false }
+        // Fail closed: if probing fails, assume low RAM and avoid memory-heavy features.
+        val low = try { totalRamGb(context) < LOW_RAM_GB } catch (e: Exception) { true }
         lowRamCache = low
         return low
     }
