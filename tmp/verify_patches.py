@@ -219,7 +219,45 @@ check("v8.5.3: nothing-local study questions get the honest prompt (NcieChat)",
 
 # ---- v8.6.0: online discovery for any question ----
 # ---- v9.10.0 "Revision Planner + Hardening": version bump + feature markers ----
-check("v9.33.70: version bumped", bg.count("versionName '9.33.70'") == 1 and bg.count("versionCode 238") == 1)
+# ---- v9.33.72: the version check asserts a FLOOR, never one snapshot ----
+# The v9.33.70 form of this check pinned build.gradle to the exact release
+# that added it ("9.33.70" / 238). The very next version bump - a routine
+# action - then turned the whole verify red and blocked the pipeline for
+# ~14 hours (run 761, 2026-10-25 18:13Z: "VERIFY FAILED: 1 problem(s) -
+# v9.33.70: version bumped"). A version check must only ever assert that the
+# version has NOT gone backwards.
+def _version_parts(v):
+    return tuple(int(x) for x in v.split(".") if x.isdigit())
+
+
+def version_at_least(floor_name, floor_code):
+    """True when build.gradle's versionName and versionCode are both at or
+    above the floor. Fails closed: an unreadable or unparseable version is a
+    failure, never a pass."""
+    vn = re.search(r"versionName '([0-9]+(?:\.[0-9]+)*)'", bg)
+    vc = re.search(r"versionCode (\d+)", bg)
+    if not vn or not vc:
+        return False
+    cur, floor = _version_parts(vn.group(1)), _version_parts(floor_name)
+    if not cur or not floor:
+        return False
+    width = max(len(cur), len(floor))
+    cur += (0,) * (width - len(cur))
+    floor += (0,) * (width - len(floor))
+    return cur >= floor and int(vc.group(1)) >= floor_code
+
+
+check("v9.33.70: version is at least 9.33.70 (238)", version_at_least("9.33.70", 238))
+
+# v9.33.72: the same trap cannot come back. Every "version bumped" check from
+# now on goes through version_at_least(); a literal exact pin in this file is
+# itself a failure.
+_pin_needle = 'count("version' + 'Name ' + chr(39)   # never written literally
+_self_source = open(__file__, encoding="utf-8").read()
+check("v9.33.72: no check pins versionName to one exact release",
+      _self_source.count(_pin_needle) == 0)
+check("v9.33.72: build.gradle declares exactly one versionName and versionCode",
+      bg.count("versionName ") == 1 and bg.count("versionCode ") == 1)
 
 # ---- v9.33.70: the fetched-source text rule pinned ----
 # cleanSourceText is the single "turn a fetched source into a short, readable
