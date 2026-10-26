@@ -255,10 +255,23 @@ class SettingsActivity : Activity() {
         })
         col.addView(remote)
 
+        }
+
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))
         val privacy = NovaUi.card(this)
         privacy.addView(NovaUi.small(this, getString(R.string.proxy_explainer)).apply { setPadding(0, 0, 0, dp(8)) })
         privacy.addView(NovaUi.switchRow(this, getString(R.string.proxy_switch), settings.proxyEnabled) { settings.proxyEnabled = it })
+        privacy.addView(field(settings.webSearchUrlTemplate,
+            "Search URL template ({query} is replaced with your encoded question)") { v ->
+            val trimmed = v.trim()
+            if (trimmed.startsWith("https://") && trimmed.contains("{query}")) {
+                settings.webSearchUrlTemplate = trimmed
+            } else if (trimmed.isBlank()) {
+                settings.webSearchUrlTemplate = "https://html.duckduckgo.com/html/?q={query}"
+            } else {
+                toast("Use an HTTPS URL containing {query}")
+            }
+        })
         privacy.addView(field(settings.proxyHost + ":" + settings.proxyPort,
             getString(R.string.proxy_hint)) { v ->
             if (v.contains(':')) {
@@ -268,8 +281,19 @@ class SettingsActivity : Activity() {
                 if (port != null && port in 1..65535) settings.proxyPort = port
             }
         })
+        privacy.addView(NovaUi.primaryButton(this, "Test SOCKS proxy") {
+            scope.launch {
+                val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    NovaNet.testProxy(this@SettingsActivity)
+                }
+                AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("SOCKS proxy test")
+                    .setMessage(result)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        })
         col.addView(privacy)
-        }
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_appearance)))
         val looks = NovaUi.card(this)

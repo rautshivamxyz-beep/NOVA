@@ -10,6 +10,11 @@ class Settings(context: Context) {
 
     private val prefs = context.getSharedPreferences("nova", Context.MODE_PRIVATE)
 
+    /** User-configurable HTTPS search URL template; use {query} for encoded terms. */
+    var webSearchUrlTemplate: String
+        get() = prefs.getString(KEY_WEB_SEARCH_URL, "https://html.duckduckgo.com/html/?q={query}") ?: "https://html.duckduckgo.com/html/?q={query}"
+        set(value) = prefs.edit().putString(KEY_WEB_SEARCH_URL, value.trim()).apply()
+
     var systemPrompt: String
         get() = prefs.getString(KEY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT) ?: DEFAULT_SYSTEM_PROMPT
         set(value) = prefs.edit().putString(KEY_SYSTEM_PROMPT, value).apply()
@@ -295,6 +300,7 @@ class Settings(context: Context) {
         private const val KEY_PROXY_ENABLED = "proxy_enabled"
         private const val KEY_PROXY_HOST = "proxy_host"
         private const val KEY_PROXY_PORT = "proxy_port"
+        private const val KEY_WEB_SEARCH_URL = "web_search_url"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
         private const val KEY_AUTO_REPLY = "auto_reply"
         private const val KEY_AUTO_REPLY_MSG = "auto_reply_msg"

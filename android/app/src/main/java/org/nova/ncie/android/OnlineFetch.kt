@@ -438,9 +438,20 @@ object OnlineFetch {
         // endpoint is the one that still returns results: ask it FIRST, and
         // guard both calls so neither can abort the search.
         val enc = URLEncoder.encode(q, "UTF-8")
-        var links = try {
-            parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc), q)
-        } catch (e: Exception) { emptyList() }
+        // The primary search endpoint is user-configurable in Settings.
+        // Require HTTPS and a {query} placeholder; fall back to known endpoints
+        // when a custom provider is blocked or returns no usable links.
+        val template = Settings(act).webSearchUrlTemplate
+        var links = if (template.startsWith("https://") && template.contains("{query}")) {
+            try {
+                parseDdgLinks(http(act, template.replace("{query}", enc)), q)
+            } catch (e: Exception) { emptyList() }
+        } else emptyList()
+        if (links.isEmpty()) {
+            links = try {
+                parseDdgLinks(http(act, "https://html.duckduckgo.com/html/?q=" + enc), q)
+            } catch (e: Exception) { emptyList() }
+        }
         if (links.isEmpty()) {
             links = try {
                 parseDdgLinks(http(act, "https://lite.duckduckgo.com/lite/?q=" + enc), q)

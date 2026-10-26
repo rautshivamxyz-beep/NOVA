@@ -40,12 +40,16 @@ object NovaNet {
     fun open(context: Context?, url: String, connectMs: Int = 10000,
              readMs: Int = 20000): HttpURLConnection {
         val u = URL(url)
+        require(u.protocol.equals("https", ignoreCase = true)) {
+            "Online fetch requires HTTPS"
+        }
         val p = proxy(context)
         val conn = (if (p != null) u.openConnection(p) else u.openConnection())
             as HttpURLConnection
         conn.connectTimeout = connectMs
         conn.readTimeout = readMs
         conn.instanceFollowRedirects = true
+        conn.useCaches = false
         // v9.26.0 "Search fix": a real browser User-Agent. The old
         // "NOVA-local-assistant/1.0" string made DuckDuckGo serve an
         // anti-bot page with no result links at all, so every web search
@@ -78,7 +82,8 @@ object NovaNet {
         return try {
             val ip = getText(context, "https://api.ipify.org", 8000, 12000).trim()
             if (ip.length in 7..45 && ip.all { it.isDigit() || it == '.' || it in "abcdefABCDEF:" })
-                "The proxy works. Sites NOVA reads now see " + ip + " instead of your own address."
+                "The proxy connection returned public exit IP " + ip +
+                    ". This confirms a public endpoint was reached; compare it with your normal IP to verify that it differs."
             else
                 "The proxy answered, but not with an address. Check " + host + ":" + port + "."
         } catch (e: Exception) {
