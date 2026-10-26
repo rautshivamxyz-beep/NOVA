@@ -261,6 +261,17 @@ class SettingsActivity : Activity() {
         val privacy = NovaUi.card(this)
         privacy.addView(NovaUi.small(this, getString(R.string.proxy_explainer)).apply { setPadding(0, 0, 0, dp(8)) })
         privacy.addView(NovaUi.switchRow(this, getString(R.string.proxy_switch), settings.proxyEnabled) { settings.proxyEnabled = it })
+        privacy.addView(field(settings.webSearchUrlTemplate,
+            "Search URL template ({query} is replaced with your encoded question)") { v ->
+            val trimmed = v.trim()
+            if (trimmed.startsWith("https://") && trimmed.contains("{query}")) {
+                settings.webSearchUrlTemplate = trimmed
+            } else if (trimmed.isBlank()) {
+                settings.webSearchUrlTemplate = "https://html.duckduckgo.com/html/?q={query}"
+            } else {
+                toast("Use an HTTPS URL containing {query}")
+            }
+        })
         privacy.addView(field(settings.proxyHost + ":" + settings.proxyPort,
             getString(R.string.proxy_hint)) { v ->
             if (v.contains(':')) {
