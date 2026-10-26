@@ -6,6 +6,15 @@
          This is the first surface; the rest follow the same pattern. -->
     <string name="settings_title">Settings</string>
     <string name="section_voice">Voice</string>
+    <string name="section_customization">Chat customization</string>
+    <string name="show_advanced_settings">Show advanced features</string>
+    <string name="response_style_title">Answer style</string>
+    <string name="response_style">Answer style: %1$s</string>
+    <string name="style_concise">Concise</string>
+    <string name="style_balanced">Balanced</string>
+    <string name="style_detailed">Detailed</string>
+    <string name="style_creative">Creative</string>
+    <string name="style_applies_next_load">Style applies when the model is next loaded or the conversation is reset.</string>
     <string name="read_aloud">Read replies aloud</string>
     <string name="auto_listen">Auto-listen (conversation mode)</string>
     <string name="section_auto_reply">Auto-reply</string>
