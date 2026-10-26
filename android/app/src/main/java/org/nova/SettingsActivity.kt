@@ -103,13 +103,13 @@ class SettingsActivity : Activity() {
             getString(R.string.style_creative)
         )
         val values = arrayOf("concise", "balanced", "detailed", "creative")
-        val selected = values.indexOf(settings.responseStyle).coerceAtLeast(1)
+        val selected = values.indexOf(settings.responseStyle).let { if (it >= 0) it else 1 }
         val b = NovaUi.ghostButton(this, getString(R.string.response_style, labels[selected]),
             NovaTheme.text) {}
         b.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle(R.string.response_style_title)
-                .setSingleChoiceItems(labels, values.indexOf(settings.responseStyle).coerceAtLeast(1)) { d, which ->
+                .setSingleChoiceItems(labels, values.indexOf(settings.responseStyle).let { if (it >= 0) it else 1 }) { d, which ->
                     settings.responseStyle = values[which]
                     b.text = getString(R.string.response_style, labels[which])
                     d.dismiss()
