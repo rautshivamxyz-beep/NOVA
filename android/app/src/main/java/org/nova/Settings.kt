@@ -36,7 +36,7 @@ class Settings(context: Context) {
             "creative" -> "Use an imaginative, expressive voice for open-ended tasks while staying accurate for factual questions."
             else -> "Use a balanced level of detail: answer directly, then explain enough to be useful."
         }
-        return base.trim() + "\\n" + style
+        return base.trim() + "\n" + style
     }
 
     var lastModelPath: String?
