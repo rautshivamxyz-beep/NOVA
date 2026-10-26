@@ -82,6 +82,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      # v9.33.73: the JVM unit tests were only ever run by nova-pr.yml, so a
+      # release committed straight to main - which is how every release in
+      # this repo is actually made - skipped them completely. They are the only
+      # thing that pins the deterministic core, so the suite now gates the
+      # release itself: a red test fails the build before anything is signed
+      # or published.
+      - name: Run the unit tests
+        working-directory: android
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
       - name: Build the NOVA release APK for arm64
         working-directory: android
         env:
