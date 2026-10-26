@@ -255,6 +255,8 @@ class SettingsActivity : Activity() {
         })
         col.addView(remote)
 
+        }
+
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))
         val privacy = NovaUi.card(this)
         privacy.addView(NovaUi.small(this, getString(R.string.proxy_explainer)).apply { setPadding(0, 0, 0, dp(8)) })
@@ -268,8 +270,19 @@ class SettingsActivity : Activity() {
                 if (port != null && port in 1..65535) settings.proxyPort = port
             }
         })
+        privacy.addView(NovaUi.primaryButton(this, "Test SOCKS proxy") {
+            scope.launch {
+                val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    NovaNet.testProxy(this@SettingsActivity)
+                }
+                AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("SOCKS proxy test")
+                    .setMessage(result)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        })
         col.addView(privacy)
-        }
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_appearance)))
         val looks = NovaUi.card(this)
