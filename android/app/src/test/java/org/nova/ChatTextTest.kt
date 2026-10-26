@@ -120,4 +120,68 @@ class ChatTextTest {
                 "The quick brown fox jumps over the lazy dog today\n" +
                     "The quick brown fox jumps over the lazy dog now"))
     }
+
+    // ---- v9.33.74: repetition repair ----
+    // A model that loses the plot repeats one sentence until the budget runs
+    // out. These pin the collapse rule, including what it must NOT touch.
+
+    @Test
+    fun aSentenceRepeatedFiveTimesCollapsesToOne() {
+        val loop = ("I do not have that information. ".repeat(5)).trim()
+        assertEquals("I do not have that information.", collapseRepetition(loop))
+    }
+
+    @Test
+    fun twoRepeatsAreLeftAlone() {
+        // emphasis, not a loop - the run must reach three before anything moves
+        val t = "Wait. Wait. Then it stopped and the room went quiet for a long, long moment of silence."
+        assertEquals(t, collapseRepetition(t))
+    }
+
+    @Test
+    fun anAlternatingLoopCollapsesToItsFirstCycle() {
+        // the classic small-model loop is two sentences trading places
+        val t = ("It is on. It is off. ".repeat(5)).trim()
+        assertEquals("It is on. It is off.", collapseRepetition(t))
+    }
+
+    @Test
+    fun aRepeatedWordRunCollapsesToOne() {
+        val t = "The answer is very very very very simple, and that is all there is to it at all."
+        assertEquals(
+            "The answer is very simple, and that is all there is to it at all.",
+            collapseRepetition(t))
+    }
+
+    @Test
+    fun aRepeatedLineRunCollapsesToOne() {
+        val t = "Section one is done and dusted.\n" +
+            "Section one is done and dusted.\n" +
+            "Section one is done and dusted."
+        assertEquals("Section one is done and dusted.", collapseRepetition(t))
+    }
+
+    @Test
+    fun aFencedCodeBlockIsNeverTouched() {
+        // three identical lines are normal in a snippet - collapsing them
+        // would corrupt what the user asked for
+        val t = "Here is the snippet you asked about, with the value set three " +
+            "times in a row as you wrote it:\n```\nx = 1\nx = 1\nx = 1\n```"
+        assertEquals(t, collapseRepetition(t))
+    }
+
+    @Test
+    fun ordinaryTextIsUnchanged() {
+        val t = "Your exam is on Monday at 9am. Bring the hall ticket and a pen. " +
+            "Do not carry the phone."
+        assertEquals(t, collapseRepetition(t))
+    }
+
+    @Test
+    fun aShortReplyIsNeverTouched() {
+        // the whole pass is skipped below 80 chars, so a terse answer cannot
+        // be mangled by a false positive
+        val t = "No. No. No."
+        assertEquals(t, collapseRepetition(t))
+    }
 }

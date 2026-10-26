@@ -113,8 +113,13 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.VH>() {
         last.done = true
         // permanently remove hidden thinking text - this is what gets
         // shown, copied, spoken and saved to the chat transcript
-        last.text = Regex("(?s)^\\s*(?:NOVA|You)\\s*:\\s*")
-            .replace(stripThinking(last.text).trim(), "")
+        // v9.33.74: the last repair - a model that fell into a generation
+        // loop repeated one sentence until the budget ran out. Collapse it
+        // once, here, so what is shown, copied, spoken and saved is clean.
+        last.text = collapseRepetition(
+            Regex("(?s)^\\s*(?:NOVA|You)\\s*:\\s*")
+                .replace(stripThinking(last.text).trim(), "")
+        )
         notifyItemChanged(items.size - 1)
     }
 

@@ -474,6 +474,112 @@ internal fun stripRepeatStart(newText: String, prevText: String): String {
     return rest.ifEmpty { newText }
 }
 
+/**
+ * v9.33.74 "Repetition repair".
+ *
+ * A small model that loses the plot does not stop - it repeats one sentence
+ * until the token budget runs out ("I do not have that information. I do not
+ * have that information. ..."), and the user is left with a wall of the same
+ * line. Every existing helper here fixes the SEAM between two replies
+ * ([stripRepeatJoin], [stripRepeatStart], [dropRepeatedBlocks]); nothing ever
+ * looked INSIDE one finished answer.
+ *
+ * Three passes, all deterministic and all cheap:
+ *  - identical consecutive LINES (a block of 1-2 lines repeated 3+ times)
+ *  - identical consecutive SENTENCES (same rule, blocks of 1-3)
+ *  - one word repeated 4+ times in a row ("the the the the")
+ *
+ * Only runs of three or more are touched, so ordinary emphasis ("no, no") and
+ * deliberate repetition survive. The units kept are the ORIGINAL substrings and
+ * the dropped ones are simply removed, so spacing and formatting are preserved.
+ * Fenced code blocks are never touched: three identical lines are normal there
+ * and collapsing them would corrupt the user's snippet.
+ *
+ * A pure string function with no Android dependency, so it is unit-tested.
+ */
+internal fun collapseRepetition(t: String): String {
+    if (t.length < 80) return t
+    val parts = t.split("```")
+    val sb = StringBuilder(t.length)
+    for ((idx, part) in parts.withIndex()) {
+        if (idx > 0) sb.append("```")
+        // odd indexes sit between two fences - that is code, leave it alone
+        sb.append(if (idx % 2 == 1) part else collapseProseRuns(part))
+    }
+    val s = sb.toString()
+    return if (s.isBlank()) t else s
+}
+
+private fun collapseProseRuns(t: String): String {
+    if (t.length < 80) return t
+    var s = collapseUnitRuns(t.lines(), 3, 2).joinToString("\n")
+    s = collapseUnitRuns(SENTENCE_PIECE.findAll(s).map { it.value }.toList(), 3, 3)
+        .joinToString("")
+    return REPEATED_WORD.replace(s) { it.groupValues[1] }
+}
+
+/** A sentence with the whitespace that precedes it - joined back verbatim. */
+private val SENTENCE_PIECE = Regex("[^.!?\u2026]+[.!?\u2026]*")
+
+/** Four or more copies of the same word in a row become one. */
+private val REPEATED_WORD =
+    Regex("\\b(\\w+)(?:\\s+\\1\\b){3,}", RegexOption.IGNORE_CASE)
+
+/** Comparison key: case, spacing and punctuation are not evidence of a loop. */
+private fun repeatKey(u: String): String =
+    u.lowercase().filter { it.isLetterOrDigit() }
+
+/**
+ * Collapses every run of [minRepeats] or more identical consecutive units down
+ * to a single copy, where "identical" means identical after [repeatKey].
+ *
+ * A run may be a block of 1..[maxPeriod] units, so an alternating loop
+ * ("A. B. A. B. A. B.") is caught as well as a plain one. A unit whose key is
+ * empty (blank, punctuation only) is never collapsed - there is no content to
+ * compare.
+ */
+private fun collapseUnitRuns(
+    units: List<String>,
+    minRepeats: Int,
+    maxPeriod: Int
+): List<String> {
+    if (units.size < minRepeats) return units
+    val out = ArrayList<String>(units.size)
+    var i = 0
+    while (i < units.size) {
+        var take = 1
+        var period = 0
+        val maxP = minOf(maxPeriod, (units.size - i) / minRepeats)
+        for (p in 1..maxP) {
+            val key = (0 until p).map { repeatKey(units[i + it]) }
+            if (key.any { it.isEmpty() }) continue
+            var reps = 1
+            while (true) {
+                val start = i + reps * p
+                if (start + p > units.size) break
+                var same = true
+                for (q in 0 until p) {
+                    if (repeatKey(units[start + q]) != key[q]) { same = false; break }
+                }
+                if (!same) break
+                reps++
+            }
+            if (reps >= minRepeats && reps * p > take) {
+                take = reps * p
+                period = p
+            }
+        }
+        if (period == 0) {
+            out.add(units[i])
+            i += 1
+        } else {
+            for (q in 0 until period) out.add(units[i + q])
+            i += take
+        }
+    }
+    return out
+}
+
 internal fun copyToClipboard(ctx: Context, text: String) {
     try {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

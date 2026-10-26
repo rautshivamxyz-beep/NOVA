@@ -163,8 +163,8 @@ android {
         // v9.33.71 "Reply and RAM safety": preserve coherent long replies
         //   from false derailment retries and fail safely when Android RAM
         //   capability probes fail.
-        versionCode 241
-        versionName '9.33.73'
+        versionCode 242
+        versionName '9.33.74'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
