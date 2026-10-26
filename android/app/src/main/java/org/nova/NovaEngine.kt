@@ -158,7 +158,7 @@ object NovaEngine {
         // v9.11.0 "Inference Quality": a blank prompt (the user cleared
         // it in Settings) falls back to the strong concise base prompt -
         // the model always gets a system turn.
-        val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
+        val prompt = Settings(context).styledPrompt(systemPrompt) +
             // v9.33.62: the standing rules ride in the system prompt, encoded
             // once per model load - not re-prefilled on every turn.
             Settings.RULEBOOK +
@@ -314,7 +314,7 @@ object NovaEngine {
             while (isGenerating && SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
             // v9.11.0 "Inference Quality": same fallback as load() - a
             // blank prompt never wipes the base prompt off the engine.
-            val prompt = systemPrompt.ifBlank { Settings.DEFAULT_SYSTEM_PROMPT } +
+            val prompt = Settings(context).styledPrompt(systemPrompt) +
                 Settings.RULEBOOK +
                 thinkingHint(activeModelPath ?: "", activeModelLabel) +
                 tinyHint(activeModelPath ?: "", activeModelLabel)

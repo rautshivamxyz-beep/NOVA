@@ -1084,10 +1084,11 @@ check("v9.11.0: per-model sampling profiles ship (NcieTune)",
 check("v9.11.0: tuning commands + context trimming wired into the chat turn (NcieChat)",
       nc.count("answerTune(text)") == 1 and nc.count("NcieTune.trimContext(") == 1 and
       nc.count("NcieTune.applyProfile(") == 1 and nc.count("TUNE_SET_Q") == 3)
-check("v9.11.0: strong concise base system prompt (Settings default + NovaEngine fallback)",
+check("v9.11.0: strong concise base system prompt (Settings default + styled NovaEngine prompt)",
       st.count("Be concise and direct. If you are not sure, say so instead of guessing") == 1 and
       st.count("Do not invent facts") == 1 and
-      nev.count("ifBlank { Settings.DEFAULT_SYSTEM_PROMPT }") == 2)
+      st.count("prompt.ifBlank { DEFAULT_SYSTEM_PROMPT }") == 1 and
+      nev.count("Settings(context).styledPrompt(systemPrompt)") == 2)
 check("v9.10.0: the exam planner ships (date file, countdown, plan, today's topic)",
       ne.count("fun setExamDate(") == 1 and ne.count("fun buildPlan(") == 1 and
       ne.count("fun daysLeft(") == 1 and ne.count("fun todayTopic(") == 1 and

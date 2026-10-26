@@ -95,6 +95,32 @@ class SettingsActivity : Activity() {
         col.addView(c)
     }
 
+    private fun styleRow(): View {
+        val labels = arrayOf(
+            getString(R.string.style_concise),
+            getString(R.string.style_balanced),
+            getString(R.string.style_detailed),
+            getString(R.string.style_creative)
+        )
+        val values = arrayOf("concise", "balanced", "detailed", "creative")
+        val selected = values.indexOf(settings.responseStyle).let { if (it >= 0) it else 1 }
+        val b = NovaUi.ghostButton(this, getString(R.string.response_style, labels[selected]),
+            NovaTheme.text) {}
+        b.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.response_style_title)
+                .setSingleChoiceItems(labels, values.indexOf(settings.responseStyle).let { if (it >= 0) it else 1 }) { d, which ->
+                    settings.responseStyle = values[which]
+                    b.text = getString(R.string.response_style, labels[which])
+                    d.dismiss()
+                    toast(getString(R.string.style_applies_next_load))
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+        return b
+    }
+
     private fun lengthRow(): View {
         val b = NovaUi.ghostButton(this, getString(R.string.response_length_n, settings.predictLength),
             NovaTheme.text) {}
@@ -126,6 +152,15 @@ class SettingsActivity : Activity() {
             NovaUi.switchRow(this, getString(R.string.read_aloud), settings.readAloud) { settings.readAloud = it },
             NovaUi.switchRow(this, getString(R.string.auto_listen), settings.autoListen) { settings.autoListen = it })
 
+        group(col, getString(R.string.section_customization),
+            styleRow(),
+            NovaUi.switchRow(this, getString(R.string.show_advanced_settings), settings.showAdvancedSettings) {
+                settings.showAdvancedSettings = it
+                recreate()
+            })
+
+        // Optional integrations are hidden by default to keep everyday settings focused.
+        if (settings.showAdvancedSettings) {
         // v9.22.0 "Busy replies": what NOVA says for you while you are busy.
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_auto_reply)))
         val auto = NovaUi.card(this)
@@ -150,6 +185,7 @@ class SettingsActivity : Activity() {
             getString(R.string.busy_replies_hint)) { settings.autoReplyLines = it })
         auto.addView(NovaUi.ghostButton(this, getString(R.string.generate_style)) { generateLines() })
         col.addView(auto)
+        }
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_memory)))
         val memory = NovaUi.card(this)
@@ -180,6 +216,7 @@ class SettingsActivity : Activity() {
         answers.addView(lengthRow())
         col.addView(answers)
 
+        if (settings.showAdvancedSettings) {
         // v9.33.42 "Borrowed brain", v9.33.43 "Find my computer"
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_remote)))
         val remote = NovaUi.card(this)
@@ -232,6 +269,7 @@ class SettingsActivity : Activity() {
             }
         })
         col.addView(privacy)
+        }
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_appearance)))
         val looks = NovaUi.card(this)

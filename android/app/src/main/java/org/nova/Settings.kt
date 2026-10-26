@@ -18,6 +18,27 @@ class Settings(context: Context) {
         get() = prefs.getInt(KEY_PREDICT_LENGTH, 512)
         set(value) = prefs.edit().putInt(KEY_PREDICT_LENGTH, value).apply()
 
+    /** Answer-style preset layered on top of the user's personality prompt. */
+    var responseStyle: String
+        get() = prefs.getString(KEY_RESPONSE_STYLE, "balanced") ?: "balanced"
+        set(value) = prefs.edit().putString(KEY_RESPONSE_STYLE, value).apply()
+
+    /** Hide optional integrations from the default settings screen. */
+    var showAdvancedSettings: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_ADVANCED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_ADVANCED, value).apply()
+
+    fun styledPrompt(prompt: String): String {
+        val base = prompt.ifBlank { DEFAULT_SYSTEM_PROMPT }
+        val style = when (responseStyle) {
+            "concise" -> "Prefer very short, direct answers. Use bullets only when useful."
+            "detailed" -> "Give thorough explanations with steps, examples, and important caveats when relevant."
+            "creative" -> "Use an imaginative, expressive voice for open-ended tasks while staying accurate for factual questions."
+            else -> "Use a balanced level of detail: answer directly, then explain enough to be useful."
+        }
+        return base.trim() + "\n" + style
+    }
+
     var lastModelPath: String?
         get() = prefs.getString(KEY_LAST_MODEL, null)
         set(value) = prefs.edit().putString(KEY_LAST_MODEL, value).apply()
@@ -251,6 +272,8 @@ class Settings(context: Context) {
     companion object {
         private const val KEY_SYSTEM_PROMPT = "system_prompt_v2"
         private const val KEY_PREDICT_LENGTH = "predict_length"
+        private const val KEY_RESPONSE_STYLE = "response_style"
+        private const val KEY_SHOW_ADVANCED = "show_advanced_settings"
         private const val KEY_LAST_MODEL = "last_model_path"
         private const val KEY_LAST_MODEL_LABEL = "last_model_label"
         private const val KEY_CURRENT_CHAT = "current_chat_id"
