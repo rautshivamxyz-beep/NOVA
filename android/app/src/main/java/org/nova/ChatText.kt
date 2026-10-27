@@ -146,17 +146,51 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
         scored.add(sc to i)
     }
     if (scored.isEmpty()) return doc.take(maxChars)
-    val best = scored.sortedByDescending { it.first }.take(12).map { it.second }.sorted()
+    // v9.33.77 "Answer-first window": the budget is spent on the paragraphs
+    // that score BEST, not on the ones that merely come first.
+    //
+    // The old form took the top 12 by score, put them back into document
+    // order and STOPPED at the first one that did not fit. Two consequences,
+    // both measured on a 450-character note whose answering sentence is its
+    // last paragraph:
+    //  - an early, mediocre paragraph could eat the whole budget, so the
+    //    paragraph holding the answer was never emitted;
+    //  - when the FIRST selected paragraph alone was larger than the budget,
+    //    the loop broke before appending anything and this function returned
+    //    an EMPTY string. The notes were silently dropped, the model answered
+    //    from imagination, and nothing anywhere reported a failure.
+    //
+    // Now the highest-scoring paragraphs are taken while they fit (a paragraph
+    // that does not fit is skipped, not fatal - a smaller one may still fit),
+    // and the chosen ones are put back into document order afterwards so the
+    // excerpt still reads naturally. The character budget is unchanged, and
+    // the result is capped at it, so this can never grow the prompt.
+    val ranked = scored.sortedByDescending { it.first }.map { it.second }
+    val chosen = ArrayList<Int>(minOf(ranked.size, 12))
+    var used = 0
+    for (i in ranked) {
+        if (chosen.size >= 12) break
+        val p = paras[i]
+        if (used + p.length > maxChars) {
+            if (chosen.isNotEmpty()) continue   // a smaller paragraph may fit
+            chosen.add(i)                       // nothing fits: keep the best one
+            break
+        }
+        chosen.add(i)
+        used += p.length
+        if (used >= maxChars) break
+    }
+    if (chosen.isEmpty()) return doc.take(maxChars)
+    chosen.sort()
     val out = StringBuilder()
     var last = -2
-    for (i in best) {
+    for (i in chosen) {
         if (out.isNotEmpty() && i != last + 1) out.append("[...]\n")
-        val p = paras[i]
-        if (out.length + p.length > maxChars) break
-        out.append(p).append("\n\n")
+        out.append(paras[i]).append("\n\n")
         last = i
     }
-    return out.toString().trim()
+    val window = out.toString().trim()
+    return if (window.length > maxChars) window.take(maxChars) else window
 }
 
 /**

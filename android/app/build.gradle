@@ -169,8 +169,12 @@ android {
         //   now use Tokens.contentWords, so a Hindi/Marathi question keeps
         //   its two-character content words in the tool scorer, the search
         //   acceptance gate and the document window. English unchanged.
-        versionCode 244
-        versionName '9.33.76'
+        // v9.33.77 "Answer-first window": the document/notes excerpt spends
+        //   its character budget on the paragraphs that score best, not on the
+        //   ones that come first, and is capped at the budget. Fixes an empty
+        //   "from my notes" window and an answer paragraph being dropped.
+        versionCode 245
+        versionName '9.33.77'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

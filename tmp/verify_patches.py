@@ -1335,6 +1335,27 @@ check("v9.33.76: no ASCII-length query filter left on the retrieval path",
       not any(_BARE_ASCII_TERMS.search(t) for t in
               [ntools, nof, ma, nc, ka, lo, load("ncie/android/NcieKnowledge.kt")]))
 
+# ---- v9.33.77 "Answer-first window" ----
+# docSearchIn builds the "from my notes" excerpt. It used to take the top 12
+# paragraphs by score, restore document order and STOP at the first one that
+# did not fit - so early filler could consume the budget and drop the
+# paragraph holding the answer, and when the first selected paragraph alone
+# was larger than the budget it returned an EMPTY string (the notes silently
+# vanished and the model answered from imagination). These checks keep the
+# relevance-first form and its unit tests in place.
+check("v9.33.77: the document window ranks by relevance first",
+      "val ranked = scored.sortedByDescending { it.first }.map { it.second }" in ma)
+check("v9.33.77: a paragraph that does not fit is skipped, not fatal",
+      "if (chosen.isNotEmpty()) continue   // a smaller paragraph may fit" in ma)
+check("v9.33.77: the window is capped at its character budget",
+      "if (window.length > maxChars) window.take(maxChars) else window" in ma)
+check("v9.33.77: the old document-order-then-stop selection is gone",
+      "take(12).map { it.second }.sorted()" not in ma)
+check("v9.33.77: the empty-window regression is pinned by a unit test",
+      "fun aWindowIsNeverSilentlyEmpty()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ChatTextTest.kt"),
+           encoding="utf-8").read())
+
 for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []

@@ -1,6 +1,7 @@
 package org.nova
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -17,6 +18,61 @@ import org.junit.Test
  * (CI runs it on every pull request).
  */
 class ChatTextTest {
+
+    // ---- v9.33.77 docSearchIn: the answer must survive the budget ----
+    //
+    // docSearchIn builds the "from my notes" window. Both failures below were
+    // real: a 450-character note whose answering sentence is its LAST
+    // paragraph returned 194 characters of filler at a 300-character budget
+    // and 0 characters at a smaller one - the notes were dropped and the
+    // model answered from imagination with nothing reported anywhere.
+
+    private val overview =
+        "The chapter opens with a general overview of the topic and its history. "
+
+    @Test
+    fun theAnsweringParagraphIsNotDroppedForEarlierFiller() {
+        val p0 = "Photosynthesis appears again in the summary below. " + overview.trim()
+        val p1 = "Photosynthesis is also mentioned in the review questions. " + overview.trim()
+        val answer = "Photosynthesis converts light into chemical energy."
+        val doc = listOf(p0, p1, answer).joinToString("\n\n")
+        val win = docSearchIn(doc, "photosynthesis", 300)
+        assertTrue("the window dropped the answering paragraph: " + win,
+            win.contains("chemical energy"))
+    }
+
+    @Test
+    fun aWindowIsNeverSilentlyEmpty() {
+        // one long scoring paragraph, then the answer: the old code broke out
+        // of the loop on the first paragraph and returned ""
+        val long = ("Photosynthesis is covered later in this chapter. " +
+            "Background context that the chapter mentions once. ".repeat(8)).trim()
+        val doc = long + "\n\n" + "Photosynthesis converts light into chemical energy."
+        assertTrue(docSearchIn(doc, "photosynthesis", 200).isNotEmpty())
+    }
+
+    @Test
+    fun chosenParagraphsStayInDocumentOrder() {
+        val first = "Photosynthesis converts light into chemical energy."
+        val middle = "This paragraph is about something else entirely."
+        val last = "Photosynthesis is also reviewed in the questions at the end."
+        val doc = listOf(first, middle, last).joinToString("\n\n")
+        // a budget that holds the two matching paragraphs but not the middle
+        val win = docSearchIn(doc, "photosynthesis", 120)
+        assertTrue(win.contains("chemical energy"))
+        assertTrue(win.contains("questions at the end"))
+        // document order, with the gap marked
+        assertTrue(win.indexOf("chemical energy") < win.indexOf("questions at the end"))
+        assertTrue(win.contains("[...]"))
+    }
+
+    @Test
+    fun theWindowNeverExceedsItsBudget() {
+        val doc = "Photosynthesis. " + "padding words that go on and on. ".repeat(200)
+        val win = docSearchIn(doc, "photosynthesis", 400)
+        assertTrue("window is " + win.length + " chars", win.length <= 400)
+        assertTrue(win.isNotEmpty())
+    }
 
     // ---- dropRepeatedBlocks: drop runs the continuation re-emits ----
 
