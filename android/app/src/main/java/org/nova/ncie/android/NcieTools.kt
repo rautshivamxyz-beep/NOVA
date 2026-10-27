@@ -158,7 +158,9 @@ object NcieTools {
     private fun score(text: String, query: String): Int {
         if (query.isBlank() || text.isBlank()) return 0
         val t = text.lowercase()
-        val terms = Tokens.split(query).filter { it.length > 2 }
+        // v9.33.76: every-script content words (a 2-character Devanagari
+        // word is a real term) - see Tokens.contentWords.
+        val terms = Tokens.contentWords(query)
         if (terms.isEmpty()) return 0
         return terms.count { t.contains(it) } * 100 / terms.size
     }

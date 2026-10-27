@@ -38,6 +38,29 @@ object Tokens {
                 (minLen > 2 && it.length == 2 && it.any { c -> c.code > 127 })
         }
 
+    /**
+     * v9.33.76 "Every-script retrieval terms": the ONE definition of a
+     * content word on the retrieval path - the words of a query or a page
+     * that are worth matching on.
+     *
+     * v9.33.19 gave every script a tokenizer, but four retrieval call sites
+     * kept the old hand-rolled rule `Tokens.split(x).filter { it.length > 2 }`.
+     * That rule counts CHARACTERS, and a Devanagari content word is short in
+     * characters because its vowel signs are separate code points: "घर"
+     * (house) and "मन" (mind) are two characters and were silently dropped.
+     * A Hindi question therefore lost its real content words before matching
+     * - the tool scorer saw no terms at all, the search acceptance gate
+     * counted zero keyword hits, and the document window had nothing to rank
+     * on. Exactly the failure v9.33.19 set out to end, surviving in the four
+     * places that were missed.
+     *
+     * [words] already carries the rule (ASCII keeps ">= minLen", a 2-character
+     * word qualifies when it holds a non-ASCII letter), so this is a NAME for
+     * it rather than a second implementation. English behaviour is identical
+     * to the old filter; every other script now behaves like English.
+     */
+    fun contentWords(s: String, minLen: Int = 3): List<String> = words(s, minLen)
+
     /** Space-padded normalized form for whole-word matching (" term "). */
     fun norm(s: String): String = " " + split(s).joinToString(" ") + " "
 }

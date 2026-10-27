@@ -738,8 +738,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
 
         val docPart = if (docContext != null) {
             val win = docSearch(text)
-            val qWords = Tokens.split(text)
-                .filter { it.length > 2 && it !in docStop }
+            // v9.33.76: every-script content words - a Hindi question about
+            // an attached document now registers overlap instead of looking
+            // unrelated and losing the document.
+            val qWords = Tokens.contentWords(text)
+                .filter { it !in docStop }
             val overlap = qWords.count { it in win.lowercase() }
             // user explicitly off the document ("don't search the notes")
             val offDoc = Regex("(?i)\\b(?:don'?t|do not|stop)\\b[^.]*\\b(?:use|search|look)\\b[^.]*\\b(?:notes?|document|pdf|it)\\b|\\bfrom your own knowledge\\b|\\bwithout the (?:notes?|document)\\b")

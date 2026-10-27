@@ -1307,7 +1307,35 @@ def structural(f, text):
     check("%s: braces balanced" % f, braces == 0)
     check("%s: parentheses balanced" % f, parens == 0)
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt"))]:
+# ---- v9.33.76 "Every-script retrieval terms" ----
+# v9.33.19 gave every script a tokenizer, but four retrieval call sites kept
+# the old hand-rolled rule `Tokens.split(x).filter { it.length > 2 }`. That
+# counts CHARACTERS, and a Devanagari content word is short in characters
+# because its vowel signs are separate code points, so "ghar" and "man" were
+# dropped before anything matched: a Hindi question lost its content words in
+# the tool scorer, the search acceptance gate and the document window.
+# The rule now has one name (Tokens.contentWords) and these checks keep it.
+ntools = load("ncie/android/NcieTools.kt")
+nof = load("ncie/android/OnlineFetch.kt")
+check("v9.33.76: Tokens defines contentWords (the one content-word rule)",
+      "fun contentWords(s: String, minLen: Int = 3): List<String> = words(s, minLen)"
+      in load("ncie/Tokens.kt"))
+check("v9.33.76: tool-result scoring uses every-script terms",
+      "Tokens.contentWords(query)" in ntools)
+check("v9.33.76: the search acceptance gate uses every-script terms",
+      "Tokens.contentWords(q).distinct()" in nof)
+check("v9.33.76: document excerpt ranking uses every-script terms",
+      "Tokens.contentWords(ql)" in ma)
+check("v9.33.76: document-window overlap uses every-script terms",
+      "Tokens.contentWords(text)" in nc)
+# and the ASCII-length rule cannot come back on the retrieval path
+_BARE_ASCII_TERMS = re.compile(
+    r"Tokens\.split\([^)]*\)\s*\.filter\s*\{\s*it\.length\s*>\s*2")
+check("v9.33.76: no ASCII-length query filter left on the retrieval path",
+      not any(_BARE_ASCII_TERMS.search(t) for t in
+              [ntools, nof, ma, nc, ka, lo, load("ncie/android/NcieKnowledge.kt")]))
+
+for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

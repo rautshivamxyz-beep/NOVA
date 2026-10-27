@@ -312,7 +312,10 @@ object OnlineFetch {
      *  the query's terms is a real hit even when it cannot cover the rest
      *  of a long question. */
     private fun hits(q: String, text: String): Int {
-        val terms = Tokens.split(q).filter { it.length > 2 }.distinct()
+        // v9.33.76: every-script content words. The ASCII-length filter
+        // dropped a Hindi query's two-character words, so the keyword side
+        // of the acceptance gate counted zero hits for a Hindi question.
+        val terms = Tokens.contentWords(q).distinct()
         if (terms.isEmpty()) return 0
         // v9.33.7: whole-word match - substring matching counted "art"
         // inside "start", inflating the 2+ keyword acceptance gate

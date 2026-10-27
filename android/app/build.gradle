@@ -164,8 +164,13 @@ android {
         //   from false derailment retries and fail safely when Android RAM
         //   capability probes fail.
         // v9.33.75: configurable HTTPS search URL and improved proxy diagnostics.
-        versionCode 243
-        versionName '9.33.75'
+        // v9.33.76 "Every-script retrieval terms": the four retrieval call
+        //   sites that still filtered query words by ASCII character count
+        //   now use Tokens.contentWords, so a Hindi/Marathi question keeps
+        //   its two-character content words in the tool scorer, the search
+        //   acceptance gate and the document window. English unchanged.
+        versionCode 244
+        versionName '9.33.76'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

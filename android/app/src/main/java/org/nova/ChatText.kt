@@ -101,8 +101,10 @@ fun docSearchIn(doc: String, query: String, maxChars: Int): String {
         }
     }
     val ql = query.lowercase()
-    val qw = Tokens.split(ql)
-        .filter { it.length > 2 && it !in docStop }.toSet()
+    // v9.33.76: every-script content words, so a Hindi question ranks the
+    // document's paragraphs instead of falling through to a blind head slice.
+    val qw = Tokens.contentWords(ql)
+        .filter { it !in docStop }.toSet()
     if (qw.isEmpty()) return doc.take(maxChars)
     val paras = doc.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }
     val lower = paras.map { it.lowercase() }

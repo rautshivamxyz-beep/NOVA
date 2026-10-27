@@ -27,6 +27,17 @@ class TokensTest {
     }
 
     @Test
+    fun contentWordsKeepShortDevanagari() {
+        // v9.33.76: "घर" (house) and "मन" (mind) are two CHARACTERS because
+        // the vowel signs are separate code points. The old
+        // `Tokens.split(x).filter { it.length > 2 }` rule dropped them, so a
+        // Hindi query lost its content words before anything matched.
+        assertEquals(listOf("घर", "कहाँ", "है"), Tokens.contentWords("घर कहाँ है?"))
+        // English behaviour is exactly the old filter: two letters still go.
+        assertEquals(listOf("the", "cat"), Tokens.contentWords("the cat is in"))
+    }
+
+    @Test
     fun punctuationAndDigitsSurviveAsWords() {
         assertEquals(listOf("chapter", "10"), Tokens.split("chapter 10!"))
     }
