@@ -176,8 +176,9 @@ android {
         // v9.33.78 "Storage robustness": a stale partial download that the
         //   server answers 416 for is cleared instead of failing forever, and
         //   the fetch log is rewritten atomically.
-        versionCode 246
-        versionName '9.33.78'
+        // v9.33.79: reuse resident model weights and defer startup cache warmups.
+        versionCode 247
+        versionName '9.33.79'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
