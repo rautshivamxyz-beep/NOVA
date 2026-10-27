@@ -153,8 +153,15 @@ object NovaEngine {
 
     suspend fun load(context: Context, path: String, label: String, systemPrompt: String) {
         val engine = get(context)
-        ensureReady(engine)
-        engine.loadModel(path)
+        // Re-selecting the model that is already resident should not unload
+        // and re-read gigabytes of weights. Reset only the conversation prompt;
+        // the model weights stay in memory and answer quality is unchanged.
+        val reuseLoadedModel = activeModelPath == path &&
+            engine.state.value is InferenceEngine.State.ModelReady
+        if (!reuseLoadedModel) {
+            ensureReady(engine)
+            engine.loadModel(path)
+        }
         // v9.11.0 "Inference Quality": a blank prompt (the user cleared
         // it in Settings) falls back to the strong concise base prompt -
         // the model always gets a system turn.
@@ -180,15 +187,19 @@ object NovaEngine {
         // targets (the draft must share the vocabulary). The binding
         // swallows failures, so speculation just stays off if anything
         // is missing.
-        try {
-            if (Settings(context.applicationContext).specDecoding) {
-                findDraftModel(context.applicationContext)?.let {
-                    engine.loadDraftModel(it.absolutePath)
+        // A reused model keeps its current draft-decoding state too; do not
+        // reload a second set of weights just because the same model was tapped.
+        if (!reuseLoadedModel) {
+            try {
+                if (Settings(context.applicationContext).specDecoding) {
+                    findDraftModel(context.applicationContext)?.let {
+                        engine.loadDraftModel(it.absolutePath)
+                    }
+                } else {
+                    engine.unloadDraftModel()
                 }
-            } else {
-                engine.unloadDraftModel()
-            }
-        } catch (e: Exception) { NovaLog.quiet("NovaEngine", e) }
+            } catch (e: Exception) { NovaLog.quiet("NovaEngine", e) }
+        }
     }
 
     /**

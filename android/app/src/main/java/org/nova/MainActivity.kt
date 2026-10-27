@@ -273,10 +273,24 @@ class MainActivity : Activity() {
 
         // v9.29.5: warm the store whenever the file exists, not only when the
         // full offline dataset was downloaded - fetched articles live there too.
-        scope.launch(Dispatchers.IO) { WikiCore.warmUp(this@MainActivity) }
-        // v7.6: warm the notes cache too - the first message of every
-        // session otherwise parsed knowledge.json on the main thread
-        scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }
+        scope.launch(Dispatchers.IO) {
+            // Give the saved model first access to disk bandwidth and RAM.
+            // The wiki/notes/skills caches are useful, but warming them while
+            // llama.cpp maps model weights can slow startup on low-RAM phones.
+            val savedModel = settings.lastModelPath
+            if (savedModel != null && File(savedModel).exists()) {
+                val waitUntil = android.os.SystemClock.elapsedRealtime() + 3_000L
+                while (!NovaEngine.isLoading && !NovaEngine.isModelLoaded &&
+                    android.os.SystemClock.elapsedRealtime() < waitUntil) delay(100)
+                while (NovaEngine.isLoading) delay(250)
+            }
+            WikiCore.warmUp(this@MainActivity)
+            // Warm these off the main thread so the first message never has
+            // to parse the knowledge files while the UI is handling input.
+            // Keep the source verifier's existing warm-up marker intact.
+            NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity)
+            NcieSkills.ensure(this@MainActivity)
+        }
         installCrashReporter()
         // v9.29.4: auto-check for an update on launch - silent unless one is
         // actually available, and never twice for a version already deferred.
