@@ -135,10 +135,19 @@ class FetchLogActivity : ListActivity() {
 
     private fun rewriteLogWithout(title: String) {
         try {
-            val kept = logFile().readLines().filter {
+            val f = logFile()
+            val kept = f.readLines().filter {
                 it.split('\t').getOrNull(1)?.equals(title, ignoreCase = true) != true
             }
-            logFile().writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
+            val body = kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n"
+            // v9.33.78: written atomically. A direct writeText truncates the
+            // file first, so a crash (or the process being killed while the
+            // user is deleting an entry) left an empty or half-written fetch
+            // log - the whole lookup history, gone. tmp + rename means the
+            // log is either the old one or the new one, never a fragment.
+            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(body)
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { NovaLog.quiet("FetchLogActivity", e) }
     }
 

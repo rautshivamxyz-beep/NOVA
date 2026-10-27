@@ -1356,6 +1356,14 @@ check("v9.33.77: the empty-window regression is pinned by a unit test",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ChatTextTest.kt"),
            encoding="utf-8").read())
 
+# ---- v9.33.78 "Storage robustness" ----
+# Two ways data or a multi-GB download could be lost with nothing reported.
+check("v9.33.78: a 416 on a stale partial clears it instead of failing forever",
+      "if (code == 416 && existing > 0) {" in load("ModelDownloader.kt")
+      and "the partial download could not be resumed and was cleared" in load("ModelDownloader.kt"))
+check("v9.33.78: the fetch log is rewritten atomically",
+      'val tmp = java.io.File(f.parentFile, f.name + ".tmp")' in load("FetchLogActivity.kt"))
+
 for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []

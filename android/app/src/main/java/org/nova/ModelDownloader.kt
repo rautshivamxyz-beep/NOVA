@@ -206,6 +206,19 @@ object ModelDownloader {
             }
 
             val code = conn.responseCode
+            // v9.33.78 "Unstuck download": a .part left behind by an earlier
+            // attempt that is already complete, or longer than the object the
+            // server now has, makes every retry answer 416 Range Not
+            // Satisfiable. The download was then stuck for good - the same
+            // "HTTP 416 from server" on every tap, with no way out but
+            // clearing app data. Bytes on disk plus a 416 means the partial
+            // cannot be appended to, so drop it and say so plainly; the next
+            // tap starts clean.
+            if (code == 416 && existing > 0) {
+                part.delete()
+                throw IOException(
+                    "the partial download could not be resumed and was cleared - tap download again")
+            }
             if (code != 200 && code != 206) {
                 throw IOException("HTTP $code from server")
             }
