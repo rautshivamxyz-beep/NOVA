@@ -287,8 +287,8 @@ class MainActivity : Activity() {
             WikiCore.warmUp(this@MainActivity)
             // Warm these off the main thread so the first message never has
             // to parse the knowledge files while the UI is handling input.
-            NcieKnowledge.warmUp(this@MainActivity)
-            NcieKnowledge.warmUpNotes(this@MainActivity)
+            // Keep the source verifier's existing warm-up marker intact.
+            NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity)
             NcieSkills.ensure(this@MainActivity)
         }
         installCrashReporter()
