@@ -186,8 +186,12 @@ android {
         //   mentions X" answers with the user's own lines, verbatim, and never
         //   calls the model - instant, impossible to invent, and it works with
         //   no model loaded at all. "from my notes: X" stays the question form.
-        versionCode 248
-        versionName '9.33.80'
+        // v9.33.81 "Outgoing-answer grounding check": a reply that claims the
+        //   user's own notes as its source on an install that holds none is
+        //   neutralised and labelled once - the one fabrication the user could
+        //   check and cannot trust. With material present nothing is touched.
+        versionCode 249
+        versionName '9.33.81'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

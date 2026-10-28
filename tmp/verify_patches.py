@@ -1419,7 +1419,26 @@ check("v9.33.80: the lookup is pinned by unit tests",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieLookupTest.kt"),
            encoding="utf-8").read())
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
+# ---- v9.33.81 "Outgoing-answer grounding check" ----
+# The check runs on the text that leaves the app, so it must fire on a claim
+# and must NOT fire (or rewrite) when the install holds material.
+_claim = load("ncie/android/NcieClaim.kt")
+check("v9.33.81: the reply cleanup runs the outgoing claim check",
+      "NcieClaim.check(cleaned, hasMaterial)" in ma)
+check("v9.33.81: the check fails OPEN when the store cannot be read",
+      "catch (e: Exception) { true }" in ma)
+check("v9.33.81: with material present the reply is returned untouched",
+      "if (hasMaterial) return reply" in _claim)
+check("v9.33.81: an ordinary reply is not a claim",
+      "fun ordinaryTextIsNotAClaim()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieClaimTest.kt"),
+           encoding="utf-8").read())
+check("v9.33.81: the check is pinned by unit tests",
+      "fun withMaterialPresentNothingIsRewritten()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieClaimTest.kt"),
+           encoding="utf-8").read())
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

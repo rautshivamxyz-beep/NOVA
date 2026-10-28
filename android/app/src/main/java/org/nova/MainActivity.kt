@@ -1293,7 +1293,16 @@ class MainActivity : Activity() {
             }
             out.add(line)
         }
-        return out.joinToString("\n").trim()
+        val cleaned = out.joinToString("\n").trim()
+        // F3 "Outgoing-answer grounding check" (v9.33.81): a reply may not
+        // claim the user's own notes as its source when this install holds
+        // none. NcieClaim neutralises that one sentence and says so once; with
+        // material present nothing is touched, and a failed store read fails
+        // OPEN - a wrong rewrite would be worse than a wrong claim.
+        val hasMaterial = try {
+            org.nova.ncie.android.NcieKnowledge.hasDocs(this) || WikiCore.isReady(this)
+        } catch (e: Exception) { true }
+        return org.nova.ncie.android.NcieClaim.check(cleaned, hasMaterial)
     }
 
     /** v7.3: does this message actually involve maths? If not, the LaTeX
