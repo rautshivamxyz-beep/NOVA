@@ -1438,6 +1438,17 @@ check("v9.33.81: the check is pinned by unit tests",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieClaimTest.kt"),
            encoding="utf-8").read())
 
+# ---- v9.33.82 "Retrieval-first lean prompt" ----
+# The lean turn must stay lean: one source when the notes already answer, and
+# the online offer must keep keying on the notes (not on the wiki it no longer
+# reads).
+check("v9.33.82: wiki background is skipped when the notes already back the turn",
+      "if (settings.wikiEnabled && knowledgePart.isEmpty() && seek && WikiCore.isReady(this) &&" in nc)
+check("v9.33.82: the online offer still requires empty notes",
+      nc.count("seek && docPart.isEmpty() &&\n            lastSkillMatched == null && knowledgePart.isEmpty()") >= 1)
+check("v9.33.82: the notes still win the study rewrap",
+      "if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {" in nc)
+
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []

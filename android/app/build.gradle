@@ -190,8 +190,13 @@ android {
         //   user's own notes as its source on an install that holds none is
         //   neutralised and labelled once - the one fabrication the user could
         //   check and cannot trust. With material present nothing is touched.
-        versionCode 249
-        versionName '9.33.81'
+        // v9.33.82 "Retrieval-first lean prompt": when the user's own
+        //   documents already back the turn, the offline-wiki background is not
+        //   injected as well - ~1400 characters (about 350 tokens) less to read
+        //   before the first word, on exactly the turns the notes answer. One
+        //   source decided by retrieval, not two competing ones.
+        versionCode 250
+        versionName '9.33.82'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

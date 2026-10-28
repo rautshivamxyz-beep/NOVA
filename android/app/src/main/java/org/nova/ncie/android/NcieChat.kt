@@ -960,7 +960,15 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // knowledge-seeking too - "difference between X and Y" and
             // "bmw vs bugatti" name no question word at the start
             compareQuestion(text)
-        if (settings.wikiEnabled && seek && WikiCore.isReady(this) &&
+        // F5 "Retrieval-first lean prompt" (v9.33.82): when the user's own
+        // documents already passed the strength gate above, the turn is
+        // ANSWERED by them - the wiki block added ~1400 characters of second
+        // reference the model had to read before its first word, and its
+        // "the reference overrides your memory" instruction could argue with
+        // the user's own material. Retrieval already decided; do not load a
+        // second source. The online offer is unaffected: both offer gates
+        // already require knowledgePart.isEmpty().
+        if (settings.wikiEnabled && knowledgePart.isEmpty() && seek && WikiCore.isReady(this) &&
             (!settings.adaptiveContext || NcieValue.allow(this, "wiki"))) {
             val wikiHits = WikiCore.search(this, text, if (tiny) 1 else 2)
             // v8.5.3: the same Coverage gate that guards fetched articles
