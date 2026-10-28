@@ -101,7 +101,9 @@ NC_MARKERS = [
     ("NCIE 6: kernel context-budget gate in the chat turn", "NcieKnowledge.leanContext(text)", 1),
     # v9.33.52: the rule moved into ModelProfile so the health screen can report
     # it and a test can pin it - the marker follows it there.
-    ("v8.3.1 tiny detection parses the parameter count", "ModelProfile.isTiny(mlabel)", 1),
+    # v9.33.79: the call gained the card's size label as the fallback.
+    ("v8.3.1 tiny detection parses the parameter count",
+     "ModelProfile.isTiny(mlabel, NovaEngine.activeModelSizeLabel)", 1),
     ("v7.5.1/NCIE-6 lean notes caps", "if (lean) 1200 else 2400", 4),
     ("v7.6 greeting context reset", "greeting sent into a dirty/stale context", 1),
     ("v7.6 notes relevance gate", "relevance gate - one shared word", 1),
@@ -335,9 +337,12 @@ check("v9.33.53: NOVA is told what to do with the background",
       load("Settings.kt").count("Use them silently") == 1)
 
 # ---- v9.33.52: the "tiny" decision is one rule, and it is visible ----
+# v9.33.79: two overloads now - the label rule, and the same rule with the
+# GGUF card's size label as a fallback. One call site, one rule.
 check("v9.33.52: one definition of the lean profile",
-      load("ncie/ModelProfile.kt").count("fun isTiny(") == 1 and
-      load("ncie/android/NcieChat.kt").count("ModelProfile.isTiny(mlabel)") == 1 and
+      load("ncie/ModelProfile.kt").count("fun isTiny(") == 2 and
+      load("ncie/android/NcieChat.kt").count(
+          "ModelProfile.isTiny(mlabel, NovaEngine.activeModelSizeLabel)") == 1 and
       load("ncie/android/NcieChat.kt").count("MODEL_PARAMS") == 0)
 check("v9.33.52: and the health screen reports it",
       load("NovaHealth.kt").count("prompt profile: ") == 1 and
@@ -1139,7 +1144,7 @@ check("v8.4.0: weak-topic signal synced (Learner + PersistentLearner)",
 
 # ---- v8.3.1: tiny-model detection parses the label (1.5B was missed) ----
 check("v8.3.1: model size parsed, not substring-matched",
-      nc.count("ModelProfile.isTiny(mlabel)") == 1 and
+      nc.count("ModelProfile.isTiny(mlabel, NovaEngine.activeModelSizeLabel)") == 1 and
       load("ncie/ModelProfile.kt").count("MODEL_PARAMS") == 2)
 
 # ---- v8.3.0: the study planner + doubt journal (drawer row) ----
@@ -1364,7 +1369,36 @@ check("v9.33.78: a 416 on a stale partial clears it instead of failing forever",
 check("v9.33.78: the fetch log is rewritten atomically",
       'val tmp = java.io.File(f.parentFile, f.name + ".tmp")' in load("FetchLogActivity.kt"))
 
-for f, text in [("MainActivity.kt", ma), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
+# ---- v9.33.79 "GGUF card" ----
+# The model's own header decides the prompt profile when its LABEL states no
+# size. A parser that loses sync returns a blank card, which would quietly put
+# every imported model back on the full profile - so both the parser and its
+# wiring are pinned here.
+_gguf = load("ncie/GgufMeta.kt")
+_mprof = load("ncie/ModelProfile.kt")
+check("v9.33.79: the GGUF header reader exists and stops at the byte budget",
+      "private const val BUDGET: Long" in _gguf and "if (r.used > BUDGET) break" in _gguf)
+check("v9.33.79: a string array is walked without allocating it",
+      "T_STRING -> r.skipString()" in _gguf and "r.skipString()\n                        i++" in _gguf)
+check("v9.33.79: an unreadable card is null, never an exception",
+      "fun read(path: String): Card? = try {" in _gguf and "    } catch (e: Exception) {\n        null\n    }" in _gguf)
+check("v9.33.79: the size-label fallback lives in ModelProfile",
+      "fun isTiny(label: String, sizeLabel: String?): Boolean" in _mprof)
+check("v9.33.79: the prompt builder passes the card's size label",
+      "ModelProfile.isTiny(mlabel, NovaEngine.activeModelSizeLabel)" in nc)
+check("v9.33.79: the loader reads the card off the main thread",
+      "org.nova.ncie.GgufMeta.read(path)" in load("NovaEngine.kt")
+      and "withContext(Dispatchers.IO)" in load("NovaEngine.kt"))
+check("v9.33.79: a catalog label still wins over the card",
+      "if (MODEL_PARAMS.containsMatchIn(label.lowercase())) return label" in load("NovaEngine.kt"))
+check("v9.33.79: the health screen reports the card",
+      'sb.append("model card: ")' in load("NovaHealth.kt"))
+check("v9.33.79: the parser is pinned by unit tests",
+      "fun aStringArrayIsSkippedBeforeTheTemplate()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/GgufMetaTest.kt"),
+           encoding="utf-8").read())
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

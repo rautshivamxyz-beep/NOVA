@@ -826,7 +826,9 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // hand - covers 1.5B, 1.7B and 2B the list never knew.
         // v9.33.52: the rule now lives in ModelProfile, so the health screen can
         // report which profile a model gets and a test can pin it.
-        val tiny = ModelProfile.isTiny(mlabel)
+        // v9.33.79: the model's own GGUF size label is the fallback when the
+        // label says nothing - a renamed 0.6B still gets the lean profile.
+        val tiny = ModelProfile.isTiny(mlabel, NovaEngine.activeModelSizeLabel)
 
         // NCIE Stage 6 (#1): the kernel's context budget now picks the
         // injection profile. Plain short chat gets the lean caps (the

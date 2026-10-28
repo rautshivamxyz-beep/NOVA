@@ -38,6 +38,21 @@ object ModelProfile {
      */
     fun isTiny(label: String): Boolean = (billions(label) ?: return false) <= 2.0
 
+    /**
+     * v9.33.79 "GGUF card": the same rule, but the model's own size label from
+     * its GGUF header is consulted when the LABEL does not state a size. A
+     * model the user renamed (or copied in by hand) carries no size in its
+     * name, so a 0.6B used to be treated as "unknown, therefore full profile"
+     * - two background sources and the exam line for a model that drowns in
+     * them. The label always wins when it does say a size: nothing changes for
+     * a catalog model.
+     */
+    fun isTiny(label: String, sizeLabel: String?): Boolean {
+        billions(label)?.let { return it <= 2.0 }
+        if (!sizeLabel.isNullOrBlank()) billions(sizeLabel)?.let { return it <= 2.0 }
+        return false
+    }
+
     /** One line for the health screen. */
     fun describe(label: String): String {
         val b = billions(label)

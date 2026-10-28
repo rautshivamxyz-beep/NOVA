@@ -63,6 +63,20 @@ object NovaEngine {
     var activeModelLabel: String = ""
         private set
 
+    /**
+     * v9.33.79 "GGUF card": what the loaded model says about itself - its
+     * architecture, real size label, context length and chat template, read
+     * from the GGUF header. Null when the file could not be read, which is
+     * never fatal: every decision below falls back to the old label rule.
+     */
+    @Volatile
+    var activeModelCard: org.nova.ncie.GgufMeta.Card? = null
+        private set
+
+    /** The model's own size label ("0.6B"), or null when it does not carry one. */
+    val activeModelSizeLabel: String?
+        get() = activeModelCard?.sizeLabel?.takeIf { it.isNotBlank() }
+
     /** True after any send() - the conversation context is no longer clean.
      *  Cleared by load() (fresh model = fresh context). Callers use it to
      *  skip a wasteful multi-second reload when the engine is already clean. */
@@ -155,6 +169,18 @@ object NovaEngine {
         val engine = get(context)
         ensureReady(engine)
         engine.loadModel(path)
+        // v9.33.79: read the model's own card, off the main thread. This is a
+        // header walk (never the weights) and it is cached per load, so the
+        // cost is a few milliseconds once per model - not per turn.
+        activeModelCard = try {
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                org.nova.ncie.GgufMeta.read(path)
+            }
+        } catch (e: Exception) {
+            NovaLog.quiet("NovaEngine", e)
+            null
+        }
+        val identity = modelIdentity(label)
         // v9.11.0 "Inference Quality": a blank prompt (the user cleared
         // it in Settings) falls back to the strong concise base prompt -
         // the model always gets a system turn.
@@ -162,7 +188,7 @@ object NovaEngine {
             // v9.33.62: the standing rules ride in the system prompt, encoded
             // once per model load - not re-prefilled on every turn.
             Settings.RULEBOOK +
-            thinkingHint(path, label) + tinyHint(path, label)
+            thinkingHint(path, identity) + tinyHint(path, identity)
         if (prompt.isNotBlank()) {
             try {
                 engine.setSystemPrompt(prompt)
@@ -200,6 +226,18 @@ object NovaEngine {
      * A target never drafts with itself, and an absent draft is simply a no-op
      * (the engine unloads any draft), so this can only help, never regress.
      */
+    /**
+     * v9.33.79: the label, plus the card's size label and name when the label
+     * does not state a size itself. A catalog label always wins, so an existing
+     * model keeps exactly the hints it had; only a renamed/imported model gains
+     * the identity its file already carried.
+     */
+    private fun modelIdentity(label: String): String {
+        if (MODEL_PARAMS.containsMatchIn(label.lowercase())) return label
+        val card = activeModelCard ?: return label
+        return (label + " " + card.sizeLabel + " " + card.name).trim()
+    }
+
     private fun findDraftModel(ctx: Context): java.io.File? {
         // v9.32.1 "Low-RAM guard": speculative decoding keeps a SECOND model in
         // memory. On a 4 GB phone Android already holds 2-3 GB, so the draft

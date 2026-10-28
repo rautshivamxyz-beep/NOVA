@@ -194,6 +194,22 @@ object NovaHealth {
         val profile = if (label.isBlank()) "no model loaded"
             else try { ModelProfile.describe(label) } catch (e: Exception) { "unknown" }
         sb.append("prompt profile: ").append(profile).append('\n')
+        // v9.33.79: what the model's own GGUF header said, so the identity the
+        // profile was chosen from can be SEEN rather than guessed.
+        val card = try { NovaEngine.activeModelCard } catch (e: Exception) { null }
+        val cardLine = if (card == null) {
+            if (label.isBlank()) "no model loaded" else "not read"
+        } else {
+            val bits = ArrayList<String>()
+            if (card.architecture.isNotBlank()) bits.add(card.architecture)
+            if (card.sizeLabel.isNotBlank()) bits.add(card.sizeLabel)
+            if (card.contextLength > 0) bits.add(card.contextLength.toString() + " ctx")
+            if (card.chatTemplate.isNotBlank()) {
+                bits.add(if (card.hasSystemRole) "system role" else "no system role")
+            }
+            if (bits.isEmpty()) "read, nothing useful" else bits.joinToString(", ")
+        }
+        sb.append("model card: ").append(cardLine).append('\n')
         val speed = try { Settings(ctx).lastSpeedReport } catch (e: Exception) { "" }
         sb.append("measured speed: ").append(speed.ifBlank { "not measured yet" }).append('\n')
         val replies = try { NovaListener.autoRepliesToday(ctx) } catch (e: Exception) { 0 }
