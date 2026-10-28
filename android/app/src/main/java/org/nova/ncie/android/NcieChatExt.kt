@@ -636,6 +636,31 @@ internal fun MainActivity.answerDocsList(text: String): Boolean {
     return true
 }
 
+// F2 "Notes lookup" (v9.33.80): "find in my notes: X" / "which note mentions
+// X" answers with the user's own lines, verbatim, and NEVER calls the model -
+// so it is instant, it cannot invent anything, and it works with no model
+// loaded at all. "from my notes: X" stays the question form (retrieve, then a
+// worded answer); this is the lookup form, where the user wants the line.
+internal fun MainActivity.answerNoteLookup(text: String): Boolean {
+    val q = NcieLookup.query(text) ?: return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try {
+            val sources = NcieGround.docsList(activity).size
+            val hits = if (sources == 0) emptyList() else NcieGround.retrieve(activity, q)
+            NcieLookup.body(q, hits, sources)
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieChat", e)
+            "I couldn't read your notes just now."
+        }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
 /** The monospace document inventory: Knowledge documents first, then
  *  wiki articles, each with its size in characters. */
 internal fun groundDocsBody(ctx: android.content.Context): String {

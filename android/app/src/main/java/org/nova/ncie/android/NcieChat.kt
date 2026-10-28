@@ -423,6 +423,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // mode the user invokes.
         if (answerGrounded(text)) { input.setText(""); return }
         if (answerDocsList(text)) { input.setText(""); return }
+        // F2 "Notes lookup" (v9.33.80): "find in my notes: X" / "which note
+        // mentions X" - the user's own lines, quoted verbatim, with no model
+        // call at all. "from my notes: X" above stays the QUESTION form.
+        if (answerNoteLookup(text)) { input.setText(""); return }
         // A2 "Deadline radar" (v9.33.9): "what's due" / "deadlines" /
         // "what's coming up" - deterministic, fully offline, no new
         // permission: reminders + exam countdown + dates in the notes.

@@ -1398,7 +1398,28 @@ check("v9.33.79: the parser is pinned by unit tests",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/GgufMetaTest.kt"),
            encoding="utf-8").read())
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
+# ---- v9.33.80 "Notes lookup" ----
+# A lookup that answers with the user's own lines must never reach the model
+# (a paraphrase is not a lookup) and must stay behind the "from my notes:"
+# question path, which it sits next to. Both are pinned here.
+_look = load("ncie/android/NcieLookup.kt")
+check("v9.33.80: the lookup command is routed before any generation",
+      "if (answerNoteLookup(text)) { input.setText(\"\"); return }" in nc)
+check("v9.33.80: the handler never calls the model",
+      "internal fun MainActivity.answerNoteLookup(text: String): Boolean" in nc
+      and "NovaEngineAdapter.generate" not in _look)
+check("v9.33.80: a long pasted page is not a command",
+      "if (t.length > 160) return null" in _look)
+check("v9.33.80: nothing found names what it looked in",
+      "I looked in " in _look)
+check("v9.33.80: a code fence in the notes cannot break the reply",
+      'replace("```", "\'\'\'")' in _look)
+check("v9.33.80: the lookup is pinned by unit tests",
+      "fun theCommandFormsAreRecognised()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieLookupTest.kt"),
+           encoding="utf-8").read())
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

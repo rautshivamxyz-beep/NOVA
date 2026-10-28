@@ -182,8 +182,12 @@ android {
         //   unknown, therefore full profile". A 0.6B called model.gguf now gets
         //   the lean prompt it needs instead of two background sources and the
         //   exam line. A catalog label still wins, so nothing changes there.
-        versionCode 247
-        versionName '9.33.79'
+        // v9.33.80 "Notes lookup": "find in my notes: X" / "which note
+        //   mentions X" answers with the user's own lines, verbatim, and never
+        //   calls the model - instant, impossible to invent, and it works with
+        //   no model loaded at all. "from my notes: X" stays the question form.
+        versionCode 248
+        versionName '9.33.80'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
