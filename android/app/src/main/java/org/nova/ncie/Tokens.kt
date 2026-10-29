@@ -61,6 +61,27 @@ object Tokens {
      */
     fun contentWords(s: String, minLen: Int = 3): List<String> = words(s, minLen)
 
+    /**
+     * v9.33.83 "Lookup ranking": the ONE list of function words on the
+     * retrieval path - the words a question carries for grammar, not for
+     * meaning. Moved here verbatim from NcieGround (which now reads it as
+     * Tokens.STOP) because a second caller needs it: the notes lookup ranks
+     * its quoted line on the question's content words, and a private list
+     * two packages away is how the v9.33.76 drift happened in the first
+     * place. This file is pure Kotlin, so the list is reachable from a JVM
+     * unit test with no Android on the classpath.
+     *
+     * English first, then the Devanagari function words (v9.33.23) so a
+     * Hindi/Marathi question's content terms are not diluted by its
+     * grammar words.
+     */
+    val STOP: Set<String> = setOf("what", "who", "when", "where", "why", "how", "the", "and",
+        "for", "are", "was", "were", "is", "does", "did", "do", "with", "about",
+        "tell", "explain", "describe", "which", "that", "this", "from", "many",
+        "much", "some", "give", "list", "name", "then", "than", "into", "also",
+        "my", "notes", "note", "documents", "document",
+        "है", "हैं", "था", "थी", "थे", "का", "की", "के", "को", "में", "से", "पर", "और", "या", "यह", "ये", "वह", "वो", "कि", "क्या", "कौन", "कब", "कहाँ", "कहां", "क्यों", "कैसे", "ने", "भी", "तो", "ही", "नहीं", "न", "कर", "करें", "हो", "होता", "होती", "होते", "जो", "लिए", "कुछ", "कोई", "इस", "उस", "इन", "उन", "वाला", "वाली", "वाले", "मेरा", "मेरी", "मेरे", "तुम", "आप", "मैं", "हम", "अपना", "अपनी", "आहे", "आहेत", "चा", "ची", "चे", "ला", "मध्ये", "आणि", "किंवा", "नाही", "हा", "ती", "ते")
+
     /** Space-padded normalized form for whole-word matching (" term "). */
     fun norm(s: String): String = " " + split(s).joinToString(" ") + " "
 }

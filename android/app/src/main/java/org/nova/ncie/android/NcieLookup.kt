@@ -77,7 +77,7 @@ object NcieLookup {
      *  A line that holds more of the query's words wins; ties keep the
      *  earlier line, so the result is stable rather than arbitrary. */
     fun excerpt(chunk: String, query: String, maxChars: Int = 240): String {
-        val terms = Tokens.contentWords(query)
+        val terms = termsOf(query)
         val lines = chunk.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
         var best = ""
         var bestScore = -1
@@ -94,14 +94,60 @@ object NcieLookup {
         return window(best, terms, maxChars)
     }
 
+    /**
+     * v9.33.83: the query's content words, with the shared function-word list
+     * removed. "what is the boiling point of water" used to hand [excerpt]
+     * the five words what/the/boiling/point/water, so a distractor line that
+     * merely said "what" and "the" outscored the line that said "boiling"
+     * and the user was quoted the wrong line. A query made only of function
+     * words keeps its words, so the excerpt still has something to look for.
+     */
+    internal fun termsOf(query: String): List<String> {
+        val all = Tokens.contentWords(query)
+        val content = all.filter { it !in Tokens.STOP }
+        return if (content.isEmpty()) all else content
+    }
+
+    /**
+     * v9.33.83: the first WHOLE-WORD occurrence of [term] in [lower], or -1.
+     * A plain indexOf found "the" inside "There" and "art" inside
+     * "startup", so a long line was sliced around a substring that had
+     * nothing to do with the question and the quoted window often did not
+     * contain the word the user searched for. The boundaries are checked by
+     * hand because Java's word-boundary anchor is ASCII-only and would never
+     * match a Devanagari word at all.
+     */
+    private fun firstWord(lower: String, term: String): Int {
+        if (term.isEmpty()) return -1
+        var i = lower.indexOf(term)
+        while (i >= 0) {
+            val end = i + term.length
+            val before = i <= 0 || !isWordChar(lower[i - 1])
+            val after = end >= lower.length || !isWordChar(lower[end])
+            if (before && after) return i
+            i = lower.indexOf(term, i + 1)
+        }
+        return -1
+    }
+
+    /** Letters, digits and combining marks of any script are one word. */
+    private fun isWordChar(c: Char): Boolean {
+        if (Character.isLetterOrDigit(c)) return true
+        val t = Character.getType(c)
+        return t == Character.NON_SPACING_MARK.toInt() ||
+            t == Character.COMBINING_SPACING_MARK.toInt()
+    }
+
     /** A flat, bounded slice of one line, centred on the first matched word. */
     private fun window(line: String, terms: List<String>, maxChars: Int): String {
         val flat = line.replace(Regex("\\s+"), " ").trim()
         if (flat.length <= maxChars) return flat
-        val lower = flat.lowercase()
+        // v9.33.83: keep the indices usable - a few code points lowercase to
+        // two characters, which would shift every index in this function.
+        val lower = flat.lowercase().let { if (it.length == flat.length) it else flat }
         var at = -1
         for (t in terms) {
-            val i = lower.indexOf(t)
+            val i = firstWord(lower, t)
             if (i >= 0 && (at < 0 || i < at)) at = i
         }
         if (at < 0) return flat.take(maxChars).trimEnd() + "..."

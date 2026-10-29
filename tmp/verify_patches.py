@@ -621,7 +621,7 @@ check("v9.33.23: short non-Latin words survive the query tokenizer",
       kstore.count("w.length == 2 && w.any { it.code > 127 }") == 1)
 check("v9.33.23: the retrieval stopword lists carry the Devanagari function words",
       kstore.count('"का"') == 1 and
-      load("ncie/android/NcieGround.kt").count('"का"') == 1)
+      load("ncie/Tokens.kt").count('"का"') == 1)
 
 # ---- v9.33.24: Hindi/Marathi WIKI retrieval - the same two fixes ----
 check("v9.33.24: the wiki query tokenizers keep short non-Latin words",
@@ -1448,6 +1448,32 @@ check("v9.33.82: the online offer still requires empty notes",
       nc.count("seek && docPart.isEmpty() &&\n            lastSkillMatched == null && knowledgePart.isEmpty()") >= 1)
 check("v9.33.82: the notes still win the study rewrap",
       "if (studyQ && docPart.isEmpty() && knowledgePart.isNotEmpty()) {" in nc)
+
+# ---- v9.33.83 "Lookup quotes the line the user meant" ----
+# The lookup answers with the user's own line and no model, so the only
+# failure mode is the WRONG line. It must rank on content words (the shared
+# function-word list, not a private copy) and must centre the quote on a
+# whole word rather than on a substring that merely contains one.
+_tok83 = load("ncie/Tokens.kt")
+_ground83 = load("ncie/android/NcieGround.kt")
+check("v9.33.83: the function-word list has ONE definition (Tokens.STOP)",
+      "val STOP: Set<String> = setOf(" in _tok83
+      and "private val STOP = Tokens.STOP" in _ground83)
+check("v9.33.83: the lookup ranks on content words, not on function words",
+      "val content = all.filter { it !in Tokens.STOP }" in _look
+      and "val terms = termsOf(query)" in _look)
+check("v9.33.83: the quoted window is centred on a whole word",
+      "private fun firstWord(lower: String, term: String): Int" in _look
+      and "val i = firstWord(lower, t)" in _look)
+check("v9.33.83: the lookup ranking is pinned by unit tests",
+      "fun aFunctionWordDoesNotOutrankTheContentWord()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieLookupTest.kt"),
+           encoding="utf-8").read()
+      and "fun theWindowIsCentredOnTheWholeWordNotASubstring()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieLookupTest.kt"),
+           encoding="utf-8").read())
+check("v9.33.83: version is at least 9.33.83 (251)",
+      version_at_least("9.33.83", 251))
 
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)

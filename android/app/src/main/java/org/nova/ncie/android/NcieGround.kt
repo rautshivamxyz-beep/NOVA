@@ -69,14 +69,10 @@ object NcieGround {
     /** The question's own stopwords - the same words the wiki search
      *  drops, so scoring counts content terms only ("what is the
      *  ozone layer" scores on ozone and layer, not on what and the). */
-    private val STOP = setOf("what", "who", "when", "where", "why", "how", "the", "and",
-        "for", "are", "was", "were", "is", "does", "did", "do", "with", "about",
-        "tell", "explain", "describe", "which", "that", "this", "from", "many",
-        "much", "some", "give", "list", "name", "then", "than", "into", "also",
-        "my", "notes", "note", "documents", "document",
-        // v9.33.23: the Devanagari function words, so a Hindi/Marathi
-        // question's content terms are not diluted by its grammar words.
-        "है", "हैं", "था", "थी", "थे", "का", "की", "के", "को", "में", "से", "पर", "और", "या", "यह", "ये", "वह", "वो", "कि", "क्या", "कौन", "कब", "कहाँ", "कहां", "क्यों", "कैसे", "ने", "भी", "तो", "ही", "नहीं", "न", "कर", "करें", "हो", "होता", "होती", "होते", "जो", "लिए", "कुछ", "कोई", "इस", "उस", "इन", "उन", "वाला", "वाली", "वाले", "मेरा", "मेरी", "मेरे", "तुम", "आप", "मैं", "हम", "अपना", "अपनी", "आहे", "आहेत", "चा", "ची", "चे", "ला", "मध्ये", "आणि", "किंवा", "नाही", "हा", "ती", "ते")
+    // v9.33.83: the list itself moved to Tokens.STOP (one definition on
+    // the retrieval path). The contents are unchanged, so questionTerms()
+    // behaves exactly as before.
+    private val STOP = Tokens.STOP
 
     /** The question's significant terms: the kernel analyzer's keywords
      *  (NcieKnowledge.keyTerms - the retrieval layer's existing helper)

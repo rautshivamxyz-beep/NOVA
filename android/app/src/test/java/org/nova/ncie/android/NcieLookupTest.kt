@@ -93,4 +93,44 @@ class NcieLookupTest {
         val body = NcieLookup.body("code", hits, 1)
         assertEquals(2, Regex("```").findAll(body).count())
     }
+
+    @Test
+    fun aFunctionWordDoesNotOutrankTheContentWord() {
+        // "what is the boiling point of water" - the first line holds what
+        // and the and point, the second holds boiling and water. Ranking on
+        // every query word quoted the first line; ranking on content words
+        // quotes the one the user asked about.
+        val chunk = "What is the point of this? The whole thing is what it is.\n" +
+            "Boiling water at sea level reaches 100 degrees."
+        assertEquals("Boiling water at sea level reaches 100 degrees.",
+            NcieLookup.excerpt(chunk, "what is the boiling point of water"))
+    }
+
+    @Test
+    fun theWindowIsCentredOnTheWholeWordNotASubstring() {
+        // "the" first occurs inside "There", so the old slice started at
+        // character 0 and stopped before the word the user searched for.
+        val line = "There is a lot of background here about many unrelated things, " +
+            "and the paragraph rambles on about cooking, storage and other matters " +
+            "before it finally mentions the boiling point of water at altitude."
+        val ex = NcieLookup.excerpt(line, "what is the boiling point of water", 120)
+        assertTrue(ex.contains("boiling"))
+    }
+
+    @Test
+    fun aShortWordIsNotFoundInsideALongerOne() {
+        // "art" only ever appears as the start of "startup" and "part"
+        // early in the line - the quote must be the standalone word.
+        val line = "The startup of the machine takes a long time, and this part " +
+            "of the process is slow, but the art of tuning it is knowing where " +
+            "to begin and the rest is practice and patience over many weeks."
+        val ex = NcieLookup.excerpt(line, "art", 90)
+        assertTrue(ex.contains(" art "))
+    }
+
+    @Test
+    fun aQueryOfOnlyFunctionWordsStillQuotesALine() {
+        assertEquals("First line here.",
+            NcieLookup.excerpt("First line here.\nSecond line there.", "what is it"))
+    }
 }
