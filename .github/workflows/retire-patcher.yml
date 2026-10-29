@@ -1,0 +1,40 @@
+# ONE-SHOT cleanup: retire the v9.33.83-86 one-shot patcher.
+#
+# All four releases built green, so the patch scripts and the apply workflow
+# that carried them are deleted in ONE commit (a self-retiring workflow, so the
+# cleanup does not become six pushes and six wasted builds). This file deletes
+# itself in the same commit.
+#
+# Usage: dispatch once, then forget it. It cannot run twice - it removes
+# itself.
+name: Retire the one-shot patcher
+on:
+  workflow_dispatch:
+concurrency:
+  group: nova-retire
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  retire:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove the one-shot files
+        run: |
+          git rm -q .github/workflows/apply-patch.yml
+          git rm -q tmp/patch_engine86.py tmp/patch_engine86b.py \
+                    tmp/patch_engine87.py tmp/patch_engine88.py tmp/patch_engine89.py
+          git rm -q .github/workflows/retire-patcher.yml
+          git status --short
+      - name: Commit and push
+        run: |
+          git config user.name "nova-bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          git commit -m "v${VER}: retire the one-shot patcher (all four releases are green)" \
+            -m "v9.33.83 lookup ranking, v9.33.84 the lookup never quotes an unrelated line, v9.33.85 a deadline written for today is due today, and v9.33.86 Tier 1 device senses all built green, so the patch scripts and the apply workflow that carried them are removed. No app source changes - this commit only deletes build scaffolding."
+          git push origin HEAD:main
