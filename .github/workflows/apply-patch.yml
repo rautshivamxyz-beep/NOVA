@@ -1,7 +1,7 @@
-# ONE-SHOT apply workflow for v9.33.83 (lookup ranking).
-# Temporary: it exists only to run the two patch steps on the real tree and
-# commit the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is
-# dispatched by hand afterwards. Delete this file once the release is green.
+# ONE-SHOT apply workflow for v9.33.84 (the lookup never quotes an unrelated line).
+# Temporary: it exists only to run the patch step on the real tree and commit
+# the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is dispatched
+# by hand afterwards. Delete this file once the release is green.
 name: Apply one-shot patch
 on:
   workflow_dispatch:
@@ -18,10 +18,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Step B - the v9.33.23 stopword check follows the list to Tokens.kt
-        run: python3 tmp/patch_engine86b.py .
-      - name: Step A - the patch itself (its final verify_patches run is the gate)
-        run: python3 tmp/patch_engine86.py .
+      - name: The patch (its final verify_patches run is the gate)
+        run: python3 tmp/patch_engine87.py .
       - name: Commit and push the patched tree
         run: |
           git config user.name "nova-bot"
@@ -33,7 +31,7 @@ jobs:
           fi
           VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
           echo "committing v${VER}"
-          git commit -m "v${VER}: lookup quotes the line the user meant" \
-            -m "F2 notes lookup ranked its quoted line on every word of the question, so 'what is the boiling point of water' scored a distractor line on what/the/point and quoted it instead of the line that said boiling. It also centred the 240-character window on a plain indexOf, so 'the' matched inside 'There' and the quote often did not contain the word the user searched for." \
-            -m "The function-word list now has one definition (Tokens.STOP), the lookup ranks and centres on content words only, and the window snaps to whole-word matches in any script. Five verify_patches checks and four unit tests pin it."
+          git commit -m "v${VER}: the lookup never quotes an unrelated line" \
+            -m "NcieGround.retrieve returns a chunk when it matched only semantically (cosine >= 0.30, zero keyword overlap). The lookup quoted the first line of whatever it was handed, so such a hit was printed under 'Your notes on X' with 'Quoted straight from your notes - nothing added' - a paraphrase dressed up as a quote, the exact failure the command exists to prevent. It also burned one of the four quote slots." \
+            -m "body() now skips a hit whose line holds none of the question's content words, and falls back to the honest 'nothing in your notes mentions ...' when no line survives. Four verify checks and two unit tests pin it."
           git push origin HEAD:main
