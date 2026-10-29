@@ -755,6 +755,37 @@ internal val FOCUS_OFF_Q = Regex(
 internal val FOCUS_STATUS_Q = Regex(
     "(?i)^\\s*(?:focus|focus\\s+mode|focus\\s+status|am\\s+i\\s+focused)\\s*[.!?]*\\s*$")
 
+// v9.33.86 "Device senses" (Tier 1): "battery" / "am i online" /
+// "device status" - what the phone itself is doing. Deterministic, offline,
+// no model call and no new permission. It sits with the other deterministic
+// commands and runs before any generation, so a question about the phone
+// never waits for a token.
+internal val SENSES_Q = Regex(
+    "(?i)^\\s*(?:" +
+        "how(?:'s|\\s+is)?\\s+(?:my\\s+)?battery" +
+        "|battery(?:\\s+(?:status|level))?" +
+        "|am\\s+i\\s+online" +
+        "|(?:network|connection)\\s+status" +
+        "|device\\s+status" +
+        "|phone\\s+status" +
+        ")\\s*[.!?]*\\s*$")
+
+internal fun MainActivity.answerSenses(text: String): Boolean {
+    if (text.length > 60) return false
+    if (!SENSES_Q.containsMatchIn(text)) return false
+    val activity = this
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    scope.launch(Dispatchers.IO) {
+        val body = try {
+            NcieSenses.format(NcieSenses.read(activity))
+        } catch (e: Exception) { "Device status unavailable." }
+        withContext(Dispatchers.Main) { postGroundReply(activity, body) }
+    }
+    return true
+}
+
 internal fun MainActivity.answerFocus(text: String): Boolean {
     if (text.length > 60) return false
     val start = FOCUS_START_Q.find(text)

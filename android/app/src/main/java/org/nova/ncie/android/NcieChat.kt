@@ -441,6 +441,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // A5 "Focus mode" (v9.33.12): "focus 25" / "focus mode" /
         // "stop focus" - deterministic, fully offline, no new permission.
         if (answerFocus(text)) { input.setText(""); return }
+        // v9.33.86 "Device senses" (Tier 1): "battery" / "am i online" /
+        // "device status" - what the phone itself is doing. Deterministic,
+        // offline, no model call and no new permission.
+        if (answerSenses(text)) { input.setText(""); return }
         // v9.6.0 "Engine Pack": "what have you learned" - the Experience
         // Engine's deterministic view of the questions whose answers the
         // user regenerated; "connections" / "related documents" - the
