@@ -1,5 +1,5 @@
 # ONE-SHOT apply workflow for v9.33.83 (lookup ranking).
-# Temporary: it exists only to run tmp/patch_engine86.py on the real tree and
+# Temporary: it exists only to run the two patch steps on the real tree and
 # commit the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is
 # dispatched by hand afterwards. Delete this file once the release is green.
 name: Apply one-shot patch
@@ -18,7 +18,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Run the patch script (it self-verifies before anything is committed)
+      - name: Step B - the v9.33.23 stopword check follows the list to Tokens.kt
+        run: python3 tmp/patch_engine86b.py .
+      - name: Step A - the patch itself (its final verify_patches run is the gate)
         run: python3 tmp/patch_engine86.py .
       - name: Commit and push the patched tree
         run: |
