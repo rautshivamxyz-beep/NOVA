@@ -133,4 +133,25 @@ class NcieLookupTest {
         assertEquals("First line here.",
             NcieLookup.excerpt("First line here.\nSecond line there.", "what is it"))
     }
+
+    @Test
+    fun aHitThatSharesNoWordWithTheQuestionIsNotQuoted() {
+        // retrieval can return a semantic-only hit - no literal overlap at
+        // all. Quoting its first line as "your notes on tensor" would be a
+        // paraphrase dressed up as a quote.
+        val hits = listOf("Physics" to "Kinetic energy depends on mass and speed.")
+        val body = NcieLookup.body("tensor", hits, 1)
+        assertTrue(body.contains("Nothing in your notes mentions \"tensor\""))
+        assertTrue(!body.contains("Kinetic energy"))
+    }
+
+    @Test
+    fun anUnrelatedHitDoesNotConsumeAQuoteSlot() {
+        val hits = listOf(
+            "Physics" to "Kinetic energy depends on mass.",
+            "ML Notes" to "A tensor is a multi-dimensional array.")
+        val body = NcieLookup.body("tensor", hits, 2)
+        assertTrue(body.contains("1. ML Notes - A tensor is a multi-dimensional array."))
+        assertTrue(!body.contains("Physics"))
+    }
 }

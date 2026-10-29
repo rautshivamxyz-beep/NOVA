@@ -56,21 +56,41 @@ object NcieLookup {
             return "You have no notes or documents yet - paste a page into " +
                 "Knowledge, or scan one, and ask me again."
         }
-        if (hits.isEmpty()) {
-            val what = if (sources == 1) "1 source" else sources.toString() + " sources"
-            return "Nothing in your notes mentions \"" + query + "\". I looked in " + what + "."
-        }
-        val sb = StringBuilder("```\nYour notes on \"").append(query).append("\":\n")
-        var n = 0
+        val terms = termsOf(query)
+        val quotes = ArrayList<Pair<String, String>>()
         for (h in hits) {
-            if (n >= MAX_QUOTES) break
-            n++
-            sb.append("\n").append(n).append(". ").append(h.first).append(" - ")
-            sb.append(excerpt(h.second, query).replace("```", "'''")).append("\n")
+            if (quotes.size >= MAX_QUOTES) break
+            val line = bestLine(h.second, query)
+            if (!holdsTerm(line, terms)) continue
+            quotes.add(h.first to window(line, terms, 240))
+        }
+        if (quotes.isEmpty()) return nothingFound(query, sources)
+        val sb = StringBuilder("```\nYour notes on \"").append(query).append("\":\n")
+        for (i in quotes.indices) {
+            sb.append("\n").append(i + 1).append(". ").append(quotes[i].first).append(" - ")
+            sb.append(quotes[i].second.replace("```", "'''")).append("\n")
         }
         sb.append("```\n")
         sb.append("Quoted straight from your notes - nothing added, no model used.")
         return sb.toString()
+    }
+
+    /** v9.33.84: the honest reply when not one line shares a word. */
+    private fun nothingFound(query: String, sources: Int): String {
+        val what = if (sources == 1) "1 source" else sources.toString() + " sources"
+        return "Nothing in your notes mentions \"" + query + "\". I looked in " + what + "."
+    }
+
+    /**
+     * v9.33.84: true when [line] holds at least one of the query's content
+     * words. Retrieval can hand back a chunk that matched only semantically,
+     * with no word in common with the question; quoting its first line as
+     * "your notes on X" would be a paraphrase dressed up as a quote.
+     */
+    private fun holdsTerm(line: String, terms: List<String>): Boolean {
+        if (terms.isEmpty()) return false
+        val norm = Tokens.norm(line)
+        return terms.any { norm.contains(" " + it + " ") }
     }
 
     /** The single most relevant line of a chunk, trimmed around the match.
@@ -93,6 +113,14 @@ object NcieLookup {
         if (best.isEmpty()) best = chunk.trim()
         return window(best, terms, maxChars)
     }
+
+    /**
+     * v9.33.84: the whole line [excerpt] would quote, unclipped. The caller
+     * needs it to decide whether that line shares a word with the question
+     * at all before spending one of the [MAX_QUOTES] slots on it.
+     */
+    internal fun bestLine(chunk: String, query: String): String =
+        excerpt(chunk, query, Int.MAX_VALUE)
 
     /**
      * v9.33.83: the query's content words, with the shared function-word list

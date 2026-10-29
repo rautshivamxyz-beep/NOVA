@@ -1475,6 +1475,21 @@ check("v9.33.83: the lookup ranking is pinned by unit tests",
 check("v9.33.83: version is at least 9.33.83 (251)",
       version_at_least("9.33.83", 251))
 
+# ---- v9.33.84 "The lookup never quotes an unrelated line" ----
+# A quote with no word in common with the question is a paraphrase wearing
+# the word "quoted" - the one thing this command must never print.
+check("v9.33.84: a line that shares no word with the question is not quoted",
+      "if (!holdsTerm(line, terms)) continue" in _look
+      and "internal fun bestLine(chunk: String, query: String): String" in _look)
+check("v9.33.84: an empty quote list falls back to the honest reply",
+      "if (quotes.isEmpty()) return nothingFound(query, sources)" in _look)
+check("v9.33.84: the rule is pinned by unit tests",
+      "fun aHitThatSharesNoWordWithTheQuestionIsNotQuoted()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieLookupTest.kt"),
+           encoding="utf-8").read())
+check("v9.33.84: version is at least 9.33.84 (252)",
+      version_at_least("9.33.84", 252))
+
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
