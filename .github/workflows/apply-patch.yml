@@ -1,4 +1,4 @@
-# ONE-SHOT apply workflow for v9.33.84 (the lookup never quotes an unrelated line).
+# ONE-SHOT apply workflow for v9.33.85 (a deadline written for today is due today).
 # Temporary: it exists only to run the patch step on the real tree and commit
 # the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is dispatched
 # by hand afterwards. Delete this file once the release is green.
@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: The patch (its final verify_patches run is the gate)
-        run: python3 tmp/patch_engine87.py .
+        run: python3 tmp/patch_engine88.py .
       - name: Commit and push the patched tree
         run: |
           git config user.name "nova-bot"
@@ -31,7 +31,7 @@ jobs:
           fi
           VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
           echo "committing v${VER}"
-          git commit -m "v${VER}: the lookup never quotes an unrelated line" \
-            -m "NcieGround.retrieve returns a chunk when it matched only semantically (cosine >= 0.30, zero keyword overlap). The lookup quoted the first line of whatever it was handed, so such a hit was printed under 'Your notes on X' with 'Quoted straight from your notes - nothing added' - a paraphrase dressed up as a quote, the exact failure the command exists to prevent. It also burned one of the four quote slots." \
-            -m "body() now skips a hit whose line holds none of the question's content words, and falls back to the honest 'nothing in your notes mentions ...' when no line survives. Four verify checks and two unit tests pin it."
+          git commit -m "v${VER}: a deadline written for today is due today" \
+            -m "The deadline radar added a date found in the user's notes only when it fell inside now..horizon. A date-only value resolves to midnight, so 'assignment due 29 Oct' compared as 00:00 against 14:30 and was dropped for the whole of the 29th - the one day it mattered most. The formatter even had a 'today' branch a note date could never reach." \
+            -m "Note dates are now measured from the start of today (onRadar(), pure arithmetic). Reminders keep the now floor on purpose: one that already fired is done, not due. Three verify checks and one unit test pin the boundary and keep the two windows from drifting into each other."
           git push origin HEAD:main
