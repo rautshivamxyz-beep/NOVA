@@ -1,0 +1,37 @@
+# ONE-SHOT apply workflow for v9.33.83 (lookup ranking).
+# Temporary: it exists only to run tmp/patch_engine86.py on the real tree and
+# commit the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is
+# dispatched by hand afterwards. Delete this file once the release is green.
+name: Apply one-shot patch
+on:
+  workflow_dispatch:
+concurrency:
+  group: nova-apply
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run the patch script (it self-verifies before anything is committed)
+        run: python3 tmp/patch_engine86.py .
+      - name: Commit and push the patched tree
+        run: |
+          git config user.name "nova-bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit - the patch was already applied"
+            exit 0
+          fi
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          echo "committing v${VER}"
+          git commit -m "v${VER}: lookup quotes the line the user meant" \
+            -m "F2 notes lookup ranked its quoted line on every word of the question, so 'what is the boiling point of water' scored a distractor line on what/the/point and quoted it instead of the line that said boiling. It also centred the 240-character window on a plain indexOf, so 'the' matched inside 'There' and the quote often did not contain the word the user searched for." \
+            -m "The function-word list now has one definition (Tokens.STOP), the lookup ranks and centres on content words only, and the window snaps to whole-word matches in any script. Five verify_patches checks and four unit tests pin it."
+          git push origin HEAD:main
