@@ -78,7 +78,7 @@ object NcieDeadlines {
                 for (m in ISO_DATE.findAll(text)) {
                     val at = dateAt(today, m.groupValues[3].toIntOrNull(),
                         m.groupValues[2].toIntOrNull(), m.groupValues[1]) ?: continue
-                    if (at in now..horizon) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
                 }
                 // scan the loose formats on the text with the ISO dates
                 // blanked, so "2026-11-05" is not also read as "11-05"
@@ -86,17 +86,17 @@ object NcieDeadlines {
                 for (m in NUM_DATE.findAll(plain)) {
                     val at = dateAt(today, m.groupValues[1].toIntOrNull(),
                         m.groupValues[2].toIntOrNull(), m.groupValues[3].ifBlank { null }) ?: continue
-                    if (at in now..horizon) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
                 }
                 for (m in D_MON.findAll(plain)) {
                     val mo = MONTHS[m.groupValues[2].lowercase()]?.plus(1) ?: continue
                     val at = dateAt(today, m.groupValues[1].toIntOrNull(), mo, null) ?: continue
-                    if (at in now..horizon) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
                 }
                 for (m in MON_D.findAll(plain)) {
                     val mo = MONTHS[m.groupValues[1].lowercase()]?.plus(1) ?: continue
                     val at = dateAt(today, m.groupValues[2].toIntOrNull(), mo, null) ?: continue
-                    if (at in now..horizon) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
                 }
             }
         } catch (e: Exception) { NovaLog.quiet("NcieDeadlines", e) }
@@ -119,6 +119,17 @@ object NcieDeadlines {
         sb.append("```")
         return sb.toString()
     }
+
+    /**
+     * v9.33.85: a deadline WRITTEN IN A NOTE is due from the start of today,
+     * not from this instant. A date-only value resolves to midnight, so
+     * "assignment due 29 Oct" compared as `at in now..horizon` was dropped
+     * for the whole of the 29th - the one day it mattered most. Reminders
+     * keep the `now` floor: one that already fired is done, not due.
+     * Pure arithmetic, so a unit test can pin the boundary.
+     */
+    internal fun onRadar(today: Long, horizon: Long, at: Long): Boolean =
+        at >= today && at <= horizon
 
     private fun startOfToday(): Long {
         val c = Calendar.getInstance()

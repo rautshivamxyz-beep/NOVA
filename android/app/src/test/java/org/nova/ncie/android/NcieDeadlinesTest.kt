@@ -2,6 +2,7 @@ package org.nova.ncie.android
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
 
@@ -60,5 +61,19 @@ class NcieDeadlinesTest {
         assertNull(NcieDeadlines.dateAt(today, 31, 2, "2026"))
         assertNull(NcieDeadlines.dateAt(today, 0, 5, null))
         assertNull(NcieDeadlines.dateAt(today, 10, 13, null))
+    }
+
+    @Test
+    fun aDeadlineWrittenForTodayIsOnTheRadarAllDay() {
+        val today = midnight(2026, 6, 1)
+        val horizon = today + 60L * 24 * 60 * 60 * 1000
+        // a date-only value resolves to the start of today, so by 14:30 it
+        // is already 'in the past' - it must still be due, not dropped
+        assertTrue(NcieDeadlines.onRadar(today, horizon, today))
+        assertTrue(NcieDeadlines.onRadar(today, horizon, today + 1))
+        assertTrue(NcieDeadlines.onRadar(today, horizon, horizon))
+        // yesterday is not due, and neither is anything past the horizon
+        assertTrue(!NcieDeadlines.onRadar(today, horizon, today - 1))
+        assertTrue(!NcieDeadlines.onRadar(today, horizon, horizon + 1))
     }
 }

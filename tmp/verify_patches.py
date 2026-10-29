@@ -1490,6 +1490,24 @@ check("v9.33.84: the rule is pinned by unit tests",
 check("v9.33.84: version is at least 9.33.84 (252)",
       version_at_least("9.33.84", 252))
 
+# ---- v9.33.85 "A deadline written for today is due today" ----
+# A note date resolves to midnight, so it must be measured from the start
+# of today; a reminder keeps the `now` floor because one that already fired
+# is done. The two must not drift into each other.
+_dl85 = load("ncie/android/NcieDeadlines.kt")
+check("v9.33.85: a note date is due from the start of today",
+      "internal fun onRadar(today: Long, horizon: Long, at: Long): Boolean" in _dl85
+      and _dl85.count("if (onRadar(today, horizon, at))") == 4)
+check("v9.33.85: a reminder keeps the now floor",
+      "if (fireAt in now..horizon)" in _dl85
+      and "if (at in now..horizon)" not in _dl85)
+check("v9.33.85: the boundary is pinned by a unit test",
+      "fun aDeadlineWrittenForTodayIsOnTheRadarAllDay()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDeadlinesTest.kt"),
+           encoding="utf-8").read())
+check("v9.33.85: version is at least 9.33.85 (253)",
+      version_at_least("9.33.85", 253))
+
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt"))]:
     structural(f, text)
     bad = []
