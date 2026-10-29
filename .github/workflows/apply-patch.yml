@@ -1,4 +1,4 @@
-# ONE-SHOT apply workflow for v9.33.85 (a deadline written for today is due today).
+# ONE-SHOT apply workflow for v9.33.86 (Tier 1 device senses).
 # Temporary: it exists only to run the patch step on the real tree and commit
 # the result. A GITHUB_TOKEN push triggers no CI, so nova-apk.yml is dispatched
 # by hand afterwards. Delete this file once the release is green.
@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: The patch (its final verify_patches run is the gate)
-        run: python3 tmp/patch_engine88.py .
+        run: python3 tmp/patch_engine89.py .
       - name: Commit and push the patched tree
         run: |
           git config user.name "nova-bot"
@@ -31,7 +31,7 @@ jobs:
           fi
           VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
           echo "committing v${VER}"
-          git commit -m "v${VER}: a deadline written for today is due today" \
-            -m "The deadline radar added a date found in the user's notes only when it fell inside now..horizon. A date-only value resolves to midnight, so 'assignment due 29 Oct' compared as 00:00 against 14:30 and was dropped for the whole of the 29th - the one day it mattered most. The formatter even had a 'today' branch a note date could never reach." \
-            -m "Note dates are now measured from the start of today (onRadar(), pure arithmetic). Reminders keep the now floor on purpose: one that already fired is done, not due. Three verify checks and one unit test pin the boundary and keep the two windows from drifting into each other."
+          git commit -m "v${VER}: Tier 1 device senses" \
+            -m "'battery' / 'am i online' / 'device status' now answers from the phone itself: battery level and charging, network type, screen state and free storage, in one deterministic block with no model call. Battery and screen state need no permission at all, ACCESS_NETWORK_STATE was already declared, and StatFs reads the app's own directory - so Tier 1 costs the user no new ask." \
+            -m "It is also a speed win: a question about the phone used to go to the model, which generated guesses about a device it cannot see. The reply text is built by NcieSenses.format, pure Kotlin, so the wording and the honesty rules (an unreadable battery is 'not readable', never '0%') are unit-tested. Six verify checks and six unit tests pin it."
           git push origin HEAD:main
