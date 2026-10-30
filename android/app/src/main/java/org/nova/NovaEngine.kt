@@ -416,7 +416,12 @@ object NovaEngine {
             return flow {
                 var got = false
                 try {
-                    RemoteEngine.stream(message, budget).collect { got = true; emit(it) }
+                    // v9.33.88: the loop guard covers the borrowed brain too.
+                    // A remote model loops exactly like a small one, and a user
+                    // should not wait it out just because the answer came from
+                    // a laptop.
+                    guardLoops(RemoteEngine.stream(message, budget))
+                        .collect { got = true; emit(it) }
                 } catch (e: CancellationException) {
                     // Stop/cancel must never launch a second, local generation.
                     throw e
@@ -438,31 +443,43 @@ object NovaEngine {
         contextDirty = true   // the conversation context now holds this prompt
         return flow {
             awaitEngineReady(engine)
-            // v9.33.87 "F4 the loop is cut": a small model that loses its
-            // thread does not stop - it repeats the same sentence until the
-            // generation leash runs out, and the user waits out the whole
-            // budget reading text they already have. Watch the tail of the
-            // stream; the moment it becomes a loop, cancel generation and
-            // say so. Detection is checked every 24 characters rather than
-            // on every token, so the guard costs nothing measurable.
-            val seen = StringBuilder()
-            var lastCheck = 0
-            var looped = false
-            engine.sendUserPrompt(message, budget)
-                .takeWhile { piece ->
-                    seen.append(piece)
-                    if (seen.length - lastCheck >= 24) {
-                        lastCheck = seen.length
-                        if (org.nova.ncie.NcieRepeat.looped(seen.toString())) {
-                            looped = true
-                            return@takeWhile false
-                        }
-                    }
-                    true
-                }
-                .collect { emit(it) }
-            if (looped) emit("\n\n[Stopped early - the reply started repeating itself.]")
+            emitAll(guardLoops(engine.sendUserPrompt(message, budget)))
         }
+    }
+
+    /** What is shown in place of the text a loop would have produced. */
+    private const val LOOP_MARKER =
+        "\n\n[Stopped early - the reply started repeating itself.]"
+
+    /**
+     * v9.33.87 "F4 the loop is cut", v9.33.88 for both engines.
+     *
+     * A model that loses its thread does not stop: it repeats the same
+     * sentence until the generation leash runs out, and the user waits out the
+     * whole budget reading text they already have. This watches the TAIL of the
+     * stream and, the moment it becomes a loop, cancels the upstream generation
+     * and says so.
+     *
+     * Detection runs every 24 characters rather than on every token, so the
+     * guard costs nothing measurable, and it can only ever SHORTEN a reply -
+     * it never adds a character to the prompt and never slows a good turn.
+     */
+    private fun guardLoops(src: Flow<String>): Flow<String> = flow {
+        val seen = StringBuilder()
+        var lastCheck = 0
+        var looped = false
+        src.takeWhile { piece ->
+            seen.append(piece)
+            if (seen.length - lastCheck >= 24) {
+                lastCheck = seen.length
+                if (org.nova.ncie.NcieRepeat.looped(seen.toString())) {
+                    looped = true
+                    return@takeWhile false
+                }
+            }
+            true
+        }.collect { emit(it) }
+        if (looped) emit(LOOP_MARKER)
     }
 
     /** v9.13.9 "No dropped turns": suspend until the engine is no longer
