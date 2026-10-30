@@ -195,8 +195,8 @@ android {
         //   injected as well - ~1400 characters (about 350 tokens) less to read
         //   before the first word, on exactly the turns the notes answer. One
         //   source decided by retrieval, not two competing ones.
-        versionCode 254
-        versionName '9.33.86'
+        versionCode 255
+        versionName '9.33.87'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

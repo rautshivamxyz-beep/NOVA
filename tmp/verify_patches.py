@@ -1070,7 +1070,10 @@ nev = load("NovaEngine.kt")
 check("v9.13.9: a prompt is never fired into a busy engine (NovaEngine)",
       nev.count("private suspend fun awaitEngineReady(") == 1 and
       nev.count("awaitEngineReady(engine)") == 2 and
-      nev.count("emitAll(engine.sendUserPrompt(") == 2)
+      # v9.33.87: the local path now collects the engine flow through the
+      # loop guard instead of emitAll, so the firing site is counted by the
+      # call itself - both paths still await the engine first.
+      nev.count("engine.sendUserPrompt(message, budget)") == 2)
 check("v9.13.7: draft matcher covers Qwen and LFM families (NovaEngine)",
       nev.count('"qwen" in target') == 1 and nev.count('"lfm" in target') == 1)
 # ---- v9.13.3 "No-Thinking for 1B+": models 1B and larger skip hidden thinking ----
@@ -1530,7 +1533,36 @@ check("v9.33.86: the reply is pinned by unit tests",
 check("v9.33.86: version is at least 9.33.86 (254)",
       version_at_least("9.33.86", 254))
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt"))]:
+# ---- v9.33.87 "F4 the loop is cut" ----
+# A small model that loses its thread does not stop: it repeats the same
+# sentence until the generation leash runs out. The detector is pure string
+# logic in its own object (so the JVM tests pin it); the guard sits in
+# NovaEngine's LOCAL stream, and it must never add a character to the prompt -
+# stopping a runaway generation is a speed win, not a cost.
+_rep = load("ncie/NcieRepeat.kt")
+_eng = load("NovaEngine.kt")
+check("v9.33.87: the detector is its own pure-JVM object",
+      "object NcieRepeat" in _rep
+      and "import android." not in _rep
+      and "NcieChat" not in _rep)
+check("v9.33.87: the local stream watches its own tail",
+      "org.nova.ncie.NcieRepeat.looped(seen.toString())" in _eng
+      and ".takeWhile { piece ->" in _eng)
+check("v9.33.87: a loop cancels generation instead of running out the leash",
+      "return@takeWhile false" in _eng
+      and "[Stopped early - the reply started repeating itself.]" in _eng)
+check("v9.33.87: detection is throttled, never per token",
+      "seen.length - lastCheck >= 24" in _eng)
+check("v9.33.87: the loop guard does not grow the prompt",
+      "NcieRepeat" not in nc and "NcieRepeat" not in ma)
+check("v9.33.87: the detector is pinned by unit tests",
+      "fun aRepeatedSentenceIsALoop()" in
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/NcieRepeatTest.kt"),
+           encoding="utf-8").read())
+check("v9.33.87: version is at least 9.33.87 (255)",
+      version_at_least("9.33.87", 255))
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
