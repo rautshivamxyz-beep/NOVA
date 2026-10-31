@@ -506,7 +506,7 @@ object OnlineFetch {
                 title.replace("\t", " ").replace("\n", " ") + "\t" + url
             val kept = f.readLines().toMutableList()
             kept.add(line)
-            f.writeText(kept.takeLast(500).joinToString("\n") + "\n")
+            NcieFiles.write(f, kept.takeLast(500).joinToString("\n") + "\n")
         } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
     }
 

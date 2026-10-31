@@ -198,7 +198,7 @@ object NcieLearn {
                 pending = null
                 try {
                     file.parentFile?.mkdirs()
-                    file.writeText(snap)
+                    NcieFiles.write(file, snap)
                 } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             }
         }
@@ -289,7 +289,7 @@ object NcieLearn {
                 try { gapFile(ctx).readText() } catch (e: Exception) { "" }
             ).also { gapStore = it }
             g.note(question, System.currentTimeMillis())
-            try { gapFile(ctx).writeText(g.serialize()) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
+            try { NcieFiles.write(gapFile(ctx), g.serialize()) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
         }
     }
 

@@ -162,7 +162,7 @@ object NcieExam {
         }
         val ms = c.timeInMillis
         try {
-            dateFile(act).apply { parentFile?.mkdirs() }.writeText(ms.toString() + "\n")
+            NcieFiles.write(dateFile(act), ms.toString() + "\n")
         } catch (e: Exception) {
             postReply(act, "Could not save the exam date.")
             return
@@ -273,7 +273,7 @@ object NcieExam {
                     .append(topic).append('\n')
                 written++
             }
-            planFile(act).apply { parentFile?.mkdirs() }.writeText(lines.toString())
+            NcieFiles.write(planFile(act), lines.toString())
         } catch (e: Exception) {
             postReply(act, "Could not save the revision plan.")
             return

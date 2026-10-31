@@ -141,7 +141,7 @@ object NcieTutor {
                 val p = l.split("\t", limit = 3)
                 !(p.size == 3 && p[1].trim().lowercase() == key && p[2] == question)
             }
-            f.writeText(if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
+            NcieFiles.write(f, if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
         } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
     }
 

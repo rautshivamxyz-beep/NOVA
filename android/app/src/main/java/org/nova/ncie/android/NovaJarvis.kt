@@ -129,7 +129,7 @@ object NovaNudge {
         try { state(ctx).readText().trim().toLong() } catch (e: Exception) { 0L }
 
     private fun mark(ctx: Context) {
-        try { state(ctx).writeText(System.currentTimeMillis().toString()) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        try { NcieFiles.write(state(ctx), System.currentTimeMillis().toString()) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** Schedule the periodic nudge check (idempotent). */
@@ -199,7 +199,7 @@ object NovaTriggers {
     fun removeAt(ctx: Context, index: Int) {
         try {
             val l = all(ctx).toMutableList()
-            if (index in l.indices) { l.removeAt(index); file(ctx).writeText(l.joinToString("\n") { it.cond + "\t" + it.what } + "\n") }
+            if (index in l.indices) { l.removeAt(index); NcieFiles.write(file(ctx), l.joinToString("\n") { it.cond + "\t" + it.what } + "\n") }
         } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
@@ -216,8 +216,8 @@ object NovaTriggers {
     }
 
     private fun saveFired(ctx: Context, m: Map<String, Long>) {
-        try { File(ctx.filesDir, "triggers_fired.txt")
-            .writeText(m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        try { NcieFiles.write(File(ctx.filesDir, "triggers_fired.txt"),
+            m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
     }
 
     /** Fire any trigger whose condition now holds. Returns what it said. */

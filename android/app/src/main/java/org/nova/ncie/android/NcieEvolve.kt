@@ -57,7 +57,8 @@ object NcieEvolve {
                 // v9.31.5: only compact when the file actually grew past the cap
                 if (f.length() > 40_000) {
                     val lines = f.readLines()
-                    if (lines.size > MAX_LINES) f.writeText(lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
+                    if (lines.size > MAX_LINES)
+                        NcieFiles.write(f, lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
                 }
             } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
         }
@@ -82,7 +83,7 @@ object NcieEvolve {
         try {
             NcieLearn.memoryDistill(ctx) { distill ->
                 val body = report(ctx, distill)
-                try { File(ctx.filesDir, "growth_report.txt").writeText(body) } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
+                try { NcieFiles.write(File(ctx.filesDir, "growth_report.txt"), body) } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
                 onReport?.invoke(body)
             }
         } catch (e: Exception) {

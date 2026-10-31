@@ -67,7 +67,7 @@ object NcieValue {
         try {
             val sb = StringBuilder()
             for ((k, v) in m) sb.append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
-            file(ctx).writeText(sb.toString())
+            NcieFiles.write(file(ctx), sb.toString())
         } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
     }
 

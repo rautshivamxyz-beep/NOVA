@@ -203,8 +203,20 @@ android {
         //   is one step instead of a while-loop - same answer, but a tiny or
         //   corrupt repeat interval can no longer hang the UI thread behind
         //   "what's due", the weekly review and the boot re-arm.
-        versionCode 257
-        versionName '9.33.89'
+        // v9.33.90 "One way to write a file": every state file NOVA rewrites
+        //   in place - the exam date and revision plan, the tuning overrides,
+        //   the learned experience, the focus session, the value stats, the
+        //   rolling summary, the chunk index behind "from my notes", the
+        //   Jarvis trigger log, the fetch log, the tutor's missed list, the
+        //   growth log - now goes through one atomic save (NcieFiles.write:
+        //   write a .tmp, rename it over the target). A bare writeText
+        //   truncates first and writes second, so a kill in between left a
+        //   half file that every reader parses defensively - which is why the
+        //   symptom was never a crash but a silent reset (an exam date simply
+        //   gone, learned facts quietly dropped). 19 call sites, one rule,
+        //   pinned by 6 unit tests.
+        versionCode 258
+        versionName '9.33.90'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

@@ -244,7 +244,7 @@ object NcieTune {
         try {
             val sb = StringBuilder()
             for (k in KEYS) if (k in vals) sb.append(k).append('=').append(fmt(vals.getValue(k))).append('\n')
-            fileFor(c, m.first).writeText(sb.toString())
+            NcieFiles.write(fileFor(c, m.first), sb.toString())
         } catch (e: Exception) {
             return "Could not save the setting (storage error)."
         }

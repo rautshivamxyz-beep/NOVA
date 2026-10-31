@@ -62,7 +62,7 @@ object NcieEngines {
                 val lines = readLines(experienceFile(ctx)).toMutableList()
                 lines.add(System.currentTimeMillis().toString() + "\t" + q)
                 while (lines.size > CAP) lines.removeAt(0)
-                experienceFile(ctx).writeText(lines.joinToString("\n") + "\n")
+                NcieFiles.write(experienceFile(ctx), lines.joinToString("\n") + "\n")
             }
         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }
@@ -117,7 +117,7 @@ object NcieEngines {
                 lines.removeAll { it.substringBefore(SEP).trim().lowercase() == q.lowercase() }
                 lines.add(escape(q) + SEP + escape(a))
                 while (lines.size > CAP) lines.removeAt(0)
-                answerFile(ctx).writeText(lines.joinToString("\n") + "\n")
+                NcieFiles.write(answerFile(ctx), lines.joinToString("\n") + "\n")
             }
         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }

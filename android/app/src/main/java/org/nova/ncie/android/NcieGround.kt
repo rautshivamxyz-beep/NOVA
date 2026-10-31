@@ -370,7 +370,7 @@ object NcieGround {
      *  `name\tchunkCount` line per source that has chunks. */
     private fun writeIndex(ctx: Context, names: List<String>) {
         try {
-            indexFile(ctx).writeText(names.filter { flashChunks[it]?.isNotEmpty() == true }
+            NcieFiles.write(indexFile(ctx), names.filter { flashChunks[it]?.isNotEmpty() == true }
                 .joinToString("") { it + "\t" + flashChunks[it]!!.size + "\n" })
         } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
     }
@@ -392,7 +392,7 @@ object NcieGround {
             }
             if (text == null) map.remove(name)
             else map[name] = flashChunks[name]!!.size
-            f.writeText(map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
+            NcieFiles.write(f, map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
         } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
         // v9.9.0: keep the semantic chunk embeddings in step with this
         // write (fire-and-forget; deleteIndex when the source is gone).

@@ -43,7 +43,7 @@ object NcieFocus {
         // "focus mode on" anyway - the session was never saved, so the next
         // turn was not actually silent. Say so instead of lying.
         val saved = try {
-            file(ctx).writeText(end.toString())
+            NcieFiles.write(file(ctx), end.toString())
             true
         } catch (e: Exception) {
             NovaLog.quiet("NcieFocus", e)
