@@ -222,8 +222,14 @@ android {
         //   distinct question ever asked, kept for the life of the install,
         //   all of it stat()ed on every listing. NcieCache.put writes the
         //   entry atomically and keeps the 200 newest of its family.
-        versionCode 259
-        versionName '9.33.91'
+        // v9.33.92 "Bounded tail": the repetition guard re-checked the whole
+        //   reply every 24 characters, so a long answer copied the entire
+        //   text again on every check - on the same thread that is receiving
+        //   tokens. NcieRepeat only ever reads the last 1600 characters, so
+        //   the guard now keeps exactly that much (NcieRepeat.window). Same
+        //   verdict, bounded work: the check no longer grows with the reply.
+        versionCode 260
+        versionName '9.33.92'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

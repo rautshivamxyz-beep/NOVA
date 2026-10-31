@@ -90,4 +90,39 @@ class NcieRepeatTest {
             "fail, and the gasket keeps the seal tight."
         assertFalse(NcieRepeat.looped(unit + unit + body))
     }
+
+    // ---- v9.33.92: the tail the guard keeps is the tail the detector reads ----
+
+    @Test
+    fun theWindowKeepsTheEndOfALongReply() {
+        val text = "x".repeat(5000) + "the end"
+        assertEquals("the end", NcieRepeat.window(text).takeLast(7))
+        assertEquals(NcieRepeat.TAIL, NcieRepeat.window(text).length)
+    }
+
+    @Test
+    fun aShortReplyIsNotCutAtAll() {
+        val text = "a short answer."
+        assertEquals(text, NcieRepeat.window(text))
+    }
+
+    /** Varied filler: long enough to overflow the window, and with no two
+     *  lines alike, so nothing in it can be mistaken for a loop. */
+    private fun filler(lines: Int): String =
+        (1..lines).joinToString(" ") { "Line $it says something else entirely. " }
+
+    @Test
+    fun truncatingToTheWindowChangesNoVerdict() {
+        // the guard streams only the window; a loop must still be a loop, and
+        // a clean answer must still be clean
+        val unit = "The capital of France is Paris, as everyone already knows. "
+        assertTrue(unit.length >= 32)
+        val long = filler(60) + unit + unit + unit
+        assertTrue(NcieRepeat.looped(long))
+        assertTrue(NcieRepeat.looped(NcieRepeat.window(long)))
+
+        val clean = filler(60) + "That is where this answer ends."
+        assertFalse(NcieRepeat.looped(clean))
+        assertFalse(NcieRepeat.looped(NcieRepeat.window(clean)))
+    }
 }

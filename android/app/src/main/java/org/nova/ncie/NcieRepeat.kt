@@ -38,8 +38,23 @@ object NcieRepeat {
     private const val SHORT_MAX = 7
     private const val SHORT_REPS = 10
 
-    /** Only the tail is examined. */
-    private const val TAIL = 1600
+    /** Only the tail is examined. Public since v9.33.92: the caller keeps
+     *  exactly this much while streaming, so the detector is handed a bounded
+     *  string instead of the whole growing reply. */
+    const val TAIL = 1600
+
+    /**
+     * v9.33.92 "Bounded tail": the part of [text] [cycle] actually looks at.
+     *
+     * While a reply streams, the guard re-checks every 24 characters. It used
+     * to hand the detector the whole reply so far, so every check copied the
+     * entire text again - on a long answer that is hundreds of copies of a
+     * growing string, all on the thread that is also receiving tokens. The
+     * detector only ever reads the last [TAIL] characters, so that is all it
+     * needs to be given, and keeping only that much changes no verdict.
+     */
+    fun window(text: String): String =
+        if (text.length <= TAIL) text else text.substring(text.length - TAIL)
 
     /** True when the end of [text] is already a loop. */
     fun looped(text: String): Boolean = cycle(text) != null

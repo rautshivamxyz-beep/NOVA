@@ -1655,6 +1655,21 @@ check("v9.33.91: the ceiling is pinned by a unit test",
 check("v9.33.91: version is at least 9.33.91 (259)",
       version_at_least("9.33.91", 259))
 
+# ---- v9.33.92 "Bounded tail" ----
+# The loop guard handed the detector the whole reply on every check, so a long
+# answer was copied again and again while it streamed. The detector reads only
+# the last TAIL characters, so that is all the guard keeps now.
+check("v9.33.92: the detector names the tail it reads",
+      _rep.count("const val TAIL = 1600") == 1 and _rep.count("fun window(text: String): String") == 1)
+check("v9.33.92: the guard keeps only that tail",
+      _eng.count("NcieRepeat.TAIL") == 3 and
+      _eng.count("seen.delete(0, seen.length - org.nova.ncie.NcieRepeat.TAIL)") == 1)
+check("v9.33.92: the window is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/NcieRepeatTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 13)
+check("v9.33.92: version is at least 9.33.92 (260)",
+      version_at_least("9.33.92", 260))
+
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc)]:
     structural(f, text)
     bad = []

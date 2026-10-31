@@ -476,6 +476,14 @@ object NovaEngine {
                     looped = true
                     return@takeWhile false
                 }
+                // v9.33.92: keep only the tail the detector reads, so the
+                // guard costs a bounded copy per check instead of one that
+                // grows with the reply. Same verdict: NcieRepeat never looks
+                // further back than NcieRepeat.TAIL.
+                if (seen.length > org.nova.ncie.NcieRepeat.TAIL) {
+                    seen.delete(0, seen.length - org.nova.ncie.NcieRepeat.TAIL)
+                    lastCheck = seen.length
+                }
             }
             true
         }.collect { emit(it) }
