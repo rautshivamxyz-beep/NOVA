@@ -1594,8 +1594,10 @@ class MainActivity : Activity() {
                         if (newBubble && userText != null && !willContinue) {
                             val qaAns = stripThinking(replyMsg.text).trim()
                             if (qaAns.length > 30) try {
-                                File(File(filesDir, "summary_cache").apply { mkdirs() },
-                                    qaKey).writeText(qaAns)
+                                // v9.33.91: atomic, and bounded - the cache
+                                // had no ceiling and grew for the life of
+                                // the install
+                                org.nova.ncie.android.NcieCache.put(filesDir, qaKey, qaAns)
                             } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                         }
                     }
@@ -1976,8 +1978,8 @@ class MainActivity : Activity() {
                 scrollToEnd()
                 // cache it for next time
                 if (key != null && finalText.length > 50) try {
-                    File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
-                        .writeText(finalText)
+                    // v9.33.91: same ceiling for the document summaries
+                    org.nova.ncie.android.NcieCache.put(filesDir, key, finalText)
                 } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 // the engine context now holds every section prompt - reset it
                 needsContextCarry = true

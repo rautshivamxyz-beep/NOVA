@@ -215,8 +215,15 @@ android {
         //   symptom was never a crash but a silent reset (an exam date simply
         //   gone, learned facts quietly dropped). 19 call sites, one rule,
         //   pinned by 6 unit tests.
-        versionCode 258
-        versionName '9.33.90'
+        // v9.33.91 "The answer cache has a ceiling": the cached answers
+        //   (qa_<question>_<model>) and the cached document summaries
+        //   (doc5_<name>_<length>) in summary_cache were cleared when the
+        //   user's material changed but never bounded - one small file per
+        //   distinct question ever asked, kept for the life of the install,
+        //   all of it stat()ed on every listing. NcieCache.put writes the
+        //   entry atomically and keeps the 200 newest of its family.
+        versionCode 259
+        versionName '9.33.91'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
