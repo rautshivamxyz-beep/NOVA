@@ -76,4 +76,97 @@ class NcieDeadlinesTest {
         assertTrue(!NcieDeadlines.onRadar(today, horizon, today - 1))
         assertTrue(!NcieDeadlines.onRadar(today, horizon, horizon + 1))
     }
+
+    // ---- v9.33.89: the radar reads dates, not arithmetic ----
+
+    @Test
+    fun aDecimalIsNotADeadline() {
+        val today = midnight(2026, 6, 1)
+        // "8.5" is a valid day and month to the numeric pattern - and an
+        // average in every note that contains one
+        assertTrue(NcieDeadlines.numericDates(today, "my average is 8.5 out of 10").isEmpty())
+    }
+
+    @Test
+    fun aFractionIsNotADeadline() {
+        val today = midnight(2026, 6, 1)
+        assertTrue(NcieDeadlines.numericDates(today, "use 1/2 cup of water").isEmpty())
+    }
+
+    @Test
+    fun aRangeIsNotADeadline() {
+        val today = midnight(2026, 6, 1)
+        assertTrue(NcieDeadlines.numericDates(today, "read pages 3-5 again").isEmpty())
+    }
+
+    @Test
+    fun aTimeIsNotADeadline() {
+        val today = midnight(2026, 6, 1)
+        assertTrue(NcieDeadlines.numericDates(today, "class starts at 10.05 sharp").isEmpty())
+    }
+
+    @Test
+    fun aBareDateBesideASchedulingWordIsKept() {
+        val today = midnight(2026, 6, 1)
+        val found = NcieDeadlines.numericDates(today, "submit by 12/06 please")
+        assertEquals(1, found.size)
+        assertEquals(Triple(2026, 6, 12), ymd(found[0].first))
+    }
+
+    @Test
+    fun aDateThatCarriesItsYearNeedsNoHint() {
+        val today = midnight(2026, 6, 1)
+        // no scheduling word anywhere near - the year makes it unambiguous
+        val found = NcieDeadlines.numericDates(today, "the ratio was 12/06/2026 on the sheet")
+        assertEquals(1, found.size)
+        assertEquals(Triple(2026, 6, 12), ymd(found[0].first))
+    }
+
+    @Test
+    fun theHintWindowIsLocal() {
+        val today = midnight(2026, 6, 1)
+        val far = "due" + "x".repeat(200) + " 12/06"
+        assertTrue(NcieDeadlines.numericDates(today, far).isEmpty())
+    }
+
+    @Test
+    fun anIsoDateIsNotReadTwice() {
+        val today = midnight(2026, 6, 1)
+        val found = NcieDeadlines.numericDates(today, "exam 2026-11-05")
+        assertTrue(found.isEmpty())
+    }
+
+    // ---- v9.33.89: the roll-forward is one step, never a loop ----
+
+    @Test
+    fun aRepeatingReminderRollsForwardInOneStep() {
+        val now = midnight(2026, 6, 1)
+        val day = 24L * 60 * 60 * 1000
+        // a daily reminder last armed three days ago is due right now, not
+        // three days ago
+        assertEquals(now, NcieDeadlines.nextFire(now - 3 * day, day, now))
+        // one second after its fire time it is tomorrow's
+        assertEquals(now + day - 1000, NcieDeadlines.nextFire(now - 3 * day + 1000, day, now))
+    }
+
+    @Test
+    fun aFutureReminderKeepsItsOwnTime() {
+        val now = midnight(2026, 6, 1)
+        val day = 24L * 60 * 60 * 1000
+        assertEquals(now + 2 * day, NcieDeadlines.nextFire(now + 2 * day, day, now))
+    }
+
+    @Test
+    fun aOneShotReminderIsNeverRolledForward() {
+        val now = midnight(2026, 6, 1)
+        assertEquals(now - 5, NcieDeadlines.nextFire(now - 5, 0L, now))
+    }
+
+    @Test
+    fun aTinyIntervalTerminatesInsteadOfHanging() {
+        val now = midnight(2026, 6, 1)
+        // 1 ms repeat, decades behind: the old while-loop would have run
+        // ~10^12 times on the UI thread. One division now.
+        assertEquals(now, NcieDeadlines.nextFire(0L, 1L, now))
+    }
 }

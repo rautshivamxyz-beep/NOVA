@@ -195,8 +195,16 @@ android {
         //   injected as well - ~1400 characters (about 350 tokens) less to read
         //   before the first word, on exactly the turns the notes answer. One
         //   source decided by retrieval, not two competing ones.
-        versionCode 256
-        versionName '9.33.88'
+        // v9.33.89 "Dates, not arithmetic": the deadline radar stopped
+        //   reading a note's "8.5", "1/2", "3-5" and "10.30" as dates. A bare
+        //   day/month now needs a scheduling word beside it (the year-carrying
+        //   forms never did), so a maths note no longer reports its own
+        //   arithmetic as a deadline. And the repeating-reminder roll-forward
+        //   is one step instead of a while-loop - same answer, but a tiny or
+        //   corrupt repeat interval can no longer hang the UI thread behind
+        //   "what's due", the weekly review and the boot re-arm.
+        versionCode 257
+        versionName '9.33.89'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

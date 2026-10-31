@@ -1578,6 +1578,33 @@ check("v9.33.88: the marker is written once",
 check("v9.33.88: version is at least 9.33.88 (256)",
       version_at_least("9.33.88", 256))
 
+# ---- v9.33.89 "Dates, not arithmetic" ----
+# The deadline radar matched "8.5", "1/2", "3-5" and "10.05" as day/month -
+# a study note's own arithmetic came back as a deadline. A bare day/month now
+# needs a scheduling word within HORIZON chars; a form that carries its year
+# is still taken as it is. And the repeating-reminder roll-forward is one
+# division instead of a loop that a tiny repeat interval could hang.
+_dl89 = load("ncie/android/NcieDeadlines.kt")
+check("v9.33.89: a bare day/month needs a scheduling word",
+      _dl89.count("SCHEDULE_HINT") == 2 and _dl89.count("nearScheduleWord(") == 2)
+check("v9.33.89: the numeric forms go through the one gated pass",
+      _dl89.count("numericDates(") == 2 and
+      _dl89.count("for ((at, label) in numericDates(today, plain))") == 1)
+check("v9.33.89: the roll-forward is one step, everywhere it happens",
+      _dl89.count("internal fun nextFire(") == 1 and
+      load("ncie/android/NcieWeekly.kt").count("NcieDeadlines.nextFire(") == 1 and
+      load("ncie/android/NcieWatchdog.kt").count("NcieDeadlines.nextFire(") == 1 and
+      load("ReminderStore.kt").count("org.nova.ncie.android.NcieDeadlines.nextFire(") == 1)
+check("v9.33.89: no add-the-interval loop survives in the app",
+      sum(load(f).count("while (n <= now)") + load(f).count("while (fireAt < now)")
+          for f in ["ncie/android/NcieDeadlines.kt", "ncie/android/NcieWeekly.kt",
+                    "ncie/android/NcieWatchdog.kt", "ReminderStore.kt"]) == 0)
+check("v9.33.89: the gate and the roll-forward are unit-tested",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDeadlinesTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 18)
+check("v9.33.89: version is at least 9.33.89 (257)",
+      version_at_least("9.33.89", 257))
+
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep)]:
     structural(f, text)
     bad = []

@@ -37,8 +37,9 @@ object NcieWeekly {
         val ahead = ArrayList<Pair<Long, String>>()
         try {
             for ((at, t, rep) in ReminderStore.load(ctx)) {
-                var fireAt = at
-                if (rep > 0L) { while (fireAt < now) fireAt += rep }
+                // v9.33.89: one-step roll-forward (NcieDeadlines.nextFire) -
+                // the old while-loop was a hang waiting for a tiny interval
+                val fireAt = NcieDeadlines.nextFire(at, rep, now)
                 if (fireAt in now..weekEnd) ahead.add(fireAt to t)
             }
         } catch (e: Exception) { NovaLog.quiet("NcieWeekly", e) }

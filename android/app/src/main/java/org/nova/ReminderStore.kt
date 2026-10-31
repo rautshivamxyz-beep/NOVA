@@ -79,8 +79,12 @@ class BootReceiver : android.content.BroadcastReceiver() {
         for ((at, t, rep) in ReminderStore.load(context)) {
             val next = when {
                 rep > 0 -> {
-                    var n = at
-                    while (n <= now) n += rep
+                    // v9.33.89: one-step roll-forward - the old while-loop
+                    // was a hang waiting for a tiny or corrupt interval.
+                    // The boot re-arm wants the first fire strictly after
+                    // now, hence the extra step at exact equality.
+                    var n = org.nova.ncie.android.NcieDeadlines.nextFire(at, rep, now)
+                    if (n <= now) n += rep
                     n
                 }
                 at > now -> at

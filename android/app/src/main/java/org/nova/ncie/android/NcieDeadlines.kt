@@ -44,6 +44,23 @@ object NcieDeadlines {
     // june 12, jun 12
     private val MON_D = Regex("(?i)\\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b")
 
+    /**
+     * v9.33.89: a bare "d/m" with NO year is only a date when the note is
+     * talking about one. "8.5" is an average, "1/2" is a fraction, "3-5" is
+     * a range and "10.30" is a time - every one of them is a valid day and
+     * month to [NUM_DATE], so the radar used to report a study note's
+     * arithmetic as a deadline. The year-carrying forms are unambiguous and
+     * are never gated; a bare one has to sit next to a scheduling word.
+     */
+    private val SCHEDULE_HINT = Regex(
+        "(?i)\\b(?:due|deadline|deadlines|submit|submission|submitting|exam|exams" +
+            "|test|tests|quiz|assignment|assignments|project|viva|practical|holiday" +
+            "|birthday|anniversary|meeting|appointment|interview|event|events" +
+            "|result|results|fee|fees|payment|admit card|last date|by|before|until|till)\\b")
+
+    /** How far from a bare date a scheduling word still counts, in chars. */
+    private const val HINT_WINDOW = 40
+
     /** The radar body: a monospace list of what is due in the next
      *  [HORIZON_DAYS] days, soonest first. Never throws. */
     fun radar(ctx: Context): String {
@@ -55,8 +72,7 @@ object NcieDeadlines {
         // 1. scheduled reminders
         try {
             for ((at, t, rep) in ReminderStore.load(ctx)) {
-                var fireAt = at
-                if (rep > 0L) { while (fireAt < now) fireAt += rep }
+                val fireAt = nextFire(at, rep, now)
                 if (fireAt in now..horizon)
                     items.add(fireAt to ("reminder: " + t + (if (rep > 0L) " (repeats)" else "")))
             }
@@ -83,10 +99,12 @@ object NcieDeadlines {
                 // scan the loose formats on the text with the ISO dates
                 // blanked, so "2026-11-05" is not also read as "11-05"
                 val plain = ISO_DATE.replace(text, " ")
-                for (m in NUM_DATE.findAll(plain)) {
-                    val at = dateAt(today, m.groupValues[1].toIntOrNull(),
-                        m.groupValues[2].toIntOrNull(), m.groupValues[3].ifBlank { null }) ?: continue
-                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                // v9.33.89: the numeric forms go through one gated pass - a
+                // bare "d/m" needs a scheduling word beside it, so a note's
+                // "8.5" / "1/2" / "3-5" is no longer reported as a deadline
+                for ((at, label) in numericDates(today, plain)) {
+                    if (onRadar(today, horizon, at))
+                        items.add(at to (label + " \u2014 in \"" + d.first + "\""))
                 }
                 for (m in D_MON.findAll(plain)) {
                     val mo = MONTHS[m.groupValues[2].lowercase()]?.plus(1) ?: continue
@@ -142,6 +160,57 @@ object NcieDeadlines {
 
     private fun fmtDate(ms: Long): String =
         SimpleDateFormat("d MMM", Locale.US).format(Date(ms))
+
+    /**
+     * v9.33.89: the numeric dates inside [text] the radar will trust.
+     *
+     * The ISO form is blanked first, so "2026-11-05" is never also read as
+     * "11-05". A match that carries its own year is unambiguous and always
+     * accepted; a bare day/month must sit within [HINT_WINDOW] characters of
+     * a scheduling word, because on its own it is far more likely to be a
+     * decimal, a fraction, a range or a time than a date.
+     *
+     * Pure string + calendar work over [today], so a unit test can pin it.
+     */
+    internal fun numericDates(today: Long, text: String): List<Pair<Long, String>> {
+        val out = ArrayList<Pair<Long, String>>()
+        val plain = ISO_DATE.replace(text, " ")
+        for (m in NUM_DATE.findAll(plain)) {
+            val at = dateAt(today, m.groupValues[1].toIntOrNull(),
+                m.groupValues[2].toIntOrNull(), m.groupValues[3].ifBlank { null }) ?: continue
+            if (m.groupValues[3].isBlank() && !nearScheduleWord(plain, m.range)) continue
+            out.add(at to m.value.trim())
+        }
+        return out
+    }
+
+    /** True when a scheduling word sits within [HINT_WINDOW] chars of [r]. */
+    internal fun nearScheduleWord(text: String, r: IntRange): Boolean {
+        val from = if (r.first > HINT_WINDOW) r.first - HINT_WINDOW else 0
+        val to = if (r.last + 1 + HINT_WINDOW < text.length) r.last + 1 + HINT_WINDOW else text.length
+        if (to <= from) return false
+        return SCHEDULE_HINT.containsMatchIn(text.substring(from, to))
+    }
+
+    /**
+     * v9.33.89: the next fire time of a reminder at or after [now].
+     *
+     * The roll-forward used to add the interval in a loop until it passed
+     * now. It is the same arithmetic, but done in one step: a stored repeat
+     * interval that is tiny (or corrupt) turned that loop into a hang, and
+     * this runs on the UI thread behind "what's due" and the weekly review.
+     *
+     * A one-shot reminder keeps its own time. Pure arithmetic, so it is
+     * unit-tested.
+     */
+    internal fun nextFire(at: Long, rep: Long, now: Long): Long {
+        if (rep <= 0L) return at
+        if (at >= now) return at
+        val behind = now - at
+        // ceil(behind / rep): the first fire time at or after now
+        val steps = if (behind % rep == 0L) behind / rep else behind / rep + 1
+        return at + steps * rep
+    }
 
     /** A date as millis, or null when the parts are not a real date. A
      *  date already past rolls to next year only when it carried no

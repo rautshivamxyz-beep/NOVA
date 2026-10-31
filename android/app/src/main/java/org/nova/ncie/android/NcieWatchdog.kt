@@ -37,7 +37,14 @@ object NcieWatchdog {
         try {
             for ((at, t, rep) in ReminderStore.load(ctx)) {
                 val next = when {
-                    rep > 0L -> { var n = at; while (n <= now) n += rep; n }
+                    // v9.33.89: one-step roll-forward (NcieDeadlines.nextFire)
+                    // - the old while-loop was a hang waiting for a tiny
+                    // interval, and this runs on every watchdog sweep
+                    rep > 0L -> {
+                        var n = NcieDeadlines.nextFire(at, rep, now)
+                        if (n <= now) n += rep
+                        n
+                    }
                     at > now -> at
                     else -> continue
                 }
