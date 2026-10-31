@@ -145,8 +145,8 @@ class NcieDeadlinesTest {
         // a daily reminder last armed three days ago is due right now, not
         // three days ago
         assertEquals(now, NcieDeadlines.nextFire(now - 3 * day, day, now))
-        // one second after its fire time it is tomorrow's
-        assertEquals(now + day - 1000, NcieDeadlines.nextFire(now - 3 * day + 1000, day, now))
+        // one second after its fire time, the next fire is a second away
+        assertEquals(now + 1000, NcieDeadlines.nextFire(now - 3 * day + 1000, day, now))
     }
 
     @Test
