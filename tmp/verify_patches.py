@@ -847,9 +847,11 @@ check("v9.19.0: the leftover state joins the briefing + dream report",
       load("ncie/android/NcieDream.kt").count("NcieLeftovers.dailyDigest(ctx)") == 1)
 check("v9.19.0: money radar accepts the rupee sign",
       lo.count("\\u20B9") == 1)
+# v9.33.94 replaced the private Hit class with a plain (source, text) pair,
+# so the two sources are recognised by the line they add now.
 check("v9.19.0: time machine searches promises + expiry",
-      load("ncie/android/NcieTimeMachine.kt").count('Hit("promise"') == 1 and
-      load("ncie/android/NcieTimeMachine.kt").count('Hit("expiry"') == 1)
+      load("ncie/android/NcieTimeMachine.kt").count('hits.add("promise" to') == 1 and
+      load("ncie/android/NcieTimeMachine.kt").count('hits.add("expiry" to') == 1)
 # ---- v9.18.0 "Redesign": the design system + the screens on it ----
 check("v9.18.0: the design system ships (NovaUi kit)",
       load("NovaUi.kt").count("object NovaUi") == 1 and
@@ -1696,7 +1698,25 @@ check("v9.33.93: the gate is pinned by a unit test",
 check("v9.33.93: version is at least 9.33.93 (261)",
       version_at_least("9.33.93", 261))
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc)]:
+# ---- v9.33.94 "The best hit first" ----
+# The Time Machine collected notifications, chats, notes, promises and expiry
+# in that fixed order and cut the reply straight from it, so eight
+# notifications holding one query word buried the chat message holding both.
+# The reply is now ranked by how many distinct query words each hit holds.
+_tm = load("ncie/android/NcieTimeMachine.kt")
+check("v9.33.94: the reply is ranked, not cut from the collection order",
+      _tm.count("internal fun rank(") == 1 and
+      _tm.count("internal fun score(") == 1 and
+      _tm.count("for ((source, text) in rank(hits, terms, limit))") == 1)
+check("v9.33.94: no hit carries a private type any more",
+      _tm.count("private class Hit") == 0 and _tm.count("Hit(") == 0)
+check("v9.33.94: the ranking is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieTimeMachineTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 7)
+check("v9.33.94: version is at least 9.33.94 (262)",
+      version_at_least("9.33.94", 262))
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
