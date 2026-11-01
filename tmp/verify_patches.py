@@ -1716,7 +1716,27 @@ check("v9.33.94: the ranking is pinned by a unit test",
 check("v9.33.94: version is at least 9.33.94 (262)",
       version_at_least("9.33.94", 262))
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm)]:
+# ---- v9.33.95 "One turn in eight, per source" ----
+# The context-value tracker skipped a source that had never helped, but its
+# re-test rode one shared counter advanced once per eligible CALL - so with
+# several tracked sources a skipped source came back every couple of turns
+# and the prompt saving the tracker exists for mostly evaporated. The count is
+# per source now, and the decision is a pure function.
+_nv = load("ncie/android/NcieValue.kt")
+check("v9.33.95: the re-test is decided by one pure function",
+      _nv.count("internal fun decide(") == 1 and
+      _nv.count("skipsSoFar % every == 0") == 1)
+check("v9.33.95: the shared turn counter is gone",
+      _nv.count("private var turns = 0") == 0 and
+      _nv.count("turns % RETEST_EVERY") == 0 and
+      _nv.count("private val skips = HashMap<String, Int>()") == 1)
+check("v9.33.95: the cadence is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieValueTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 7)
+check("v9.33.95: version is at least 9.33.95 (263)",
+      version_at_least("9.33.95", 263))
+
+for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

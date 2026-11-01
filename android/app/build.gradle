@@ -228,8 +228,8 @@ android {
         //   tokens. NcieRepeat only ever reads the last 1600 characters, so
         //   the guard now keeps exactly that much (NcieRepeat.window). Same
         //   verdict, bounded work: the check no longer grows with the reply.
-        versionCode 262
-        versionName '9.33.94'
+        versionCode 263
+        versionName '9.33.95'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

@@ -37,7 +37,9 @@ object NcieValue {
 
     // source -> [injected, used]
     @Volatile private var stats: MutableMap<String, IntArray>? = null
-    private var turns = 0
+    // v9.33.95: source -> how many turns in a row it has been skipped. The
+    // single shared `turns` counter is gone - see [decide].
+    private val skips = HashMap<String, Int>()
 
     private fun file(ctx: Context) = File(ctx.filesDir, "context_value.txt")
 
@@ -76,9 +78,33 @@ object NcieValue {
     @Synchronized
     fun allow(ctx: Context, source: String): Boolean {
         val v = load(ctx)[source] ?: return true
-        if (v[0] < MIN_INJECT || v[1] > 0) return true
-        turns++
-        return turns % RETEST_EVERY == 0
+        if (v[0] < MIN_INJECT || v[1] > 0) { skips.remove(source); return true }
+        val n = skips[source] ?: 0
+        if (decide(v[0], v[1], n)) { skips[source] = 0; return true }
+        skips[source] = n + 1
+        return false
+    }
+
+    /**
+     * v9.33.95 "One turn in eight, per source": whether [source] may be
+     * injected, given its own evidence and how many turns it has been
+     * skipped.
+     *
+     * The re-test used to ride a single shared `turns` counter that only
+     * advanced when a source was ELIGIBLE to be skipped - so with four
+     * tracked sources it advanced four times per turn and a skipped source
+     * came back roughly every other turn instead of every eighth. The whole
+     * point of this tracker is to shrink the prompt; that cadence gave back
+     * most of the saving it was written to win, and did it invisibly.
+     *
+     * The evidence is per source, so the count is per source. Pure
+     * arithmetic, so a unit test can pin the cadence instead of trusting it.
+     */
+    internal fun decide(injected: Int, used: Int, skipsSoFar: Int,
+                        minInject: Int = MIN_INJECT, every: Int = RETEST_EVERY): Boolean {
+        if (injected < minInject || used > 0) return true
+        if (every <= 0) return false
+        return skipsSoFar > 0 && skipsSoFar % every == 0
     }
 
     /** Record that [source] was injected this turn and whether it was used. */
@@ -106,7 +132,7 @@ object NcieValue {
     @Synchronized
     fun reset(ctx: Context) {
         stats = HashMap()
-        turns = 0
+        skips.clear()
         try { file(ctx).delete() } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
     }
 }
