@@ -106,15 +106,11 @@ object NcieDeadlines {
                     if (onRadar(today, horizon, at))
                         items.add(at to (label + " \u2014 in \"" + d.first + "\""))
                 }
-                for (m in D_MON.findAll(plain)) {
-                    val mo = MONTHS[m.groupValues[2].lowercase()]?.plus(1) ?: continue
-                    val at = dateAt(today, m.groupValues[1].toIntOrNull(), mo, null) ?: continue
-                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
-                }
-                for (m in MON_D.findAll(plain)) {
-                    val mo = MONTHS[m.groupValues[1].lowercase()]?.plus(1) ?: continue
-                    val at = dateAt(today, m.groupValues[2].toIntOrNull(), mo, null) ?: continue
-                    if (onRadar(today, horizon, at)) items.add(at to (m.value.trim() + " \u2014 in \"" + d.first + "\""))
+                // v9.33.93: the month-name forms go through one gated pass
+                // too - "maybe 5 chapters" is not the 5th of May
+                for ((at, label) in monthNameDates(today, plain)) {
+                    if (onRadar(today, horizon, at))
+                        items.add(at to (label + " \u2014 in \"" + d.first + "\""))
                 }
             }
         } catch (e: Exception) { NovaLog.quiet("NcieDeadlines", e) }
@@ -183,6 +179,51 @@ object NcieDeadlines {
         }
         return out
     }
+
+    /**
+     * v9.33.93: the month-NAME dates inside [text] the radar will trust.
+     *
+     * Every month name is an unambiguous date signal - except "may", which is
+     * also the modal verb. "maybe 5 chapters" and "you may 12 attempts" are
+     * ordinary study-note sentences, and both read as the 5th and 12th of May
+     * to [D_MON] / [MON_D]. v9.33.89 gave the bare numeric forms this gate and
+     * left the month names ungated, so the radar still invented a deadline out
+     * of a note's grammar. A "may" date therefore has to sit next to a
+     * scheduling word, exactly like a bare "d/m"; every other month name is
+     * trusted on its own.
+     *
+     * One pass for both orders ("12 june" and "june 12"), over [today], so a
+     * unit test can pin it.
+     */
+    internal fun monthNameDates(today: Long, text: String): List<Pair<Long, String>> {
+        val out = ArrayList<Pair<Long, String>>()
+        for (m in D_MON.findAll(text)) {
+            val stem = m.groupValues[2].lowercase()
+            val mo = MONTHS[stem]?.plus(1) ?: continue
+            if (!monthNameTrusted(text, m.range, stem)) continue
+            val at = dateAt(today, m.groupValues[1].toIntOrNull(), mo, null) ?: continue
+            out.add(at to m.value.trim())
+        }
+        for (m in MON_D.findAll(text)) {
+            val stem = m.groupValues[1].lowercase()
+            val mo = MONTHS[stem]?.plus(1) ?: continue
+            if (!monthNameTrusted(text, m.range, stem)) continue
+            val at = dateAt(today, m.groupValues[2].toIntOrNull(), mo, null) ?: continue
+            out.add(at to m.value.trim())
+        }
+        return out
+    }
+
+    /**
+     * v9.33.93: true when a month-name match at [r] really is a date.
+     *
+     * "may" is the only month name that is also an everyday word, so it is
+     * the only one that has to prove itself: a scheduling word within
+     * [HINT_WINDOW] characters, the same evidence a bare "d/m" needs. Pure
+     * string work, so a unit test can pin it.
+     */
+    internal fun monthNameTrusted(text: String, r: IntRange, stem: String): Boolean =
+        !stem.lowercase().startsWith("may") || nearScheduleWord(text, r)
 
     /** True when a scheduling word sits within [HINT_WINDOW] chars of [r]. */
     internal fun nearScheduleWord(text: String, r: IntRange): Boolean {

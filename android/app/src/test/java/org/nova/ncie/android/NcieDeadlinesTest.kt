@@ -169,4 +169,46 @@ class NcieDeadlinesTest {
         // ~10^12 times on the UI thread. One division now.
         assertEquals(now, NcieDeadlines.nextFire(0L, 1L, now))
     }
+
+    // ---- v9.33.93: "may" is a verb as well as a month ----
+
+    @Test
+    fun aModalMayIsNotAMonth() {
+        val today = midnight(2026, 6, 1)
+        // "you may 12 attempts" - the note is about a limit, not the 12th
+        assertTrue(NcieDeadlines.monthNameDates(today, "you may 12 attempts left").isEmpty())
+    }
+
+    @Test
+    fun maybeIsNotMay() {
+        val today = midnight(2026, 6, 1)
+        // "maybe 5 chapters" read as the 5th of May before the gate
+        assertTrue(NcieDeadlines.monthNameDates(today, "maybe 5 chapters to revise").isEmpty())
+    }
+
+    @Test
+    fun aMayDateBesideASchedulingWordIsKept() {
+        val today = midnight(2026, 6, 1)
+        val found = NcieDeadlines.monthNameDates(today, "exam due 12 may")
+        assertEquals(1, found.size)
+        // 12 May is already past on 1 June, so it is the next one
+        assertEquals(Triple(2027, 5, 12), ymd(found[0].first))
+    }
+
+    @Test
+    fun everyOtherMonthNameNeedsNoHint() {
+        val today = midnight(2026, 6, 1)
+        // a month name is unambiguous on its own - no scheduling word here
+        val found = NcieDeadlines.monthNameDates(today, "12 june")
+        assertEquals(1, found.size)
+        assertEquals(Triple(2026, 6, 12), ymd(found[0].first))
+    }
+
+    @Test
+    fun theMonthFirstFormIsReadTheSameWay() {
+        val today = midnight(2026, 6, 1)
+        val found = NcieDeadlines.monthNameDates(today, "june 12")
+        assertEquals(1, found.size)
+        assertEquals(Triple(2026, 6, 12), ymd(found[0].first))
+    }
 }

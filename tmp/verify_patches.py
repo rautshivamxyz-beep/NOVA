@@ -1498,9 +1498,13 @@ check("v9.33.84: version is at least 9.33.84 (252)",
 # of today; a reminder keeps the `now` floor because one that already fired
 # is done. The two must not drift into each other.
 _dl85 = load("ncie/android/NcieDeadlines.kt")
+# v9.33.93 folded the two month-name loops into one gated pass, so the note
+# side now has three onRadar call sites (ISO, numeric, month name) instead of
+# four. The rule is unchanged: every note date is measured from the start of
+# today.
 check("v9.33.85: a note date is due from the start of today",
       "internal fun onRadar(today: Long, horizon: Long, at: Long): Boolean" in _dl85
-      and _dl85.count("if (onRadar(today, horizon, at))") == 4)
+      and _dl85.count("if (onRadar(today, horizon, at))") == 3)
 check("v9.33.85: a reminder keeps the now floor",
       "if (fireAt in now..horizon)" in _dl85
       and "if (at in now..horizon)" not in _dl85)
@@ -1585,8 +1589,10 @@ check("v9.33.88: version is at least 9.33.88 (256)",
 # is still taken as it is. And the repeating-reminder roll-forward is one
 # division instead of a loop that a tiny repeat interval could hang.
 _dl89 = load("ncie/android/NcieDeadlines.kt")
+# v9.33.93 gives the month-name pass the same gate, so nearScheduleWord now
+# has one definition and two callers (numeric + month name).
 check("v9.33.89: a bare day/month needs a scheduling word",
-      _dl89.count("SCHEDULE_HINT") == 2 and _dl89.count("nearScheduleWord(") == 2)
+      _dl89.count("SCHEDULE_HINT") == 2 and _dl89.count("nearScheduleWord(") == 3)
 check("v9.33.89: the numeric forms go through the one gated pass",
       _dl89.count("numericDates(") == 2 and
       _dl89.count("for ((at, label) in numericDates(today, plain))") == 1)
@@ -1669,6 +1675,26 @@ check("v9.33.92: the window is pinned by a unit test",
            encoding="utf-8").read().count("@Test") >= 13)
 check("v9.33.92: version is at least 9.33.92 (260)",
       version_at_least("9.33.92", 260))
+
+# ---- v9.33.93 "May is a verb too" ----
+# The month-NAME forms of the radar had no scheduling gate. "maybe 5 chapters"
+# and "you may 12 attempts" are ordinary note sentences, and both read as a
+# date. "may" is the one month name that is also an everyday word, so it now
+# needs the same nearby scheduling word a bare "d/m" does.
+_dl = load("ncie/android/NcieDeadlines.kt")
+check("v9.33.93: the month-name dates go through one gated pass",
+      _dl.count("internal fun monthNameDates(") == 1 and
+      _dl.count("internal fun monthNameTrusted(") == 1 and
+      _dl.count("monthNameTrusted(text, m.range, stem)") == 2)
+check("v9.33.93: the radar reads them from that one pass",
+      _dl.count("for ((at, label) in monthNameDates(today, plain))") == 1 and
+      _dl.count("for (m in D_MON.findAll(plain))") == 0 and
+      _dl.count("for (m in MON_D.findAll(plain))") == 0)
+check("v9.33.93: the gate is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDeadlinesTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 23)
+check("v9.33.93: version is at least 9.33.93 (261)",
+      version_at_least("9.33.93", 261))
 
 for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc)]:
     structural(f, text)
