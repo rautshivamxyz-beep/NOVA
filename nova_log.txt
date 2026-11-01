@@ -1,0 +1,142 @@
+--------- beginning of system
+08-22 14:24:47.708  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=474.0, y[0]=735.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21137893, downTime=21137893, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:24:48.113  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:48.113  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:48.136  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:48.136  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:48.298  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:48.298  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:48.716  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=237.0, y[0]=76.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21138901, downTime=21138901, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:24:49.411  6140  6140 D ViewRootImpl: processKeyEvent,KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21139598, downTime=21139598, deviceId=-1, source=0x101, displayId=-1 }
+08-22 14:24:49.418  6140  6140 D ViewRootImpl: processKeyEvent,KeyEvent { action=ACTION_UP, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21139598, downTime=21139598, deviceId=-1, source=0x101, displayId=-1 }
+08-22 14:24:50.023  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=536.0, y[0]=707.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21140208, downTime=21140208, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:24:50.428  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:50.428  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:50.451  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:50.451  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:50.636  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:50.637  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:51.295  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=30.0, y[0]=22.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21141481, downTime=21141481, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:24:52.056  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=49.0, y[0]=40.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21142242, downTime=21142242, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:24:52.078  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:52.078  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:54.116  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:24:54.116  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:24:55.530  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=90.0, y[0]=60.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21145715, downTime=21145715, deviceId=3, source=0x1002, displayId=0 }
+--------- beginning of main
+08-22 14:25:43.019  6140  6140 V PhoneWindow: DecorView setVisiblity: visibility = 0, Parent = android.view.ViewRootImpl@341d85a, this = DecorView@290ba8b[TermuxActivity]
+08-22 14:25:43.039  6140  6140 V PhoneWindow: DecorView setVisiblity: visibility = 0, Parent = android.view.ViewRootImpl@341d85a, this = DecorView@290ba8b[TermuxActivity]
+08-22 14:25:43.197  6140 10619 E Parcel  : Reading a NULL string not supported here.
+08-22 14:25:43.209  6140 10625 D CCodec  : allocate(c2.android.vorbis.decoder)
+08-22 14:25:43.419  6140  6218 D BufferPoolAccessor2.0: bufferpool2 0x747128cc28 : 0(0 size) total buffers - 0(0 size) used buffers - 2/9 (recycle/alloc) - 7/24 (fetch/transfer)
+08-22 14:25:43.419  6140  6218 D BufferPoolAccessor2.0: Destruction - bufferpool2 0x747128cc28 cached: 0/0M, 0/0% in use; allocs: 9, 22% recycled; transfers: 24, 71% unfetched
+08-22 14:25:43.424  6140 10625 I CCodec  : Created component [c2.android.vorbis.decoder]
+08-22 14:25:43.425  6140 10625 D CCodecConfig: read media type: audio/vorbis
+08-22 14:25:43.427  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.max-count.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: output.subscribed-indices.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: input.buffers.allocator-ids.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.allocator-ids.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.allocator-ids.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.pool-ids.values
+08-22 14:25:43.428  6140 10625 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.pool-ids.values
+08-22 14:25:43.432  6140 10625 I CCodecConfig: query failed after returning 7 values (BAD_INDEX)
+08-22 14:25:43.432  6140 10625 D CCodecConfig: c2 config diff is Dict {
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   c2::u32 coded.bitrate.value = 64000
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   c2::u32 input.buffers.max-size.value = 32768
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   c2::u32 input.delay.value = 0
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   string input.media-type.value = "audio/vorbis"
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   string output.media-type.value = "audio/raw"
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   c2::u32 raw.channel-count.value = 1
+08-22 14:25:43.432  6140 10625 D CCodecConfig:   c2::u32 raw.sample-rate.value = 48000
+08-22 14:25:43.432  6140 10625 D CCodecConfig: }
+08-22 14:25:43.433  6140 10625 D CCodec  : [c2.android.vorbis.decoder] buffers are bound to CCodec for this session
+08-22 14:25:43.433  6140 10625 D CCodecConfig: no c2 equivalents for durationUs
+08-22 14:25:43.433  6140 10625 D CCodecConfig: no c2 equivalents for track-id
+08-22 14:25:43.433  6140 10625 D CCodecConfig: no c2 equivalents for csd-1
+08-22 14:25:43.433  6140 10625 D CCodecConfig: no c2 equivalents for channel-mask
+08-22 14:25:43.433  6140 10625 D CCodecConfig: no c2 equivalents for flags
+08-22 14:25:43.433  6140 10625 D CCodecConfig: c2 config diff is   c2::u32 raw.sample-rate.value = 44100
+08-22 14:25:43.434  6140 10625 W Codec2Client: query -- param skipped: index = 1107298332.
+08-22 14:25:43.434  6140 10625 D CCodec  : setup formats input: AMessage(what = 0x00000000) = {
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t channel-count = 1
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t max-input-size = 32768
+08-22 14:25:43.434  6140 10625 D CCodec  :   string mime = "audio/vorbis"
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t sample-rate = 44100
+08-22 14:25:43.434  6140 10625 D CCodec  : } and output: AMessage(what = 0x00000000) = {
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t channel-count = 1
+08-22 14:25:43.434  6140 10625 D CCodec  :   string mime = "audio/raw"
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t sample-rate = 44100
+08-22 14:25:43.434  6140 10625 D CCodec  :   int32_t channel-mask = 1
+08-22 14:25:43.434  6140 10625 D CCodec  : }
+08-22 14:25:43.435  6140 10625 W Codec2Client: query -- param skipped: index = 1342179345.
+08-22 14:25:43.435  6140 10625 W Codec2Client: query -- param skipped: index = 2415921170.
+08-22 14:25:43.437  6140 10625 E FMQ     : grantorIdx must be less than 3
+08-22 14:25:43.437  6140 10625 E FMQ     : grantorIdx must be less than 3
+08-22 14:25:43.437  6140 10625 D CCodecBufferChannel: [c2.android.vorbis.decoder#696] Created input block pool with allocatorID 16 => poolID 20 - OK (0)
+08-22 14:25:43.438  6140 10625 I CCodecBufferChannel: [c2.android.vorbis.decoder#696] Created output block pool with allocatorID 16 => poolID 242 - OK
+08-22 14:25:43.438  6140 10625 D CCodecBufferChannel: [c2.android.vorbis.decoder#696] Configured output block pool ids 242 => OK
+08-22 14:25:43.442  6140 10625 E FMQ     : grantorIdx must be less than 3
+08-22 14:25:43.449  6140  6218 E FMQ     : grantorIdx must be less than 3
+08-22 14:25:43.460  6140 10625 D CCodecBufferChannel: [c2.android.vorbis.decoder#696] MediaCodec discarded an unknown buffer
+08-22 14:25:43.460  6140 10625 D CCodecBufferChannel: [c2.android.vorbis.decoder#696] MediaCodec discarded an unknown buffer
+08-22 14:25:43.460  6140 10625 D CCodecBufferChannel: [c2.android.vorbis.decoder#696] MediaCodec discarded an unknown buffer
+08-22 14:25:43.462  6140 10625 I hw-BpHwBinder: onLastStrongRef automatically unlinking death recipients
+08-22 14:25:43.966  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=478.0, y[0]=768.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21194151, downTime=21194151, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:43.966  6140  6140 D ViewRootImpl[TermuxActivity]: processMotionEvent MotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=478.0, y[0]=768.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21194151, downTime=21194151, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:43.967  6140  6140 D ViewRootImpl[TermuxActivity]: dispatchPointerEvent handled=true, event=MotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=478.0, y[0]=768.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21194151, downTime=21194151, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.369  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:25:44.369  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:25:44.376  6140  6140 D ViewRootImpl[PopupWindow:74a55e0]: hardware acceleration = true , fakeHwAccelerated = false, sRendererDisabled = false, forceHwAccelerated = false, sSystemRendererDisabled = false
+08-22 14:25:44.384  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.391  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.392  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.392  6140  6140 I chatty  : uid=10471(com.termux) identical 2 lines
+08-22 14:25:44.392  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.393  6140  6140 I InputTransport: Create ARC handle: 0x7465f21660
+08-22 14:25:44.395  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:25:44.395  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:25:44.398  6140  6140 D ViewRootImpl[PopupWindow:4035f3f]: hardware acceleration = true , fakeHwAccelerated = false, sRendererDisabled = false, forceHwAccelerated = false, sSystemRendererDisabled = false
+08-22 14:25:44.403  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.404  6140  6140 I chatty  : uid=10471(com.termux) identical 4 lines
+08-22 14:25:44.404  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.404  6140  6140 I InputTransport: Create ARC handle: 0x7465f9eaa0
+08-22 14:25:44.414  6140  6140 D TestOverScroll: getScaledOverscrollDistance: b
+08-22 14:25:44.422  6140  6140 D ViewRootImpl[TermuxActivity]: processMotionEvent MotionEvent { action=ACTION_UP, actionButton=0, id[0]=0, x[0]=478.0, y[0]=768.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21194580, downTime=21194151, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.422  6140  6140 D ViewRootImpl[TermuxActivity]: dispatchPointerEvent handled=true, event=MotionEvent { action=ACTION_UP, actionButton=0, id[0]=0, x[0]=478.0, y[0]=768.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21194580, downTime=21194151, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.544  6140  6140 D ColorViewRootUtil: initSwipState, isDisplayCompatApp false
+08-22 14:25:44.544  6140  6140 D ColorViewRootUtil: mScreenHeight 1600, mScreenWidth 720
+08-22 14:25:44.549  6140  6140 D ViewRootImpl[PopupWindow:abf0c0e]: hardware acceleration = true , fakeHwAccelerated = false, sRendererDisabled = false, forceHwAccelerated = false, sSystemRendererDisabled = false
+08-22 14:25:44.556  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.557  6140  6140 I chatty  : uid=10471(com.termux) identical 4 lines
+08-22 14:25:44.557  6140  6140 E libEGL  : Invalid file path for libcolorx-loader.so
+08-22 14:25:44.557  6140  6140 I InputTransport: Create ARC handle: 0x7471b54a00
+08-22 14:25:44.908  6140  6140 D ViewRootImpl: enqueueInputEventMotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=215.0, y[0]=57.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21195094, downTime=21195094, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.908  6140  6140 D ViewRootImpl[PopupWindow:abf0c0e]: processMotionEvent MotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=215.0, y[0]=57.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21195094, downTime=21195094, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.909  6140  6140 D ViewRootImpl[PopupWindow:abf0c0e]: dispatchPointerEvent handled=true, event=MotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=215.0, y[0]=57.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21195094, downTime=21195094, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.956  6140  6140 D ViewRootImpl[PopupWindow:abf0c0e]: processMotionEvent MotionEvent { action=ACTION_UP, actionButton=0, id[0]=0, x[0]=215.0, y[0]=57.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21195143, downTime=21195094, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.957  6140  6140 D ViewRootImpl[PopupWindow:abf0c0e]: dispatchPointerEvent handled=true, event=MotionEvent { action=ACTION_UP, actionButton=0, id[0]=0, x[0]=215.0, y[0]=57.0, toolType[0]=TOOL_TYPE_FINGER, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=21195143, downTime=21195094, deviceId=3, source=0x1002, displayId=0 }
+08-22 14:25:44.960  6140  6140 D View    : [Warning] assignParent to null: this = android.widget.PopupWindow$PopupDecorView{b0c187d V.E...... R....... 0,0-96,48}
+08-22 14:25:44.967  6140  6140 I InputTransport: Destroy ARC handle: 0x7465f21660
+08-22 14:25:44.969  6140  6140 D View    : [Warning] assignParent to null: this = android.widget.PopupWindow$PopupDecorView{14ab372 V.E...... R....... 0,0-96,48}
+08-22 14:25:44.976  6140  6140 I InputTransport: Destroy ARC handle: 0x7465f9eaa0
+08-22 14:25:44.993  6140  6140 D View    : [Warning] assignParent to null: this = android.widget.PopupWindow$PopupDecorView{d964440 V.E...... R......D 0,0-457,108}
+08-22 14:25:44.999  6140  6140 I InputTransport: Destroy ARC handle: 0x7471b54a00
+08-22 14:25:45.540  6140  6140 D ViewRootImpl: processKeyEvent,KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21195726, downTime=21195726, deviceId=-1, source=0x101, displayId=-1 }
+08-22 14:25:45.540  6140  6140 D DecorView: dispatchKeyEvent handled=true, KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21195726, downTime=21195726, deviceId=-1, source=0x101, displayId=-1 }, activity=com.termux.app.TermuxActivity@15e89e, mFeatureId=-1
+08-22 14:25:45.544  6140  6140 V ViewRootImpl[TermuxActivity]: [ANR Warning]Input routeing takes more than 6000ms since 1970-01-01 05:30:00.000, this = com.mediatek.view.impl.ViewDebugManagerImpl@76cfbd1
+08-22 14:25:45.544  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$EarlyPostImeInputStage@8d12e73 at 2026-08-22 14:25:45.540
+08-22 14:25:45.544  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$SyntheticInputStage@f2d732e at 2026-08-22 14:25:45.540
+08-22 14:25:45.544  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$ViewPostImeInputStage@25f51a9 at 2026-08-22 14:25:45.540
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$NativePostImeInputStage@d2a0130 at 2026-08-22 14:25:45.540
+08-22 14:25:45.545  6140  6140 D ViewRootImpl: processKeyEvent,KeyEvent { action=ACTION_UP, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21195726, downTime=21195726, deviceId=-1, source=0x101, displayId=-1 }
+08-22 14:25:45.545  6140  6140 D DecorView: dispatchKeyEvent handled=true, KeyEvent { action=ACTION_UP, keyCode=KEYCODE_ENTER, scanCode=28, metaState=0, flags=0x6, repeatCount=0, eventTime=21195726, downTime=21195726, deviceId=-1, source=0x101, displayId=-1 }, activity=com.termux.app.TermuxActivity@15e89e, mFeatureId=-1
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: [ANR Warning]Input routeing takes more than 6000ms since 1970-01-01 05:30:00.000, this = com.mediatek.view.impl.ViewDebugManagerImpl@76cfbd1
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$EarlyPostImeInputStage@8d12e73 at 2026-08-22 14:25:45.545
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$SyntheticInputStage@f2d732e at 2026-08-22 14:25:45.545
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$ViewPostImeInputStage@25f51a9 at 2026-08-22 14:25:45.545
+08-22 14:25:45.545  6140  6140 V ViewRootImpl[TermuxActivity]: Input event delivered to android.view.ViewRootImpl$NativePostImeInputStage@d2a0130 at 2026-08-22 14:25:45.545
+08-22 14:25:45.543 10630 10630 W bash    : type=1400 audit(0.0:85644): avc: granted { execute } for name="logcat" dev="dm-26" ino=296850 scontext=u:r:untrusted_app_27:s0:c215,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c215,c257,c512,c768 tclass=file app=com.termux
+08-22 14:25:45.547 10630 10630 W bash    : type=1400 audit(0.0:85645): avc: granted { execute } for name="dash" dev="dm-26" ino=289766 scontext=u:r:untrusted_app_27:s0:c215,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c215,c257,c512,c768 tclass=file app=com.termux
+08-22 14:25:45.547 10631 10631 W bash    : type=1400 audit(0.0:85646): avc: granted { execute } for name="coreutils" dev="dm-26" ino=659451 scontext=u:r:untrusted_app_27:s0:c215,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c215,c257,c512,c768 tclass=file app=com.termux
+08-22 14:25:45.547 10630 10630 W bash    : type=1400 audit(0.0:85647): avc: granted { execute_no_trans } for path="/data/data/com.termux/files/usr/bin/dash" dev="dm-26" ino=289766 scontext=u:r:untrusted_app_27:s0:c215,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c215,c257,c512,c768 tclass=file app=com.termux
+08-22 14:25:45.547 10631 10631 W bash    : type=1400 audit(0.0:85648): avc: granted { execute } for name="coreutils" dev="dm-26" ino=659451 scontext=u:r:untrusted_app_27:s0:c215,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c215,c257,c512,c768 tclass=file app=com.termux

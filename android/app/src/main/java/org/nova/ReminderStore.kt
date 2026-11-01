@@ -1,0 +1,108 @@
+package org.nova
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/**
+ * v5.4.2: reminders now survive a reboot. Reminder.schedule() only arms an
+ * AlarmManager alarm, which Android discards on restart - every reminder was
+ * silently lost. This store keeps them on disk; BootReceiver re-arms them
+ * after the phone boots.
+ */
+object ReminderStore {
+
+    private fun file(ctx: Context): File = File(ctx.filesDir, "reminders.json")
+
+    fun add(ctx: Context, atMillis: Long, text: String, repeatMs: Long) {
+        val all = load(ctx)
+        if (all.none { it.first == atMillis && it.second == text }) {
+            all.add(Triple(atMillis, text, repeatMs))
+            save(ctx, all)
+        }
+    }
+
+    fun remove(ctx: Context, atMillis: Long, text: String) {
+        val all = load(ctx)
+        all.removeAll { it.first == atMillis && it.second == text }
+        save(ctx, all)
+    }
+
+    fun load(ctx: Context): MutableList<Triple<Long, String, Long>> {
+        val out = mutableListOf<Triple<Long, String, Long>>()
+        try {
+            val f = file(ctx)
+            if (f.exists()) {
+                val arr = JSONArray(f.readText())
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    out.add(Triple(o.optLong("at"), o.getString("t"), o.optLong("rep")))
+                }
+            }
+        } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        return out
+    }
+
+    fun save(ctx: Context, list: List<Triple<Long, String, Long>>) {
+        try {
+            val arr = JSONArray()
+            val now = System.currentTimeMillis()
+            for ((at, t, rep) in list) {
+                // drop one-shots that already fired and were never removed
+                if (rep <= 0L && at < now - 60_000L) continue
+                arr.put(JSONObject().put("at", at).put("t", t).put("rep", rep))
+            }
+            val f = file(ctx)
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(arr.toString())
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+    }
+
+    /** v7.6: stable unique reminder IDs - the old hashCode() ids could
+     *  collide, silently overwriting an alarm with another. */
+    fun nextId(ctx: Context): Int {
+        val f = File(ctx.filesDir, "reminder_id")
+        var n = 1
+        try { if (f.exists()) n = f.readText().trim().toInt() + 1 } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        try { f.writeText(n.toString()) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        return n
+    }
+}
+
+/** Re-arms all stored reminders after the phone reboots. */
+class BootReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: android.content.Intent) {
+        if (intent.action != android.content.Intent.ACTION_BOOT_COMPLETED) return
+        val now = System.currentTimeMillis()
+        for ((at, t, rep) in ReminderStore.load(context)) {
+            val next = when {
+                rep > 0 -> {
+                    // v9.33.89: one-step roll-forward - the old while-loop
+                    // was a hang waiting for a tiny or corrupt interval.
+                    // The boot re-arm wants the first fire strictly after
+                    // now, hence the extra step at exact equality.
+                    var n = org.nova.ncie.android.NcieDeadlines.nextFire(at, rep, now)
+                    if (n <= now) n += rep
+                    n
+                }
+                at > now -> at
+                else -> continue
+            }
+            Reminder.schedule(context, next, t, rep)
+        }
+        // v9.8.0: pending scheduled texts survive the reboot too - fire
+        // anything that came due while the phone was off, then re-arm
+        // the nearest future one
+        try { ScheduledSends.fireDue(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        // v9.21.0 "Reliable": re-arm the rest of NOVA's alarms too - the
+        // nightly Dream consolidation and the daily recurring reminders
+        // were armed only when the morning briefing ran, so a reboot
+        // silently stopped them.
+        try { NovaHealth.armAll(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        // v9.31.2 "Jarvis": re-arm the spoken-nudge / trigger tick too, so a
+        // reboot no longer silently stops them.
+        try { org.nova.ncie.android.NovaNudge.schedule(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+    }
+}

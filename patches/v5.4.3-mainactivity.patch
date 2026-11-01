@@ -1,0 +1,98 @@
+diff -ruN a/android/app/src/main/java/org/nova/MainActivity.kt b/android/app/src/main/java/org/nova/MainActivity.kt
+--- a/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 23:46:37.020606968 +0000
++++ b/android/app/src/main/java/org/nova/MainActivity.kt	2026-09-23 23:46:37.040607154 +0000
+@@ -597,16 +597,24 @@
+     private fun newConversation() {
+         if (generationJob?.isActive == true) generationJob?.cancel()
+         tts?.stop()
+-        if (NovaEngine.isModelLoaded) {
+-            NovaEngine.reloadAsync(this, settings.systemPrompt)
+-            needsContextCarry = false
+-        }
+         currentChat = ChatStore.newChat()
+         settings.currentChatId = currentChat.id
+         adapter.clear()
+         docName = null; docContext = null; docInjected = false
+         compactSummary = null; compactedAtCount = 0
+         updateDocBanner()
++        if (NovaEngine.isModelLoaded) {
++            // v5.4.3 fix: wait for any in-flight generation to stop before
++            // reloading - issuing the reload mid-generation made the load
++            // appear stuck until the old reply finished in the background
++            scope.launch {
++                val t0 = android.os.SystemClock.elapsedRealtime()
++                while (NovaEngine.isGenerating &&
++                    android.os.SystemClock.elapsedRealtime() - t0 < 60_000) delay(200)
++                NovaEngine.reloadAsync(this@MainActivity, settings.systemPrompt)
++            }
++        }
++        needsContextCarry = false
+         toast("New conversation")
+     }
+ 
+@@ -1002,6 +1010,10 @@
+                     scrollToEnd()
+                     toast("Answer (cached from last time)")
+                     try { ChatStore.save(this, currentChat) } catch (e: Exception) { }
++                    // v5.4.3 fix: the engine never saw this exchange - make
++                    // the next real question carry the transcript, so
++                    // follow-ups ("explain that again") aren't answered cold
++                    needsContextCarry = true
+                     return
+                 }
+                 pendingQaKey = qaKey
+@@ -1163,11 +1175,11 @@
+                         toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
+                     }
+                     adapter.finalizeLast()
+-                    // v5.4.2: performance readout
++                    // v5.4.2: performance readout (v5.4.3: fixed locale)
+                     val tEnd = android.os.SystemClock.elapsedRealtime()
+                     if (tFirstToken > 0L) status.text =
+-                        "first word " + String.format("%.1f", (tFirstToken - tStart) / 1000.0) +
+-                            "s - total " + String.format("%.1f", (tEnd - tStart) / 1000.0) + "s"
++                        "first word " + String.format(java.util.Locale.US, "%.1f", (tFirstToken - tStart) / 1000.0) +
++                            "s - total " + String.format(java.util.Locale.US, "%.1f", (tEnd - tStart) / 1000.0) + "s"
+                     // blank, one-word or looping answers from tiny models:
+                     // retry once with a firmer instruction instead of garbage
+                     if (!speechCancelled && newBubble && userText != null && !replyRetried &&
+@@ -1734,7 +1746,38 @@
+         }
+         val lastUser = currentChat.messages.lastOrNull { it.role == Role.USER }
+         if (lastUser == null) { toast("Nothing to regenerate"); return }
+-        startGeneration(lastUser.text, null)
++        // v5.4.3 fix: the old answer is still in the engine's context. The old
++        // code just re-sent the question, leaving "Q, A, Q" (and a growing
++        // pile of duplicates after every regenerate tap) in the context.
++        // Instead: reload to a clean engine when needed, then re-send the
++        // question WITH the earlier transcript attached.
++        if (NovaEngine.isModelLoaded && NovaEngine.contextDirty) {
++            needsContextCarry = true
++            NovaEngine.reloadAsync(this, settings.systemPrompt)
++            scope.launch {
++                val t0 = android.os.SystemClock.elapsedRealtime()
++                while (NovaEngine.isLoading &&
++                    android.os.SystemClock.elapsedRealtime() - t0 < 120_000) delay(200)
++                if (NovaEngine.isModelLoaded) regenerateFrom(lastUser)
++                else toast("Reload failed - try again")
++            }
++        } else {
++            regenerateFrom(lastUser)
++        }
++    }
++
++    /** v5.4.3: re-asks [lastUser] with the earlier conversation attached,
++     *  so regenerating never pollutes the engine context. */
++    private fun regenerateFrom(lastUser: Msg) {
++        val recent = currentChat.messages.dropLast(1).takeLast(6)
++            .joinToString("\n") { m ->
++                (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(250)
++            }
++        val prompt = if (recent.isBlank()) lastUser.text else
++            "(Earlier conversation for context:\n$recent\n— end of earlier conversation)\n\n" +
++                "New message: ${lastUser.text}\n" +
++                "(Reply to the new message directly, even if it starts a completely new topic. Do not repeat the transcript.)"
++        startGeneration(prompt, null)
+    }
+ 
+    /** Loads a shared or picked file (PDF / plain text) as document context. */

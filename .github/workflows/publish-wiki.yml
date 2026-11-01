@@ -1,0 +1,30 @@
+name: Publish Wikipedia dataset to NOVA-APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "wiki/articles-v1.txt"
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push the dataset to the public NOVA-APK repo
+        env:
+          NOVA_APK_TOKEN: ${{ secrets.NOVA_APK_TOKEN }}
+        run: |
+          if [ -z "$NOVA_APK_TOKEN" ]; then
+            echo "FATAL: NOVA_APK_TOKEN is not set (needs a PAT with repo scope on NOVA-APK)"
+            exit 1
+          fi
+          git clone --depth 1 "https://x-access-token:${NOVA_APK_TOKEN}@github.com/rautshivamxyz-beep/NOVA-APK.git" /tmp/nova-apk
+          mkdir -p /tmp/nova-apk/wiki
+          cp wiki/articles-v1.txt /tmp/nova-apk/wiki/articles-v1.txt
+          cd /tmp/nova-apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add wiki/articles-v1.txt
+          git commit -m "data: publish the Wikipedia dataset" || echo "no change"
+          git push

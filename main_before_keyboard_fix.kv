@@ -1,0 +1,43 @@
+#:import dp kivy.metrics.dp
+
+BoxLayout:
+    orientation: "vertical"
+
+    Label:
+        text: "🤖 NOVA"
+        size_hint_y: None
+        height: dp(55)
+        font_size: dp(22)
+
+    ScrollView:
+        id: chat_scroll
+        do_scroll_x: False
+
+        BoxLayout:
+            id: chat_list
+            orientation: "vertical"
+            size_hint_y: None
+            height: self.minimum_height
+            padding: dp(12)
+            spacing: dp(12)
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(60)
+        padding: dp(6)
+        spacing: dp(6)
+
+        TextInput:
+            id: message_input
+            hint_text: "Message NOVA..."
+            multiline: False
+            write_tab: False
+            font_size: dp(17)
+            padding: dp(10), dp(10)
+            on_text_validate: app.send_message()
+
+        Button:
+            text: "SEND"
+            size_hint_x: None
+            width: dp(75)
+            on_release: app.send_message()

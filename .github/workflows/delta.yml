@@ -1,0 +1,31 @@
+name: Retro NOVA delta patch
+on:
+  workflow_dispatch:
+concurrency:
+  group: nova-delta
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  delta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install bsdiff4
+        run: pip install bsdiff4
+      - name: Attach the delta patch between the two latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO="${{ github.repository }}"
+          CUR="$(gh release list --repo "$REPO" --limit 8 --json tagName,isDraft --jq '[.[] | select(.isDraft == false) | .tagName][0]')"
+          PREV="$(gh release list --repo "$REPO" --limit 8 --json tagName,isDraft --jq '[.[] | select(.isDraft == false) | .tagName][1]')"
+          if [ -z "$CUR" ] || [ "$CUR" = "null" ] || [ -z "$PREV" ] || [ "$PREV" = "null" ]; then
+            echo "FATAL: need at least two published releases"
+            exit 1
+          fi
+          echo "building delta patch from $PREV to $CUR"
+          gh release download "$PREV" --repo "$REPO" --pattern '*.apk' --output old.apk
+          gh release download "$CUR" --repo "$REPO" --pattern '*.apk' --output new.apk
+          python -c "import bsdiff4; bsdiff4.file_diff('old.apk','new.apk','NOVA-delta-${PREV}-to-${CUR}.patch')"
+          gh release upload "$CUR" --repo "$REPO" "NOVA-delta-${PREV}-to-${CUR}.patch" --clobber
+          echo "delta patch attached: NOVA-delta-${PREV}-to-${CUR}.patch ($(du -m "NOVA-delta-${PREV}-to-${CUR}.patch" | cut -f1) MB)"

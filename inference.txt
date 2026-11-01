@@ -1,0 +1,372 @@
+Compiled from "InferenceEngineImpl.kt"
+public final class com.arm.aichat.internal.InferenceEngineImpl implements com.arm.aichat.InferenceEngine {
+  public static final com.arm.aichat.internal.InferenceEngineImpl$Companion Companion;
+
+  private final java.lang.String nativeLibDir;
+
+  private final kotlinx.coroutines.flow.MutableStateFlow<com.arm.aichat.InferenceEngine$State> _state;
+
+  private final kotlinx.coroutines.flow.StateFlow<com.arm.aichat.InferenceEngine$State> state;
+
+  private boolean _readyForSystemPrompt;
+
+  private volatile boolean _cancelGeneration;
+
+  private final kotlinx.coroutines.CoroutineDispatcher llamaDispatcher;
+
+  private final kotlinx.coroutines.CoroutineScope llamaScope;
+
+  private static final java.lang.String TAG;
+
+  private static volatile com.arm.aichat.InferenceEngine instance;
+
+  private com.arm.aichat.internal.InferenceEngineImpl(java.lang.String);
+    Code:
+       0: aload_0
+       1: invokespecial #11                 // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: aload_1
+       6: putfield      #15                 // Field nativeLibDir:Ljava/lang/String;
+       9: aload_0
+      10: getstatic     #21                 // Field com/arm/aichat/InferenceEngine$State$Uninitialized.INSTANCE:Lcom/arm/aichat/InferenceEngine$State$Uninitialized;
+      13: invokestatic  #27                 // Method kotlinx/coroutines/flow/StateFlowKt.MutableStateFlow:(Ljava/lang/Object;)Lkotlinx/coroutines/flow/MutableStateFlow;
+      16: putfield      #31                 // Field _state:Lkotlinx/coroutines/flow/MutableStateFlow;
+      19: aload_0
+      20: aload_0
+      21: getfield      #31                 // Field _state:Lkotlinx/coroutines/flow/MutableStateFlow;
+      24: invokestatic  #37                 // Method kotlinx/coroutines/flow/FlowKt.asStateFlow:(Lkotlinx/coroutines/flow/MutableStateFlow;)Lkotlinx/coroutines/flow/StateFlow;
+      27: putfield      #41                 // Field state:Lkotlinx/coroutines/flow/StateFlow;
+      30: aload_0
+      31: invokestatic  #47                 // Method kotlinx/coroutines/Dispatchers.getIO:()Lkotlinx/coroutines/CoroutineDispatcher;
+      34: iconst_1
+      35: aconst_null
+      36: iconst_2
+      37: aconst_null
+      38: invokestatic  #53                 // Method kotlinx/coroutines/CoroutineDispatcher.limitedParallelism$default:(Lkotlinx/coroutines/CoroutineDispatcher;ILjava/lang/String;ILjava/lang/Object;)Lkotlinx/coroutines/CoroutineDispatcher;
+      41: putfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+      44: aload_0
+      45: aload_0
+      46: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+      49: aconst_null
+      50: iconst_1
+      51: aconst_null
+      52: invokestatic  #63                 // Method kotlinx/coroutines/SupervisorKt.SupervisorJob$default:(Lkotlinx/coroutines/Job;ILjava/lang/Object;)Lkotlinx/coroutines/CompletableJob;
+      55: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+      58: invokevirtual #69                 // Method kotlinx/coroutines/CoroutineDispatcher.plus:(Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+      61: invokestatic  #75                 // Method kotlinx/coroutines/CoroutineScopeKt.CoroutineScope:(Lkotlin/coroutines/CoroutineContext;)Lkotlinx/coroutines/CoroutineScope;
+      64: putfield      #79                 // Field llamaScope:Lkotlinx/coroutines/CoroutineScope;
+      67: nop
+      68: aload_0
+      69: getfield      #79                 // Field llamaScope:Lkotlinx/coroutines/CoroutineScope;
+      72: aconst_null
+      73: aconst_null
+      74: new           #81                 // class com/arm/aichat/internal/InferenceEngineImpl$1
+      77: dup
+      78: aload_0
+      79: aconst_null
+      80: invokespecial #84                 // Method com/arm/aichat/internal/InferenceEngineImpl$1."<init>":(Lcom/arm/aichat/internal/InferenceEngineImpl;Lkotlin/coroutines/Continuation;)V
+      83: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      86: iconst_3
+      87: aconst_null
+      88: invokestatic  #92                 // Method kotlinx/coroutines/BuildersKt.launch$default:(Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/CoroutineContext;Lkotlinx/coroutines/CoroutineStart;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lkotlinx/coroutines/Job;
+      91: pop
+      92: nop
+      93: return
+
+  private final native void init(java.lang.String);
+
+  private final native int load(java.lang.String);
+
+  private final native int prepare();
+
+  private final native java.lang.String systemInfo();
+
+  private final native java.lang.String benchModel(int, int, int, int);
+
+  private final native int processSystemPrompt(java.lang.String);
+
+  private final native int processUserPrompt(java.lang.String, int);
+
+  private final native java.lang.String generateNextToken();
+
+  private final native void unload();
+
+  private final native void shutdown();
+
+  public kotlinx.coroutines.flow.StateFlow<com.arm.aichat.InferenceEngine$State> getState();
+    Code:
+       0: aload_0
+       1: getfield      #41                 // Field state:Lkotlinx/coroutines/flow/StateFlow;
+       4: areturn
+
+  private static void getLlamaDispatcher$annotations();
+    Code:
+       0: return
+
+  public java.lang.Object loadModel(java.lang.String, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    Code:
+       0: aload_0
+       1: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+       4: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+       7: new           #121                // class com/arm/aichat/internal/InferenceEngineImpl$loadModel$2
+      10: dup
+      11: aload_0
+      12: aload_1
+      13: aconst_null
+      14: invokespecial #124                // Method com/arm/aichat/internal/InferenceEngineImpl$loadModel$2."<init>":(Lcom/arm/aichat/internal/InferenceEngineImpl;Ljava/lang/String;Lkotlin/coroutines/Continuation;)V
+      17: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      20: aload_2
+      21: invokestatic  #128                // Method kotlinx/coroutines/BuildersKt.withContext:(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+      24: dup
+      25: invokestatic  #134                // Method kotlin/coroutines/intrinsics/IntrinsicsKt.getCOROUTINE_SUSPENDED:()Ljava/lang/Object;
+      28: if_acmpne     32
+      31: areturn
+      32: pop
+      33: getstatic     #139                // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+      36: areturn
+
+  public java.lang.Object setSystemPrompt(java.lang.String, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    Code:
+       0: aload_0
+       1: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+       4: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+       7: new           #145                // class com/arm/aichat/internal/InferenceEngineImpl$setSystemPrompt$2
+      10: dup
+      11: aload_1
+      12: aload_0
+      13: aconst_null
+      14: invokespecial #148                // Method com/arm/aichat/internal/InferenceEngineImpl$setSystemPrompt$2."<init>":(Ljava/lang/String;Lcom/arm/aichat/internal/InferenceEngineImpl;Lkotlin/coroutines/Continuation;)V
+      17: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      20: aload_2
+      21: invokestatic  #128                // Method kotlinx/coroutines/BuildersKt.withContext:(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+      24: dup
+      25: invokestatic  #134                // Method kotlin/coroutines/intrinsics/IntrinsicsKt.getCOROUTINE_SUSPENDED:()Ljava/lang/Object;
+      28: if_acmpne     32
+      31: areturn
+      32: pop
+      33: getstatic     #139                // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+      36: areturn
+
+  public kotlinx.coroutines.flow.Flow<java.lang.String> sendUserPrompt(java.lang.String, int);
+    Code:
+       0: aload_1
+       1: ldc           #154                // String message
+       3: invokestatic  #160                // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: new           #162                // class com/arm/aichat/internal/InferenceEngineImpl$sendUserPrompt$1
+       9: dup
+      10: aload_1
+      11: aload_0
+      12: iload_2
+      13: aconst_null
+      14: invokespecial #165                // Method com/arm/aichat/internal/InferenceEngineImpl$sendUserPrompt$1."<init>":(Ljava/lang/String;Lcom/arm/aichat/internal/InferenceEngineImpl;ILkotlin/coroutines/Continuation;)V
+      17: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      20: invokestatic  #169                // Method kotlinx/coroutines/flow/FlowKt.flow:(Lkotlin/jvm/functions/Function2;)Lkotlinx/coroutines/flow/Flow;
+      23: aload_0
+      24: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+      27: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+      30: invokestatic  #173                // Method kotlinx/coroutines/flow/FlowKt.flowOn:(Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/CoroutineContext;)Lkotlinx/coroutines/flow/Flow;
+      33: areturn
+
+  public java.lang.Object bench(int, int, int, int, kotlin.coroutines.Continuation<? super java.lang.String>);
+    Code:
+       0: aload_0
+       1: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+       4: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+       7: new           #180                // class com/arm/aichat/internal/InferenceEngineImpl$bench$2
+      10: dup
+      11: aload_0
+      12: iload_1
+      13: iload_2
+      14: iload_3
+      15: iload         4
+      17: aconst_null
+      18: invokespecial #183                // Method com/arm/aichat/internal/InferenceEngineImpl$bench$2."<init>":(Lcom/arm/aichat/internal/InferenceEngineImpl;IIIILkotlin/coroutines/Continuation;)V
+      21: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      24: aload         5
+      26: invokestatic  #128                // Method kotlinx/coroutines/BuildersKt.withContext:(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+      29: areturn
+
+  public void cleanUp();
+    Code:
+       0: aload_0
+       1: iconst_1
+       2: putfield      #192                // Field _cancelGeneration:Z
+       5: aload_0
+       6: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+       9: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+      12: new           #194                // class com/arm/aichat/internal/InferenceEngineImpl$cleanUp$1
+      15: dup
+      16: aload_0
+      17: aconst_null
+      18: invokespecial #195                // Method com/arm/aichat/internal/InferenceEngineImpl$cleanUp$1."<init>":(Lcom/arm/aichat/internal/InferenceEngineImpl;Lkotlin/coroutines/Continuation;)V
+      21: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      24: invokestatic  #199                // Method kotlinx/coroutines/BuildersKt.runBlocking:(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;
+      27: pop
+      28: return
+
+  public void destroy();
+    Code:
+       0: aload_0
+       1: iconst_1
+       2: putfield      #192                // Field _cancelGeneration:Z
+       5: aload_0
+       6: getfield      #57                 // Field llamaDispatcher:Lkotlinx/coroutines/CoroutineDispatcher;
+       9: checkcast     #65                 // class kotlin/coroutines/CoroutineContext
+      12: new           #202                // class com/arm/aichat/internal/InferenceEngineImpl$destroy$1
+      15: dup
+      16: aload_0
+      17: aconst_null
+      18: invokespecial #203                // Method com/arm/aichat/internal/InferenceEngineImpl$destroy$1."<init>":(Lcom/arm/aichat/internal/InferenceEngineImpl;Lkotlin/coroutines/Continuation;)V
+      21: checkcast     #86                 // class kotlin/jvm/functions/Function2
+      24: invokestatic  #199                // Method kotlinx/coroutines/BuildersKt.runBlocking:(Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function2;)Ljava/lang/Object;
+      27: pop
+      28: aload_0
+      29: getfield      #79                 // Field llamaScope:Lkotlinx/coroutines/CoroutineScope;
+      32: aconst_null
+      33: iconst_1
+      34: aconst_null
+      35: invokestatic  #207                // Method kotlinx/coroutines/CoroutineScopeKt.cancel$default:(Lkotlinx/coroutines/CoroutineScope;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V
+      38: return
+
+  public static final com.arm.aichat.InferenceEngine access$getInstance$cp();
+    Code:
+       0: getstatic     #213                // Field instance:Lcom/arm/aichat/InferenceEngine;
+       3: areturn
+
+  public static final java.lang.String access$getTAG$cp();
+    Code:
+       0: getstatic     #217                // Field TAG:Ljava/lang/String;
+       3: areturn
+
+  public com.arm.aichat.internal.InferenceEngineImpl(java.lang.String, kotlin.jvm.internal.DefaultConstructorMarker);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #220                // Method "<init>":(Ljava/lang/String;)V
+       5: return
+
+  public static final void access$setInstance$cp(com.arm.aichat.InferenceEngine);
+    Code:
+       0: aload_0
+       1: putstatic     #213                // Field instance:Lcom/arm/aichat/InferenceEngine;
+       4: return
+
+  public static final kotlinx.coroutines.flow.MutableStateFlow access$get_state$p(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: getfield      #31                 // Field _state:Lkotlinx/coroutines/flow/MutableStateFlow;
+       4: areturn
+
+  public static final void access$set_readyForSystemPrompt$p(com.arm.aichat.internal.InferenceEngineImpl, boolean);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #233                // Field _readyForSystemPrompt:Z
+       5: return
+
+  public static final int access$load(com.arm.aichat.internal.InferenceEngineImpl, java.lang.String);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #237                // Method load:(Ljava/lang/String;)I
+       5: ireturn
+
+  public static final int access$prepare(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: invokespecial #242                // Method prepare:()I
+       4: ireturn
+
+  public static final void access$set_cancelGeneration$p(com.arm.aichat.internal.InferenceEngineImpl, boolean);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #192                // Field _cancelGeneration:Z
+       5: return
+
+  public static final boolean access$get_readyForSystemPrompt$p(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: getfield      #233                // Field _readyForSystemPrompt:Z
+       4: ireturn
+
+  public static final int access$processSystemPrompt(com.arm.aichat.internal.InferenceEngineImpl, java.lang.String);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #248                // Method processSystemPrompt:(Ljava/lang/String;)I
+       5: ireturn
+
+  public static final int access$processUserPrompt(com.arm.aichat.internal.InferenceEngineImpl, java.lang.String, int);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: iload_2
+       3: invokespecial #253                // Method processUserPrompt:(Ljava/lang/String;I)I
+       6: ireturn
+
+  public static final boolean access$get_cancelGeneration$p(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: getfield      #192                // Field _cancelGeneration:Z
+       4: ireturn
+
+  public static final java.lang.String access$generateNextToken(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: invokespecial #259                // Method generateNextToken:()Ljava/lang/String;
+       4: areturn
+
+  public static final java.lang.String access$benchModel(com.arm.aichat.internal.InferenceEngineImpl, int, int, int, int);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: iload_2
+       3: iload_3
+       4: iload         4
+       6: invokespecial #263                // Method benchModel:(IIII)Ljava/lang/String;
+       9: areturn
+
+  public static final void access$unload(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: invokespecial #267                // Method unload:()V
+       4: return
+
+  public static final void access$shutdown(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: invokespecial #270                // Method shutdown:()V
+       4: return
+
+  public static final void access$init(com.arm.aichat.internal.InferenceEngineImpl, java.lang.String);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #274                // Method init:(Ljava/lang/String;)V
+       5: return
+
+  public static final java.lang.String access$getNativeLibDir$p(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: getfield      #15                 // Field nativeLibDir:Ljava/lang/String;
+       4: areturn
+
+  public static final java.lang.String access$systemInfo(com.arm.aichat.internal.InferenceEngineImpl);
+    Code:
+       0: aload_0
+       1: invokespecial #278                // Method systemInfo:()Ljava/lang/String;
+       4: areturn
+
+  static {};
+    Code:
+       0: new           #281                // class com/arm/aichat/internal/InferenceEngineImpl$Companion
+       3: dup
+       4: aconst_null
+       5: invokespecial #284                // Method com/arm/aichat/internal/InferenceEngineImpl$Companion."<init>":(Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+       8: putstatic     #288                // Field Companion:Lcom/arm/aichat/internal/InferenceEngineImpl$Companion;
+      11: ldc           #2                  // class com/arm/aichat/internal/InferenceEngineImpl
+      13: invokevirtual #293                // Method java/lang/Class.getSimpleName:()Ljava/lang/String;
+      16: putstatic     #217                // Field TAG:Ljava/lang/String;
+      19: return
+}
