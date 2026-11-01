@@ -63,8 +63,13 @@ class NcieValueTest {
 
     @Test
     fun theThresholdsCanBeMovedWithoutChangingTheShape() {
-        assertTrue(NcieValue.decide(3, 0, 0, 2, 4))
-        assertFalse(NcieValue.decide(3, 0, 3, 2, 4))
-        assertTrue(NcieValue.decide(3, 0, 4, 2, 4))
+        // a 2-injection floor and a 4-turn cadence. One injection short of
+        // the floor is injected whatever the cadence says.
+        assertTrue(NcieValue.decide(1, 0, 0, 2, 4))
+        assertTrue(NcieValue.decide(1, 0, 3, 2, 4))
+        // at the floor it is skipped, and re-tested on the FOURTH skip
+        assertFalse(NcieValue.decide(2, 0, 0, 2, 4))
+        assertFalse(NcieValue.decide(2, 0, 3, 2, 4))
+        assertTrue(NcieValue.decide(2, 0, 4, 2, 4))
     }
 }
