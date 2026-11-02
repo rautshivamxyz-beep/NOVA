@@ -3,6 +3,7 @@ package org.nova
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import org.nova.ncie.android.NcieFiles
 import java.io.File
 
 /**
@@ -36,8 +37,18 @@ object ReminderStore {
             if (f.exists()) {
                 val arr = JSONArray(f.readText())
                 for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    out.add(Triple(o.optLong("at"), o.getString("t"), o.optLong("rep")))
+                    // v9.33.96: one malformed row used to throw straight out
+                    // of this loop, so every reminder AFTER it disappeared
+                    // from the list - and the next save() wrote that short
+                    // list back to disk, deleting them for good. A reminder
+                    // is the one thing here the user cannot re-derive. Each
+                    // row now stands on its own: a bad one is skipped, the
+                    // rest survive.
+                    val o = arr.optJSONObject(i) ?: continue
+                    val t = o.optString("t")
+                    val at = o.optLong("at", 0L)
+                    if (t.isBlank() || at <= 0L) continue
+                    out.add(Triple(at, t, o.optLong("rep", 0L)))
                 }
             }
         } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
@@ -53,21 +64,49 @@ object ReminderStore {
                 if (rep <= 0L && at < now - 60_000L) continue
                 arr.put(JSONObject().put("at", at).put("t", t).put("rep", rep))
             }
-            val f = file(ctx)
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            // v9.33.96: the hand-rolled save deleted the old file BEFORE it
+            // retried the rename, so a second failed rename lost the whole
+            // reminder list - old and new. NcieFiles.write (v9.33.90) is the
+            // one atomic save in the app: it never removes the old file
+            // until the new one is really in place.
+            NcieFiles.write(file(ctx), arr.toString())
         } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
     }
 
     /** v7.6: stable unique reminder IDs - the old hashCode() ids could
-     *  collide, silently overwriting an alarm with another. */
+     *  collide, silently overwriting an alarm with another.
+     *
+     *  v9.33.96: a corrupt or empty counter file used to fall back to 1, so
+     *  the very next reminder reused an id an already-armed alarm was
+     *  holding and FLAG_UPDATE_CURRENT replaced it - the same silent
+     *  overwrite v7.6 fixed, reachable again from one bad byte. The counter
+     *  is also read and written under one lock now: two reminders added in
+     *  the same moment used to read the same number. */
+    @Synchronized
     fun nextId(ctx: Context): Int {
         val f = File(ctx.filesDir, "reminder_id")
-        var n = 1
-        try { if (f.exists()) n = f.readText().trim().toInt() + 1 } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        val raw = try { if (f.exists()) f.readText() else null } catch (e: Exception) {
+            NovaLog.quiet("ReminderStore", e); null
+        }
+        val n = nextIdFrom(raw, System.currentTimeMillis())
         try { f.writeText(n.toString()) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         return n
+    }
+
+    /**
+     * v9.33.96: the next reminder id, from the stored counter text.
+     *
+     * A counter that parses keeps counting. One that does not - missing,
+     * blank, truncated, overflowed - starts from a base taken from the
+     * clock instead of from 1, so a new alarm can never land on an id an
+     * older, still-armed alarm is using. Pure arithmetic over [now], so a
+     * JVM unit test can pin it.
+     */
+    internal fun nextIdFrom(raw: String?, now: Long): Int {
+        val prev = raw?.trim()?.toIntOrNull()
+        if (prev != null && prev >= 1 && prev < Int.MAX_VALUE) return prev + 1
+        val base = (now / 1000L) % 1_000_000_000L
+        return if (base < 1L) 1 else base.toInt()
     }
 }
 

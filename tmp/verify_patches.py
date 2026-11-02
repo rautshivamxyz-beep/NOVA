@@ -1736,7 +1736,36 @@ check("v9.33.95: the cadence is pinned by a unit test",
 check("v9.33.95: version is at least 9.33.95 (263)",
       version_at_least("9.33.95", 263))
 
-for f, text in [("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
+# ---- v9.33.96 "Reminders hardened" ----
+# Four doors in the reminder subsystem: a load that truncated on one bad row,
+# a save that deleted before it retried, an id counter that restarted at 1,
+# and the last while-loop roll-forward in the app.
+_rs = load("ReminderStore.kt")
+_rr = load("ReminderReceiver.kt")
+check("v9.33.96: a reminder row is read without throwing on its neighbours",
+      _rs.count("arr.optJSONObject(i)") == 1 and
+      _rs.count("arr.getJSONObject(i)") == 0 and
+      _rs.count('o.getString("t")') == 0)
+check("v9.33.96: the reminder save is the one atomic save",
+      _rs.count("NcieFiles.write(file(ctx)") == 1 and
+      _rs.count("f.delete(); tmp.renameTo(f)") == 0 and
+      _rs.count('f.name + ".tmp"') == 0)
+check("v9.33.96: the id counter has one rule and it is pure",
+      _rs.count("internal fun nextIdFrom(") == 1 and
+      _rs.count("var n = 1") == 0 and
+      _rs.count("now / 1000L") == 1)
+check("v9.33.96: the counter is handed out under one lock",
+      _rs.count("@Synchronized\n    fun nextId(") == 1)
+check("v9.33.96: the last while-loop roll-forward is gone",
+      _rr.count("while (next <= now) next += repeatMs") == 0 and
+      _rr.count("NcieDeadlines.nextFire(base, repeatMs, now)") == 1)
+check("v9.33.96: the id rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ReminderStoreTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 7)
+check("v9.33.96: version is at least 9.33.96 (264)",
+      version_at_least("9.33.96", 264))
+
+for f, text in [("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

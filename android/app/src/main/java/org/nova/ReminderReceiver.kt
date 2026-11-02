@@ -60,9 +60,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 // v9.33.7: advance from the INTENDED time, not "now", so a
                 // late fire (Doze) no longer drifts the schedule forward
                 val base = if (at > 0L) at else System.currentTimeMillis()
-                var next = base + repeatMs
+                // v9.33.96: this was the last while-loop roll-forward left in
+                // the app. v9.33.89 replaced the other two (the watchdog and
+                // the boot re-arm) with NcieDeadlines.nextFire because a tiny
+                // or corrupt repeat interval turns that loop into a hang on
+                // the thread that has just fired an alarm - and a hang here
+                // also swallows the notification, so the reminder simply
+                // never appears. One step now, same answer for a sane
+                // interval.
                 val now = System.currentTimeMillis()
-                while (next <= now) next += repeatMs
+                var next = org.nova.ncie.android.NcieDeadlines.nextFire(base, repeatMs, now)
+                if (next <= now) next += repeatMs
                 Reminder.schedule(context, next, text, repeatMs)
             } catch (e: Exception) {
                 // keep notifying even if re-arming failed

@@ -228,8 +228,31 @@ android {
         //   tokens. NcieRepeat only ever reads the last 1600 characters, so
         //   the guard now keeps exactly that much (NcieRepeat.window). Same
         //   verdict, bounded work: the check no longer grows with the reply.
-        versionCode 263
-        versionName '9.33.95'
+        // v9.33.96 "Reminders hardened": four doors in one small subsystem.
+        //   (1) ReminderStore.load read each row with getJSONObject/getString,
+        //   so ONE malformed row threw out of the loop and every reminder
+        //   after it vanished from the list - and the next save() wrote that
+        //   short list back, deleting them for good. Each row stands on its
+        //   own now (optJSONObject + optString, a bad row skipped).
+        //   (2) The hand-rolled save deleted the old file BEFORE retrying the
+        //   rename, so a second failed rename lost the old list and the new
+        //   one. It goes through NcieFiles.write, the one atomic save.
+        //   (3) nextId fell back to 1 when the counter file did not parse, so
+        //   the next reminder reused an id a still-armed alarm was holding
+        //   and FLAG_UPDATE_CURRENT replaced it - the exact collision v7.6
+        //   fixed, reachable again from one bad byte. A counter that does not
+        //   parse now starts from a clock-derived base, outside the small ids
+        //   an earlier install handed out, and the counter is read+written
+        //   under one lock (two reminders added together used to read the
+        //   same number).
+        //   (4) ReminderReceiver still rolled a repeating reminder forward
+        //   with `while (next <= now) next += repeatMs` - the last copy of the
+        //   loop v9.33.89 removed from the watchdog and the boot re-arm, where
+        //   a tiny or corrupt interval is a hang on the thread that has just
+        //   fired the alarm (and a hang there also swallows the notification).
+        //   One step through NcieDeadlines.nextFire, same answer.
+        versionCode 264
+        versionName '9.33.96'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
