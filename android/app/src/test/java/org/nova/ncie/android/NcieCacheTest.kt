@@ -2,6 +2,7 @@ package org.nova.ncie.android
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -110,6 +111,59 @@ class NcieCacheTest {
             assertEquals(3, d.listFiles()!!.count { it.name.startsWith("qa_") })
         } finally {
             filesDir.deleteRecursively()
+        }
+    }
+
+    // ---- v9.33.97: one key rule ----
+
+    @Test
+    fun theKeyStaysInTheQaFamily() {
+        assertEquals("qa_", NcieCache.familyOf(NcieCache.qaKey("what is a cell", "Qwen", 512)))
+    }
+
+    @Test
+    fun theSameQuestionAndSettingsGiveTheSameKey() {
+        assertEquals(
+            NcieCache.qaKey("What is a cell", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("what is a cell", "Qwen3 0.6B", 512))
+    }
+
+    @Test
+    fun aLongerAnswerLengthIsADifferentAnswer() {
+        // the setting shaped the reply, so it is part of the identity of the
+        // cached reply - otherwise a longer setting replayed the short one
+        assertNotEquals(
+            NcieCache.qaKey("what is a cell", "Qwen3 0.6B", 256),
+            NcieCache.qaKey("what is a cell", "Qwen3 0.6B", 2048))
+    }
+
+    @Test
+    fun anotherModelIsAnotherAnswer() {
+        assertNotEquals(
+            NcieCache.qaKey("what is a cell", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("what is a cell", "Llama 3.2 1B", 512))
+    }
+
+    @Test
+    fun aDifferentQuestionIsADifferentKey() {
+        assertNotEquals(
+            NcieCache.qaKey("what is a cell", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("what is a gene", "Qwen3 0.6B", 512))
+    }
+
+    @Test
+    fun theKeyIsLocaleIndependent() {
+        // the delete used to lowercase with the device locale while the read
+        // used Locale.ROOT; the key must not depend on the phone's locale
+        val saved = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ROOT)
+            val root = NcieCache.qaKey("WHAT IS A CELL", "Qwen3 0.6B", 512)
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"))
+            val tr = NcieCache.qaKey("WHAT IS A CELL", "Qwen3 0.6B", 512)
+            assertEquals(root, tr)
+        } finally {
+            java.util.Locale.setDefault(saved)
         }
     }
 

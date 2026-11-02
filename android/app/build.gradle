@@ -251,8 +251,20 @@ android {
         //   a tiny or corrupt interval is a hang on the thread that has just
         //   fired the alarm (and a hang there also swallows the notification).
         //   One step through NcieDeadlines.nextFire, same answer.
-        versionCode 264
-        versionName '9.33.96'
+        // v9.33.97 "A cached answer belongs to the settings that produced it":
+        //   the cached-answer key was built by hand in three places and they
+        //   disagreed. The delete lowercased with the DEVICE locale while the
+        //   read used Locale.ROOT, so on a Turkish/Azeri-locale phone the two
+        //   keys differed - the cache still hit, and the delete v9.13.0 added
+        //   so a rejected answer could never replay removed nothing at all.
+        //   The key also ignored the answer-length setting, so turning the
+        //   reply length up and asking the same question again served the old
+        //   SHORT answer out of the cache instead of generating the longer
+        //   one: the setting looked broken. One rule now (NcieCache.qaKey:
+        //   question in Locale.ROOT + model label + generation length) for the
+        //   read, the write's owner and the delete, pinned by unit tests.
+        versionCode 265
+        versionName '9.33.97'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

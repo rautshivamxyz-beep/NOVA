@@ -1765,6 +1765,29 @@ check("v9.33.96: the id rule is pinned by a unit test",
 check("v9.33.96: version is at least 9.33.96 (264)",
       version_at_least("9.33.96", 264))
 
+# ---- v9.33.97 "A cached answer belongs to the settings that produced it" ----
+# The cached-answer key was hand-built in three places: the read used
+# Locale.ROOT, the delete used the device locale, and none of them carried the
+# answer length. One rule now, and it is a pure function.
+check("v9.33.97: the cache key has one definition",
+      _nc.count("fun qaKey(question: String, model: String, length: Int)") == 1)
+check("v9.33.97: the key lowercases in Locale.ROOT, not the device locale",
+      _nc.count("question.lowercase(java.util.Locale.ROOT).hashCode()") == 1)
+check("v9.33.97: the key carries the generation length",
+      _nc.count('"_" + Integer.toHexString(model.hashCode()) + "_" + length') == 1)
+check("v9.33.97: no call site builds the key by hand any more",
+      nc.count('"qa_" + Integer.toHexString(') == 0 and
+      ma.count('"qa_" + Integer.toHexString(') == 0 and
+      nc.count("NcieCache.qaKey(text, NovaEngine.activeModelLabel") == 1 and
+      ma.count("NcieCache.qaKey(") == 1)
+check("v9.33.97: the delete no longer lowercases with the device locale",
+      ma.count("lastUser.text.lowercase().hashCode()") == 0)
+check("v9.33.97: the key rule is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieCacheTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 13)
+check("v9.33.97: version is at least 9.33.97 (265)",
+      version_at_least("9.33.97", 265))
+
 for f, text in [("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
     structural(f, text)
     bad = []

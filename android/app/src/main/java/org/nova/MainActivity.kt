@@ -2325,8 +2325,12 @@ class MainActivity : Activity() {
         // learned answer (fact + cached answer, memory and disk) via
         // the surgical memoryForget.
         try {
-            val qaKey = "qa_" + Integer.toHexString(lastUser.text.lowercase().hashCode()) + "_" +
-                Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
+            // v9.33.97: the same key the read used, so the stale entry is
+            // really removed. This line lowercased with the DEVICE locale
+            // while the read used Locale.ROOT, so on a Turkish-locale phone
+            // the two keys differed and this delete removed nothing.
+            val qaKey = org.nova.ncie.android.NcieCache.qaKey(
+                lastUser.text, NovaEngine.activeModelLabel, settings.predictLength)
             File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey).delete()
         } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         NcieLearn.memoryForget(lastUser.text)

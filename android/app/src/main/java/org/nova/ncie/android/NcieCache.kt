@@ -37,6 +37,29 @@ object NcieCache {
     fun familyOf(name: String): String =
         if (name.contains('_')) name.substringBefore('_') + "_" else name
 
+    /**
+     * v9.33.97 "A cached answer belongs to the settings that produced it":
+     * the one place the cached-answer key is built.
+     *
+     * Three places used to build this key by hand - the read, the write's
+     * owner and the delete - and they did not agree. The delete lowercased
+     * with the DEVICE locale while the read used Locale.ROOT, so on a phone
+     * whose locale folds "I" differently (Turkish, Azeri) the two produced
+     * different keys for the same question: the cache still hit, and the
+     * delete that v9.13.0 added so a rejected answer could never replay
+     * quietly removed nothing. The key also ignored the answer-length
+     * setting, so turning the reply length up and asking the same question
+     * again served the old short answer out of the cache instead of
+     * generating the longer one - the setting looked broken.
+     *
+     * One function, one rule: the question in Locale.ROOT, the model label,
+     * and the generation length that shaped the answer. Pure string work, so
+     * a unit test can pin it.
+     */
+    fun qaKey(question: String, model: String, length: Int): String =
+        "qa_" + Integer.toHexString(question.lowercase(java.util.Locale.ROOT).hashCode()) +
+            "_" + Integer.toHexString(model.hashCode()) + "_" + length
+
     /** Cache one entry atomically, then keep the newest [keep] of its family. */
     fun put(filesDir: File, name: String, text: String, keep: Int = KEEP): Boolean {
         val d = dir(filesDir)

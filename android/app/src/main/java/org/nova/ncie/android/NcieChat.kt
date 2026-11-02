@@ -877,8 +877,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             // v5.4: cached answer from last time? -> instant, no model run
             if (studyQ && !isChip && docPart.isEmpty() && !experienced && !preShown) {
-                val qaKey = "qa_" + Integer.toHexString(qLow.hashCode()) + "_" +
-                    Integer.toHexString(NovaEngine.activeModelLabel.hashCode())
+                // v9.33.97: one key rule for the read, the write and the
+                // delete - and it carries the answer length, so a longer
+                // setting is not served the old short cached answer
+                val qaKey = NcieCache.qaKey(text, NovaEngine.activeModelLabel,
+                    settings.predictLength)
                 val qaFile = File(File(filesDir, "summary_cache").apply { mkdirs() }, qaKey)
                 val qaCached = if (qaFile.exists())
                     try { qaFile.readText() } catch (e: Exception) { "" } else ""
