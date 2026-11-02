@@ -7,6 +7,7 @@ import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.nova.ncie.android.NcieStyle
+import org.nova.ncie.android.NcieFiles
 
 /**
  * v8.8.0: NOVA's eyes. A second, quiet listener beside NotifBrain: it
@@ -195,9 +196,7 @@ class NovaListener : NotificationListenerService() {
                     who.replace('\t', ' ').replace('\n', ' ') + "\n")
                 if (f.length() > 60_000) {
                     val kept = f.readLines().takeLast(300)
-                    val tmp = File(f.parentFile, f.name + ".tmp")
-                    tmp.writeText(kept.joinToString("\n") + "\n")
-                    if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+                    NcieFiles.write(f, kept.joinToString("\n") + "\n")
                 }
             } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
         }
@@ -302,9 +301,7 @@ class NovaListener : NotificationListenerService() {
                         t != null && t >= cutoff
                     }.takeLast(2000)
                     // v9.16.1: atomic rewrite of the trimmed log
-                    val tmp = java.io.File(f.parentFile, f.name + ".tmp")
-                    tmp.writeText(kept.joinToString("\n") + "\n")
-                    if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+                    NcieFiles.write(f, kept.joinToString("\n") + "\n")
                 }
             }
         }

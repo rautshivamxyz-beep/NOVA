@@ -174,9 +174,7 @@ object NcieTools {
         try {
             val dir = File(ctx.filesDir, "recipes-out").apply { mkdirs() }
             val dest = File(dir, name)
-            val tmp = File(dir, name + ".tmp")
-            FileOutputStream(tmp).use { it.write(body.toByteArray()) }
-            if (!tmp.renameTo(dest)) { dest.delete(); tmp.renameTo(dest) }
+            NcieFiles.write(dest, body)
         } catch (e: Exception) { NovaLog.quiet("NcieTools", e) }
     }
 }

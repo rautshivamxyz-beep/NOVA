@@ -6,6 +6,7 @@ import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import org.nova.ncie.android.NcieFiles
 
 /**
  * Spaced-repetition flashcards ("Study").
@@ -44,10 +45,7 @@ object Study {
                     .put("iv", c.interval).put("due", c.due))
             }
             // v7.6: atomic write - a crash mid-write no longer wipes the file
-            val f = file(ctx)
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            NcieFiles.write(file(ctx), arr.toString())
         } catch (e: Exception) { NovaLog.quiet("Study", e) }
     }
 

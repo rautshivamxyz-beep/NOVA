@@ -263,8 +263,26 @@ android {
         //   one: the setting looked broken. One rule now (NcieCache.qaKey:
         //   question in Locale.ROOT + model label + generation length) for the
         //   read, the write's owner and the delete, pinned by unit tests.
-        versionCode 265
-        versionName '9.33.97'
+        // v9.33.98 "One way to write a file, part 2: the fallback": v9.33.90 gave
+        //   the app one atomic save (NcieFiles.write) and converted the files it
+        //   listed, but eleven hand-rolled copies kept the OLD fallback body:
+        //   `if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }`. When the
+        //   second rename also fails - the very case the fallback exists for -
+        //   the old file is already deleted and the new one is not in place, so
+        //   the store is simply empty. On the files that carried it that meant
+        //   the exam list, the user's notes, the flashcard deck, the scheduled
+        //   texts, the fetch log, the notification log, the offline wiki and the
+        //   planner could all go blank after one failed rename. All eleven go
+        //   through NcieFiles.write now, which never removes the old file until
+        //   the new one is really in place and falls back to a direct write. The
+        //   wiki's article rewrite also REPORTS the failure instead of ignoring
+        //   it, and NcieEmbed no longer deletes a good embedding index in its
+        //   catch block (tmp+rename leaves the old index intact; the delete threw
+        //   away a complete index - a full re-index of every document - for
+        //   nothing). A source-tree scan in verify_patches fails the build if any
+        //   `delete()` ever precedes a `renameTo(` again.
+        versionCode 266
+        versionName '9.33.98'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

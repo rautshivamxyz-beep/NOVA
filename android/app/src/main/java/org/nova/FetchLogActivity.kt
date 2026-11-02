@@ -15,6 +15,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.nova.ncie.android.NcieFiles
 
 /**
  * v8.5.0: the Fetches screen - every article NOVA has fetched online,
@@ -145,9 +146,8 @@ class FetchLogActivity : ListActivity() {
             // user is deleting an entry) left an empty or half-written fetch
             // log - the whole lookup history, gone. tmp + rename means the
             // log is either the old one or the new one, never a fragment.
-            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(body)
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            // v9.33.98: NcieFiles.write - its fallback never deletes the log
+            NcieFiles.write(f, body)
         } catch (e: Exception) { NovaLog.quiet("FetchLogActivity", e) }
     }
 

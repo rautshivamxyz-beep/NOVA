@@ -7,6 +7,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.nova.ncie.android.NcieFiles
 
 /**
  * Exam countdown: exam names + dates stored locally, shown in a screen
@@ -37,10 +38,10 @@ object Exams {
             val arr = JSONArray()
             for (e in exams) arr.put(JSONObject().put("name", e.name).put("date", e.dateMs))
             // v7.6: atomic write - a crash mid-write no longer wipes the file
-            val f = file(ctx)
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            // v9.33.98: the one atomic save. The hand-rolled copy below used
+            // to delete the old file BEFORE retrying the rename, so a second
+            // failed rename left no exam list at all.
+            NcieFiles.write(file(ctx), arr.toString())
         } catch (e: Exception) { NovaLog.quiet("Exams", e) }
     }
 

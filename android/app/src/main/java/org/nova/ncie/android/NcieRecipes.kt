@@ -64,10 +64,7 @@ object NcieRecipes {
                 o.put("steps", st)
                 arr.put(o)
             }
-            val f = file(ctx)
-            val tmp = File(ctx.filesDir, "recipes.json.tmp")
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            NcieFiles.write(file(ctx), arr.toString())
         } catch (e: Exception) { NovaLog.quiet("NcieRecipes", e) }
     }
 

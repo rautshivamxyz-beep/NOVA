@@ -292,7 +292,12 @@ object NcieEmbed {
                 tmp.delete()
             }
         } catch (t: Throwable) {
-            try { f.delete() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
+            // v9.33.98: this used to delete the index file on ANY write error.
+            // tmp+rename means the file still holds the last good index, so the
+            // delete threw away a complete embedding index - a full re-index of
+            // every document - for nothing. The failure is logged and the old
+            // index stands.
+            NovaLog.quiet("NcieEmbed", t)
         }
     }
 

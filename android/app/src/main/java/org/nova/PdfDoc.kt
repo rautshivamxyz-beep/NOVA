@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import org.nova.ncie.android.NcieFiles
 
 /**
  * Reads text out of PDF files for NOVA's document chat.
@@ -77,9 +78,7 @@ object PdfDoc {
         val text = extract(context, uri, maxChars, onProgress)
         if (text.isNotBlank()) try {
             // v9.16.1: atomic - a crash mid-write cannot leave a torn cache
-            val tmp = File(cache.parentFile, cache.name + ".tmp")
-            tmp.writeText(text)
-            if (!tmp.renameTo(cache)) { cache.delete(); tmp.renameTo(cache) }
+            NcieFiles.write(cache, text)
         } catch (e: Exception) { NovaLog.quiet("PdfDoc", e) }
         if (text.length > maxChars)
             text.substring(0, maxChars) + "\n[...document truncated]" else text

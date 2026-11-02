@@ -17,6 +17,7 @@ import java.net.URL
 import org.nova.ncie.android.NcieGround
 import org.nova.ncie.knowledge.EntityMatch
 import org.nova.ncie.knowledge.WikiStore
+import org.nova.ncie.android.NcieFiles
 
 /**
  * Offline Wikipedia: downloads a pre-built "vital articles" dataset
@@ -236,9 +237,9 @@ object WikiCore {
         try {
             // v9.16.1: atomic rewrite - a crash mid-write can no longer
             // truncate the whole wiki store
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n")
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            // v9.33.98: and now the failure is reported instead of swallowed
+            if (!NcieFiles.write(f, kept.joinToString("\n") + if (kept.isEmpty()) "" else "\n"))
+                return false
         } catch (e: Exception) { return false }
         val ix = buildIndex(ctx)
         index = ix

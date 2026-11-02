@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.widget.Toast
 import java.io.File
+import org.nova.ncie.android.NcieFiles
 
 /**
  * v9.8.0 "Scheduled Sends": "text <name> at <time>: <message>" stores the
@@ -170,12 +171,11 @@ object ScheduledSends {
     private fun save(ctx: Context, list: List<Send>) {
         try {
             val f = file(ctx)
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(list.joinToString("\n") { s ->
+            // v9.33.98: a scheduled text that is lost here is lost silently
+            NcieFiles.write(f, list.joinToString("\n") { s ->
                 "${s.id}\t${s.millis}\t${s.name}\t${s.message}" +
                     (if (s.notified) "\tn" else "")
             })
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
         } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
     }
 

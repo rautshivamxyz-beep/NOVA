@@ -1372,7 +1372,9 @@ check("v9.33.78: a 416 on a stale partial clears it instead of failing forever",
       "if (code == 416 && existing > 0) {" in load("ModelDownloader.kt")
       and "the partial download could not be resumed and was cleared" in load("ModelDownloader.kt"))
 check("v9.33.78: the fetch log is rewritten atomically",
-      'val tmp = java.io.File(f.parentFile, f.name + ".tmp")' in load("FetchLogActivity.kt"))
+      # v9.33.98: the hand-rolled tmp+rename became NcieFiles.write, the one
+      # atomic save - still atomic, and now without the destructive fallback
+      "NcieFiles.write(f, body)" in load("FetchLogActivity.kt"))
 
 # ---- v9.33.79 "GGUF card" ----
 # The model's own header decides the prompt profile when its LABEL states no
@@ -1788,7 +1790,56 @@ check("v9.33.97: the key rule is pinned by unit tests",
 check("v9.33.97: version is at least 9.33.97 (265)",
       version_at_least("9.33.97", 265))
 
-for f, text in [("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
+# ---- v9.33.98 "One way to write a file, part 2: the fallback" ----
+# v9.33.90 gave the app one atomic save, but eleven hand-rolled copies kept the
+# old fallback body: `if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }`.
+# When the second rename also fails the old file is already gone and the new
+# one is not in place, so the store is simply empty - exams, notes, cards,
+# scheduled texts, the fetch log, the notification log, the wiki, the planner.
+_rs98 = load("ReminderStore.kt")
+_pd = load("PdfDoc.kt")
+_wo = load("WikiCore.kt")
+_ex = load("Exams.kt")
+_st = load("Study.kt")
+_sr = load("SendReceiver.kt")
+_fl = load("FetchLogActivity.kt")
+_kn = load("Knowledge.kt")
+_pl = load("Planner.kt")
+_nl = load("NovaListener.kt")
+_rec = load("ncie/android/NcieRecipes.kt")
+_tl = load("ncie/android/NcieTools.kt")
+_emb = load("ncie/android/NcieEmbed.kt")
+_destructive = []
+for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
+    for _n in _names:
+        if not _n.endswith(".kt"):
+            continue
+        _t = open(os.path.join(_dir, _n), encoding="utf-8").read()
+        if "delete(); tmp.renameTo(" in _t or "delete(); tmp.renameTo(" in _t:
+            _destructive.append(_n)
+        if re.search(r"\.delete\(\)\n\s+tmp\.renameTo\(", _t):
+            _destructive.append(_n)
+check("v9.33.98: no save deletes the old file before retrying the rename",
+      not _destructive)
+check("v9.33.98: every hand-rolled state save goes through the one atomic save",
+      all(t.count("NcieFiles.write(") >= 1 for t in
+          [_rs98, _pd, _wo, _ex, _st, _sr, _fl, _kn, _pl, _nl, _rec, _tl]))
+check("v9.33.98: the notes store writes through it exactly once",
+      _kn.count("NcieFiles.write(") == 1)
+check("v9.33.98: a failed wiki rewrite is reported, not swallowed",
+      _wo.count("if (!NcieFiles.write(f,") == 1)
+check("v9.33.98: a failed embedding rewrite no longer deletes the good index",
+      _emb.count("try { f.delete() }") == 0)
+check("v9.33.98: version is at least 9.33.98 (266)",
+      version_at_least("9.33.98", 266))
+
+for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
+                ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
+                ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
+                ("ncie/android/NcieRecipes.kt", _rec),
+                ("ncie/android/NcieTools.kt", _tl),
+                ("ncie/android/NcieEmbed.kt", _emb),
+                ("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):

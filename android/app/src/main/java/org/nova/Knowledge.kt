@@ -6,6 +6,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import org.nova.ncie.android.NcieFiles
 
 /** Personal knowledge base: user documents split into chunks,
  *  keyword-searched and injected into prompts (offline RAG). */
@@ -60,10 +61,9 @@ object Knowledge {
             val arr = JSONArray()
             for (c in chunks) arr.put(JSONObject().put("d", c.doc).put("t", c.text))
             // v7.6: atomic write - a crash mid-write no longer wipes the file
-            val f = file(ctx)
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            // v9.33.98: the one atomic save - the user's notes are the last
+            // thing that may be lost to a failed rename
+            NcieFiles.write(file(ctx), arr.toString())
             cache = chunks
         } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
     }

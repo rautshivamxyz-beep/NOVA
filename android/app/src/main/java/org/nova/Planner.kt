@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import org.nova.ncie.android.NcieFiles
 
 /**
  * v8.3.0: the study planner.
@@ -48,12 +49,7 @@ object Planner {
 
     private fun writeAtomic(f: File, text: String) {
         try {
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(text)
-            if (!tmp.renameTo(f)) {
-                f.delete()
-                tmp.renameTo(f)
-            }
+            NcieFiles.write(f, text)
         } catch (e: Exception) { NovaLog.quiet("Planner", e) }
     }
 
