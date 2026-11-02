@@ -33,8 +33,30 @@ import java.io.File
  */
 object NcieFiles {
 
+    /**
+     * v9.33.99 "One buffer per file": one lock per destination path.
+     *
+     * The save writes a FIXED sibling name (`<name>.tmp`), so two threads
+     * saving the same file at the same time were writing into the same
+     * buffer: `writeText` is a buffered stream, so their bytes can interleave
+     * and the file that gets renamed into place is neither writer's text - a
+     * corrupt state file, which every reader then parses defensively and
+     * silently resets. Nothing in the app serialized the callers (NcieCache.put
+     * and several state saves run on whatever thread got there first).
+     *
+     * The lock is keyed by the destination's absolute path, so different files
+     * still save in parallel and only the same file waits. The map holds one
+     * entry per state file the app owns - a small, fixed set, not per call.
+     */
+    private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
     /** [f] with [text] in it, atomically. True when the new text is on disk. */
     fun write(f: File, text: String): Boolean {
+        val lock = locks.getOrPut(f.absolutePath) { Any() }
+        return synchronized(lock) { writeNow(f, text) }
+    }
+
+    private fun writeNow(f: File, text: String): Boolean {
         val tmp = File(f.parentFile, f.name + ".tmp")
         return try {
             f.parentFile?.mkdirs()

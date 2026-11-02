@@ -1623,7 +1623,9 @@ _nf = load("ncie/android/NcieFiles.kt")
 check("v9.33.90: the atomic save exists and is the only definition",
       _nf.count("object NcieFiles") == 1 and _nf.count("fun write(f: File, text: String): Boolean") == 1)
 check("v9.33.90: it writes a .tmp and renames it over the target",
-      _nf.count(".tmp") == 2 and _nf.count("renameTo(f)") == 2)
+      # v9.33.99: counted on the code, not on every mention - the lock comment
+      # names the .tmp too
+      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
 check("v9.33.90: the state files go through it",
       sum(load(f).count("NcieFiles.write(") for f in [
           "ncie/android/NcieExam.kt", "ncie/android/NcieTune.kt",
@@ -1832,6 +1834,25 @@ check("v9.33.98: a failed embedding rewrite no longer deletes the good index",
       _emb.count("try { f.delete() }") == 0)
 check("v9.33.98: version is at least 9.33.98 (266)",
       version_at_least("9.33.98", 266))
+
+# ---- v9.33.99 "One buffer per file" ----
+# The save writes a fixed `<name>.tmp`, so two threads saving one file shared a
+# buffer and could interleave their bytes into a corrupt state file.
+check("v9.33.99: the save takes one lock per destination path",
+      _nf.count("private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()") == 1 and
+      _nf.count("synchronized(lock) { writeNow(f, text) }") == 1 and
+      _nf.count("locks.getOrPut(f.absolutePath) { Any() }") == 1)
+check("v9.33.99: the body moved under the lock, not copied",
+      _nf.count("fun write(f: File, text: String): Boolean") == 1 and
+      _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1 and
+      _nf.count("f.name + \".tmp\"") == 1)
+check("v9.33.99: the save is still the one atomic save (tmp then rename)",
+      _nf.count("tmp.writeText(text)") == 1 and _nf.count("tmp.renameTo(f)") == 2)
+check("v9.33.99: the concurrency rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 8)
+check("v9.33.99: version is at least 9.33.99 (267)",
+      version_at_least("9.33.99", 267))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

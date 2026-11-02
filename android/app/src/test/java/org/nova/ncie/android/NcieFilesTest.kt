@@ -8,6 +8,8 @@ import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * v9.33.90: the one atomic save.
@@ -75,6 +77,40 @@ class NcieFilesTest {
         f.writeText("something")
         assertTrue(NcieFiles.write(f, ""))
         assertEquals("", f.readText())
+    }
+
+    @Test
+    fun twoThreadsSavingOneFileNeverMixIt() {
+        // v9.33.99: the save writes a fixed `<name>.tmp`, so two threads on the
+        // same file share one buffer. Whichever text wins, the file must be a
+        // COMPLETE one of them - never a mixture, never empty.
+        val f = File(dir, "state.json")
+        val a = "A".repeat(6000)
+        val b = "B".repeat(6000)
+        val pool = Executors.newFixedThreadPool(4)
+        try {
+            repeat(150) {
+                pool.execute { NcieFiles.write(f, a) }
+                pool.execute { NcieFiles.write(f, b) }
+            }
+            pool.shutdown()
+            assertTrue("the writers did not finish in time", pool.awaitTermination(60, TimeUnit.SECONDS))
+        } finally {
+            pool.shutdownNow()
+        }
+        val got = f.readText()
+        assertTrue("the file is neither writer's complete text (${got.length} chars)",
+            got == a || got == b)
+    }
+
+    @Test
+    fun differentFilesStillSaveIndependently() {
+        val one = File(dir, "one.json")
+        val two = File(dir, "two.json")
+        assertTrue(NcieFiles.write(one, "first"))
+        assertTrue(NcieFiles.write(two, "second"))
+        assertEquals("first", one.readText())
+        assertEquals("second", two.readText())
     }
 
     @Test

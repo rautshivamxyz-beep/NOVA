@@ -281,8 +281,18 @@ android {
         //   away a complete index - a full re-index of every document - for
         //   nothing). A source-tree scan in verify_patches fails the build if any
         //   `delete()` ever precedes a `renameTo(` again.
-        versionCode 266
-        versionName '9.33.98'
+        // v9.33.99 "One buffer per file": NcieFiles.write writes a FIXED sibling
+        //   name (`<name>.tmp`), so two threads saving the same file at the same
+        //   moment were writing into the same buffer - writeText is a buffered
+        //   stream, so their bytes interleave and the file renamed into place is
+        //   neither writer's text. Every reader parses these files defensively,
+        //   so the symptom is not a crash: it is a silent reset of whatever that
+        //   file held. Nothing serialized the callers (NcieCache.put and several
+        //   state saves run on whichever thread got there first). One lock per
+        //   destination path now: different files still save in parallel, the same
+        //   file waits. Pinned by a 4-thread stress test in NcieFilesTest.
+        versionCode 267
+        versionName '9.33.99'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
