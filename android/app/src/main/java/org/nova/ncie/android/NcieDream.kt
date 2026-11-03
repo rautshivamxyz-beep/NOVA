@@ -106,7 +106,8 @@ object NcieDream {
         } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
-        try { reportPath(ctx).writeText(text) } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
+        // v9.33.103: the one atomic save - a half-written report was shown as a whole one
+        NcieFiles.write(reportPath(ctx), text)
         // v9.16.12: keep the nightly alarm armed (idempotent).
         schedule(ctx)
         return text

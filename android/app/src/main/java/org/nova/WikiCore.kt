@@ -107,12 +107,13 @@ object WikiCore {
                 if (n % 400 == 0) {
                     _state.value = Pair(0.04f + 0.9f * n / lines.size, "saving $n articles")
                     bw.flush(); dw.flush()
-                    File(d, "count").writeText(n.toString())
+                    // v9.33.103: the count is state, not a log - atomic like the rest
+                    NcieFiles.write(File(d, "count"), n.toString())
                 }
             }
             bw.close(); dw.close()
             doneTmp.renameTo(doneFile(ctx))
-            File(d, "count").writeText(n.toString())
+            NcieFiles.write(File(d, "count"), n.toString())
             index = null
             // v9.6.0 "Engine Pack": the whole store was replaced - drop
             // the grounding index; the next retrieve rebuilds it.

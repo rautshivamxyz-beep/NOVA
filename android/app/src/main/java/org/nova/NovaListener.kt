@@ -259,7 +259,9 @@ class NovaListener : NotificationListenerService() {
 
         /** Stop logging notifications ("pause notifications"). */
         fun pause(ctx: Context) {
-            try { pauseFlag(ctx).writeText("paused\n") } catch (e: Exception) { NovaLog.quiet("NovaListener", e) }
+            // v9.33.103: the one atomic save - a half-written flag read back as
+            // "not paused" would restart the listener the user just silenced
+            NcieFiles.write(pauseFlag(ctx), "paused\n")
         }
 
         /** Resume logging notifications ("resume notifications"). */

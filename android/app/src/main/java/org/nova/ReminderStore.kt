@@ -89,7 +89,9 @@ object ReminderStore {
             NovaLog.quiet("ReminderStore", e); null
         }
         val n = nextIdFrom(raw, System.currentTimeMillis())
-        try { f.writeText(n.toString()) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        // v9.33.103: the counter is a state file too - a truncated one is read
+        // back as "no counter" and the clock-derived base takes over
+        NcieFiles.write(f, n.toString())
         return n
     }
 

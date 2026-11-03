@@ -1923,6 +1923,28 @@ check("v9.33.102: the fingerprint is pinned by unit tests",
 check("v9.33.102: version is at least 9.33.102 (270)",
       version_at_least("9.33.102", 270))
 
+# ---- v9.33.103 "One way to write a file, part 3: the last bare writes" ----
+# v9.33.90 and v9.33.98 converted the state saves, but ten sites still wrote
+# with a bare writeText - truncate first, write second - so a kill in between
+# left a half file that every reader parses defensively and silently resets.
+_bare = []
+for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
+    for _n in _names:
+        if not _n.endswith(".kt") or _n == "NcieFiles.kt":
+            continue
+        _p = os.path.join(_dir, _n)
+        if ".writeText(" in open(_p, encoding="utf-8").read():
+            _bare.append(os.path.relpath(_p, os.path.join(ROOT, BASE)))
+check("v9.33.103: no bare writeText anywhere outside the one atomic save",
+      not _bare)
+check("v9.33.103: the one atomic save still writes its own temp",
+      _nf.count("tmp.writeText(text)") == 1)
+check("v9.33.103: a PIN that did not reach the disk is not reported as set",
+      ma.count("if (org.nova.ncie.android.NcieFiles.write(pinFile(), pinHash(p) + \"\\n\")) {") == 1 and
+      ma.count('else toast("Could not save the PIN")') == 1)
+check("v9.33.103: version is at least 9.33.103 (271)",
+      version_at_least("9.33.103", 271))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

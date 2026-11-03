@@ -331,8 +331,22 @@ android {
         //   the .emb) and is rebuilt on any difference at all; a missing or
         //   unreadable fingerprint fails closed to a rebuild, never to a wrong
         //   citation. Pinned by NcieFingerprintTest.
-        versionCode 270
-        versionName '9.33.102'
+        // v9.33.103 "One way to write a file, part 3: the last bare writes":
+        //   v9.33.90 gave the app one atomic save and v9.33.98 converted the
+        //   hand-rolled copies, but ten files still wrote their state with a
+        //   bare `writeText` - which truncates first and writes second, so a kill
+        //   in between leaves a half file that every reader parses defensively
+        //   and therefore silently resets. They were the cached document summary
+        //   and its section checkpoint, the voice-input language, the last crash
+        //   report, the app-lock PIN hash, the notification pause flag, the
+        //   reminder id counter, the offline wiki's article count and the nightly
+        //   report. The PIN one also used to report "App lock on" whether or not
+        //   the hash reached the disk. All ten go through NcieFiles.write now, and
+        //   verify_patches scans the whole source tree and fails the build if a
+        //   bare `writeText` appears anywhere outside NcieFiles itself - the
+        //   invariant has no exceptions left to remember.
+        versionCode 271
+        versionName '9.33.103'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

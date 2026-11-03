@@ -2141,7 +2141,8 @@ class MainActivity : Activity() {
                         try {
                             val ja = JSONArray()
                             for (d in done) ja.put(d)
-                            cpFile.writeText(ja.toString())
+                            // v9.33.103: the one atomic save, like every other state file
+                            org.nova.ncie.android.NcieFiles.write(cpFile, ja.toString())
                         } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                         // stop early when the notes just repeat themselves
                         if (sectionSummaries.length - before < 20) emptyStreak++ else emptyStreak = 0
@@ -2180,7 +2181,9 @@ class MainActivity : Activity() {
                 reply.text = "(from $doc)\n\n$finalText"
                 adapter.finalizeLast()
                 scrollToEnd()
-                if (finalText.length > 50) try { cf.writeText(finalText) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+                // v9.33.103: atomic - a half-written cached summary was served
+                // as if it were a whole one
+                if (finalText.length > 50) org.nova.ncie.android.NcieFiles.write(cf, finalText)
                 // the summary is cached now - drop the section checkpoint
                 try { cpFile.delete() } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
                 needsContextCarry = true
@@ -3617,7 +3620,7 @@ Study:
             else -> null   // back to the phone default - no file
         }
         try {
-            if (next == null) f.delete() else f.writeText(next)
+            if (next == null) f.delete() else org.nova.ncie.android.NcieFiles.write(f, next)
         } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         toast("Voice language: " + (next ?: "phone default"))
     }
@@ -4016,7 +4019,10 @@ Study:
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {
-                File(filesDir, "last_crash.txt").writeText(
+                // v9.33.103: the one atomic save. The crash file is read back
+                // by the "share the last crash" action, so a half-written one
+                // is a half-read report.
+                org.nova.ncie.android.NcieFiles.write(File(filesDir, "last_crash.txt"),
                     "time: " + java.text.SimpleDateFormat(
                         "yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                         .format(java.util.Date()) +
@@ -4143,12 +4149,13 @@ Study:
                 if (p.length !in 4..6 || !p.all { it.isDigit() }) {
                     toast("PIN must be 4-6 digits"); return@setOnClickListener
                 }
-                try {
-                    pinFile().writeText(pinHash(p) + "\n")
+                // v9.33.103: the PIN file is a state file like any other. A save
+                // that did not land must not report "App lock on".
+                if (org.nova.ncie.android.NcieFiles.write(pinFile(), pinHash(p) + "\n")) {
                     pinUnlocked = true
                     toast("App lock on")
                     setDialog.dismiss()
-                } catch (e: Exception) { toast("Could not save the PIN") }
+                } else toast("Could not save the PIN")
             }
         } else {
             val pinBox = EditText(this).apply {
