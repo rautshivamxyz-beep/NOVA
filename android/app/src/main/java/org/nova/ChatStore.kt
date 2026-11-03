@@ -3,6 +3,7 @@ package org.nova
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import org.nova.ncie.android.NcieFiles
 import java.io.File
 
 enum class Role { USER, ASSISTANT }
@@ -59,12 +60,16 @@ object ChatStore {
                 .put("created", chat.createdAt)
                 .put("updated", chat.updatedAt)
                 .put("messages", arr)
-            File(dir(context), chat.id + ".json").let { f ->
-                // atomic write: a crash mid-save can't destroy an existing chat
-                val tmp = File(dir(context), chat.id + ".tmp")
-                tmp.writeText(json.toString())
-                if (!tmp.renameTo(f)) { tmp.delete(); f.writeText(json.toString()) }
-            }
+            // v9.33.100 "The conversation store joins the one atomic save":
+            // this was the last store still hand-rolling its own `<id>.tmp`.
+            // It is also the most-written state file in the app - MainActivity
+            // saves a chat from the UI thread while a Dispatchers.IO coroutine
+            // saves the same chat mid-stream - so the fixed temp name meant two
+            // threads sharing one buffer (v9.33.99), and its own fallback
+            // dropped the temp before writing the target directly. Both are
+            // gone: NcieFiles.write takes one lock per destination path and
+            // never removes the old file until the new one is really in place.
+            NcieFiles.write(File(dir(context), chat.id + ".json"), json.toString())
         } catch (e: Exception) {
             // best effort — never crash the app for storage
             NovaLog.quiet("ChatStore", e)

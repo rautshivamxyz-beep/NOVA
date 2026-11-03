@@ -291,8 +291,19 @@ android {
         //   state saves run on whichever thread got there first). One lock per
         //   destination path now: different files still save in parallel, the same
         //   file waits. Pinned by a 4-thread stress test in NcieFilesTest.
-        versionCode 267
-        versionName '9.33.99'
+        // v9.33.100 "The conversation store joins the one atomic save":
+        //   ChatStore.save was the last store in the app still hand-rolling its
+        //   own write - a fixed `<id>.tmp`, a bare writeText, and a fallback
+        //   that dropped the temp and wrote the target directly. It is also the
+        //   most-written state file NOVA owns: MainActivity saves a chat on the
+        //   UI thread while a Dispatchers.IO coroutine saves the same chat
+        //   mid-stream, so v9.33.99's shared-buffer race was live here, on the
+        //   one store whose corruption costs the user their conversation. It
+        //   goes through NcieFiles.write now: one lock per destination path, the
+        //   temp is never dropped before the new text is really in place, and no
+        //   `<id>.tmp` is left behind for the chat list to trip over.
+        versionCode 268
+        versionName '9.33.100'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
