@@ -302,8 +302,21 @@ android {
         //   goes through NcieFiles.write now: one lock per destination path, the
         //   temp is never dropped before the new text is really in place, and no
         //   `<id>.tmp` is left behind for the chat list to trip over.
-        versionCode 268
-        versionName '9.33.100'
+        // v9.33.101 "One bad row no longer costs the list": every state loader in
+        //   the app read its rows with `getJSONObject(i)` and its fields with
+        //   `getString(...)`, both of which THROW on a row that is not shaped as
+        //   expected - and every one of those loaders sits inside a try whose
+        //   catch returns an empty list. So one damaged row did not cost one
+        //   row: it cost the whole conversation, the whole flashcard deck, the
+        //   whole exam list, the weak-topic list, the doubt journal, the notes
+        //   index and the document listing - and because add()/save() write the
+        //   loaded list straight back, the next edit made the loss permanent.
+        //   Every loader reads rows with `optJSONObject(i) ?: continue` and
+        //   fields with `optString` now, and skips only the row that is broken.
+        //   verify_patches fails the build if a state loader grows a throwing
+        //   row read again.
+        versionCode 269
+        versionName '9.33.101'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

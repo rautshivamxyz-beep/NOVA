@@ -83,7 +83,11 @@ object ChatStore {
         val messages = mutableListOf<Msg>()
         val arr = json.optJSONArray("messages") ?: JSONArray()
         for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
+            // v9.33.101: one malformed row used to throw straight out of this
+            // loop and take the WHOLE conversation with it - load() catches,
+            // returns null, and the chat is simply gone. A row that is not an
+            // object is skipped; every other message still opens.
+            val o = arr.optJSONObject(i) ?: continue
             messages.add(Msg(
                 if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
                 o.optString("t"),

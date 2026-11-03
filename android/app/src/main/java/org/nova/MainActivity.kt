@@ -3313,7 +3313,9 @@ Study:
             var apk: String? = null
             var patch: String? = null
             if (assets != null) for (i in 0 until assets.length()) {
-                val a = assets.getJSONObject(i)
+                // v9.33.101: one odd entry in the release listing used to throw
+                // out of the update check and hide the whole update
+                val a = assets.optJSONObject(i) ?: continue
                 val n = a.optString("name")
                 if (n.endsWith(".apk") && apk == null) apk = a.optString("browser_download_url")
                 else if (n.endsWith(".patch") && n.lowercase().contains(want))

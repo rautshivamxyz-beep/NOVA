@@ -1870,6 +1870,35 @@ check("v9.33.100: the save is still best-effort and never throws into a caller",
 check("v9.33.100: version is at least 9.33.100 (268)",
       version_at_least("9.33.100", 268))
 
+# ---- v9.33.101 "One bad row no longer costs the list" ----
+# A row read with getJSONObject(i) throws on anything that is not an object, and
+# every one of these loaders sits in a try whose catch returns an empty list, so
+# one damaged row cost the whole store - and add()/save() wrote that empty list
+# straight back. Rows are read with optJSONObject now, one broken row at a time.
+_throwers = []
+for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
+    for _n in _names:
+        if not _n.endswith(".kt"):
+            continue
+        _p = os.path.join(_dir, _n)
+        _t = open(_p, encoding="utf-8").read()
+        if re.search(r"\.getJSONObject\(\s*i\s*\)", _t):
+            _throwers.append(os.path.relpath(_p, os.path.join(ROOT, BASE)))
+check("v9.33.101: no source reads a JSON row with the throwing call",
+      not _throwers)
+_tolerant = [("ChatStore.kt", load("ChatStore.kt")),
+             ("Exams.kt", _ex), ("Study.kt", _st),
+             ("Planner.kt", _pl), ("Knowledge.kt", _kn),
+             ("ncie/android/KnowledgeAdapter.kt", load("ncie/android/KnowledgeAdapter.kt"))]
+check("v9.33.101: every state loader skips a broken row instead of failing",
+      all(t.count("optJSONObject(i) ?: continue") >= 1 for _, t in _tolerant))
+check("v9.33.101: the notes index keeps a row only when it has text",
+      _kn.count("if (t.isBlank()) continue") == 2)
+check("v9.33.101: the card deck keeps a card only when both sides are there",
+      _st.count("if (q.isBlank() || a.isBlank()) continue") == 1)
+check("v9.33.101: version is at least 9.33.101 (269)",
+      version_at_least("9.33.101", 269))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

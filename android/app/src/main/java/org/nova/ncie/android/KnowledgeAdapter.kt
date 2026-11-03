@@ -26,7 +26,7 @@ object KnowledgeAdapter {
             val arr = JSONArray(f.readText())
             (0 until arr.length()).mapNotNull { i ->
                 try {
-                    val o = arr.getJSONObject(i)
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
                     o.getString("d") to o.getString("t")
                 } catch (e: Exception) { null }
             }
@@ -42,9 +42,12 @@ object KnowledgeAdapter {
             val arr = JSONArray(f.readText())
             val byDoc = LinkedHashMap<String, StringBuilder>()
             for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                byDoc.getOrPut(o.getString("d")) { StringBuilder() }
-                    .append(o.getString("t")).append("\n\n")
+                // v9.33.101: one bad row used to empty the whole listing
+                val o = arr.optJSONObject(i) ?: continue
+                val t = o.optString("t")
+                if (t.isBlank()) continue
+                byDoc.getOrPut(o.optString("d")) { StringBuilder() }
+                    .append(t).append("\n\n")
             }
             byDoc.map { it.key to it.value.toString().trim() }
         } catch (e: Exception) {

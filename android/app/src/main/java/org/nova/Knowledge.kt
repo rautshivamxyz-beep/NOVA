@@ -46,9 +46,13 @@ object Knowledge {
             if (f.exists()) {
                 val arr = JSONArray(f.readText())
                 for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val t = o.getString("t")
-                    list.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
+                    // v9.33.101: one bad row used to throw out of the loop and
+                    // the catch then left the list EMPTY - every document the
+                    // user added disappeared from "from my notes" at once.
+                    val o = arr.optJSONObject(i) ?: continue
+                    val t = o.optString("t")
+                    if (t.isBlank()) continue
+                    list.add(Chunk(o.optString("d"), t, t.lowercase(), normOf(t)))
                 }
             }
         } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
@@ -100,9 +104,11 @@ object Knowledge {
             val arr = JSONArray(json)
             val chunks = ArrayList<Chunk>()
             for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val t = o.getString("t")
-                chunks.add(Chunk(o.getString("d"), t, t.lowercase(), normOf(t)))
+                // v9.33.101: same rule on the restore path
+                val o = arr.optJSONObject(i) ?: continue
+                val t = o.optString("t")
+                if (t.isBlank()) continue
+                chunks.add(Chunk(o.optString("d"), t, t.lowercase(), normOf(t)))
             }
             save(ctx, chunks)
         } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }

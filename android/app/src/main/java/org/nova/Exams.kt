@@ -26,8 +26,13 @@ object Exams {
         try {
             val arr = JSONArray(f.readText())
             for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                out.add(Exam(o.getString("name"), o.optLong("date", 0L)))
+                // v9.33.101: getJSONObject/getString throw on one bad row and
+                // the catch below then returns an EMPTY list - every exam the
+                // user had, gone, and the next add() saves that empty list back.
+                val o = arr.optJSONObject(i) ?: continue
+                val name = o.optString("name")
+                if (name.isBlank()) continue
+                out.add(Exam(name, o.optLong("date", 0L)))
             }
         } catch (e: Exception) { NovaLog.quiet("Exams", e) }
         return out

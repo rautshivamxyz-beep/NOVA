@@ -29,9 +29,15 @@ object Study {
         try {
             val arr = JSONArray(f.readText())
             for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                out.add(Card(o.getString("q"), o.getString("a"),
-                    o.optInt("iv", 1), o.optLong("due", 0L)))
+                // v9.33.101: one bad row used to throw out of the loop and the
+                // catch below then returned an EMPTY deck - and the next save
+                // wrote that empty deck over the file. A card is kept when it
+                // still has both sides; a broken row costs only itself.
+                val o = arr.optJSONObject(i) ?: continue
+                val q = o.optString("q")
+                val a = o.optString("a")
+                if (q.isBlank() || a.isBlank()) continue
+                out.add(Card(q, a, o.optInt("iv", 1), o.optLong("due", 0L)))
             }
         } catch (e: Exception) { NovaLog.quiet("Study", e) }
         return out

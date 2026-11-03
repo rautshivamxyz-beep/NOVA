@@ -86,7 +86,8 @@ object Planner {
             val o = JSONObject(f.readText())
             val arr = o.optJSONArray("topics") ?: return out
             for (i in 0 until arr.length()) {
-                val t = arr.getJSONObject(i)
+                // v9.33.101: a row that is not an object is skipped, not fatal
+                val t = arr.optJSONObject(i) ?: continue
                 out.add(
                     Topic(
                         t.optString("subject", ""),
@@ -128,7 +129,8 @@ object Planner {
         try {
             val arr = JSONArray(f.readText())
             for (i in 0 until arr.length()) {
-                val d = arr.getJSONObject(i)
+                // v9.33.101: a row that is not an object is skipped, not fatal
+                val d = arr.optJSONObject(i) ?: continue
                 out.add(Doubt(d.optString("text", ""), d.optLong("ts", 0L), d.optBoolean("done", false)))
             }
         } catch (e: Exception) { NovaLog.quiet("Planner", e) }

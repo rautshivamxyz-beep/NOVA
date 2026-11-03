@@ -29,7 +29,8 @@ object NcieRecipes {
 
     fun all(ctx: Context): List<Recipe> = try {
         val arr = JSONArray(file(ctx).readText())
-        (0 until arr.length()).mapNotNull { i -> readOne(arr.getJSONObject(i)) }
+        // v9.33.101: a row that is not an object is skipped, not fatal for the list
+        (0 until arr.length()).mapNotNull { i -> readOne(arr.optJSONObject(i) ?: return@mapNotNull null) }
     } catch (e: Exception) { emptyList() }
 
     private fun readOne(o: JSONObject): Recipe? {
