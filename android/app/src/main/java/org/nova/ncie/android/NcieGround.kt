@@ -420,9 +420,9 @@ object NcieGround {
     /** Fire-and-forget: bring a source's chunk embeddings (NcieEmbed's
      *  filesDir/embeddings/<name>.emb) in step with its chunks. Runs on
      *  a plain background thread, skips when the index is already
-     *  current (chunk count matches), deletes the index when the source
-     *  is gone. Failures are logged, never fatal - that source simply
-     *  stays keyword-only. */
+     *  current (v9.33.102: the chunk list's fingerprint matches, not its
+     *  count), deletes the index when the source is gone. Failures are
+     *  logged, never fatal - that source simply stays keyword-only. */
     private fun reindexEmbeddings(ctx: Context, name: String, chunks: List<String>?) {
         val appCtx = ctx.applicationContext
         synchronized(embeddingInFlight) {
@@ -433,7 +433,11 @@ object NcieGround {
             try {
                 if (chunks == null || chunks.isEmpty())
                     NcieEmbed.deleteIndex(appCtx, name)
-                else if (NcieEmbed.indexSize(appCtx, name) != chunks.size)
+                // v9.33.102: identity, not count. A chunk count that happens
+                // to match after an edit used to leave the index stale for
+                // good, and every later question was scored against the old
+                // text's vectors - the wrong material got cited.
+                else if (!NcieEmbed.indexCurrent(appCtx, name, chunks))
                     NcieEmbed.indexChunks(appCtx, name, chunks)
             } catch (e: Exception) {
                 android.util.Log.w("NcieGround", "embedding index failed for " + name, e)

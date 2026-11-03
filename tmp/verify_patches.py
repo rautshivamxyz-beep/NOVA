@@ -1899,6 +1899,30 @@ check("v9.33.101: the card deck keeps a card only when both sides are there",
 check("v9.33.101: version is at least 9.33.101 (269)",
       version_at_least("9.33.101", 269))
 
+# ---- v9.33.102 "The embedding index knows what it was built from" ----
+# The index was rebuilt only when the chunk COUNT changed, so an edit that kept
+# the count left every later question scored against the old text's vectors.
+_ground102 = load("ncie/android/NcieGround.kt")
+_emb102 = load("ncie/android/NcieEmbed.kt")
+_fp102 = load("ncie/android/NcieFingerprint.kt")
+check("v9.33.102: the index is checked for identity, not for its count",
+      _ground102.count("NcieEmbed.indexSize(") == 0 and
+      _ground102.count("NcieEmbed.indexCurrent(") == 1)
+check("v9.33.102: the fingerprint is written with the index it describes",
+      _emb102.count("NcieFiles.write(sigFile(ctx, name), NcieFingerprint.ofTexts(texts).toString())") == 1)
+check("v9.33.102: a missing or unreadable fingerprint means rebuild, not trust",
+      _emb102.count("fun indexCurrent(ctx: Context, name: String, texts: List<String>): Boolean") == 1 and
+      _emb102.count("if (!indexFile(ctx, name).exists()) return false") == 1)
+check("v9.33.102: deleting a source's index drops its fingerprint too",
+      _emb102.count("sigFile(ctx, name).delete()") == 1)
+check("v9.33.102: the fingerprint is pure arithmetic (no Android, no files)",
+      "import android" not in _fp102 and "java.io" not in _fp102)
+check("v9.33.102: the fingerprint is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFingerprintTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 7)
+check("v9.33.102: version is at least 9.33.102 (270)",
+      version_at_least("9.33.102", 270))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

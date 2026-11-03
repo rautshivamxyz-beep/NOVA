@@ -315,8 +315,24 @@ android {
         //   fields with `optString` now, and skips only the row that is broken.
         //   verify_patches fails the build if a state loader grows a throwing
         //   row read again.
-        versionCode 269
-        versionName '9.33.101'
+        // v9.33.102 "The embedding index knows what it was built from": a
+        //   source's semantic index was rebuilt only when its chunk COUNT
+        //   changed. Count is not identity - editing a note into the same number
+        //   of chunks, re-saving a document with a corrected sentence, or taking
+        //   one document out and putting another of equal size in all keep the
+        //   count while changing every chunk after the edit. The index was then
+        //   never rebuilt, so every later question was scored against the OLD
+        //   text's vectors while the scores were read as if they belonged to the
+        //   new chunks: the wrong passage scored high, the passage that actually
+        //   answered scored low, and the answer NOVA grounded and cited was built
+        //   from material the user had already replaced - for as long as the
+        //   count happened to match. The index now records a 64-bit FNV-1a
+        //   fingerprint of the exact chunk list it was built from (a .sig beside
+        //   the .emb) and is rebuilt on any difference at all; a missing or
+        //   unreadable fingerprint fails closed to a rebuild, never to a wrong
+        //   citation. Pinned by NcieFingerprintTest.
+        versionCode 270
+        versionName '9.33.102'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

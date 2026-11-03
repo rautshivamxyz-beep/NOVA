@@ -249,6 +249,43 @@ object NcieEmbed {
     /** True when this source has an embedding index on disk. */
     fun hasIndex(ctx: Context, name: String): Boolean = indexFile(ctx, name).exists()
 
+    /**
+     * v9.33.102: the fingerprint file that sits beside the index and records
+     * exactly which chunk list the vectors were built from.
+     */
+    fun sigFile(ctx: Context, name: String): File =
+        File(File(ctx.filesDir, "embeddings"), safe(name) + ".sig")
+
+    /**
+     * v9.33.102 "The embedding index knows what it was built from": true only
+     * when the index on disk was built from exactly [texts].
+     *
+     * The old rule compared the chunk COUNT (`indexSize(name) != texts.size`),
+     * and count is not identity: a corrected sentence, a re-saved document, or
+     * one document out and another of equal size in all keep the count while
+     * changing every chunk after the edit. The index was then never rebuilt,
+     * so later questions were scored against the old text's vectors and the
+     * scores were read as if they belonged to the new chunks - the wrong
+     * material got cited and stayed cited. Any difference at all in the chunk
+     * list now means rebuild.
+     *
+     * Fails closed: a missing index, a missing fingerprint or an unreadable one
+     * all say "not current", which costs one re-index and never a wrong answer.
+     */
+    fun indexCurrent(ctx: Context, name: String, texts: List<String>): Boolean {
+        if (texts.isEmpty()) return false
+        if (!indexFile(ctx, name).exists()) return false
+        val stored = try {
+            val s = sigFile(ctx, name)
+            if (!s.exists()) return false
+            s.readText().trim()
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieEmbed", e)
+            return false
+        }
+        return stored == NcieFingerprint.ofTexts(texts).toString()
+    }
+
     /** The index's chunk count (for staleness checks), or -1. */
     fun indexSize(ctx: Context, name: String): Int = try {
         DataInputStream(BufferedInputStream(indexFile(ctx, name).inputStream())).use { it.readInt() }
@@ -291,6 +328,11 @@ object NcieEmbed {
                 tmp.copyTo(f, overwrite = true)
                 tmp.delete()
             }
+            // v9.33.102: record WHICH chunk list these vectors belong to, so the
+            // next update compares identity and not just the count. Written
+            // after the index, so a crash in between leaves a fingerprint that
+            // does not match and the index is simply rebuilt.
+            NcieFiles.write(sigFile(ctx, name), NcieFingerprint.ofTexts(texts).toString())
         } catch (t: Throwable) {
             // v9.33.98: this used to delete the index file on ANY write error.
             // tmp+rename means the file still holds the last good index, so the
@@ -305,6 +347,7 @@ object NcieEmbed {
      *  nothing). */
     fun deleteIndex(ctx: Context, name: String) {
         try { indexFile(ctx, name).delete() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
+        try { sigFile(ctx, name).delete() } catch (e: Exception) { NovaLog.quiet("NcieEmbed", e) }
     }
 
     /** The whole wiki store was replaced: drop every embedding index. */
