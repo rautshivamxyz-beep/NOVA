@@ -1945,6 +1945,25 @@ check("v9.33.103: a PIN that did not reach the disk is not reported as set",
 check("v9.33.103: version is at least 9.33.103 (271)",
       version_at_least("9.33.103", 271))
 
+# ---- v9.33.104 "A patched APK is only installed if it is a NOVA build" ----
+# The delta patch is any file the user picked; the APK it produced went to the
+# installer unchecked. It must now carry the same signing certificate as the
+# installed app - read at runtime, never hardcoded.
+_upd = load("UpdateActivity.kt")
+check("v9.33.104: the built APK is checked against the running app's signer",
+      _upd.count("private fun signedLikeThisApp(apk: File): Boolean") == 1 and
+      _upd.count("if (!signedLikeThisApp(out)) {") == 1)
+check("v9.33.104: the certificate is compared, not a hardcoded digest",
+      _upd.count("theirs.contentEquals(mine)") == 1 and
+      re.search(r"\"[0-9a-f]{64}\"", _upd) is None)
+check("v9.33.104: an unreadable APK is not a NOVA build",
+      _upd.count("NovaLog.quiet(\"UpdateActivity\", e)") >= 3)
+check("v9.33.104: the refusal points at the full APK",
+      open(os.path.join(ROOT, "android/app/src/main/res/values/strings.xml"),
+           encoding="utf-8").read().count('name="update_patch_unsigned_msg"') == 1)
+check("v9.33.104: version is at least 9.33.104 (272)",
+      version_at_least("9.33.104", 272))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

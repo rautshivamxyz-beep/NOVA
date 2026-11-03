@@ -167,6 +167,8 @@
     <string name="update_apply_anyway">फिर भी लागू करें</string>
     <string name="update_patch_failed">पैच विफल रहा</string>
     <string name="update_patch_failed_msg">पैच विफल रहा - इसके बजाय पूरा APK डाउनलोड करें।</string>
+    <string name="update_patch_unsigned">यह NOVA का बिल्ड नहीं है</string>
+    <string name="update_patch_unsigned_msg">इस पैच से बना APK आपके NOVA के हस्ताक्षर से मेल नहीं खाता, इसलिए इसे इंस्टॉल नहीं किया गया। इसके बजाय रिलीज़ पेज से पूरा APK डाउनलोड करें।</string>
     <string name="update_open_releases">रिलीज़ खोलें</string>
     <string name="update_applying">पैच लागू हो रहा है - इसमें थोड़ा समय लगेगा</string>
     <string name="update_saved_downloads">NOVA-update.apk Downloads में सेव हो गया</string>

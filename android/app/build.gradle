@@ -345,8 +345,20 @@ android {
         //   verify_patches scans the whole source tree and fails the build if a
         //   bare `writeText` appears anywhere outside NcieFiles itself - the
         //   invariant has no exceptions left to remember.
-        versionCode 271
-        versionName '9.33.103'
+        // v9.33.104 "A patched APK is only installed if it is a NOVA build":
+        //   the delta patch is an arbitrary file the user picked, NcieDelta turns
+        //   it into an APK, and the app handed that APK straight to the installer
+        //   without ever asking whether it was a NOVA build. A patch built against
+        //   anything else produced a file the installer rejects with a generic
+        //   error - or, if NOVA had been uninstalled first, a stranger's APK
+        //   wearing the NOVA name. The built APK must now carry the SAME signing
+        //   certificate as the NOVA that is running, read from the installed app
+        //   at runtime rather than hardcoded, so no secret lives in the source and
+        //   a rotated key cannot silently disable the check. It fails closed - an
+        //   unreadable APK or a missing signer is "not a NOVA build" - and the
+        //   dialog points at the full APK, which always installs.
+        versionCode 272
+        versionName '9.33.104'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

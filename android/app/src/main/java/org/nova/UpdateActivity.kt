@@ -218,11 +218,59 @@ class UpdateActivity : ListActivity() {
                         .show()
                     return@runOnUiThread
                 }
+                // v9.33.104: a patch is an arbitrary file the user picked, and
+                // the APK it produces is handed to the installer. Android would
+                // refuse an APK signed by a different key - say it here, with a
+                // reason, instead of letting the installer report a generic
+                // failure.
+                if (!signedLikeThisApp(out)) {
+                    try { out.delete() } catch (e: Exception) { NovaLog.quiet("UpdateActivity", e) }
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.update_patch_unsigned)
+                        .setMessage(R.string.update_patch_unsigned_msg)
+                        .setPositiveButton(R.string.update_open_releases) { _, _ -> openReleases() }
+                        .setNegativeButton(R.string.action_close, null)
+                        .show()
+                    return@runOnUiThread
+                }
                 builtApk = out
                 builtUri = null
                 handOverAndInstall(out)
             }
         }.start()
+    }
+
+    /**
+     * v9.33.104 "A patched APK is only installed if it is a NOVA build".
+     *
+     * The delta patch is a file the user picked from anywhere - a release page,
+     * a chat message, a downloads folder. NcieDelta turns it into an APK and the
+     * app hands that APK to the installer. Nothing in between ever asked whether
+     * the result was a NOVA build at all, so a patch built against something
+     * else produced a file the installer would reject with a generic error, or -
+     * if the user had uninstalled NOVA first - a stranger's APK wearing the NOVA
+     * name.
+     *
+     * The rule is the one Android enforces anyway, checked here so the user gets
+     * a sentence instead of a failure: the built APK must carry the SAME signing
+     * certificate as the NOVA that is running. It is read from the installed app
+     * at runtime, not hardcoded, so a rotated key cannot silently disable it and
+     * no secret lives in the source.
+     *
+     * Fails closed: an unreadable APK, a missing signer or any exception is "not
+     * a NOVA build". The full APK from the releases page always works, and the
+     * dialog points there.
+     */
+    private fun signedLikeThisApp(apk: File): Boolean = try {
+        val flags = android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        val theirs = packageManager.getPackageArchiveInfo(apk.absolutePath, flags)
+            ?.signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray()
+        val mine = packageManager.getPackageInfo(packageName, flags)
+            .signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray()
+        theirs != null && mine != null && theirs.contentEquals(mine)
+    } catch (e: Exception) {
+        NovaLog.quiet("UpdateActivity", e)
+        false
     }
 
     /** the built APK goes to Downloads (MediaStore) when possible - that
