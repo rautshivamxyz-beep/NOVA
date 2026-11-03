@@ -1964,6 +1964,23 @@ check("v9.33.104: the refusal points at the full APK",
 check("v9.33.104: version is at least 9.33.104 (272)",
       version_at_least("9.33.104", 272))
 
+# ---- v9.33.105 "A cached summary belongs to the text it summarises" ----
+# Both summary caches were keyed on a LENGTH - the document's, and the total of
+# the chunks picked for the question. Two different texts of similar shape share
+# a length, so a summary of other text was served, instantly, labelled "cached".
+check("v9.33.105: the document-summary key is the document's fingerprint",
+      ma.count('return "doc5_" + Integer.toHexString(n.hashCode()) + "_" +') == 1 and
+      ma.count("NcieFingerprint.ofText(d)") == 1)
+check("v9.33.105: the notes-summary key is the picked chunks' fingerprint",
+      ma.count('val key = "notes6_" + Integer.toHexString(doc.hashCode()) + "_" +') == 1 and
+      ma.count("NcieFingerprint.ofTexts(chunks)") == 1)
+check("v9.33.105: no summary key is built from a length any more",
+      ma.count("totalLen") == 0 and ma.count('"doc5_" + Integer.toHexString(n.hashCode()) + "_" + d.length') == 0)
+check("v9.33.105: the notes cache is still written under the same key it reads",
+      ma.count("NcieFiles.write(cf, finalText)") == 1)
+check("v9.33.105: version is at least 9.33.105 (273)",
+      version_at_least("9.33.105", 273))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

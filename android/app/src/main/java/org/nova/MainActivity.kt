@@ -2003,11 +2003,22 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Cache key for this document's summary (name + length = same file). */
+    /**
+     * Cache key for this document's summary.
+     *
+     * v9.33.105 "A cached summary belongs to the text it summarises": the key
+     * was the document's NAME and its LENGTH. Length is not identity - a
+     * corrected re-import of the same chapter (a fixed typo, a different
+     * edition of the same size) keeps both, so the summary of the text the
+     * user replaced was served, as "cached", as if it described the new one.
+     * It is the document's content fingerprint now, so any edit at all
+     * regenerates and only a true repeat is free.
+     */
     private fun summaryCacheKey(): String? {
         val n = docName ?: return null
         val d = docContext ?: return null
-        return "doc5_" + Integer.toHexString(n.hashCode()) + "_" + d.length
+        return "doc5_" + Integer.toHexString(n.hashCode()) + "_" +
+            org.nova.ncie.android.NcieFingerprint.ofText(d)
     }
 
     /**
@@ -2031,9 +2042,14 @@ class MainActivity : Activity() {
                      else topicChunks(userText, all).ifEmpty {
                          NcieKnowledge.bestChunks(this, userText) }
         if (chunks.isEmpty()) { toast("Couldn't find those notes"); return }
-        val totalLen = chunks.sumOf { it.length }
-        // cached from last time? -> instant
-        val key = "notes6_" + Integer.toHexString(doc.hashCode()) + "_" + totalLen
+        // v9.33.105: the cache key was the TOTAL LENGTH of the chunks picked
+        // for this question. Two different topics whose chunks happen to add up
+        // to the same length - the common case for notes of similar shape -
+        // shared one entry, so the summary generated for one question was
+        // served, marked "cached", as the answer to a different one. The key is
+        // the fingerprint of the exact chunks being summarised now.
+        val key = "notes6_" + Integer.toHexString(doc.hashCode()) + "_" +
+            org.nova.ncie.android.NcieFingerprint.ofTexts(chunks)
         val cf = File(File(filesDir, "summary_cache").apply { mkdirs() }, key)
         if (cf.exists()) {
             val cached = try { cf.readText() } catch (e: Exception) { "" }

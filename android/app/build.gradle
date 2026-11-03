@@ -357,8 +357,19 @@ android {
         //   a rotated key cannot silently disable the check. It fails closed - an
         //   unreadable APK or a missing signer is "not a NOVA build" - and the
         //   dialog points at the full APK, which always installs.
-        versionCode 272
-        versionName '9.33.104'
+        // v9.33.105 "A cached summary belongs to the text it summarises": the
+        //   document-summary cache was keyed on the document's NAME and LENGTH,
+        //   and the notes-summary cache on the TOTAL LENGTH of the chunks picked
+        //   for the question. Length is not identity, and it is the one thing two
+        //   different texts of similar shape share: a corrected re-import of the
+        //   same chapter, or two different topics whose chunks add up to the same
+        //   number, both hit an entry that describes OTHER text - served instantly
+        //   and labelled "cached", which is exactly what makes it believable. The
+        //   keys are content fingerprints now (NcieFingerprint, v9.33.102), so any
+        //   edit at all regenerates and only a true repeat is free. One-off cost:
+        //   the first summary of each document after the update regenerates.
+        versionCode 273
+        versionName '9.33.105'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
