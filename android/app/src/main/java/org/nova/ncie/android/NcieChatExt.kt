@@ -586,10 +586,11 @@ internal val DOCS_Q = Regex(
     "(?i)^\\s*(?:what\\s+documents\\s+do\\s+i\\s+have|my\\s+documents|" +
         "list\\s+my\\s+documents)\\s*[.!?]*\\s*$")
 
-/** v9.32.8: "health" / "what's not working" - the setup checklist in the chat. */
-internal val HEALTH_Q = Regex(
-    "(?i)^\\s*(health|nova health|what(?:'s| is) not working|what is broken|" +
-        "fix nova|nova setup|setup nova|diagnose)\\b")
+// v9.33.106: "health" / "what's not working" - the setup checklist in the
+// chat. The pattern lives in NcieAsk now and consumes the WHOLE message: as a
+// prefix it also matched "health benefits of walking" and "what's not working
+// in this function", and answered those with NOVA's own checklist.
+internal val HEALTH_Q = NcieAsk.HEALTH_Q
 
 /** v9.33.3: "proxy" / "test proxy" - is the SOCKS proxy actually carrying traffic? */
 internal val PROXY_Q = Regex(
@@ -609,7 +610,8 @@ internal fun MainActivity.answerProxy(text: String): Boolean {
 }
 
 internal fun MainActivity.answerHealth(text: String): Boolean {
-    if (text.length > 60 || !HEALTH_Q.containsMatchIn(text)) return false
+    // v9.33.106: one predicate - length ceiling and whole-message pattern
+    if (!NcieAsk.health(text)) return false
     val activity = this
     input.setText("")
     val um = Msg(Role.USER, text)
@@ -819,14 +821,14 @@ internal val LEARNED_Q = Regex("(?i)^\\s*what\\s+have\\s+you\\s+learned\\s*[.!?]
 
 // v9.30.0 "Growth": the self-evolution commands - what NOVA has taught
 // itself. Short, typed commands only (long text is a study question).
-internal val SKILLS_Q = Regex(
-    "(?i)^\\s*(?:(?:your|my|nova'?s)\\s+)?skills?\\s*[.!?]*\\s*$" +
-        "|^\\s*what\\s+skills\\b|^\\s*growth\\s*[.!?]*\\s*$" +
-        "|^\\s*how\\s+have\\s+you\\s+grown\\b|^\\s*what\\s+have\\s+you\\s+taught\\s+yourself\\b"
-)
+// v9.33.106: every branch consumes the whole message now (NcieAsk.SKILLS_Q) -
+// "what skills do I need to become a data analyst" is a question for the
+// model, not a request for NOVA's own skill list.
+internal val SKILLS_Q = NcieAsk.SKILLS_Q
 
 internal fun MainActivity.answerSkills(text: String): Boolean {
-    if (text.length > 80 || !SKILLS_Q.containsMatchIn(text)) return false
+    // v9.33.106: one predicate - length ceiling and whole-message pattern
+    if (!NcieAsk.skills(text)) return false
     val activity = this
     input.setText("")
     val um = Msg(Role.USER, text)

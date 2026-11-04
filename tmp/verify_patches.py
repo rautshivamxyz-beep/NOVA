@@ -1981,13 +1981,41 @@ check("v9.33.105: the notes cache is still written under the same key it reads",
 check("v9.33.105: version is at least 9.33.105 (273)",
       version_at_least("9.33.105", 273))
 
+# ---- v9.33.106 "A typed command is the whole message" ----
+# Two deterministic commands matched a PREFIX of the message, and the length
+# gate at the call site was standing in for the missing end anchor. "health
+# benefits of walking to college" got NOVA's diagnostics; "what skills do I
+# need to become a data analyst" got NOVA's own skill list. Both patterns now
+# consume the whole message, in one pure object the JVM tests can pin.
+_ask = load("ncie/android/NcieAsk.kt")
+check("v9.33.106: the diagnostics pattern consumes the whole message",
+      r"\s*[.!?]*\s*$" in _ask and r'diagnose)\b")' not in _ask)
+check("v9.33.106: no growth branch is a bare prefix either",
+      _ask.count(r"\s*$") >= 6 and r"what\s+skills\b" not in _ask)
+check("v9.33.106: both commands keep their length ceilings",
+      _ask.count("const val HEALTH_MAX = 60") == 1 and
+      _ask.count("const val SKILLS_MAX = 80") == 1)
+check("v9.33.106: the chat asks the one predicate, not a bare regex",
+      nc.count("if (!NcieAsk.health(text)) return false") == 1 and
+      nc.count("if (!NcieAsk.skills(text)) return false") == 1)
+check("v9.33.106: the old prefix patterns are gone from the chat",
+      nc.count("internal val HEALTH_Q = Regex(") == 0 and
+      nc.count("internal val SKILLS_Q = Regex(") == 0)
+check("v9.33.106: both directions are pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieAskTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 5)
+check("v9.33.106: the trigger object is pure - no Android types",
+      "android." not in _ask)
+check("v9.33.106: version is at least 9.33.106 (274)",
+      version_at_least("9.33.106", 274))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
                 ("ncie/android/NcieRecipes.kt", _rec),
                 ("ncie/android/NcieTools.kt", _tl),
                 ("ncie/android/NcieEmbed.kt", _emb),
-                ("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv), ("ChatStore.kt", _cs100)]:
+                ("ReminderStore.kt", _rs), ("ReminderReceiver.kt", _rr), ("MainActivity.kt", ma), ("ncie/GgufMeta.kt", _gguf), ("ncie/android/NcieLookup.kt", _look), ("ncie/android/NcieClaim.kt", _claim), ("ncie/android/NcieChat.kt", nc), ("ncie/android/NcieTune.kt", tun), ("ncie/android/NcieLearn.kt", nl), ("ncie/android/NcieKnowledge.kt", nk), ("ncie/android/NcieExam.kt", ne), ("ncie/learn/Learner.kt", lr), ("ncie/learn/PersistentLearner.kt", pl), ("ncie/learn/LearnedFact.kt", lf), ("KnowledgeActivity.kt", ka), ("ncie/android/NcieLeftovers.kt", lo), ("LeftoverReceiver.kt", lr2), ("NovaUi.kt", load("NovaUi.kt")), ("NovaHealth.kt", load("NovaHealth.kt")), ("SetupActivity.kt", load("SetupActivity.kt")), ("HealthActivity.kt", load("HealthActivity.kt")), ("HelpActivity.kt", load("HelpActivity.kt")), ("ncie/android/NcieStyle.kt", load("ncie/android/NcieStyle.kt")), ("NovaListener.kt", load("NovaListener.kt")), ("ncie/android/NcieDeadlines.kt", load("ncie/android/NcieDeadlines.kt")), ("ncie/android/NcieWeekly.kt", load("ncie/android/NcieWeekly.kt")), ("ncie/android/NcieWatchdog.kt", load("ncie/android/NcieWatchdog.kt")), ("ncie/android/NcieFocus.kt", load("ncie/android/NcieFocus.kt")), ("ncie/android/NovaJarvis.kt", load("ncie/android/NovaJarvis.kt")), ("NovaLog.kt", load("NovaLog.kt")), ("ncie/android/NcieTools.kt", ntools), ("ncie/android/OnlineFetch.kt", nof), ("ncie/Tokens.kt", load("ncie/Tokens.kt")), ("ncie/android/NcieSenses.kt", load("ncie/android/NcieSenses.kt")), ("ncie/NcieRepeat.kt", _rep), ("ncie/android/NcieFiles.kt", _nf), ("ncie/android/NcieCache.kt", _nc), ("ncie/android/NcieTimeMachine.kt", _tm), ("ncie/android/NcieValue.kt", _nv), ("ChatStore.kt", _cs100), ("ncie/android/NcieAsk.kt", _ask)]:
     structural(f, text)
     bad = []
     for m in re.finditer(r'"(?:[^"\\]|\\.)*"', text):
