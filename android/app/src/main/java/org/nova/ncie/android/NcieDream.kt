@@ -83,7 +83,10 @@ object NcieDream {
         var cards = 0
         try {
             val f = File(ctx.filesDir, "flashcards.txt")
-            if (f.exists()) cards = f.readLines().count { it.isNotBlank() }
+            // v9.33.109: the same count the briefing prints (NcieDeck) - a
+            // blank line or a card without its separator is not a card, and
+            // this report used to count it as one.
+            if (f.exists()) cards = NcieDeck.count(f.readLines())
         } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("flashcards: ").append(cards).append('\n')
 

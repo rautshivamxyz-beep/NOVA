@@ -37,7 +37,6 @@ object NcieRoutines {
 
     /** Same line format separator NcieTutor uses for flashcards.txt
      *  (unit-separator symbol, Kotlin escape like NcieTutor.kt). */
-    private const val SEP = '\u241F'
 
     /**
      * The morning briefing - every line from local state only:
@@ -122,10 +121,10 @@ object NcieRoutines {
         var cards = 0
         try {
             val f = File(ctx.filesDir, "flashcards.txt")
-            if (f.exists()) cards = f.readLines().count { l ->
-                val i = l.indexOf(SEP)
-                i > 0 && l.substring(0, i).isNotBlank() && l.substring(i + 1).isNotBlank()
-            }
+            // v9.33.109: one count for both screens (NcieDeck) - this one
+            // counted cards, the dream report below it counted lines, and the
+            // two numbers sat on the same screen.
+            if (f.exists()) cards = NcieDeck.count(f.readLines())
         } catch (e: Exception) { NovaLog.quiet("NcieRoutines", e) }
         sb.append(if (cards > 0) "flashcards: $cards" else "flashcards: none yet").append('\n')
         // v9.10.0 "Revision Planner": the exam countdown and today's
