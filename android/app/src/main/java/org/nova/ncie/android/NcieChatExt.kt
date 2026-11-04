@@ -144,14 +144,16 @@ internal fun MainActivity.maybeRememberFacts(text: String) {
 // - a summary of the last 24h from NovaListener's local log, grouped
 // by app. Deterministic like PROFILE_Q: no model call, no network,
 // nothing leaves the phone.
-internal val MISSED_Q = Regex(
-    "(?i)\\bwhat\\s+did\\s+i\\s+miss\\b|\\bany\\s+notifications\\b" +
-        "|\\b(?:read|check)\\s+my\\s+notifications\\b|\\bnotification\\s+summary\\b")
+// v9.33.107: the pattern lives in NcieAsk now and consumes the WHOLE
+// message. As a phrase hunt it also matched "what did i miss in class
+// yesterday" and answered a lecture question with the notification summary.
+internal val MISSED_Q = NcieAsk.MISSED_Q
 
 internal fun MainActivity.answerMissed(text: String): Boolean {
     // OCR'd or long text is a study question that merely contains the
     // phrase - the missed question is always short and typed
-    if (text.length > 80 || !MISSED_Q.containsMatchIn(text)) return false
+    // v9.33.107: one predicate - length ceiling and whole-message pattern
+    if (!NcieAsk.missed(text)) return false
     val activity = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()
@@ -439,15 +441,15 @@ internal fun MainActivity.answerStudy(text: String): Boolean {
 // read straight from filesDir/chat_summary.txt, deterministically.
 // Like BRIEFING_Q: no model call, no network, works with no model
 // loaded at all.
-internal val SUMMARY_Q = Regex(
-    "(?i)^\\s*(?:summarize|summarise)\\s+our\\s+conversation\\s*[.!?]*\\s*$" +
-        "|\\bwhat\\s+were\\s+we\\s+talking\\s+about\\b" +
-        "|\\bconversation\\s+summary\\b")
+// v9.33.107: whole message now (NcieAsk.SUMMARY_Q) - "what were we talking
+// about in class yesterday" asked for a lecture recap, not this chat's summary.
+internal val SUMMARY_Q = NcieAsk.SUMMARY_Q
 
 internal fun MainActivity.answerSummary(text: String): Boolean {
     // long/OCR'd text is a study question that merely contains the
     // phrase - these commands are always short and typed
-    if (text.length > 80 || !SUMMARY_Q.containsMatchIn(text)) return false
+    // v9.33.107: one predicate - length ceiling and whole-message pattern
+    if (!NcieAsk.summary(text)) return false
     val activity = this
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um); adapter.add(um); scrollToEnd()

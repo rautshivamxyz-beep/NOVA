@@ -37,6 +37,8 @@ object NcieAsk {
      */
     const val HEALTH_MAX = 60
     const val SKILLS_MAX = 80
+    const val MISSED_MAX = 80
+    const val SUMMARY_MAX = 80
 
     /**
      * NOVA's own diagnostics: "health", "nova health", "health check",
@@ -66,6 +68,49 @@ object NcieAsk {
             "|^\\s*growth\\s*[.!?]*\\s*$" +
             "|^\\s*how\\s+have\\s+you\\s+grown\\s*[.!?]*\\s*$" +
             "|^\\s*what\\s+have\\s+you\\s+taught\\s+yourself\\s*[.!?]*\\s*$")
+
+    /**
+     * v9.33.107 "A typed command is the whole message, part 2": the
+     * notification summary. "what did I miss" / "any notifications" /
+     * "read my notifications" / "notification summary".
+     *
+     * This one was a phrase hunt in both directions - no anchor at either
+     * end - so "what did i miss in class yesterday" and "what did i miss in
+     * today's lecture" both fired it, and a question about a lecture was
+     * answered with a summary of the phone's notifications. It consumes the
+     * message now. "Any notifications from <app>" is still accepted, because
+     * the log the reply prints is grouped by app.
+     */
+    val MISSED_Q = Regex(
+        "(?i)\\s*(?:what\\s+did\\s+i\\s+miss(?:\\s+(?:today|so\\s+far))?" +
+            "|any\\s+notifications?(?:\\s+from\\s+[a-z0-9' ]{1,30})?(?:\\s+(?:today|so\\s+far))?" +
+            "|(?:read|check)\\s+my\\s+notifications?" +
+            "|notification\\s+summary)" +
+            "\\s*[.!?]*\\s*$")
+
+    /**
+     * v9.33.107: the conversation summary. "summarize our conversation" /
+     * "what were we talking about" / "conversation summary".
+     *
+     * The middle branch was a phrase hunt too, so "what were we talking
+     * about in class yesterday" asked for a lecture recap and got the
+     * summary of this chat instead. Whole message now; the phrasings that
+     * really do mean the chat are kept ("so far", "earlier", "before",
+     * "yesterday").
+     */
+    val SUMMARY_Q = Regex(
+        "(?i)\\s*(?:summari[sz]e\\s+our\\s+conversation" +
+            "|what\\s+were\\s+we\\s+talking\\s+about(?:\\s+(?:so\\s+far|earlier|before|yesterday))?" +
+            "|conversation\\s+summary)" +
+            "\\s*[.!?]*\\s*$")
+
+    /** The notification summary - on a short message that IS the command. */
+    fun missed(text: String): Boolean =
+        text.length <= MISSED_MAX && MISSED_Q.containsMatchIn(text)
+
+    /** The conversation summary - on a short message that IS the command. */
+    fun summary(text: String): Boolean =
+        text.length <= SUMMARY_MAX && SUMMARY_Q.containsMatchIn(text)
 
     /** The diagnostics command - on a short message that IS the command. */
     fun health(text: String): Boolean =

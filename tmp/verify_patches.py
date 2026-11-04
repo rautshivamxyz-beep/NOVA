@@ -2012,6 +2012,30 @@ check("v9.33.106: the trigger object is pure - no Android types",
 check("v9.33.106: version is at least 9.33.106 (274)",
       version_at_least("9.33.106", 274))
 
+# ---- v9.33.107 "A typed command is the whole message, part 2" ----
+# The notification summary and the conversation summary were phrase hunts with
+# no anchor at either end, so "what did i miss in class yesterday" was answered
+# with the phone's notification log and "what were we talking about in class
+# yesterday" with this chat's summary. Both consume the whole message now.
+check("v9.33.107: the notification summary consumes the whole message",
+      _ask.count("val MISSED_Q = Regex(") == 1 and
+      _ask.count(_BS + "s*[.!?]*" + _BS + "s*$") >= 3)
+check("v9.33.107: the conversation summary consumes the whole message",
+      _ask.count("val SUMMARY_Q = Regex(") == 1 and
+      ("what" + _BS + "s+were" + _BS + "s+we" + _BS + "s+talking" + _BS + "s+about" + _BS + "b")
+      not in _ask)
+check("v9.33.107: the chat asks the predicates, not bare regexes",
+      nc.count("if (!NcieAsk.missed(text)) return false") == 1 and
+      nc.count("if (!NcieAsk.summary(text)) return false") == 1)
+check("v9.33.107: the old phrase hunts are gone from the chat",
+      nc.count("internal val MISSED_Q = Regex(") == 0 and
+      nc.count("internal val SUMMARY_Q = Regex(") == 0)
+check("v9.33.107: both directions are pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieAskTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 9)
+check("v9.33.107: version is at least 9.33.107 (275)",
+      version_at_least("9.33.107", 275))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

@@ -76,4 +76,50 @@ class NcieAskTest {
         assertFalse(NcieAsk.health(longHealth))
         assertFalse(NcieAsk.skills(longSkills))
     }
+
+    @Test
+    fun theNotificationSummaryStillFires() {
+        for (t in listOf(
+            "what did i miss", "What did I miss?", "what did i miss today",
+            "what did i miss so far", "any notifications", "any notifications today",
+            "any notifications from whatsapp", "read my notifications",
+            "check my notifications", "notification summary"
+        )) {
+            assertTrue("should fire: $t", NcieAsk.missed(t))
+        }
+    }
+
+    @Test
+    fun aLectureQuestionReachesTheModel() {
+        for (t in listOf(
+            "what did i miss in class yesterday",
+            "what did i miss in today's lecture",
+            "i missed my bus, what do i do",
+            "why did i miss the deadline"
+        )) {
+            assertFalse("must not fire: $t", NcieAsk.missed(t))
+        }
+    }
+
+    @Test
+    fun theConversationSummaryStillFires() {
+        for (t in listOf(
+            "summarize our conversation", "summarise our conversation",
+            "what were we talking about", "what were we talking about so far",
+            "conversation summary", "What were we talking about?"
+        )) {
+            assertTrue("should fire: $t", NcieAsk.summary(t))
+        }
+    }
+
+    @Test
+    fun aClassRecapQuestionReachesTheModel() {
+        for (t in listOf(
+            "what were we talking about in class yesterday",
+            "what were we talking about last week in physics",
+            "summarize our conversation in hindi please"
+        )) {
+            assertFalse("must not fire: $t", NcieAsk.summary(t))
+        }
+    }
 }
