@@ -42,13 +42,13 @@ object NcieFocus {
         // v9.33.16: a swallowed write failure used to be reported as
         // "focus mode on" anyway - the session was never saved, so the next
         // turn was not actually silent. Say so instead of lying.
-        val saved = try {
-            NcieFiles.write(file(ctx), end.toString())
-            true
-        } catch (e: Exception) {
-            NovaLog.quiet("NcieFocus", e)
-            false
-        }
+        // v9.33.108: NcieFiles.write has not thrown since v9.33.90 - it
+        // RETURNS false when the save fails. Wrapping it in try/catch and
+        // answering "true" therefore made the v9.33.16 honesty fix dead code:
+        // a session that never reached the disk was still reported as "Focus
+        // mode on", which is the exact lie that fix removed. Ask the one save
+        // function for its answer instead of assuming the exception path.
+        val saved = NcieFiles.write(file(ctx), end.toString())
         if (!saved) return "Couldn't start focus mode - NOVA could not save the session. Try again."
         return "Focus mode on for " + mins +
             (if (mins == 1) " minute." else " minutes.") +

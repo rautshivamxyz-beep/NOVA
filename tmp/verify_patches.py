@@ -2036,6 +2036,30 @@ check("v9.33.107: both directions are pinned by unit tests",
 check("v9.33.107: version is at least 9.33.107 (275)",
       version_at_least("9.33.107", 275))
 
+# ---- v9.33.108 "A save that cannot throw is not a save that succeeded" ----
+# v9.33.90 made NcieFiles.write RETURN false instead of throwing. The focus
+# session still wrapped it in try/catch and answered "true", so the v9.33.16
+# honesty fix ("never report a session that was not saved") became dead code -
+# a write that failed still said "Focus mode on". The answer is the save's own
+# return value now, and a repo-wide sweep keeps the shape from coming back.
+_focus = load("ncie/android/NcieFocus.kt")
+check("v9.33.108: the focus session reports the save's own answer",
+      _focus.count("val saved = NcieFiles.write(file(ctx), end.toString())") == 1)
+check("v9.33.108: the honest refusal is still there",
+      _focus.count('Couldn\'t start focus mode - NOVA could not save the session. Try again.') == 1)
+_dead_saves = []
+for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
+    for _n in _names:
+        if not _n.endswith(".kt"):
+            continue
+        _p = os.path.join(_dir, _n)
+        if re.search(r"NcieFiles\.write\([^\n]*\)\s*\n\s*true\b",
+                     open(_p, encoding="utf-8").read()):
+            _dead_saves.append(_n)
+check("v9.33.108: no save anywhere tests a failure by catching it", not _dead_saves)
+check("v9.33.108: version is at least 9.33.108 (276)",
+      version_at_least("9.33.108", 276))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
