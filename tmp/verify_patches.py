@@ -929,7 +929,9 @@ check("v9.16.10: encrypted backup ships (BackupActivity)",
 # ---- v9.16.11 "Dream mode" ----
 check("v9.16.11: Dream mode ships (NcieDream + briefing)",
       load("ncie/android/NcieDream.kt").count("fun run(") == 1 and
-      load("ncie/android/NcieRoutines.kt").count("NcieDream.run(") == 1)
+      # v9.33.110: the briefing shows the report the 03:00 alarm wrote and only
+      # rebuilds it through run() on a morning the alarm was missed
+      load("ncie/android/NcieRoutines.kt").count("NcieDream.forBriefing(ctx)") == 1)
 # ---- v9.16.12 "Dream mode: nightly" ----
 check("v9.16.12: the nightly Dream receiver ships",
       load("DreamReceiver.kt").count("NcieDream.run(") == 1 and
