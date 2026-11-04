@@ -2083,6 +2083,30 @@ check("v9.33.109: the deck rule is pinned by unit tests",
 check("v9.33.109: version is at least 9.33.109 (277)",
       version_at_least("9.33.109", 277))
 
+# ---- v9.33.110 "The overnight report is the one that is shown" ----
+# v9.16.11 says the briefing shows the report the 03:00 alarm wrote, but the
+# briefing called NcieDream.run() and rebuilt it on the spot - the overnight
+# work was overwritten every morning before anyone saw it, and lastReport() was
+# never read. The stored report is shown when it belongs to today; run() only
+# covers the morning the alarm was missed.
+_dream2 = load("ncie/android/NcieDream.kt")
+check("v9.33.110: the briefing shows the stored report",
+      _dream2.count("fun forBriefing(ctx: Context): String") == 1 and
+      _dream2.count("if (!fresh(last, startOfToday())) return run(ctx)") == 1)
+check("v9.33.110: freshness is one pure rule",
+      _dream2.count("internal fun fresh(lastModified: Long, todayStart: Long): Boolean =") == 1 and
+      _dream2.count("todayStart > 0L && lastModified >= todayStart") == 1)
+check("v9.33.110: the briefing no longer rebuilds it",
+      _routines.count("NcieDream.forBriefing(ctx)") == 1 and
+      _routines.count("NcieDream.run(ctx)") == 0)
+check("v9.33.110: the alarm is re-armed on both paths",
+      _dream2.count("        schedule(ctx)\n        if (!fresh(") == 1)
+check("v9.33.110: the boundary is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDreamTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 5)
+check("v9.33.110: version is at least 9.33.110 (278)",
+      version_at_least("9.33.110", 278))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

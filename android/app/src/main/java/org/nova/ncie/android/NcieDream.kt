@@ -140,6 +140,54 @@ object NcieDream {
         } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
     }
 
+    /**
+     * v9.33.110: what the morning briefing shows.
+     *
+     * v9.16.11 says the briefing shows the overnight report "so NOVA has
+     * tomorrow's picture ready before you wake" - but the briefing called
+     * [run], which REBUILDS the report on the spot. The overnight work was
+     * overwritten every morning before anyone saw it, and the file that
+     * [lastReport] reads was never read at all. The stored report is shown
+     * when it belongs to today (the 03:00 alarm wrote it); only when there is
+     * none - the alarm was missed, or the phone was off overnight - is it
+     * rebuilt, which is the case [run] exists for.
+     *
+     * The alarm is re-armed either way, so a phone that lost it gets it back
+     * on the next good morning.
+     */
+    fun forBriefing(ctx: Context): String {
+        val f = reportPath(ctx)
+        val last = try {
+            if (f.exists()) f.lastModified() else 0L
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieDream", e)
+            0L
+        }
+        schedule(ctx)
+        if (!fresh(last, startOfToday())) return run(ctx)
+        return try { f.readText() } catch (e: Exception) {
+            NovaLog.quiet("NcieDream", e)
+            run(ctx)
+        }
+    }
+
+    /**
+     * True when a report last written at [lastModified] belongs to the day
+     * that began at [todayStart] - i.e. the overnight alarm produced it.
+     * Pure arithmetic, so a JVM unit test can pin the boundary.
+     */
+    internal fun fresh(lastModified: Long, todayStart: Long): Boolean =
+        todayStart > 0L && lastModified >= todayStart
+
+    private fun startOfToday(): Long {
+        val c = Calendar.getInstance()
+        c.set(Calendar.HOUR_OF_DAY, 0)
+        c.set(Calendar.MINUTE, 0)
+        c.set(Calendar.SECOND, 0)
+        c.set(Calendar.MILLISECOND, 0)
+        return c.timeInMillis
+    }
+
     /** v9.33.7: true when the nightly Dream alarm is actually scheduled
      *  (FLAG_NO_CREATE finds the existing PendingIntent without creating
      *  one). NovaHealth's "Alarms armed" check reads this. */

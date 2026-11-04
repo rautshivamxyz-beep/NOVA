@@ -150,7 +150,10 @@ object NcieRoutines {
         } catch (e: Exception) { NovaLog.quiet("NcieRoutines", e) }
         // v9.16.11 "Dream mode": the overnight consolidation, shown here so
         // the day's picture is ready before you start.
-        sb.append("\n\n").append(NcieDream.run(ctx)).append('\n')
+        // v9.33.110: show the report the 03:00 alarm wrote instead of
+        // rebuilding it on the spot - the overnight one was overwritten every
+        // morning before anyone saw it. Rebuilt only when there is none.
+        sb.append("\n\n").append(NcieDream.forBriefing(ctx)).append('\n')
         sb.append("```")
         return sb.toString()
     }
