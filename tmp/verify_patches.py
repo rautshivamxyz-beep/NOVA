@@ -1988,10 +1988,13 @@ check("v9.33.105: version is at least 9.33.105 (273)",
 # need to become a data analyst" got NOVA's own skill list. Both patterns now
 # consume the whole message, in one pure object the JVM tests can pin.
 _ask = load("ncie/android/NcieAsk.kt")
+_BS = chr(92) * 2  # the doubled backslash every Kotlin regex literal carries
 check("v9.33.106: the diagnostics pattern consumes the whole message",
-      r"\s*[.!?]*\s*$" in _ask and r'diagnose)\b")' not in _ask)
+      (_BS + "s*[.!?]*" + _BS + "s*$") in _ask and
+      ("diagnose)" + _BS + "b") not in _ask)
 check("v9.33.106: no growth branch is a bare prefix either",
-      _ask.count(r"\s*$") >= 6 and r"what\s+skills\b" not in _ask)
+      _ask.count(_BS + "s*$") >= 6 and
+      ("what" + _BS + "s+skills" + _BS + "b") not in _ask)
 check("v9.33.106: both commands keep their length ceilings",
       _ask.count("const val HEALTH_MAX = 60") == 1 and
       _ask.count("const val SKILLS_MAX = 80") == 1)
