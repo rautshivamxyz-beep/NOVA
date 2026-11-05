@@ -2159,8 +2159,22 @@ check("v9.33.113: the chat path replaces the date instead of adding one",
       ne.count('Exams.add(act, "Exam", ms)') == 0)
 check("v9.33.113: the manual add still adds",
       _ex.count("fun add(ctx: Context, name: String, dateMs: Long)") == 1)
-check("v9.33.113: version is at least 9.33.113 (281)",
-      version_at_least("9.33.113", 281))
+# v9.33.114 "One card rule": v9.33.109 centralised the flashcard COUNT in
+# NcieDeck but left the PARSE - where the separator is and what counts as an
+# empty side - written twice, once in NcieDeck and once in NcieTutor. Two
+# copies agree until one changes, and then the briefing reports a deck the
+# quiz cannot read: the same bug v9.33.109 fixed, one layer down.
+check("v9.33.114: the quiz asks NcieDeck what a card is",
+      load("ncie/android/NcieTutor.kt").count("if (!NcieDeck.isCard(l)) return@mapNotNull null") == 1 and
+      load("ncie/android/NcieTutor.kt").count("l.indexOf(SEP)") == 1)
+check("v9.33.114: the quiz takes the separator from NcieDeck",
+      load("ncie/android/NcieTutor.kt").count("private const val SEP = NcieDeck.SEP") == 1 and
+      load("ncie/android/NcieTutor.kt").count("const val SEP = '") == 0)
+check("v9.33.114: the one card rule is still the one in NcieDeck",
+      _deck.count("fun isCard(line: String): Boolean") == 1 and
+      _deck.count("const val SEP = '") == 1)
+check("v9.33.114: version is at least 9.33.114 (282)",
+      version_at_least("9.33.114", 282))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

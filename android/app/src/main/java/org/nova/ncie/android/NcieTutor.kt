@@ -77,8 +77,10 @@ object NcieTutor {
 
     // ------------------------------------------------------- storage
 
-    /** WikiCore's line format separator (unit-separator symbol (Kotlin escape \u241F, like WikiCore.kt)). */
-    private const val SEP = '\u241F'
+    /** v9.33.114: the separator comes from NcieDeck, where the card rule
+     *  lives - a second copy of the character is a second way for the deck to
+     *  be read, which is what v9.33.109 set out to end. */
+    private const val SEP = NcieDeck.SEP
     private const val DAY_MS = 24L * 60 * 60 * 1000
 
     private fun missFile(ctx: Context) = File(ctx.filesDir, "tutor_miss.txt")
@@ -97,11 +99,15 @@ object NcieTutor {
     private fun readCards(ctx: Context): List<Pair<String, String>> = try {
         val f = flashFile(ctx)
         if (!f.exists()) emptyList()
+        // v9.33.114: ask NcieDeck whether a line is a card. v9.33.109 gave
+        // the deck ONE count; the rule that decides what a card is was still
+        // written twice, here and there. Two copies agree until one changes,
+        // and then the briefing reports a deck the quiz cannot read.
         else f.readLines().mapNotNull { l ->
+            if (!NcieDeck.isCard(l)) return@mapNotNull null
             val i = l.indexOf(SEP)
-            if (i < 1) null
-            else l.substring(0, i).trim() to l.substring(i + 1).trim()
-        }.filter { it.first.isNotEmpty() && it.second.isNotEmpty() }
+            l.substring(0, i).trim() to l.substring(i + 1).trim()
+        }
     } catch (e: Exception) { emptyList() }
 
     private fun oneLine(s: String) =
