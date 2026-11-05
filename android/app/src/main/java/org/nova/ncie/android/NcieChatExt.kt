@@ -1108,8 +1108,18 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
                                 .setMessage("Save \"" + recipe.name + "\" so you can say " +
                                     "\"run tool " + recipe.name + "\" next time.")
                                 .setPositiveButton("Save") { _, _ ->
-                                    self.scope.launch(Dispatchers.IO) { NcieRecipes.save(self, recipe) }
-                                    reply("Saved. Say \"run tool ${recipe.name}\" any time.")
+                                    // v9.33.112: save() answers now, so the
+                                    // reply is written after the answer is
+                                    // known instead of promising a save that
+                                    // may never have happened.
+                                    self.scope.launch(Dispatchers.IO) {
+                                        val ok = NcieRecipes.save(self, recipe)
+                                        withContext(Dispatchers.Main) {
+                                            reply(if (ok) "Saved. Say \"run tool ${recipe.name}\" any time."
+                                                else "Couldn't save \"" + recipe.name + "\" - NOVA could not " +
+                                                    "write the tool library. It still runs this time.")
+                                        }
+                                    }
                                 }
                                 .setNegativeButton("No", null)
                                 .show()

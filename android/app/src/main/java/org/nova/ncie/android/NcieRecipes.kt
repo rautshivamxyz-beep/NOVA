@@ -27,11 +27,28 @@ object NcieRecipes {
 
     private fun file(ctx: Context): File = File(ctx.filesDir, "recipes.json")
 
-    fun all(ctx: Context): List<Recipe> = try {
-        val arr = JSONArray(file(ctx).readText())
-        // v9.33.101: a row that is not an object is skipped, not fatal for the list
-        (0 until arr.length()).mapNotNull { i -> readOne(arr.optJSONObject(i) ?: return@mapNotNull null) }
-    } catch (e: Exception) { emptyList() }
+    fun all(ctx: Context): List<Recipe> = allOrNull(ctx) ?: emptyList()
+
+    /**
+     * v9.33.112 "A list that failed to load is not an empty list": the stored
+     * recipes, or null when the file exists but could not be read.
+     *
+     * [all] flattens both cases into an empty list, which is right for the
+     * readers that only display. It is wrong for [save], which rewrites the
+     * list from what it just read - see there.
+     */
+    private fun allOrNull(ctx: Context): List<Recipe>? {
+        val f = file(ctx)
+        if (!f.exists()) return emptyList()
+        return try {
+            val arr = JSONArray(f.readText())
+            // v9.33.101: a row that is not an object is skipped, not fatal for the list
+            (0 until arr.length()).mapNotNull { i -> readOne(arr.optJSONObject(i) ?: return@mapNotNull null) }
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieRecipes", e)
+            null
+        }
+    }
 
     private fun readOne(o: JSONObject): Recipe? {
         val st = o.optJSONArray("steps") ?: return null
@@ -43,14 +60,33 @@ object NcieRecipes {
         val op = so.optString("op").lowercase()
         if (op !in KNOWN) return null
         val args = HashMap<String, String>()
-        so.optJSONObject("args")?.let { a -> for (k in a.keys()) args[k] = a.getString(k) }
+        // v9.33.112: getString threw on an argument that was not a string -
+        // the model writes numbers the way JSON writes them, {"n": 5} - and
+        // that throw escaped all() as "the list is empty". Every primitive
+        // reads its arguments as text anyway, so take the text.
+        val a = so.optJSONObject("args")
+        if (a != null) for (k in a.keys()) {
+            val v = a.opt(k)
+            if (v != null && v != JSONObject.NULL) args[k] = v.toString()
+        }
         return NcieTools.Step(op, args)
     }
 
-    fun save(ctx: Context, r: Recipe) {
-        try {
+    /** Saves [r], replacing any recipe of the same name. False when the
+     *  save failed, or when the stored list could not be read: a
+     *  read-modify-write must never write back a load that failed. */
+    fun save(ctx: Context, r: Recipe): Boolean {
+        // v9.33.112: this is a read-modify-write. When the read failed, all()
+        // handed back an empty list and the write that followed erased every
+        // other saved recipe - the model-authored tool library, silently, in
+        // one turn. Refuse to overwrite a list NOVA could not read.
+        val existing = allOrNull(ctx) ?: run {
+            NovaLog.quiet("NcieRecipes", java.io.IOException("unreadable recipe list - not overwriting it"))
+            return false
+        }
+        return try {
             val arr = JSONArray()
-            for (x in all(ctx).filter { it.name != r.name } + r) {
+            for (x in existing.filter { it.name != r.name } + r) {
                 val o = JSONObject().put("name", x.name)
                 val st = JSONArray()
                 for (s in x.steps) {
@@ -66,7 +102,10 @@ object NcieRecipes {
                 arr.put(o)
             }
             NcieFiles.write(file(ctx), arr.toString())
-        } catch (e: Exception) { NovaLog.quiet("NcieRecipes", e) }
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieRecipes", e)
+            false
+        }
     }
 
     /** Parses a model-authored JSON recipe, keeping only known primitives. */

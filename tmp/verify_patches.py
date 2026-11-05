@@ -2126,8 +2126,27 @@ check("v9.33.111: the revision plan asks the save for its answer",
 check("v9.33.111: the tuning override asks the save for its answer",
       tun.count("val saved = try {") == 1 and
       tun.count('if (!saved) return "Could not save the setting (storage error)."') == 1)
-check("v9.33.111: version is at least 9.33.111 (279)",
-      version_at_least("9.33.111", 279))
+# v9.33.112 "A list that failed to load is not an empty list": the recipe
+# store is a read-modify-write. A model-authored argument written as a JSON
+# number threw inside getString, the throw escaped all() as "no recipes", and
+# the save that followed rewrote the library from that empty list - every tool
+# the user had built, gone in one turn. getString is gone, "could not read" is
+# now distinct from "nothing there", and a save refuses to write back a load
+# that failed.
+check("v9.33.112: a recipe argument that is not a string is not fatal",
+      _rec.count("args[k] = v.toString()") == 1 and
+      _rec.count("args[k] = a.getString(k)") == 0)
+check("v9.33.112: a load that failed is not an empty list",
+      _rec.count("private fun allOrNull(ctx: Context): List<Recipe>?") == 1 and
+      _rec.count("fun all(ctx: Context): List<Recipe> = allOrNull(ctx) ?: emptyList()") == 1)
+check("v9.33.112: the save never writes back a load that failed",
+      _rec.count("val existing = allOrNull(ctx) ?: run {") == 1 and
+      _rec.count("fun save(ctx: Context, r: Recipe): Boolean") == 1)
+check("v9.33.112: the caller reports the save's answer",
+      nc.count("val ok = NcieRecipes.save(self, recipe)") == 1 and
+      nc.count("NcieRecipes.save(self, recipe) }") == 0)
+check("v9.33.112: version is at least 9.33.112 (280)",
+      version_at_least("9.33.112", 280))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
