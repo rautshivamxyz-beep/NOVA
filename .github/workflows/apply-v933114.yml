@@ -1,0 +1,28 @@
+name: Apply v9.33.114 patch
+# One-shot: applies tmp/patch_v933114.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933114.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.114 "One card rule": v9.33.109 put the definition of a flashcard in NcieDeck because the briefing and the dream report counted the same deck two different ways on one screen. It centralised the COUNT but not the PARSE - NcieTutor still carried its own copy of the rule, and its own copy of the separator character. So the deck the user is told they have and the deck the quiz can actually read were decided by two pieces of code that agree only by luck: change one and the app is back to reporting five cards and quizzing three, with nothing saying why. The quiz now asks NcieDeck whether a line is a card and takes the separator from NcieDeck, so there is one rule in one place. No behaviour change intended. Pinned by four new verify checks.'
+          git push
