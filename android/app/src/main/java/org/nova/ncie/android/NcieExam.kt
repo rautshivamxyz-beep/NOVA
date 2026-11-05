@@ -161,10 +161,14 @@ object NcieExam {
             return
         }
         val ms = c.timeInMillis
-        try {
-            NcieFiles.write(dateFile(act), ms.toString() + "\n")
-        } catch (e: Exception) {
-            postReply(act, "Could not save the exam date.")
+        // v9.33.111: NcieFiles.write has not thrown since v9.33.90 - it
+        // RETURNS false when the save fails - so this try/catch was dead and
+        // a save that never reached the disk was reported as "Exam date
+        // set". The countdown below reads the date straight back off disk,
+        // so the user was then told "0 days to go" about a date that was
+        // never stored. Ask the save for its answer (the v9.33.108 rule).
+        if (!NcieFiles.write(dateFile(act), ms.toString() + "\n")) {
+            postReply(act, "Could not save the exam date - NOVA could not write it to storage.")
             return
         }
         // v9.16.3: also record it in the Exams store (exams.json) so the
@@ -172,8 +176,12 @@ object NcieExam {
         // includes it - the two stores used to be disconnected.
         try { Exams.add(act, "Exam", ms) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         val fmt = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(ms))
-        val d = daysLeft(act) ?: 0
-        postReply(act, "Exam date set: $fmt. $d days to go.")
+        // v9.33.111: `?: 0` turned a failed round-trip into "0 days to go".
+        // Null here means the date did not come back off disk; say only what
+        // is true instead of inventing a countdown to today.
+        val d = daysLeft(act)
+        postReply(act, "Exam date set: $fmt." +
+            (if (d == null) "" else " $d days to go."))
     }
 
     /** The distinct weak-area topics with at least one miss older than a
@@ -257,7 +265,12 @@ object NcieExam {
             .append(SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(examMs)))
             .append("):\n\n")
         var written = 0
-        try {
+        // v9.33.111: the write no longer throws (v9.33.90), so the catch
+        // below never reported a failed save - the plan was shown as if it
+        // had been stored, and "show my revision plan" then said there was
+        // none. Keep the catch for the calendar work and read the save's own
+        // answer instead.
+        val saved = try {
             val lines = StringBuilder()
             for (d in 0 until n) {
                 if (topics[d].isEmpty()) continue
@@ -275,8 +288,8 @@ object NcieExam {
             }
             NcieFiles.write(planFile(act), lines.toString())
         } catch (e: Exception) {
-            postReply(act, "Could not save the revision plan.")
-            return
+            NovaLog.quiet("NcieExam", e)
+            false
         }
         sb.append("\nTotal: ").append(written).append(" of ").append(n)
             .append(" days scheduled")
@@ -286,6 +299,8 @@ object NcieExam {
         sb.append(", ").append(sources.size).append(" source")
         if (sources.size != 1) sb.append("s")
         sb.append(".\n```")
+        if (!saved) sb.append("\n\nNot saved - NOVA could not write the plan to storage, " +
+            "so \"show my revision plan\" will not find it.")
         postReply(act, sb.toString())
     }
 

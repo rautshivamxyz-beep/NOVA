@@ -241,13 +241,20 @@ object NcieTune {
             return usage()
         val vals = readOverrides(c, m.first)
         vals[key] = v
-        try {
+        // v9.33.111: NcieFiles.write returns false instead of throwing
+        // (v9.33.90), so this catch was dead and an unsaved setting was
+        // reported as set - the next "model settings" then showed the old
+        // value with no explanation. Keep the catch for the formatting and
+        // read the save's own answer.
+        val saved = try {
             val sb = StringBuilder()
             for (k in KEYS) if (k in vals) sb.append(k).append('=').append(fmt(vals.getValue(k))).append('\n')
             NcieFiles.write(fileFor(c, m.first), sb.toString())
         } catch (e: Exception) {
-            return "Could not save the setting (storage error)."
+            NovaLog.quiet("NcieTune", e)
+            false
         }
+        if (!saved) return "Could not save the setting (storage error)."
         return DISPLAY.getValue(key) + " set to " + fmt(v) + " for " + m.second
     }
 

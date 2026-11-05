@@ -2106,8 +2106,28 @@ check("v9.33.110: the alarm is re-armed on both paths",
 check("v9.33.110: the boundary is pinned by unit tests",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDreamTest.kt"),
            encoding="utf-8").read().count("@Test") >= 5)
-check("v9.33.110: version is at least 9.33.110 (278)",
-      version_at_least("9.33.110", 278))
+# v9.33.111 "A save that cannot throw is not a save that succeeded, part 2":
+# v9.33.90 made NcieFiles.write RETURN false instead of throwing, so every
+# try/catch that used its catch to report a failed save became dead code that
+# reported success instead. v9.33.108 fixed the focus session; these three
+# call sites still lied - the exam date, the revision plan and the tuning
+# override - and the exam one was the worst: the countdown is read back off
+# disk, so a date that never stuck was answered with "0 days to go".
+check("v9.33.111: the exam date asks the save for its answer",
+      ne.count("if (!NcieFiles.write(dateFile(act), ms.toString()") == 1 and
+      ne.count('"Could not save the exam date."') == 0)
+check("v9.33.111: no countdown is invented for a date that did not stick",
+      ne.count("val d = daysLeft(act) ?: 0") == 0 and
+      ne.count('(if (d == null) "" else " $d days to go.")') == 1)
+check("v9.33.111: the revision plan asks the save for its answer",
+      ne.count("val saved = try {") == 1 and
+      ne.count('"Could not save the revision plan."') == 0 and
+      ne.count("if (!saved) sb.append(") == 1)
+check("v9.33.111: the tuning override asks the save for its answer",
+      tun.count("val saved = try {") == 1 and
+      tun.count('if (!saved) return "Could not save the setting (storage error)."') == 1)
+check("v9.33.111: version is at least 9.33.111 (279)",
+      version_at_least("9.33.111", 279))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
