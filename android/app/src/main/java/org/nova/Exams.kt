@@ -56,6 +56,24 @@ object Exams {
         save(ctx, all)
     }
 
+    /**
+     * v9.33.113 "Setting the exam date again does not add a second exam":
+     * one name is one exam.
+     *
+     * The chat path used [add], which only appends, so correcting the date -
+     * the ordinary thing to do when a date moves - left the OLD row in the
+     * list for ever. "Exam in 102 days (15 Feb); Exam in 135 days (20 Mar)"
+     * then went into the prompt of every turn: two answers to one question,
+     * and the model picked one. The Exams screen showed a row the user never
+     * added, and the chat countdown (exam_date.txt) disagreed with both.
+     */
+    fun set(ctx: Context, name: String, dateMs: Long) {
+        val all = load(ctx)
+        all.removeAll { it.name.equals(name, ignoreCase = true) }
+        all.add(Exam(name, dateMs))
+        save(ctx, all)
+    }
+
     fun daysLeft(dateMs: Long): Int {
         // v7.6: calendar-day difference in the local zone - the old
         // millisecond math showed "TODAY" for an exam held yesterday

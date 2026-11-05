@@ -978,8 +978,10 @@ check("v9.16.3: offline Wikipedia dataset points at the public repo (WikiCore)",
 check("v9.16.3: update check reads the public release API (MainActivity)",
       ma.count("NOVA-APK/releases/latest") == 1)
 _nex3 = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android/NcieExam.kt"), encoding="utf-8").read()
+# v9.33.113: was Exams.add - the intent is that the chat exam reaches the
+# store, not that the store is appended to; set() replaces one name's row.
 check("v9.16.3: chat exam also lands in the Exams store (NcieExam)",
-      _nex3.count("Exams.add(act, \"Exam\", ms)") == 1)
+      _nex3.count("Exams.set(act, \"Exam\", ms)") == 1)
 # ---- v9.16.2 "Working buttons" ----
 check("v9.16.2: the stop button cancels the generation (MainActivity)",
       ma.count("if (generationJob?.isActive == true) generationJob?.cancel()") == 4)
@@ -2145,8 +2147,20 @@ check("v9.33.112: the save never writes back a load that failed",
 check("v9.33.112: the caller reports the save's answer",
       nc.count("val ok = NcieRecipes.save(self, recipe)") == 1 and
       nc.count("NcieRecipes.save(self, recipe) }") == 0)
-check("v9.33.112: version is at least 9.33.112 (280)",
-      version_at_least("9.33.112", 280))
+# v9.33.113 "Setting the exam date again does not add a second exam": v9.16.3
+# connected exam_date.txt to exams.json with Exams.add, which only appends, so
+# correcting the date left the old row in the list for ever - and in the prompt
+# of every turn, where the model had two answers to "how long until my exam".
+check("v9.33.113: one name is one exam",
+      _ex.count("fun set(ctx: Context, name: String, dateMs: Long)") == 1 and
+      _ex.count("all.removeAll { it.name.equals(name, ignoreCase = true) }") == 1)
+check("v9.33.113: the chat path replaces the date instead of adding one",
+      ne.count('Exams.set(act, "Exam", ms)') == 1 and
+      ne.count('Exams.add(act, "Exam", ms)') == 0)
+check("v9.33.113: the manual add still adds",
+      _ex.count("fun add(ctx: Context, name: String, dateMs: Long)") == 1)
+check("v9.33.113: version is at least 9.33.113 (281)",
+      version_at_least("9.33.113", 281))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

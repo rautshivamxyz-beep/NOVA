@@ -174,7 +174,9 @@ object NcieExam {
         // v9.16.3: also record it in the Exams store (exams.json) so the
         // Exams screen shows it AND the model's exam line (Exams.promptLine)
         // includes it - the two stores used to be disconnected.
-        try { Exams.add(act, "Exam", ms) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
+        // v9.33.113: set, not add. add appended, so setting the date a second
+        // time left the old one in the list and in every prompt.
+        try { Exams.set(act, "Exam", ms) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         val fmt = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(ms))
         // v9.33.111: `?: 0` turned a failed round-trip into "0 days to go".
         // Null here means the date did not come back off disk; say only what
