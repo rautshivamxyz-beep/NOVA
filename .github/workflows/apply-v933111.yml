@@ -1,0 +1,28 @@
+name: Apply v9.33.111 patch
+# One-shot: applies tmp/patch_v933111.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933111.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.111 "A save that cannot throw is not a save that succeeded, part 2": v9.33.90 made NcieFiles.write RETURN false instead of throwing, so every try/catch that used its catch to report a failed save became dead code that reported success. v9.33.108 fixed the focus session; three call sites still lied. The exam date was the worst: the countdown is read back off disk, so a date that never reached storage was answered with "Exam date set: 15 Feb 2027. 0 days to go." The revision plan was shown as if it had been stored, and "show my revision plan" then said there was none. A sampling override said "temperature set to 0.5" for a value the next "model settings" listing showed unchanged. Each now asks the one save function for its answer, and NcieExam no longer invents "0 days to go" for a date that did not come back off disk. Pinned by five new verify checks.'
+          git push
