@@ -1,0 +1,28 @@
+name: Apply v9.33.112 patch
+# One-shot: applies tmp/patch_v933112.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933112.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.112 "A list that failed to load is not an empty list": the tool library is a read-modify-write store. stepOf read each argument with JSONObject.getString, which throws on a JSON number - and a model-authored recipe writes "take" as {"n": 5} - so ONE numeric argument escaped all() as "no recipes" and "run tool x" said there was no such tool. Worse, the save that followed rewrote the library from that empty list: every tool the user had built was gone in one turn. Arguments are now taken as their text, "could not read" is distinct from "nothing there" (allOrNull), and save() refuses to write back a load that failed and answers its caller, which now says what actually happened. Pinned by five new verify checks.'
+          git push
