@@ -1,0 +1,28 @@
+name: Apply v9.33.117 patch
+# One-shot: applies tmp/patch_v933117.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933117.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.117 "Aa and BB are not the same question": the cached-answer key folded the question and the model label in with String.hashCode - 32 bits, and Java own collision pair ("Aa" and "BB" both hash to 2112) is two plausible study questions. Two questions that collided shared one cache entry, so the second was answered with the first one answer, instantly and marked "(cached)": the v9.33.102 and v9.33.105 shape one layer down, where a length or a name was trusted as an identity. The model label was hashed the same way, so a model whose name collided served another model answers. Both go through NcieFingerprint now - the 64-bit FNV-1a over the exact text that the embedding index and the summary caches are already keyed on - so the app has one identity rule instead of two. Old entries are simply never read again; the family ceiling prunes them. Pinned by four new verify checks and three new unit tests.'
+          git push
