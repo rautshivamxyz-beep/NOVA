@@ -84,8 +84,16 @@ object Exams {
 
     /** "Physics in 12 days (14 May)" - nearest first, or null. */
     fun promptLine(ctx: Context): String? {
+        // v9.33.118 "The exam is not over at nine in the morning": this
+        // filtered on `dateMs > now`, i.e. the exam's exact TIMESTAMP - but
+        // an exam date is a calendar DAY, stored at 09:00 by the chat parser
+        // and at midnight by the date picker. From that instant the exam
+        // stopped being "upcoming", so on the morning of the exam the model
+        // was told nothing about it, while the Exams screen, the planner and
+        // the chat countdown - which ask daysLeft - still said TODAY. One
+        // rule now, the same one Planner already used.
         val upcoming = load(ctx)
-            .filter { it.dateMs > System.currentTimeMillis() }
+            .filter { daysLeft(it.dateMs) >= 0 }
             .sortedBy { it.dateMs }
         if (upcoming.isEmpty()) return null
         return upcoming.joinToString("; ") { e ->

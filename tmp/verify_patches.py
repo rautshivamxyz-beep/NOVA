@@ -2250,6 +2250,23 @@ check("v9.33.117: the collision is pinned by a unit test",
 check("v9.33.117: version is at least 9.33.117 (285)",
       version_at_least("9.33.117", 285))
 
+# v9.33.118 "The exam is not over at nine in the morning": the prompt filtered
+# exams on their exact TIMESTAMP, and an exam date is a calendar day stored at
+# 09:00 (chat) or midnight (picker) - so on the morning of the exam the model
+# was told nothing about it while every screen said TODAY.
+_ex118 = load("Exams.kt")
+check("v9.33.118: an exam is upcoming while its DAY is today or later",
+      _ex118.count("filter { daysLeft(it.dateMs) >= 0 }") == 1 and
+      _ex118.count("dateMs > System.currentTimeMillis()") == 0)
+check("v9.33.118: the prompt and the planner ask the same rule",
+      load("Planner.kt").count("Exams.daysLeft(it.dateMs) >= 0") == 1 and
+      _ex118.count("fun daysLeft(dateMs: Long): Int") == 1)
+check("v9.33.118: the day boundary is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ExamsTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 4)
+check("v9.33.118: version is at least 9.33.118 (286)",
+      version_at_least("9.33.118", 286))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
