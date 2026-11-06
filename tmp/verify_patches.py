@@ -2214,6 +2214,23 @@ check("v9.33.115: the arming rule is pure and pinned by a unit test",
 check("v9.33.115: version is at least 9.33.115 (283)",
       version_at_least("9.33.115", 283))
 
+# v9.33.116 "A repeating reminder is not due all day": the spoken nudge
+# counted rows whose START time was in the past, and a repeat's start time is
+# in the past from the day it is created - so one daily reminder had NOVA
+# announce "You have a reminder due" every 30 minutes, all day, for ever.
+_jar = load("ncie/android/NovaJarvis.kt")
+check("v9.33.116: what 'due' means has one definition",
+      _rs115.count("internal fun isDue(at: Long, rep: Long, now: Long, window: Long): Boolean") == 1 and
+      _jar.count("org.nova.ReminderStore.isDue(") == 1)
+check("v9.33.116: the nudge asks about the next fire, not the anchor",
+      _jar.count("t.first in 1..now2") == 0 and
+      _jar.count("org.nova.ReminderStore.loadRows(ctx).count {") == 1)
+check("v9.33.116: the due rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ReminderStoreTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 17)
+check("v9.33.116: version is at least 9.33.116 (284)",
+      version_at_least("9.33.116", 284))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

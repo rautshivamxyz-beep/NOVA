@@ -160,6 +160,29 @@ object ReminderStore {
     }
 
     /**
+     * v9.33.116 "A repeating reminder is not due all day": is this reminder
+     * worth announcing NOW?
+     *
+     * The spoken nudge counted rows whose `at` was in the past, and `at` is
+     * the reminder's FIRST fire - nothing advances it. A daily reminder
+     * therefore stayed "due" from the day it was created, for ever, and the
+     * nudge said so every 30 minutes all day while the alarm that carries it
+     * had already fired and was waiting for tomorrow.
+     *
+     * A repeat is due when its next fire is within [window] (the nudge's own
+     * interval, so it says it once and not on every pass). A one-shot is due
+     * when its time has passed and it is still on disk - the alarm never
+     * delivered it, which is the only thing the nudge can add to an alarm
+     * that fires on time. Pure arithmetic over [now], so a unit test can pin
+     * it.
+     */
+    internal fun isDue(at: Long, rep: Long, now: Long, window: Long): Boolean {
+        if (rep <= 0L) return at <= now
+        val next = nextArm(at, rep, now) ?: return false
+        return next <= now + window
+    }
+
+    /**
      * v9.33.115 "A re-arm is not a new alarm": the ONE re-arm pass.
      *
      * Three copies of this loop existed - the launch path in MainActivity,

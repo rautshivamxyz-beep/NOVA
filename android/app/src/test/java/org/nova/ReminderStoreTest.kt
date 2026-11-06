@@ -1,6 +1,7 @@
 package org.nova
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -115,5 +116,39 @@ class ReminderStoreTest {
             ReminderStore.nextArm(now - day, Long.MAX_VALUE, now))
         assertNull("a negative interval is not a schedule",
             ReminderStore.nextArm(now - day, -day, now))
+    }
+
+    // v9.33.116 "A repeating reminder is not due all day": what the spoken
+    // nudge announces. The old rule asked whether the reminder's START time
+    // was in the past, which is true for a repeat from the day it is made.
+
+    private val hour = 60L * 60L * 1000L
+
+    @Test
+    fun aRepeatIsDueOnlyNearItsNextFire() {
+        // yesterday, half an hour later than now -> the next fire is in 30 min
+        assertTrue(ReminderStore.isDue(now - day + 30L * 60L * 1000L, day, now, hour))
+        // yesterday, five hours later than now -> the next fire is in 5 hours
+        assertFalse(ReminderStore.isDue(now - day + 5 * hour, day, now, hour))
+    }
+
+    @Test
+    fun aRepeatIsNotDueForEverBecauseItStartedInThePast() {
+        // three weeks in, one fire a day: the anchor is ancient, the next
+        // fire is not, and only the next fire decides
+        assertFalse(ReminderStore.isDue(now - 21 * day, day, now, hour))
+    }
+
+    @Test
+    fun aOneShotIsDueOnlyOnceItsTimeHasPassed() {
+        assertTrue("a missed one-shot is overdue",
+            ReminderStore.isDue(now - 2 * hour, 0L, now, hour))
+        assertFalse("a future one-shot is not due yet",
+            ReminderStore.isDue(now + 2 * hour, 0L, now, hour))
+    }
+
+    @Test
+    fun aCorruptIntervalIsNeverAnnounced() {
+        assertFalse(ReminderStore.isDue(now - day, Long.MAX_VALUE, now, hour))
     }
 }

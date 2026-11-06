@@ -156,8 +156,18 @@ object NovaNudge {
 
         // reminders that are due
         try {
+            // v9.33.116 "A repeating reminder is not due all day": this was
+            // `t.first in 1..now`, i.e. "the reminder's START time is in the
+            // past" - and the start time of a repeating reminder is in the
+            // past from the day it is created. One daily reminder therefore
+            // had NOVA announce "You have a reminder due" out loud every 30
+            // minutes, all day, for ever. The rule lives in ReminderStore
+            // now: a repeat is due when its next fire is within the hour, a
+            // one-shot when its time passed and no alarm delivered it.
             val now2 = System.currentTimeMillis()
-            val due = org.nova.ReminderStore.load(ctx).count { t -> t.first in 1..now2 }
+            val due = org.nova.ReminderStore.loadRows(ctx).count {
+                org.nova.ReminderStore.isDue(it.at, it.rep, now2, 60L * 60L * 1000L)
+            }
             if (due > 0) parts.add(if (due == 1) "You have a reminder due." else "You have $due reminders due.")
         } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
 
