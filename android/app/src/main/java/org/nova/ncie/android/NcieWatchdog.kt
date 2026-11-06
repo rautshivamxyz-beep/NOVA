@@ -5,7 +5,6 @@ import org.nova.NovaLog
 import android.content.Context
 import org.nova.NovaHealth
 import org.nova.NovaListener
-import org.nova.Reminder
 import org.nova.ReminderStore
 
 /**
@@ -28,30 +27,18 @@ import org.nova.ReminderStore
 object NcieWatchdog {
 
     fun run(ctx: Context): String {
-        val now = System.currentTimeMillis()
         val sb = StringBuilder("Watchdog\n")
 
         // ---- reminders: re-arm whatever is still on disk ----
-        var pending = 0
-        var rearmed = 0
-        try {
-            for ((at, t, rep) in ReminderStore.load(ctx)) {
-                val next = when {
-                    // v9.33.89: one-step roll-forward (NcieDeadlines.nextFire)
-                    // - the old while-loop was a hang waiting for a tiny
-                    // interval, and this runs on every watchdog sweep
-                    rep > 0L -> {
-                        var n = NcieDeadlines.nextFire(at, rep, now)
-                        if (n <= now) n += rep
-                        n
-                    }
-                    at > now -> at
-                    else -> continue
-                }
-                pending++
-                try { Reminder.schedule(ctx, next, t, rep); rearmed++ } catch (e: Exception) { NovaLog.quiet("NcieWatchdog", e) }
-            }
-        } catch (e: Exception) { NovaLog.quiet("NcieWatchdog", e) }
+        // v9.33.115: the re-arm rule has one home now (ReminderStore.rearm).
+        // This copy was the one that also minted a new alarm id on every
+        // sweep, so each "system check" added another copy of every reminder
+        // and the user got one notification per press.
+        val pending = try { ReminderStore.load(ctx).size } catch (e: Exception) { 0 }
+        val rearmed = try { ReminderStore.rearm(ctx) } catch (e: Exception) {
+            NovaLog.quiet("NcieWatchdog", e)
+            0
+        }
         sb.append("\nReminders\n")
         sb.append("  ").append(pending).append(" pending, ")
             .append(rearmed).append(" re-armed\n")

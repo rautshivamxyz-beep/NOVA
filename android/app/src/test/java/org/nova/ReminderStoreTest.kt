@@ -2,6 +2,7 @@ package org.nova
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,5 +70,50 @@ class ReminderStoreTest {
         val b = ReminderStore.nextIdFrom(null, now + 500L)
         assertEquals("same second, same base", a, b)
         assertNotEquals("the next second is a new id", a, ReminderStore.nextIdFrom(null, now + 1000L))
+    }
+
+    // v9.33.115 "A re-arm is not a new alarm": the one arming rule. Every
+    // re-arm site (launch, boot, watchdog) asks this instead of writing its
+    // own `when`, so the answer has to be right once.
+
+    private val day = 24L * 60L * 60L * 1000L
+
+    @Test
+    fun aOneShotInTheFutureKeepsItsOwnTime() {
+        assertEquals(now + 5 * day, ReminderStore.nextArm(now + 5 * day, 0L, now))
+    }
+
+    @Test
+    fun aOneShotThatAlreadyFiredIsNotArmedAgain() {
+        assertNull("a fired one-shot must not be re-armed", ReminderStore.nextArm(now - day, 0L, now))
+    }
+
+    @Test
+    fun aRepeatStillInTheFutureKeepsItsFirstFire() {
+        assertEquals(now + 5 * day, ReminderStore.nextArm(now + 5 * day, day, now))
+    }
+
+    @Test
+    fun aRepeatIsAlwaysArmedStrictlyAfterNow() {
+        // an alarm set for the instant it is armed is a race: the OS fires it
+        // at once, so the re-arm has to land after now even when the interval
+        // divides the time behind us exactly
+        assertEquals(now + day, ReminderStore.nextArm(now - 3 * day, day, now))
+        assertEquals(now + day, ReminderStore.nextArm(now, day, now))
+    }
+
+    @Test
+    fun aTinyRepeatIntervalIsOneStepAndNotAHang() {
+        // v9.33.89 replaced the add-the-interval loop because a 1ms interval
+        // could hang the thread arming it. One step now, and it is a step.
+        assertEquals(now + 1L, ReminderStore.nextArm(now - 1L, 1L, now))
+    }
+
+    @Test
+    fun aCorruptRepeatIntervalIsNeverArmed() {
+        assertNull("a decade is not a repeat interval",
+            ReminderStore.nextArm(now - day, Long.MAX_VALUE, now))
+        assertNull("a negative interval is not a schedule",
+            ReminderStore.nextArm(now - day, -day, now))
     }
 }

@@ -16,22 +16,44 @@ object ReminderStore {
 
     private fun file(ctx: Context): File = File(ctx.filesDir, "reminders.json")
 
-    fun add(ctx: Context, atMillis: Long, text: String, repeatMs: Long) {
-        val all = load(ctx)
-        if (all.none { it.first == atMillis && it.second == text }) {
-            all.add(Triple(atMillis, text, repeatMs))
-            save(ctx, all)
-        }
+    /**
+     * v9.33.115 "A re-arm is not a new alarm": one reminder on disk, with
+     * the AlarmManager request code it OWNS.
+     *
+     * The id used to be minted inside Reminder.schedule, i.e. once per
+     * ARMING rather than once per reminder - and a PendingIntent with a new
+     * request code is a different alarm, so arming again added a copy
+     * instead of replacing the one already set. It is minted here, when the
+     * reminder is created, and every later re-arm reuses it.
+     */
+    data class Row(val at: Long, val text: String, val rep: Long, val id: Int)
+
+    /** A repeat interval longer than this is corrupt, not a schedule. */
+    private const val MAX_REPEAT = 10L * 366L * 24L * 60L * 60L * 1000L
+
+    /** Stores one reminder and answers the alarm id it owns. */
+    fun add(ctx: Context, atMillis: Long, text: String, repeatMs: Long): Int {
+        val all = loadRows(ctx)
+        val existing = all.firstOrNull { it.at == atMillis && it.text == text }
+        if (existing != null) return existing.id
+        val id = nextId(ctx)
+        all.add(Row(atMillis, text, repeatMs, id))
+        write(ctx, all)
+        return id
     }
 
     fun remove(ctx: Context, atMillis: Long, text: String) {
-        val all = load(ctx)
-        all.removeAll { it.first == atMillis && it.second == text }
-        save(ctx, all)
+        val all = loadRows(ctx)
+        all.removeAll { it.at == atMillis && it.text == text }
+        write(ctx, all)
     }
 
-    fun load(ctx: Context): MutableList<Triple<Long, String, Long>> {
-        val out = mutableListOf<Triple<Long, String, Long>>()
+    /**
+     * Every reminder on disk with the alarm id it owns. An id of 0 means the
+     * row was written before v9.33.115; [rearm] mints one for it and saves.
+     */
+    fun loadRows(ctx: Context): MutableList<Row> {
+        val out = mutableListOf<Row>()
         try {
             val f = file(ctx)
             if (f.exists()) {
@@ -48,21 +70,27 @@ object ReminderStore {
                     val t = o.optString("t")
                     val at = o.optLong("at", 0L)
                     if (t.isBlank() || at <= 0L) continue
-                    out.add(Triple(at, t, o.optLong("rep", 0L)))
+                    out.add(Row(at, t, o.optLong("rep", 0L), o.optInt("id", 0)))
                 }
             }
         } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         return out
     }
 
-    fun save(ctx: Context, list: List<Triple<Long, String, Long>>) {
+    /** The reporting view of the store - (at, text, repeat) - what the
+     *  deadline radar, the weekly review and the spoken nudge read. */
+    fun load(ctx: Context): MutableList<Triple<Long, String, Long>> =
+        loadRows(ctx).map { Triple(it.at, it.text, it.rep) }.toMutableList()
+
+    private fun write(ctx: Context, list: List<Row>) {
         try {
             val arr = JSONArray()
             val now = System.currentTimeMillis()
-            for ((at, t, rep) in list) {
+            for (r in list) {
                 // drop one-shots that already fired and were never removed
-                if (rep <= 0L && at < now - 60_000L) continue
-                arr.put(JSONObject().put("at", at).put("t", t).put("rep", rep))
+                if (r.rep <= 0L && r.at < now - 60_000L) continue
+                arr.put(JSONObject().put("at", r.at).put("t", r.text)
+                    .put("rep", r.rep).put("id", r.id))
             }
             // v9.33.96: the hand-rolled save deleted the old file BEFORE it
             // retried the rename, so a second failed rename lost the whole
@@ -110,29 +138,75 @@ object ReminderStore {
         val base = (now / 1000L) % 1_000_000_000L
         return if (base < 1L) 1 else base.toInt()
     }
+
+    /**
+     * v9.33.115: when a stored reminder should be armed next, or null when
+     * there is nothing left to arm (a one-shot that already fired).
+     *
+     * The roll-forward itself stays in NcieDeadlines.nextFire - one step,
+     * never a loop, so a tiny or corrupt repeat interval cannot hang the
+     * thread that is arming. This adds the one thing every re-arm site needs
+     * and each of the three copies wrote out by hand: the fire has to be
+     * STRICTLY after now, because an alarm set for the instant it is armed
+     * is a race the OS settles by firing at once. Pure arithmetic, so a JVM
+     * unit test can pin it.
+     */
+    internal fun nextArm(at: Long, rep: Long, now: Long): Long? {
+        if (rep <= 0L) return if (at > now) at else null
+        if (rep > MAX_REPEAT) return null          // corrupt interval - never armed
+        val first = org.nova.ncie.android.NcieDeadlines.nextFire(at, rep, now)
+        if (first > now) return first
+        return first + rep                          // strictly after now, one step
+    }
+
+    /**
+     * v9.33.115 "A re-arm is not a new alarm": the ONE re-arm pass.
+     *
+     * Three copies of this loop existed - the launch path in MainActivity,
+     * the boot receiver and the A4 watchdog - and every one of them went
+     * through Reminder.schedule, which minted a fresh request code per call.
+     * A PendingIntent with a new request code is a DIFFERENT alarm and
+     * nothing cancelled the old one, so arming a reminder that was already
+     * armed added a second alarm for it: one reminder rang twice after two
+     * launches, three times after three, and once more for every press of
+     * "system check". Each row owns its id now, so a re-arm REPLACES its
+     * alarm (FLAG_UPDATE_CURRENT) instead of adding another, and this pass
+     * is idempotent - safe at launch, on boot and from the watchdog, which
+     * is exactly what all three callers already claimed.
+     *
+     * Returns how many alarms were armed.
+     */
+    fun rearm(ctx: Context): Int {
+        val now = System.currentTimeMillis()
+        val rows = loadRows(ctx)
+        var armed = 0
+        var minted = false
+        val keep = ArrayList<Row>(rows.size)
+        for (r in rows) {
+            val next = nextArm(r.at, r.rep, now)
+            val id = if (r.id > 0) r.id else { minted = true; nextId(ctx) }
+            keep.add(Row(r.at, r.text, r.rep, id))
+            if (next == null) continue              // a one-shot that already fired
+            try {
+                Reminder.schedule(ctx, next, r.text, r.rep, id)
+                armed++
+            } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
+        }
+        // rows written before v9.33.115 get their id exactly once
+        if (minted) write(ctx, keep)
+        return armed
+    }
 }
 
 /** Re-arms all stored reminders after the phone reboots. */
 class BootReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: Context, intent: android.content.Intent) {
         if (intent.action != android.content.Intent.ACTION_BOOT_COMPLETED) return
-        val now = System.currentTimeMillis()
-        for ((at, t, rep) in ReminderStore.load(context)) {
-            val next = when {
-                rep > 0 -> {
-                    // v9.33.89: one-step roll-forward - the old while-loop
-                    // was a hang waiting for a tiny or corrupt interval.
-                    // The boot re-arm wants the first fire strictly after
-                    // now, hence the extra step at exact equality.
-                    var n = org.nova.ncie.android.NcieDeadlines.nextFire(at, rep, now)
-                    if (n <= now) n += rep
-                    n
-                }
-                at > now -> at
-                else -> continue
-            }
-            Reminder.schedule(context, next, t, rep)
-        }
+        // v9.33.115: one re-arm pass for the launch path, the boot receiver
+        // and the watchdog. It reuses each reminder's own alarm id, so a
+        // reboot re-arms what is on disk instead of adding a second copy of
+        // every reminder beside the one it just restored.
+        try { ReminderStore.rearm(context) } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
         // v9.8.0: pending scheduled texts survive the reboot too - fire
         // anything that came due while the phone was off, then re-arm
         // the nearest future one

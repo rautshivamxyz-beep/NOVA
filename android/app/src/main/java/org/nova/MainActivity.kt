@@ -251,15 +251,14 @@ class MainActivity : Activity() {
         // same result, no main-thread stall on launch.
         scope.launch(Dispatchers.IO) {
             try {
-                val nowMs = System.currentTimeMillis()
-                for ((at, t, rep) in ReminderStore.load(this@MainActivity)) {
-                    val next = when {
-                        rep > 0 -> { var n = at; while (n <= nowMs) n += rep; n }
-                        at > nowMs -> at
-                        else -> continue
-                    }
-                    Reminder.schedule(this@MainActivity, next, t, rep)
-                }
+                // v9.33.115 "A re-arm is not a new alarm": this was a THIRD
+                // copy of the boot re-arm, and it ran on every launch.
+                // Reminder.schedule minted a fresh request code each time, so
+                // every launch armed another alarm for the same reminder and
+                // the user was notified once per launch. It also still
+                // carried the add-the-interval loop that v9.33.89 replaced
+                // "everywhere" - MainActivity was not on that sweep's list.
+                ReminderStore.rearm(this@MainActivity)
             } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
             // v9.21.0 "Reliable": the nightly Dream consolidation and the
             // daily recurring reminders, off the main thread too.
@@ -3907,8 +3906,13 @@ Study:
             .setTitle("Set reminder?")
             .setMessage(task + "\n\n" + human)
             .setPositiveButton("Set") { _, _ ->
-                Reminder.schedule(this, whenMs, task, repeatMs)
-                ReminderStore.add(this, whenMs, task, repeatMs)
+                // v9.33.115: the reminder owns its alarm id from the
+                // moment it is stored, so the alarm armed here is the one
+                // every later re-arm replaces. Store first: a reminder that
+                // reached the disk is re-armed at the next launch even if
+                // arming it now fails.
+                val rid = ReminderStore.add(this, whenMs, task, repeatMs)
+                Reminder.schedule(this, whenMs, task, repeatMs, rid)
                 toast(if (repeatMs > 0) "Reminder set ($repeatLabel): $human"
                 else "Reminder set: $human")
             }

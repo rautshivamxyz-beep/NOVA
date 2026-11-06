@@ -1607,12 +1607,17 @@ check("v9.33.89: the numeric forms go through the one gated pass",
 check("v9.33.89: the roll-forward is one step, everywhere it happens",
       _dl89.count("internal fun nextFire(") == 1 and
       load("ncie/android/NcieWeekly.kt").count("NcieDeadlines.nextFire(") == 1 and
-      load("ncie/android/NcieWatchdog.kt").count("NcieDeadlines.nextFire(") == 1 and
+      # v9.33.115 moved the watchdog's arming into ReminderStore.rearm, so
+      # the watchdog no longer rolls anything forward itself
+      load("ncie/android/NcieWatchdog.kt").count("NcieDeadlines.nextFire(") == 0 and
       load("ReminderStore.kt").count("org.nova.ncie.android.NcieDeadlines.nextFire(") == 1)
 check("v9.33.89: no add-the-interval loop survives in the app",
+      # v9.33.115: MainActivity.kt was missing from this sweep and still
+      # carried the loop on the launch path. It is on the list now.
       sum(load(f).count("while (n <= now)") + load(f).count("while (fireAt < now)")
           for f in ["ncie/android/NcieDeadlines.kt", "ncie/android/NcieWeekly.kt",
-                    "ncie/android/NcieWatchdog.kt", "ReminderStore.kt"]) == 0)
+                    "ncie/android/NcieWatchdog.kt", "ReminderStore.kt",
+                    "MainActivity.kt", "ReminderReceiver.kt"]) == 0)
 check("v9.33.89: the gate and the roll-forward are unit-tested",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieDeadlinesTest.kt"),
            encoding="utf-8").read().count("@Test") >= 18)
@@ -2175,6 +2180,39 @@ check("v9.33.114: the one card rule is still the one in NcieDeck",
       _deck.count("const val SEP = '") == 1)
 check("v9.33.114: version is at least 9.33.114 (282)",
       version_at_least("9.33.114", 282))
+
+# v9.33.115 "A re-arm is not a new alarm": three copies of the reminder
+# re-arm loop, and every one of them armed through Reminder.schedule, which
+# minted a fresh alarm id per call. A new request code is a new alarm, so a
+# re-arm ADDED a copy instead of replacing the one already set - one reminder
+# rang once per launch of the app, and once more per "system check". One
+# re-arm pass now, and the id belongs to the reminder, not to the arming.
+_rs115 = load("ReminderStore.kt")
+_rr115 = load("ReminderReceiver.kt")
+check("v9.33.115: a reminder owns its alarm id, written once",
+      _rs115.count("data class Row(val at: Long, val text: String, val rep: Long, val id: Int)") == 1 and
+      _rs115.count('o.optInt("id", 0)') == 1 and
+      _rs115.count('.put("id", r.id)') == 1)
+check("v9.33.115: arming never mints an id",
+      _rs115.count("nextId(ctx)") == 2 and
+      _rr115.count("ReminderStore.nextId(") == 0 and
+      load("MainActivity.kt").count("ReminderStore.nextId(") == 0 and
+      _rr115.count("fun schedule(context: Context, atMillis: Long, text: String, repeatMs: Long, id: Int)") == 1)
+check("v9.33.115: the re-arm pass has one definition and three callers",
+      _rs115.count("fun rearm(ctx: Context): Int") == 1 and
+      _rs115.count("ReminderStore.rearm(context)") == 1 and
+      load("MainActivity.kt").count("ReminderStore.rearm(") == 1 and
+      load("ncie/android/NcieWatchdog.kt").count("ReminderStore.rearm(ctx)") == 1 and
+      load("ncie/android/NcieWatchdog.kt").count("Reminder.schedule(") == 0)
+check("v9.33.115: the launch path no longer rolls a loop forward",
+      load("MainActivity.kt").count("while (n <= nowMs)") == 0 and
+      load("MainActivity.kt").count("var n = at; while") == 0)
+check("v9.33.115: the arming rule is pure and pinned by a unit test",
+      _rs115.count("internal fun nextArm(at: Long, rep: Long, now: Long): Long?") == 1 and
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ReminderStoreTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 13)
+check("v9.33.115: version is at least 9.33.115 (283)",
+      version_at_least("9.33.115", 283))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

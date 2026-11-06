@@ -16,11 +16,15 @@ import androidx.core.app.NotificationCompat
  */
 object Reminder {
 
-    fun schedule(context: Context, atMillis: Long, text: String, repeatMs: Long = 0L) {
+    fun schedule(context: Context, atMillis: Long, text: String, repeatMs: Long, id: Int) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        // v7.6: unique ID from the store - hash collisions silently
-        // overwrote alarms
-        val id = ReminderStore.nextId(context)
+        // v9.33.115 "A re-arm is not a new alarm": the id is the reminder's
+        // OWN (minted once by ReminderStore.add), never a fresh one. A new
+        // request code is a new alarm, so minting one here meant every
+        // re-arm ADDED a copy of the reminder instead of replacing the alarm
+        // already set - one reminder, several notifications at the same
+        // minute. v7.6's unique ids are still unique: they are just handed
+        // out once per reminder now, not once per arming.
         val intent = Intent(context, ReminderReceiver::class.java)
             .putExtra("text", text)
             .putExtra("id", id)
@@ -71,7 +75,9 @@ class ReminderReceiver : BroadcastReceiver() {
                 val now = System.currentTimeMillis()
                 var next = org.nova.ncie.android.NcieDeadlines.nextFire(base, repeatMs, now)
                 if (next <= now) next += repeatMs
-                Reminder.schedule(context, next, text, repeatMs)
+                // v9.33.115: the same id, so the next occurrence replaces
+                // this alarm and its notification rather than stacking on top
+                Reminder.schedule(context, next, text, repeatMs, id)
             } catch (e: Exception) {
                 // keep notifying even if re-arming failed
             }
