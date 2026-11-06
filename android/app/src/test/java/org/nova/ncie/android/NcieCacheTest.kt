@@ -177,4 +177,36 @@ class NcieCacheTest {
             filesDir.deleteRecursively()
         }
     }
+
+    // v9.33.117 "Aa and BB are not the same question": the cached-answer key
+    // was a 32-bit String.hashCode, and "Aa" / "BB" is Java's own collision
+    // pair. Two questions that collide share one entry, so one is answered
+    // with the other's answer, marked "(cached)".
+
+    @Test
+    fun theCanonicalHashCollisionIsNotOneCacheEntry() {
+        assertEquals("the premise: these two strings really do collide",
+            "Aa".hashCode(), "BB".hashCode())
+        assertNotEquals("two questions, two entries",
+            NcieCache.qaKey("Aa", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("BB", "Qwen3 0.6B", 512))
+    }
+
+    @Test
+    fun twoModelLabelsThatCollideAreNotOneEntry() {
+        assertEquals("the premise: these two labels really do collide",
+            "Aa".hashCode(), "BB".hashCode())
+        assertNotEquals("two models, two entries",
+            NcieCache.qaKey("what is a cell", "Aa", 512),
+            NcieCache.qaKey("what is a cell", "BB", 512))
+    }
+
+    @Test
+    fun theSameQuestionIsStillOneEntry() {
+        assertEquals(NcieCache.qaKey("What is a cell?", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("what is a cell?", "Qwen3 0.6B", 512))
+        assertNotEquals("the answer length still shapes the key",
+            NcieCache.qaKey("what is a cell?", "Qwen3 0.6B", 512),
+            NcieCache.qaKey("what is a cell?", "Qwen3 0.6B", 900))
+    }
 }

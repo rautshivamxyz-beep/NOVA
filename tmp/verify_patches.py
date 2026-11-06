@@ -1785,9 +1785,10 @@ check("v9.33.96: version is at least 9.33.96 (264)",
 check("v9.33.97: the cache key has one definition",
       _nc.count("fun qaKey(question: String, model: String, length: Int)") == 1)
 check("v9.33.97: the key lowercases in Locale.ROOT, not the device locale",
-      _nc.count("question.lowercase(java.util.Locale.ROOT).hashCode()") == 1)
+      # v9.33.117 changed how the question is folded in, not the locale
+      _nc.count("question.lowercase(java.util.Locale.ROOT)") == 1)
 check("v9.33.97: the key carries the generation length",
-      _nc.count('"_" + Integer.toHexString(model.hashCode()) + "_" + length') == 1)
+      _nc.count('"_" + length') == 1)
 check("v9.33.97: no call site builds the key by hand any more",
       nc.count('"qa_" + Integer.toHexString(') == 0 and
       ma.count('"qa_" + Integer.toHexString(') == 0 and
@@ -2230,6 +2231,24 @@ check("v9.33.116: the due rule is pinned by a unit test",
            encoding="utf-8").read().count("@Test") >= 17)
 check("v9.33.116: version is at least 9.33.116 (284)",
       version_at_least("9.33.116", 284))
+
+# v9.33.117 "Aa and BB are not the same question": the cached-answer key was a
+# 32-bit String.hashCode on the question and on the model label, and "Aa" /
+# "BB" is Java's own collision pair - two questions, one entry, one of them
+# answered with the other's answer, marked "(cached)".
+_nc117 = load("ncie/android/NcieCache.kt")
+check("v9.33.117: the answer cache key is an identity, not a 32-bit hash",
+      _nc117.count("NcieFingerprint.ofText(") == 2 and
+      _nc117.count(".hashCode()") == 0 and
+      _nc117.count("Integer.toHexString(") == 0)
+check("v9.33.117: one identity rule in the app",
+      _nc117.count("java.lang.Long.toHexString(") == 2 and
+      load("ncie/android/NcieFingerprint.kt").count("fun ofText(text: String): Long") == 1)
+check("v9.33.117: the collision is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieCacheTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 17)
+check("v9.33.117: version is at least 9.33.117 (285)",
+      version_at_least("9.33.117", 285))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

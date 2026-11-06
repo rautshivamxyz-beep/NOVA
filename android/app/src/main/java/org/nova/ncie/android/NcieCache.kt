@@ -55,10 +55,21 @@ object NcieCache {
      * One function, one rule: the question in Locale.ROOT, the model label,
      * and the generation length that shaped the answer. Pure string work, so
      * a unit test can pin it.
+     *
+     * v9.33.117 "Aa and BB are not the same question": the question and the
+     * model label were folded in with String.hashCode - 32 bits, and Java's
+     * own collision pair ("Aa" and "BB" both hash to 2112) is two plausible
+     * study questions. Two questions that collided shared one cache entry, so
+     * the second was answered with the first one's answer, instantly and
+     * marked "(cached)": the v9.33.102 / v9.33.105 shape one layer down. They
+     * go through NcieFingerprint (64-bit FNV-1a over the exact text) now, the
+     * same identity rule the embedding index and the summary caches use.
      */
     fun qaKey(question: String, model: String, length: Int): String =
-        "qa_" + Integer.toHexString(question.lowercase(java.util.Locale.ROOT).hashCode()) +
-            "_" + Integer.toHexString(model.hashCode()) + "_" + length
+        "qa_" + java.lang.Long.toHexString(
+            NcieFingerprint.ofText(question.lowercase(java.util.Locale.ROOT))) +
+            "_" + java.lang.Long.toHexString(NcieFingerprint.ofText(model)) +
+            "_" + length
 
     /** Cache one entry atomically, then keep the newest [keep] of its family. */
     fun put(filesDir: File, name: String, text: String, keep: Int = KEEP): Boolean {
