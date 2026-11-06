@@ -1,0 +1,28 @@
+name: Apply v9.33.118 patch
+# One-shot: applies tmp/patch_v933118.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933118.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.118 "The exam is not over at nine in the morning": the line that puts the user exams into the model prompt filtered on `dateMs > now` - the exam exact TIMESTAMP - but an exam date is a calendar DAY, stored at 09:00 by the chat parser and at midnight by the date picker. From that instant the exam stopped being "upcoming", so on the morning of the exam the model was told nothing about it, on the one morning it mattered, while the Exams screen, the planner and the chat countdown - which all ask Exams.daysLeft - still said TODAY. Two of those three already used the right rule; the prompt did not, so "what is coming up" had two answers depending on which screen asked. An exam is upcoming while its day is today or later, asked of Exams.daysLeft in both places now. Pinned by four new verify checks and a new ExamsTest that pins the day boundary (today is 0 at midnight, at 09:00 and at 23:59).'
+          git push
