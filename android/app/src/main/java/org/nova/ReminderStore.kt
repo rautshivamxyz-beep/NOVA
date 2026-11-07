@@ -31,50 +31,94 @@ object ReminderStore {
     /** A repeat interval longer than this is corrupt, not a schedule. */
     private const val MAX_REPEAT = 10L * 366L * 24L * 60L * 60L * 1000L
 
+    /**
+     * v9.33.119: the alarm id a reminder that could NOT be stored is armed
+     * with. [add] answers this when the reminder list exists and could not be
+     * read - nothing was written over it, so there is no stored id to use.
+     * It is never written to disk, so it cannot collide with a stored one;
+     * the alarm still rings, it just cannot survive a reboot.
+     */
+    const val TRANSIENT_ID = 0
+
     /** Stores one reminder and answers the alarm id it owns. */
     fun add(ctx: Context, atMillis: Long, text: String, repeatMs: Long): Int {
-        val all = loadRows(ctx)
+        // v9.33.119: read-modify-write. A load that FAILED is not an empty
+        // list - saving over it would erase every other reminder. Nothing is
+        // written and the caller is told, so it can say so instead of
+        // quietly losing the user's reminders.
+        val all = loadRowsOrNull(ctx) ?: run {
+            NovaLog.quiet("ReminderStore",
+                java.io.IOException("unreadable reminder list - not overwriting it"))
+            return TRANSIENT_ID
+        }
         val existing = all.firstOrNull { it.at == atMillis && it.text == text }
-        if (existing != null) return existing.id
+        // a row written before v9.33.115 owns no alarm id yet - give it one
+        if (existing != null && existing.id > 0) return existing.id
         val id = nextId(ctx)
+        all.removeAll { it.at == atMillis && it.text == text }
         all.add(Row(atMillis, text, repeatMs, id))
         write(ctx, all)
         return id
     }
 
-    fun remove(ctx: Context, atMillis: Long, text: String) {
-        val all = loadRows(ctx)
+    fun remove(ctx: Context, atMillis: Long, text: String): Boolean {
+        // v9.33.119: same read-modify-write as add - and this one runs on
+        // EVERY one-shot fire, from a broadcast receiver, so a corrupt list
+        // was wiped by simply letting a reminder ring.
+        val all = loadRowsOrNull(ctx) ?: run {
+            NovaLog.quiet("ReminderStore",
+                java.io.IOException("unreadable reminder list - not overwriting it"))
+            return false
+        }
         all.removeAll { it.at == atMillis && it.text == text }
         write(ctx, all)
+        return true
     }
 
     /**
      * Every reminder on disk with the alarm id it owns. An id of 0 means the
      * row was written before v9.33.115; [rearm] mints one for it and saves.
      */
-    fun loadRows(ctx: Context): MutableList<Row> {
-        val out = mutableListOf<Row>()
-        try {
-            val f = file(ctx)
-            if (f.exists()) {
-                val arr = JSONArray(f.readText())
-                for (i in 0 until arr.length()) {
-                    // v9.33.96: one malformed row used to throw straight out
-                    // of this loop, so every reminder AFTER it disappeared
-                    // from the list - and the next save() wrote that short
-                    // list back to disk, deleting them for good. A reminder
-                    // is the one thing here the user cannot re-derive. Each
-                    // row now stands on its own: a bad one is skipped, the
-                    // rest survive.
-                    val o = arr.optJSONObject(i) ?: continue
-                    val t = o.optString("t")
-                    val at = o.optLong("at", 0L)
-                    if (t.isBlank() || at <= 0L) continue
-                    out.add(Row(at, t, o.optLong("rep", 0L), o.optInt("id", 0)))
-                }
+    fun loadRows(ctx: Context): MutableList<Row> =
+        loadRowsOrNull(ctx) ?: mutableListOf()
+
+    /**
+     * v9.33.119 "A store that could not be read is not an empty store": the
+     * rows on disk, or null when the file exists but could not be read.
+     *
+     * v9.33.96 made one malformed ROW harmless. This makes an unreadable
+     * FILE harmless too - and that is the case that actually deletes data,
+     * because [add] and [remove] are read-modify-write: with an empty list
+     * from a failed read they save that emptiness back, so adding one
+     * reminder erased every other reminder the user had. A reminder is the
+     * one thing here the user cannot re-derive.
+     */
+    internal fun loadRowsOrNull(ctx: Context): MutableList<Row>? {
+        val f = file(ctx)
+        if (!f.exists()) return mutableListOf()
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return try {
+            val arr = JSONArray(text)
+            val out = mutableListOf<Row>()
+            for (i in 0 until arr.length()) {
+                // v9.33.96: one malformed row used to throw straight out
+                // of this loop, so every reminder AFTER it disappeared
+                // from the list - and the next save() wrote that short
+                // list back to disk, deleting them for good. A reminder
+                // is the one thing here the user cannot re-derive. Each
+                // row now stands on its own: a bad one is skipped, the
+                // rest survive.
+                val o = arr.optJSONObject(i) ?: continue
+                val t = o.optString("t")
+                val at = o.optLong("at", 0L)
+                if (t.isBlank() || at <= 0L) continue
+                out.add(Row(at, t, o.optLong("rep", 0L), o.optInt("id", 0)))
             }
-        } catch (e: Exception) { NovaLog.quiet("ReminderStore", e) }
-        return out
+            out
+        } catch (e: Exception) {
+            NovaLog.quiet("ReminderStore", e)
+            null
+        }
     }
 
     /** The reporting view of the store - (at, text, repeat) - what the
@@ -201,7 +245,15 @@ object ReminderStore {
      */
     fun rearm(ctx: Context): Int {
         val now = System.currentTimeMillis()
-        val rows = loadRows(ctx)
+        // v9.33.119: re-arm only reuses ids that are already on disk, and it
+        // saves the rows back when it mints one. On a list it could not read
+        // that save would replace every reminder with nothing, at every
+        // launch. Nothing to re-arm is the honest answer here.
+        val rows = loadRowsOrNull(ctx) ?: run {
+            NovaLog.quiet("ReminderStore",
+                java.io.IOException("unreadable reminder list - not re-arming or saving"))
+            return 0
+        }
         var armed = 0
         var minted = false
         val keep = ArrayList<Row>(rows.size)

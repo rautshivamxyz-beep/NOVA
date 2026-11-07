@@ -19,12 +19,26 @@ object Exams {
 
     private fun file(ctx: Context): File = File(ctx.filesDir, "exams.json")
 
-    fun load(ctx: Context): MutableList<Exam> {
+    fun load(ctx: Context): MutableList<Exam> =
+        loadOrNull(ctx) ?: mutableListOf()
+
+    /**
+     * v9.33.119 "A store that could not be read is not an empty store": the
+     * exams on disk, or null when the file exists but could not be read.
+     *
+     * v9.33.101 stopped one bad ROW from emptying the list; the bad FILE was
+     * still flattened to an empty list, and [add] and [set] are
+     * read-modify-write - so adding one exam to an unreadable list saved that
+     * one exam over all the others. The exam dates are the user's own, and
+     * nothing in the app can re-derive them.
+     */
+    internal fun loadOrNull(ctx: Context): MutableList<Exam>? {
         val f = file(ctx)
         if (!f.exists()) return mutableListOf()
-        val out = mutableListOf<Exam>()
-        try {
-            val arr = JSONArray(f.readText())
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return try {
+            val arr = JSONArray(text)
+            val out = mutableListOf<Exam>()
             for (i in 0 until arr.length()) {
                 // v9.33.101: getJSONObject/getString throw on one bad row and
                 // the catch below then returns an EMPTY list - every exam the
@@ -34,8 +48,11 @@ object Exams {
                 if (name.isBlank()) continue
                 out.add(Exam(name, o.optLong("date", 0L)))
             }
-        } catch (e: Exception) { NovaLog.quiet("Exams", e) }
-        return out
+            out
+        } catch (e: Exception) {
+            NovaLog.quiet("Exams", e)
+            null
+        }
     }
 
     fun save(ctx: Context, exams: List<Exam>) {
@@ -50,10 +67,15 @@ object Exams {
         } catch (e: Exception) { NovaLog.quiet("Exams", e) }
     }
 
-    fun add(ctx: Context, name: String, dateMs: Long) {
-        val all = load(ctx)
+    fun add(ctx: Context, name: String, dateMs: Long): Boolean {
+        // v9.33.119: read-modify-write - never save over a failed read
+        val all = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Exams", java.io.IOException("unreadable exam list - not overwriting it"))
+            return false
+        }
         all.add(Exam(name, dateMs))
         save(ctx, all)
+        return true
     }
 
     /**
@@ -67,11 +89,16 @@ object Exams {
      * and the model picked one. The Exams screen showed a row the user never
      * added, and the chat countdown (exam_date.txt) disagreed with both.
      */
-    fun set(ctx: Context, name: String, dateMs: Long) {
-        val all = load(ctx)
+    fun set(ctx: Context, name: String, dateMs: Long): Boolean {
+        // v9.33.119: read-modify-write, same rule as add
+        val all = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Exams", java.io.IOException("unreadable exam list - not overwriting it"))
+            return false
+        }
         all.removeAll { it.name.equals(name, ignoreCase = true) }
         all.add(Exam(name, dateMs))
         save(ctx, all)
+        return true
     }
 
     fun daysLeft(dateMs: Long): Int {

@@ -2267,6 +2267,42 @@ check("v9.33.118: the day boundary is pinned by a unit test",
 check("v9.33.118: version is at least 9.33.118 (286)",
       version_at_least("9.33.118", 286))
 
+# v9.33.119 "A store that could not be read is not an empty store": the
+# reminder store, the exam list and planner.json all load, change one item and
+# save the whole list - so an empty list from a FAILED read meant the next save
+# deleted everything else the user had. One read tells the two cases apart.
+_nf119 = load("ncie/android/NcieFiles.kt")
+_rs119 = load("ReminderStore.kt")
+_ex119 = load("Exams.kt")
+_pl119 = load("Planner.kt")
+check("v9.33.119: NcieFiles has the one read, and it keeps the two cases apart",
+      _nf119.count("fun readOrNull(f: File): String?") == 1 and
+      _nf119.count("if (!f.exists()) return \"\"") == 1)
+check("v9.33.119: the reminder store refuses to save over a failed read",
+      _rs119.count("internal fun loadRowsOrNull(ctx: Context): MutableList<Row>?") == 1 and
+      _rs119.count("unreadable reminder list - not overwriting it") == 2 and
+      _rs119.count("f.readText()") == 1)
+check("v9.33.119: add and remove are told apart from a successful save",
+      _rs119.count("const val TRANSIENT_ID = 0") == 1 and
+      _rs119.count("repeatMs: Long): Int {") == 1 and
+      _rs119.count("text: String): Boolean {") == 1)
+check("v9.33.119: the exam list refuses to save over a failed read",
+      _ex119.count("internal fun loadOrNull(ctx: Context): MutableList<Exam>?") == 1 and
+      _ex119.count("unreadable exam list - not overwriting it") == 2 and
+      _ex119.count("f.readText()") == 0)
+check("v9.33.119: planner.json is read once, through the same rule",
+      _pl119.count("private fun planOrNull(ctx: Context): JSONObject?") == 1 and
+      _pl119.count("f.readText()") == 1)
+check("v9.33.119: the doubt journal refuses to save over a failed read",
+      _pl119.count("unreadable doubt journal - not overwriting it") == 1)
+check("v9.33.119: the caller says so instead of losing the reminder",
+      load("MainActivity.kt").count("if (rid == ReminderStore.TRANSIENT_ID) {") == 1)
+check("v9.33.119: the two answers are pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieReadOrNullTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 4)
+check("v9.33.119: version is at least 9.33.119 (287)",
+      version_at_least("9.33.119", 287))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

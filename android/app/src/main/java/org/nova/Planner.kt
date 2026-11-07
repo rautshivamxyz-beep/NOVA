@@ -47,33 +47,46 @@ object Planner {
     private fun plannerFile(ctx: Context): File = File(ctx.filesDir, "planner.json")
     private fun doubtsFile(ctx: Context): File = File(ctx.filesDir, "doubts.json")
 
-    private fun writeAtomic(f: File, text: String) {
-        try {
+    private fun writeAtomic(f: File, text: String): Boolean {
+        return try {
             NcieFiles.write(f, text)
-        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
+        } catch (e: Exception) { NovaLog.quiet("Planner", e); false }
+    }
+
+    /**
+     * v9.33.119 "A store that could not be read is not an empty store":
+     * planner.json holds the daily budget AND the weak topics in ONE object,
+     * and both mutators below are read-modify-write over it. A file NOVA
+     * could not parse used to come back as a fresh empty JSONObject, so
+     * changing the budget - or adding one weak topic - rewrote the file from
+     * nothing and took the other half with it. null is "could not read"; a
+     * mutator that gets null writes nothing.
+     */
+    private fun planOrNull(ctx: Context): JSONObject? {
+        val f = plannerFile(ctx)
+        if (!f.exists()) return JSONObject()
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return try {
+            JSONObject(text)
+        } catch (e: Exception) {
+            NovaLog.quiet("Planner", e)
+            null
+        }
     }
 
     // ------------------------------------------------ daily budget (minutes)
 
     fun minutes(ctx: Context): Int {
-        return try {
-            val f = plannerFile(ctx)
-            if (!f.exists()) 60
-            else JSONObject(f.readText()).optInt("minutes", 60)
-        } catch (e: Exception) {
-            60
-        }
+        val o = planOrNull(ctx) ?: return 60
+        return o.optInt("minutes", 60)
     }
 
-    fun setMinutes(ctx: Context, m: Int) {
-        try {
-            val f = plannerFile(ctx)
-            val o = if (f.exists()) {
-                try { JSONObject(f.readText()) } catch (e: Exception) { JSONObject() }
-            } else JSONObject()
+    fun setMinutes(ctx: Context, m: Int): Boolean {
+        val o = planOrNull(ctx) ?: return false
+        return try {
             o.put("minutes", m)
-            writeAtomic(f, o.toString())
-        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
+            writeAtomic(plannerFile(ctx), o.toString())
+        } catch (e: Exception) { NovaLog.quiet("Planner", e); false }
     }
 
     // ------------------------------------------------ weak topics
@@ -83,7 +96,7 @@ object Planner {
         val f = plannerFile(ctx)
         if (!f.exists()) return out
         try {
-            val o = JSONObject(f.readText())
+            val o = planOrNull(ctx) ?: return out
             val arr = o.optJSONArray("topics") ?: return out
             for (i in 0 until arr.length()) {
                 // v9.33.101: a row that is not an object is skipped, not fatal
@@ -100,12 +113,9 @@ object Planner {
         return out
     }
 
-    fun saveTopics(ctx: Context, list: List<Topic>) {
-        try {
-            val f = plannerFile(ctx)
-            val o = if (f.exists()) {
-                try { JSONObject(f.readText()) } catch (e: Exception) { JSONObject() }
-            } else JSONObject()
+    fun saveTopics(ctx: Context, list: List<Topic>): Boolean {
+        val o = planOrNull(ctx) ?: return false
+        return try {
             val arr = JSONArray()
             for (t in list) {
                 arr.put(
@@ -116,8 +126,8 @@ object Planner {
                 )
             }
             o.put("topics", arr)
-            writeAtomic(f, o.toString())
-        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
+            writeAtomic(plannerFile(ctx), o.toString())
+        } catch (e: Exception) { NovaLog.quiet("Planner", e); false }
     }
 
     // ------------------------------------------------ doubt journal
@@ -137,8 +147,18 @@ object Planner {
         return out
     }
 
-    fun saveDoubts(ctx: Context, list: List<Doubt>) {
-        try {
+    fun saveDoubts(ctx: Context, list: List<Doubt>): Boolean {
+        // v9.33.119: this list was built by doubts(), so a journal that could
+        // not be read arrives here as "the user has no doubts" - and saving
+        // that would delete the ones they do have. The doubt journal is a
+        // read-modify-write by proxy, and the rule is the same one.
+        val f = doubtsFile(ctx)
+        if (f.exists() && NcieFiles.readOrNull(f) == null) {
+            NovaLog.quiet("Planner",
+                java.io.IOException("unreadable doubt journal - not overwriting it"))
+            return false
+        }
+        return try {
             val arr = JSONArray()
             for (d in list) {
                 arr.put(
@@ -148,8 +168,8 @@ object Planner {
                         .put("done", d.done)
                 )
             }
-            writeAtomic(doubtsFile(ctx), arr.toString())
-        } catch (e: Exception) { NovaLog.quiet("Planner", e) }
+            writeAtomic(f, arr.toString())
+        } catch (e: Exception) { NovaLog.quiet("Planner", e); false }
     }
 
     // ------------------------------------------------ today's plan

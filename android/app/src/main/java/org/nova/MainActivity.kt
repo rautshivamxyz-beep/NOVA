@@ -3913,8 +3913,16 @@ Study:
                 // arming it now fails.
                 val rid = ReminderStore.add(this, whenMs, task, repeatMs)
                 Reminder.schedule(this, whenMs, task, repeatMs, rid)
-                toast(if (repeatMs > 0) "Reminder set ($repeatLabel): $human"
-                else "Reminder set: $human")
+                if (rid == ReminderStore.TRANSIENT_ID) {
+                    // v9.33.119: the reminder list exists and could not be
+                    // read, so nothing was written over it. The alarm still
+                    // rings - it just cannot survive a reboot, and the user
+                    // is told rather than shown a reminder that is not saved.
+                    toast("NOVA could not read its reminder list, so this one rings but is not saved")
+                } else {
+                    toast(if (repeatMs > 0) "Reminder set ($repeatLabel): $human"
+                    else "Reminder set: $human")
+                }
             }
             .setNegativeButton("Cancel", null)
             .show()

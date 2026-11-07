@@ -87,4 +87,32 @@ object NcieFiles {
     fun writeQuietly(f: File, text: String) {
         write(f, text)
     }
+
+    /**
+     * v9.33.119 "A store that could not be read is not an empty store": the
+     * one read, the other half of [write].
+     *
+     * Every store parses its file defensively, so a file it cannot read comes
+     * back as "nothing there". Two answers are needed, not one:
+     *
+     *   ""    the file is not there yet - a fresh install, nothing to lose
+     *   null  the file is there and could not be read - something to lose
+     *
+     * A reader may flatten both to an empty list; a store that is about to
+     * rewrite the file from what it read may not. The stores that write back
+     * what they read (reminders, exams, planner.json) ask this, and refuse to
+     * save when the answer is null - otherwise adding one item rewrites the
+     * file from an empty list and deletes everything else the user had.
+     *
+     * Never throws: an unreadable file is recorded and answered with null.
+     */
+    fun readOrNull(f: File): String? {
+        if (!f.exists()) return ""
+        return try {
+            f.readText()
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieFiles", e)
+            null
+        }
+    }
 }
