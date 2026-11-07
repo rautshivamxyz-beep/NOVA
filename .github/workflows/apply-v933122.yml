@@ -1,0 +1,28 @@
+name: Apply v9.33.122 patch
+# One-shot: applies tmp/patch_v933122.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933122.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.122 "The exam line carries the three nearest": Exams.promptLine is injected into the prompt of EVERY chat turn, and it joined every upcoming exam the user had into one line. A student who adds their whole term - which is the point of the Exams screen - paid for all of it on every turn, in the one part of the prompt nothing can trim: the exam line is context, not a retrieval hit, so neither the relevance gate nor the document budget touches it. The model also does not answer better for knowing about the fourth exam - "what is coming up" is about the next one. The line carries the three nearest upcoming exams now, and nothing is lost from the app: the Exams screen, the deadline radar and the weekly review still list every exam. This is the one direction the speed rule allows without a measured quality gain - a smaller prompt on every turn for anyone with more than three exams - so it is the one direction this takes. The formatting moved into a pure function, Exams.lineFor, so the cap and the order are pinned by a JVM test instead of a screen, and the v9.33.118 rule it depends on - an exam is upcoming while its DAY is today or later - is restated there rather than reimplemented. Pinned by four new verify checks and a new ExamsLineTest.'
+          git push
