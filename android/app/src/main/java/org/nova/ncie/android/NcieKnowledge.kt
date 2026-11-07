@@ -208,22 +208,27 @@ object NcieKnowledge {
      *  built on the old notes must not come back as Smart Skips).
      *  (Forward — KnowledgeActivity import and the save-to-knowledge
      *  share action.) */
-    fun addDoc(c: Context, name: String, text: String) {
-        Knowledge.addDoc(c, name, text)
+    fun addDoc(c: Context, name: String, text: String): Boolean {
+        // v9.33.121: only a write that actually happened may invalidate the
+        // learned cache and move the index line - a refused save must leave
+        // every derived view exactly as it was
+        if (!Knowledge.addDoc(c, name, text)) return false
         NcieLearn.invalidate()
         // v9.6.0 "Engine Pack": the FlashMap index - refresh this
         // source's chunk-count line as the grounding layer sees it
         // (callers are already off the main thread, like the write above).
         NcieGround.indexUpdate(c, name, text)
+        return true
     }
 
     /** Delete a document and its caches — the study-Q cache and the
      *  learned one. (Forward.) */
-    fun removeDoc(c: Context, name: String) {
-        Knowledge.removeDoc(c, name)
+    fun removeDoc(c: Context, name: String): Boolean {
+        if (!Knowledge.removeDoc(c, name)) return false
         NcieLearn.invalidate()
         // v9.6.0 "Engine Pack": the FlashMap index drops the source's line.
         NcieGround.indexUpdate(c, name, null)
+        return true
     }
 
     /** Rebuild the store when knowledge.json changed (KnowledgeActivity

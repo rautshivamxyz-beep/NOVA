@@ -22,12 +22,25 @@ object Study {
 
     private fun file(ctx: Context): File = File(ctx.filesDir, "study.json")
 
-    fun load(ctx: Context): MutableList<Card> {
+    fun load(ctx: Context): MutableList<Card> = loadOrNull(ctx) ?: mutableListOf()
+
+    /**
+     * v9.33.121 "The rest of the sweep": the cards on disk, or null when the
+     * file exists and could not be read.
+     *
+     * v9.33.101 stopped one bad ROW from emptying the deck; the bad FILE was
+     * still flattened to an empty deck, and [parseAndAdd] is read-modify-
+     * write - so a deck NOVA could not parse was replaced by the handful of
+     * cards a model reply happened to contain. The deck is small, but it is
+     * the user's, and the review history in it is not re-derivable.
+     */
+    internal fun loadOrNull(ctx: Context): MutableList<Card>? {
         val f = file(ctx)
         if (!f.exists()) return mutableListOf()
-        val out = mutableListOf<Card>()
-        try {
-            val arr = JSONArray(f.readText())
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return try {
+            val arr = JSONArray(text)
+            val out = mutableListOf<Card>()
             for (i in 0 until arr.length()) {
                 // v9.33.101: one bad row used to throw out of the loop and the
                 // catch below then returned an EMPTY deck - and the next save
@@ -39,8 +52,11 @@ object Study {
                 if (q.isBlank() || a.isBlank()) continue
                 out.add(Card(q, a, o.optInt("iv", 1), o.optLong("due", 0L)))
             }
-        } catch (e: Exception) { NovaLog.quiet("Study", e) }
-        return out
+            out
+        } catch (e: Exception) {
+            NovaLog.quiet("Study", e)
+            null
+        }
     }
 
     fun save(ctx: Context, cards: List<Card>) {
@@ -70,7 +86,14 @@ object Study {
      * cards. Returns how many were added.
      */
     fun parseAndAdd(ctx: Context, text: String): Int {
-        val cards = load(ctx)
+        // v9.33.121: -1 is "the deck exists and could not be read, so nothing
+        // was saved" - the caller says that instead of "No cards found", which
+        // would blame the model reply for a storage failure.
+        val cards = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Study",
+                java.io.IOException("unreadable card deck - not overwriting it"))
+            return -1
+        }
         val before = cards.size
         var q: String? = null
         for (raw in text.lines()) {

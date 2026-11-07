@@ -2337,6 +2337,30 @@ check("v9.33.120: the selection rule is pinned by a unit test",
 check("v9.33.120: version is at least 9.33.120 (288)",
       version_at_least("9.33.120", 288))
 
+# v9.33.121 "The rest of the sweep": v9.33.119 swept four stores and stopped,
+# and the two it left are the ones the user cannot re-create - the notes
+# library and the card deck. Both are read-modify-write over the whole file.
+_kn121 = load("Knowledge.kt")
+_st121 = load("Study.kt")
+check("v9.33.121: the notes store can say a read failed",
+      _kn121.count("private fun loadOrNull(ctx: Context): ArrayList<Chunk>?") == 1 and
+      _kn121.count("unreadable notes - not overwriting them") == 2 and
+      _kn121.count("f.readText()") == 0)
+check("v9.33.121: adding and removing a note answer their caller",
+      _kn121.count("fun addDoc(ctx: Context, name: String, text: String): Boolean") == 1 and
+      _kn121.count("fun removeDoc(ctx: Context, name: String): Boolean") == 1)
+check("v9.33.121: the card deck can say a read failed",
+      _st121.count("internal fun loadOrNull(ctx: Context): MutableList<Card>?") == 1 and
+      _st121.count("unreadable card deck - not overwriting it") == 1 and
+      _st121.count("f.readText()") == 0)
+check("v9.33.121: the notes boundary only follows a real write",
+      load("ncie/android/NcieKnowledge.kt").count("if (!Knowledge.addDoc(c, name, text)) return false") == 1 and
+      load("ncie/android/NcieKnowledge.kt").count("if (!Knowledge.removeDoc(c, name)) return false") == 1)
+check("v9.33.121: a storage failure is not reported as an empty reply",
+      load("MainActivity.kt").count("if (n < 0) \"Could not read your card deck, so nothing was saved\"") == 1)
+check("v9.33.121: version is at least 9.33.121 (289)",
+      version_at_least("9.33.121", 289))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

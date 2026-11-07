@@ -368,8 +368,8 @@ android {
         //   keys are content fingerprints now (NcieFingerprint, v9.33.102), so any
         //   edit at all regenerates and only a true repeat is free. One-off cost:
         //   the first summary of each document after the update regenerates.
-        versionCode 288
-        versionName '9.33.120'
+        versionCode 289
+        versionName '9.33.121'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

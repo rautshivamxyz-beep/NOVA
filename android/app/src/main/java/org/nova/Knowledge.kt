@@ -38,26 +38,50 @@ object Knowledge {
 
     private fun file(ctx: Context) = File(ctx.filesDir, "knowledge.json")
 
-    private fun load(ctx: Context): ArrayList<Chunk> {
+    private fun load(ctx: Context): ArrayList<Chunk> = loadOrNull(ctx) ?: ArrayList()
+
+    /**
+     * v9.33.121 "The rest of the sweep": the chunks on disk, or null when the
+     * file exists and could not be read.
+     *
+     * v9.33.119 gave the stores that rewrite what they read the difference
+     * between "nothing there" and "could not read it", and swept the four
+     * small ones. These two are the ones the user cannot re-create: [addDoc]
+     * and [removeDoc] are read-modify-write over the whole notes library, so
+     * a note added while knowledge.json could not be parsed saved ONE note
+     * over all of them, and a note deleted took the rest with it. The notes
+     * are the only copy the app has - there is no cloud and no account.
+     *
+     * A failed read is not cached either: the next call tries again instead
+     * of answering from an empty list for the rest of the session.
+     */
+    private fun loadOrNull(ctx: Context): ArrayList<Chunk>? {
         cache?.let { return it }
-        val list = ArrayList<Chunk>()
-        try {
-            val f = file(ctx)
-            if (f.exists()) {
-                val arr = JSONArray(f.readText())
-                for (i in 0 until arr.length()) {
-                    // v9.33.101: one bad row used to throw out of the loop and
-                    // the catch then left the list EMPTY - every document the
-                    // user added disappeared from "from my notes" at once.
-                    val o = arr.optJSONObject(i) ?: continue
-                    val t = o.optString("t")
-                    if (t.isBlank()) continue
-                    list.add(Chunk(o.optString("d"), t, t.lowercase(), normOf(t)))
-                }
+        val f = file(ctx)
+        if (!f.exists()) {
+            val empty = ArrayList<Chunk>()
+            cache = empty
+            return empty
+        }
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return try {
+            val arr = JSONArray(text)
+            val list = ArrayList<Chunk>()
+            for (i in 0 until arr.length()) {
+                // v9.33.101: one bad row used to throw out of the loop and
+                // the catch then left the list EMPTY - every document the
+                // user added disappeared from "from my notes" at once.
+                val o = arr.optJSONObject(i) ?: continue
+                val t = o.optString("t")
+                if (t.isBlank()) continue
+                list.add(Chunk(o.optString("d"), t, t.lowercase(), normOf(t)))
             }
-        } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
-        cache = list
-        return list
+            cache = list
+            list
+        } catch (e: Exception) {
+            NovaLog.quiet("Knowledge", e)
+            null
+        }
     }
 
     private fun save(ctx: Context, chunks: ArrayList<Chunk>) {
@@ -91,11 +115,19 @@ object Knowledge {
         load(ctx).filter { it.doc == name }.joinToString("\n\n") { it.text }
 
     @Synchronized
-    fun addDoc(ctx: Context, name: String, text: String) {
-        val chunks = ArrayList(load(ctx).filter { it.doc != name })
+    fun addDoc(ctx: Context, name: String, text: String): Boolean {
+        // v9.33.121: read-modify-write over the whole library - a load that
+        // failed must never be saved back
+        val all = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Knowledge",
+                java.io.IOException("unreadable notes - not overwriting them"))
+            return false
+        }
+        val chunks = ArrayList(all.filter { it.doc != name })
         for (piece in chunkText(text)) chunks.add(Chunk(name, piece, piece.lowercase(), normOf(piece)))
         save(ctx, chunks)
         clearQaCache(ctx)
+        return true
     }
 
     /** v5.4.7: backup restore - replace the whole knowledge base. */
@@ -114,10 +146,19 @@ object Knowledge {
         } catch (e: Exception) { NovaLog.quiet("Knowledge", e) }
     }
 
-    fun removeDoc(ctx: Context, name: String) {
-        val chunks = ArrayList(load(ctx).filter { it.doc != name })
+    fun removeDoc(ctx: Context, name: String): Boolean {
+        // v9.33.121: the same read-modify-write, and this one runs from a
+        // delete button - a note removed from a library NOVA could not read
+        // used to delete every OTHER note as well
+        val all = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Knowledge",
+                java.io.IOException("unreadable notes - not overwriting them"))
+            return false
+        }
+        val chunks = ArrayList(all.filter { it.doc != name })
         save(ctx, chunks)
         clearQaCache(ctx)
+        return true
     }
 
     /** Old cached answers are invalid once the notes change. */

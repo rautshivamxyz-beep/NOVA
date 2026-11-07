@@ -1492,7 +1492,10 @@ class MainActivity : Activity() {
                     if (pendingCards) {
                         pendingCards = false
                         val n = Study.parseAndAdd(this@MainActivity, replyMsg.text)
-                        toast(if (n > 0) "Saved $n cards - open Study in the menu" else "No cards found")
+                        // v9.33.121: -1 is a storage failure, not "no cards"
+                        toast(if (n < 0) "Could not read your card deck, so nothing was saved"
+                            else if (n > 0) "Saved $n cards - open Study in the menu"
+                            else "No cards found")
                     }
                     adapter.finalizeLast()
                     // v5.4.2: performance readout (v5.4.3: fixed locale)
