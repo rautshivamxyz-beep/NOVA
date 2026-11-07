@@ -145,21 +145,38 @@ object Exams {
         list.filter { daysLeft(it.dateMs) >= 0 }.minByOrNull { it.dateMs }
             ?: list.maxByOrNull { it.dateMs }
 
+    /** How many upcoming exams the model's line carries. */
+    const val PROMPT_LIMIT = 3
+
     /** "Physics in 12 days (14 May)" - nearest first, or null. */
-    fun promptLine(ctx: Context): String? {
-        // v9.33.118 "The exam is not over at nine in the morning": this
-        // filtered on `dateMs > now`, i.e. the exam's exact TIMESTAMP - but
-        // an exam date is a calendar DAY, stored at 09:00 by the chat parser
-        // and at midnight by the date picker. From that instant the exam
-        // stopped being "upcoming", so on the morning of the exam the model
-        // was told nothing about it, while the Exams screen, the planner and
-        // the chat countdown - which ask daysLeft - still said TODAY. One
-        // rule now, the same one Planner already used.
-        val upcoming = load(ctx)
+    fun promptLine(ctx: Context): String? = lineFor(load(ctx))
+
+    /**
+     * v9.33.122 "The exam line carries the three nearest": the exam line is
+     * injected into the prompt of EVERY turn, and it used to join every
+     * upcoming exam the user had. A student who adds their whole term - which
+     * is the point of the Exams screen - paid for all of it on every turn, in
+     * the one part of the prompt nothing can trim: the line is context, not a
+     * retrieval hit, so neither the relevance gate nor the document budget
+     * touches it.
+     *
+     * The three nearest is what the model needs - "what is coming up" is
+     * about the next one - and nothing is lost from the app: the Exams
+     * screen, the deadline radar and the weekly review still list every
+     * exam. Pure, so a JVM test can pin the cap and the order.
+     *
+     * v9.33.118 "The exam is not over at nine in the morning" still holds
+     * here: this filtered on `dateMs > now`, i.e. the exam's exact TIMESTAMP,
+     * but an exam date is a calendar DAY stored at 09:00 by the chat parser
+     * and at midnight by the date picker - so on the morning of the exam the
+     * model was told nothing about it. The day is what counts.
+     */
+    fun lineFor(all: List<Exam>, limit: Int = PROMPT_LIMIT): String? {
+        val upcoming = all
             .filter { daysLeft(it.dateMs) >= 0 }
             .sortedBy { it.dateMs }
         if (upcoming.isEmpty()) return null
-        return upcoming.joinToString("; ") { e ->
+        return upcoming.take(limit).joinToString("; ") { e ->
             val d = daysLeft(e.dateMs)
             (if (d <= 0) "${e.name} TODAY " else "${e.name} in $d days ") +
                 "(${SimpleDateFormat("d MMM", Locale.US).format(Date(e.dateMs))})"

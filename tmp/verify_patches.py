@@ -2361,6 +2361,22 @@ check("v9.33.121: a storage failure is not reported as an empty reply",
 check("v9.33.121: version is at least 9.33.121 (289)",
       version_at_least("9.33.121", 289))
 
+# v9.33.122 "The exam line carries the three nearest": the exam line goes into
+# the prompt of every turn and joined EVERY upcoming exam, so a term of exams
+# was paid for on every turn in the one part of the prompt nothing can trim.
+_ex122 = load("Exams.kt")
+check("v9.33.122: the exam line is capped, and the cap is one constant",
+      _ex122.count("const val PROMPT_LIMIT = 3") == 1 and
+      _ex122.count("upcoming.take(limit)") == 1)
+check("v9.33.122: the line is built by a pure function",
+      _ex122.count("fun lineFor(all: List<Exam>, limit: Int = PROMPT_LIMIT): String?") == 1 and
+      _ex122.count("fun promptLine(ctx: Context): String? = lineFor(load(ctx))") == 1)
+check("v9.33.122: the cap is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ExamsLineTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 6)
+check("v9.33.122: version is at least 9.33.122 (290)",
+      version_at_least("9.33.122", 290))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
