@@ -131,12 +131,37 @@ object NcieExam {
 
     // --------------------------------------------------------- storage
 
-    /** The stored exam date in millis, or null when none is set. */
-    private fun readDate(ctx: Context): Long? = try {
+    /**
+     * v9.33.120 "One exam date, one store": the exam the countdown, the
+     * revision plan and "exam countdown" answer with.
+     *
+     * It came from [dateFile], a file only the chat command ever wrote. The
+     * Exams screen writes exams.json and nothing else, so a date set on the
+     * screen was invisible here - "days to my exam" answered "Set your exam
+     * date first" while the screen showed the exam and the prompt of every
+     * turn told the model about it - and an exam cleared on the screen left
+     * this countdown running against an exam that no longer existed. Two
+     * stores, two answers to one question.
+     *
+     * Exams is the one store now, and [Exams.nearest] is the one selection
+     * rule: the exam the screen lists first and the one the prompt carries.
+     * The legacy file is still read, but only when the store is empty, so an
+     * install that set its date before this release keeps its countdown.
+     */
+    private fun storedExam(ctx: Context): Exams.Exam? = try {
+        Exams.nearest(Exams.load(ctx))
+    } catch (e: Exception) { NovaLog.quiet("NcieExam", e); null }
+
+    /** The pre-v9.33.120 record - read only when the store is empty. */
+    private fun legacyDate(ctx: Context): Long? = try {
         val f = dateFile(ctx)
         if (!f.exists()) null
         else f.readLines().firstOrNull()?.trim()?.toLongOrNull()
     } catch (e: Exception) { null }
+
+    /** The stored exam date in millis, or null when none is set. */
+    private fun readDate(ctx: Context): Long? =
+        storedExam(ctx)?.dateMs ?: legacyDate(ctx)
 
     /** Days between today and the exam date (calendar-day difference in
      *  the local zone - Exams.daysLeft, the same math the exam screen
@@ -179,11 +204,11 @@ object NcieExam {
         try { Exams.set(act, "Exam", ms) } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
         val fmt = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(ms))
         // v9.33.111: `?: 0` turned a failed round-trip into "0 days to go".
-        // Null here means the date did not come back off disk; say only what
-        // is true instead of inventing a countdown to today.
-        val d = daysLeft(act)
-        postReply(act, "Exam date set: $fmt." +
-            (if (d == null) "" else " $d days to go."))
+        // v9.33.120: and the countdown is asked about the date that was just
+        // stored, not about whichever exam the store answers with now - the
+        // user typed this date, so the reply has to be about it.
+        val d = Exams.daysLeft(ms)
+        postReply(act, "Exam date set: $fmt. $d days to go.")
     }
 
     /** The distinct weak-area topics with at least one miss older than a
@@ -342,11 +367,20 @@ object NcieExam {
 
     /** "clear exam date" / "exam done" / "exam is over". */
     fun clear(act: MainActivity) {
+        // v9.33.120: the exam the countdown was answering with is removed
+        // from the one store too. Deleting only the legacy file left the
+        // exam in exams.json, so "exam done" emptied this countdown while
+        // the Exams screen and the prompt of every turn still had it.
+        val gone = storedExam(act)
+        val dropped = try {
+            if (gone == null) true else Exams.drop(act, gone.name)
+        } catch (e: Exception) { NovaLog.quiet("NcieExam", e); false }
         try {
             dateFile(act).delete()
             planFile(act).delete()
         } catch (e: Exception) { NovaLog.quiet("NcieExam", e) }
-        postReply(act, "Exam planner cleared.")
+        postReply(act, if (dropped) "Exam planner cleared."
+            else "Cleared the plan, but the exam list could not be read, so the exam is still there.")
     }
 
     /** Today's revision topic: the FIRST plan line whose dd-MMM date is

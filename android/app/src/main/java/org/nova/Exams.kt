@@ -101,6 +101,23 @@ object Exams {
         return true
     }
 
+    /**
+     * v9.33.120: removes the exam of that name - what "exam done" does now
+     * that this store is the one place an exam lives. Read-modify-write, so
+     * it refuses to save over a load that failed (the v9.33.119 rule), and
+     * it writes nothing when the name was not there to begin with.
+     */
+    fun drop(ctx: Context, name: String): Boolean {
+        val all = loadOrNull(ctx) ?: run {
+            NovaLog.quiet("Exams", java.io.IOException("unreadable exam list - not overwriting it"))
+            return false
+        }
+        val before = all.size
+        all.removeAll { it.name.equals(name, ignoreCase = true) }
+        if (all.size != before) save(ctx, all)
+        return true
+    }
+
     fun daysLeft(dateMs: Long): Int {
         // v7.6: calendar-day difference in the local zone - the old
         // millisecond math showed "TODAY" for an exam held yesterday
@@ -108,6 +125,25 @@ object Exams {
         fun day(ms: Long) = (ms + zone.getOffset(ms)) / 86_400_000L
         return (day(dateMs) - day(System.currentTimeMillis())).toInt()
     }
+
+    /**
+     * v9.33.120 "One exam date, one store": which exam "my exam" means.
+     *
+     * The chat countdown, the revision plan, the deadline radar and the
+     * weekly review each ask for ONE exam date, and they read a file of
+     * their own that only the chat command ever wrote - so the screen and
+     * the chat could disagree about whether there was an exam at all.
+     *
+     * The nearest exam whose DAY is today or later is the answer: the one
+     * the Exams screen lists first and the one [promptLine] puts in the
+     * prompt. With nothing upcoming the most recent past exam is answered
+     * rather than null, so the chat says "your exam is today or already
+     * past" instead of "set your exam date first" about an exam the screen
+     * is still showing. Pure, so a unit test can pin it.
+     */
+    fun nearest(list: List<Exam>): Exam? =
+        list.filter { daysLeft(it.dateMs) >= 0 }.minByOrNull { it.dateMs }
+            ?: list.maxByOrNull { it.dateMs }
 
     /** "Physics in 12 days (14 May)" - nearest first, or null. */
     fun promptLine(ctx: Context): String? {

@@ -2126,7 +2126,9 @@ check("v9.33.111: the exam date asks the save for its answer",
       ne.count('"Could not save the exam date."') == 0)
 check("v9.33.111: no countdown is invented for a date that did not stick",
       ne.count("val d = daysLeft(act) ?: 0") == 0 and
-      ne.count('(if (d == null) "" else " $d days to go.")') == 1)
+      # v9.33.120: the countdown is asked about the date just stored, so the
+      # nullable round-trip is gone - the intent is still "never invent one".
+      ne.count("val d = Exams.daysLeft(ms)") == 1)
 check("v9.33.111: the revision plan asks the save for its answer",
       ne.count("val saved = try {") == 1 and
       ne.count('"Could not save the revision plan."') == 0 and
@@ -2159,7 +2161,9 @@ check("v9.33.112: the caller reports the save's answer",
 # of every turn, where the model had two answers to "how long until my exam".
 check("v9.33.113: one name is one exam",
       _ex.count("fun set(ctx: Context, name: String, dateMs: Long)") == 1 and
-      _ex.count("all.removeAll { it.name.equals(name, ignoreCase = true) }") == 1)
+      # v9.33.120: drop() is the second caller of the one-name rule, not a
+      # second rule - both ask the same comparison
+      _ex.count("all.removeAll { it.name.equals(name, ignoreCase = true) }") == 2)
 check("v9.33.113: the chat path replaces the date instead of adding one",
       ne.count('Exams.set(act, "Exam", ms)') == 1 and
       ne.count('Exams.add(act, "Exam", ms)') == 0)
@@ -2256,7 +2260,8 @@ check("v9.33.117: version is at least 9.33.117 (285)",
 # was told nothing about it while every screen said TODAY.
 _ex118 = load("Exams.kt")
 check("v9.33.118: an exam is upcoming while its DAY is today or later",
-      _ex118.count("filter { daysLeft(it.dateMs) >= 0 }") == 1 and
+      # v9.33.120: the prompt and Exams.nearest are the two askers
+      _ex118.count("filter { daysLeft(it.dateMs) >= 0 }") == 2 and
       _ex118.count("dateMs > System.currentTimeMillis()") == 0)
 check("v9.33.118: the prompt and the planner ask the same rule",
       load("Planner.kt").count("Exams.daysLeft(it.dateMs) >= 0") == 1 and
@@ -2288,7 +2293,8 @@ check("v9.33.119: add and remove are told apart from a successful save",
       _rs119.count("text: String): Boolean {") == 1)
 check("v9.33.119: the exam list refuses to save over a failed read",
       _ex119.count("internal fun loadOrNull(ctx: Context): MutableList<Exam>?") == 1 and
-      _ex119.count("unreadable exam list - not overwriting it") == 2 and
+      # v9.33.120: add, set and drop are all read-modify-write
+      _ex119.count("unreadable exam list - not overwriting it") == 3 and
       _ex119.count("f.readText()") == 0)
 check("v9.33.119: planner.json is read once, through the same rule",
       _pl119.count("private fun planOrNull(ctx: Context): JSONObject?") == 1 and
@@ -2302,6 +2308,34 @@ check("v9.33.119: the two answers are pinned by a unit test",
            encoding="utf-8").read().count("@Test") >= 4)
 check("v9.33.119: version is at least 9.33.119 (287)",
       version_at_least("9.33.119", 287))
+
+# v9.33.120 "One exam date, one store": the chat countdown read a file only
+# the chat command wrote, while the Exams screen and the model prompt read
+# exams.json - so a date set on the screen was invisible to "days to my exam"
+# and an exam cleared on the screen kept the chat counting down to it.
+_ne120 = load("ncie/android/NcieExam.kt")
+_ex120 = load("Exams.kt")
+check("v9.33.120: the chat asks the one store, with one selection rule",
+      _ne120.count("Exams.nearest(Exams.load(ctx))") == 1 and
+      _ne120.count("storedExam(ctx)?.dateMs ?: legacyDate(ctx)") == 1 and
+      _ex120.count("fun nearest(list: List<Exam>): Exam?") == 1)
+check("v9.33.120: the legacy file is only a fallback",
+      _ne120.count("private fun legacyDate(ctx: Context): Long?") == 1 and
+      _ne120.count("exam_date.txt") == 2)
+check("v9.33.120: the nearest exam is the one the screen lists first",
+      _ex120.count("list.filter { daysLeft(it.dateMs) >= 0 }.minByOrNull { it.dateMs }") == 1 and
+      _ex120.count("?: list.maxByOrNull { it.dateMs }") == 1)
+check("v9.33.120: exam done removes the exam from the store",
+      _ex120.count("fun drop(ctx: Context, name: String): Boolean") == 1 and
+      _ne120.count("Exams.drop(act, gone.name)") == 1)
+check("v9.33.120: the reply counts down to the date that was just set",
+      _ne120.count("val d = Exams.daysLeft(ms)") == 1 and
+      _ne120.count("daysLeft(act)") == 2)
+check("v9.33.120: the selection rule is pinned by a unit test",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ExamsNearestTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 5)
+check("v9.33.120: version is at least 9.33.120 (288)",
+      version_at_least("9.33.120", 288))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
