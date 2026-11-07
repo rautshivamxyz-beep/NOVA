@@ -1,0 +1,28 @@
+name: Apply v9.33.121 patch
+# One-shot: applies tmp/patch_v933121.py, proves the result with the full
+# verifier, then commits and pushes it. The push uses GITHUB_TOKEN, which
+# triggers no workflow - nova-apk.yml is dispatched by hand afterwards, so
+# exactly one APK build runs for this version.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out NOVA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply the patch
+        run: python3 tmp/patch_v933121.py .
+      - name: Prove it with the full verifier
+        run: python3 tmp/verify_patches.py .
+      - name: Commit and push
+        run: |
+          git config user.name "NOVA release bot"
+          git config user.email "rautshivamxyz@gmail.com"
+          git add -A
+          git commit -m 'v9.33.121 "The rest of the sweep: the notes and the deck": v9.33.119 gave every store that rewrites what it read the difference between "nothing there" and "could not read it", and swept the four small ones - reminders, exams, planner.json and the doubt journal. It stopped there, and the two stores it left behind are the two the user cannot re-create. Knowledge.addDoc loads every chunk, drops that document old chunks, adds the new ones and saves the whole list; Knowledge.removeDoc loads every chunk, drops one document and saves the whole list; Study.parseAndAdd loads the deck, adds the parsed cards and saves the deck. Give either an unreadable file and the load hands it an empty list, so adding ONE note saved that one note over the whole notes library, deleting one note deleted all of them, and a deck NOVA could not parse was replaced by the handful of cards one model reply happened to contain. Both files are the only copy the app has - no cloud, no account, no export unless the user made one - which is why these two matter more than the four that were swept first. Same rule, same home: NcieFiles.readOrNull, a loadOrNull in each store that can say it failed, and mutators that answer their callers - addDoc and removeDoc return Boolean and the notes boundary only invalidates the learned cache and moves the FlashMap index line for a write that actually happened, and parseAndAdd returns -1 for "the deck could not be read" so the chat says that instead of "No cards found", which blamed the model reply for a storage failure. A failed read is not cached either, so the next call tries again instead of answering from an empty library for the rest of the session. Pinned by six new verify checks.'
+          git push
