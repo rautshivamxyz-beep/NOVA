@@ -379,6 +379,19 @@ check("v9.33.124: version is at least 9.33.124 (292)",
 '''
 
 ver = read(VERIFY)
+# v9.33.124: the v9.33.100 check pinned the number of reporting catches in
+# ChatStore.kt to 3. The parse, load and unreadable paths live in that store
+# now and report through the same call, so the count is tied to the catches
+# themselves instead of to a number every new catch would have to remember.
+Q = chr(39)
+NL = chr(10)
+old_cs = "      _cs100.count(" + Q + "NovaLog.quiet(\"ChatStore\", e)" + Q + ") == 3)"
+new_cs = ("      _cs100.count(" + Q + "NovaLog.quiet(\"ChatStore\", e)" + Q + ") == 5 and" + NL +
+          "      _cs100.count(\"catch (e: Exception)\") == 5)")
+if ver.count(old_cs) != 1:
+    print("FATAL: the v9.33.100 best-effort anchor did not match exactly once")
+    sys.exit(1)
+ver = ver.replace(old_cs, new_cs)
 if ver.count(OLD_V123) != 1:
     print("FATAL: the v9.33.123 tail anchor did not match exactly once")
     sys.exit(1)
@@ -400,6 +413,8 @@ check("version is 9.33.124 (292)",
       "versionName '9.33.124'" in gradle and "versionCode 292" in gradle)
 check("the verifier knows this version",
       'version_at_least("9.33.124", 292)' in read(VERIFY))
+check("the v9.33.100 best-effort check counts the catches, not a number",
+      'catch (e: Exception)' in read(VERIFY) and ' == 3)' not in read(VERIFY).split('_cs100')[1][:200])
 check("the unit test exists and pins the parse", os.path.exists(NEWTEST))
 check("the words are in strings.xml", 'name="chat_unreadable"' in read(STR))
 check("the words are in strings-hi.xml", 'name="chat_unreadable"' in read(STR_HI))
