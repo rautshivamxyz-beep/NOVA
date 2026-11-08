@@ -2377,6 +2377,35 @@ check("v9.33.122: the cap is pinned by a unit test",
 check("v9.33.122: version is at least 9.33.122 (290)",
       version_at_least("9.33.122", 290))
 
+# v9.33.123 "The scheduled text is the whole text": the scheduled-texts store
+# was the one the v9.33.119/121 sweep missed - it answered "empty" for a file
+# it could not read and wrote that list straight back, and it wrote the
+# message raw into a tab-separated line, so a newline cut the text that sent.
+check("v9.33.123: the scheduled-texts store tells unreadable from empty",
+      _sr.count("fun loadOrNull(ctx: Context): MutableList<Send>?") == 1 and
+      _sr.count("val text = NcieFiles.readOrNull(file(ctx)) ?: return null") == 1)
+check("v9.33.123: adding a send refuses to rewrite a store it could not read",
+      _sr.count("val all = loadOrNull(ctx) ?: return false") == 1)
+check("v9.33.123: firing due sends never rewrites an unreadable store",
+      _sr.count("loadOrNull(ctx) ?: return") == 2 and
+      _sr.count("loadOrNull(ctx) ?: return false") == 1)
+check("v9.33.123: the message is escaped into the line and unescaped back",
+      _sr.count("internal fun esc(s: String): String") == 1 and
+      _sr.count("internal fun unesc(s: String): String") == 1 and
+      _sr.count("esc(s.message)") == 1 and
+      _sr.count("unesc(p[3])") == 1)
+check("v9.33.123: the line format is one pure pair of functions",
+      _sr.count("internal fun encode(list: List<Send>): String") == 1 and
+      _sr.count("internal fun decode(text: String): MutableList<Send>") == 1)
+check("v9.33.123: a schedule that did not save is not reported as scheduled",
+      ma.count("if (!ScheduledSends.add(this, ms, who, msg)) {") == 1 and
+      ma.count("I couldn't read the scheduled-texts list") == 1)
+check("v9.33.123: the round trip is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ScheduledSendsTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 12)
+check("v9.33.123: version is at least 9.33.123 (291)",
+      version_at_least("9.33.123", 291))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

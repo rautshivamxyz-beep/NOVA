@@ -149,41 +149,105 @@ object ScheduledSends {
 
     private fun file(ctx: Context): File = File(ctx.filesDir, FILE)
 
-    fun load(ctx: Context): MutableList<Send> {
-        val out = mutableListOf<Send>()
-        try {
-            val f = file(ctx)
-            if (f.exists()) {
-                for (line in f.readText().split('\n')) {
-                    // v9.13.0: limit 5 - an optional 5th field ("n") marks
-                    // a background-notified send. Old 4-field lines parse
-                    // unchanged (notified = false).
-                    val p = line.trim('\r').split('\t', limit = 5)
-                    val ms = p.getOrNull(1)?.toLongOrNull()
-                    if (p.size >= 4 && ms != null && p[2].isNotEmpty() && p[3].isNotEmpty())
-                        out.add(Send(p[0], ms, p[2], p[3], p.getOrNull(4) == "n"))
+    /**
+     * v9.33.123 "The scheduled text is the whole text": the store, or null
+     * when the file is there and could not be read.
+     *
+     * v9.33.119 gave every store that rewrites what it read the difference
+     * between "nothing there" and "could not be read"; v9.33.121 finished the
+     * sweep over the notes and the deck. This one was missed. [load] answers
+     * an empty list either way, and [add] writes that list straight back - so
+     * one unreadable read deleted every scheduled text the user had, and NOVA
+     * still answered "Scheduled: ... to ...", true about the new one and a
+     * lie about the rest.
+     */
+    fun loadOrNull(ctx: Context): MutableList<Send>? {
+        val text = NcieFiles.readOrNull(file(ctx)) ?: return null
+        return decode(text)
+    }
+
+    fun load(ctx: Context): MutableList<Send> = loadOrNull(ctx) ?: mutableListOf()
+
+    /**
+     * v9.33.123: the file is one tab-separated line per send, and the message
+     * used to be written into it raw. A two-line draft - or anything pasted
+     * with a newline in it - became two lines, and the reader kept only the
+     * first: the text that actually sent was silently cut at the first
+     * newline, and NOVA still reported it "sent". A TAB was worse: it is the
+     * field separator, so it ate the rest of the message and the remainder
+     * became the "notified" flag.
+     *
+     * [esc] on the way out, [unesc] on the way in. A line written before this
+     * release carries no backslash and decodes exactly as it did.
+     */
+    internal fun esc(s: String): String = s
+        .replace("\\", "\\\\")
+        .replace("\t", "\\t")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+
+    /** The inverse of [esc]. An unknown escape is kept as written. */
+    internal fun unesc(s: String): String {
+        if (s.indexOf('\\') < 0) return s
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                when (s[i + 1]) {
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    't' -> { sb.append('\t'); i += 2 }
+                    'n' -> { sb.append('\n'); i += 2 }
+                    'r' -> { sb.append('\r'); i += 2 }
+                    else -> { sb.append(c); i += 1 }
                 }
+            } else {
+                sb.append(c)
+                i += 1
             }
-        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * The lines of the store, parsed. One broken line costs that line only -
+     * the same rule v9.33.101 gave every JSON loader in the app.
+     */
+    internal fun decode(text: String): MutableList<Send> {
+        val out = mutableListOf<Send>()
+        for (line in text.split('\n')) {
+            // v9.13.0: limit 5 - an optional 5th field ("n") marks a
+            // background-notified send. Old 4-field lines parse unchanged.
+            val p = line.trim('\r').split('\t', limit = 5)
+            val ms = p.getOrNull(1)?.toLongOrNull()
+            if (p.size >= 4 && ms != null && p[2].isNotEmpty() && p[3].isNotEmpty())
+                out.add(Send(unesc(p[0]), ms, unesc(p[2]), unesc(p[3]), p.getOrNull(4) == "n"))
+        }
         return out
     }
 
-    private fun save(ctx: Context, list: List<Send>) {
-        try {
-            val f = file(ctx)
-            // v9.33.98: a scheduled text that is lost here is lost silently
-            NcieFiles.write(f, list.joinToString("\n") { s ->
-                "${s.id}\t${s.millis}\t${s.name}\t${s.message}" +
-                    (if (s.notified) "\tn" else "")
-            })
-        } catch (e: Exception) { NovaLog.quiet("SendReceiver", e) }
+    /** The file's exact text for [list] - the inverse of [decode]. */
+    internal fun encode(list: List<Send>): String = list.joinToString("\n") { s ->
+        esc(s.id) + "\t" + s.millis + "\t" + esc(s.name) + "\t" + esc(s.message) +
+            (if (s.notified) "\tn" else "")
     }
 
-    fun add(ctx: Context, atMillis: Long, name: String, message: String) {
-        val all = load(ctx)
+    private fun save(ctx: Context, list: List<Send>): Boolean = try {
+        // v9.33.98: a scheduled text that is lost here is lost silently
+        NcieFiles.write(file(ctx), encode(list))
+    } catch (e: Exception) { NovaLog.quiet("SendReceiver", e); false }
+
+    /**
+     * True when the send is on disk. False when the store could not be read -
+     * saving then would rewrite the file from nothing and delete every other
+     * scheduled text the user had, so nothing is written at all.
+     */
+    fun add(ctx: Context, atMillis: Long, name: String, message: String): Boolean {
+        val all = loadOrNull(ctx) ?: return false
         all.add(Send(System.currentTimeMillis().toString(), atMillis, name, message))
-        save(ctx, all)
+        if (!save(ctx, all)) return false
         armNext(ctx)
+        return true
     }
 
     /** "cancel scheduled texts" - clears the file and the alarm. */
@@ -265,7 +329,10 @@ object ScheduledSends {
      */
     fun fireDue(ctx: Context, foreground: Boolean = false) {
         val now = System.currentTimeMillis()
-        val all = load(ctx)
+        // v9.33.123: an unreadable store is not an empty one - this used to
+        // return here too, which was safe, but the save below would have
+        // rewritten the file from nothing if the read had only partly failed.
+        val all = loadOrNull(ctx) ?: return
         if (all.isEmpty()) return
         val due = all.filter { it.millis <= now }
         val rest = ArrayList(all.filter { it.millis > now })

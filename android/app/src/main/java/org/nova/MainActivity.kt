@@ -2864,7 +2864,15 @@ Study:
                             toast("Couldn't find '$who' in contacts")
                             return true
                         }
-                        ScheduledSends.add(this, ms, who, msg)
+                        // v9.33.123: the store refuses to write when it
+                        // could not be read - say so instead of reporting a
+                        // schedule that did not happen.
+                        if (!ScheduledSends.add(this, ms, who, msg)) {
+                            chatCommandReply(t,
+                                "I couldn't read the scheduled-texts list, so I saved nothing - " +
+                                    "your other scheduled texts are untouched. Try again.")
+                            return true
+                        }
                         val human = java.text.SimpleDateFormat("EEE d MMM h:mm a", Locale.getDefault())
                             .format(java.util.Date(ms))
                         chatCommandReply(t,
