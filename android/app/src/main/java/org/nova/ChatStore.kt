@@ -86,35 +86,56 @@ object ChatStore {
      * tell "there is no conversation here" from "there is one and it did not
      * parse". Pure, so a JVM test can pin both halves of that answer.
      */
-    fun parse(text: String, id: String): Chat? = try {
-        val json = JSONObject(text)
-        val messages = mutableListOf<Msg>()
-        val arr = json.optJSONArray("messages") ?: JSONArray()
-        for (i in 0 until arr.length()) {
-            // v9.33.101: one malformed row used to throw straight out of this
-            // loop and take the WHOLE conversation with it. A row that is not
-            // an object is skipped; every other message still opens.
-            val o = arr.optJSONObject(i) ?: continue
-            messages.add(Msg(
-                if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
-                o.optString("t"),
-                // v9.29.4: a message read from disk is NEVER "generating".
-                // A mid-stream save (done=false) used to reload as a
-                // permanent animated bubble - the "stuck on generating"
-                // report. History is always done.
-                true
-            ))
+    fun parse(text: String, id: String): Chat? {
+        // v9.33.124: a conversation is a JSON OBJECT and nothing else is one,
+        // so the cheapest answer is also the honest one - and it costs no
+        // exception for the common garbage (an empty file, a fragment, an
+        // array, the literal null). It is also the half of the answer a JVM
+        // unit test can pin: a local test has no JSON runtime at all, because
+        // org.json ships inside android.jar and Gradle replaces that jar with
+        // the mockable one, whose every method throws.
+        if (!isObject(text)) return null
+        return try {
+            val json = JSONObject(text)
+            val messages = mutableListOf<Msg>()
+            val arr = json.optJSONArray("messages") ?: JSONArray()
+            for (i in 0 until arr.length()) {
+                // v9.33.101: one malformed row used to throw straight out of
+                // this loop and take the WHOLE conversation with it. A row
+                // that is not an object is skipped; every other message still
+                // opens.
+                val o = arr.optJSONObject(i) ?: continue
+                messages.add(Msg(
+                    if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
+                    o.optString("t"),
+                    // v9.29.4: a message read from disk is NEVER "generating".
+                    // A mid-stream save (done=false) used to reload as a
+                    // permanent animated bubble - the "stuck on generating"
+                    // report. History is always done.
+                    true
+                ))
+            }
+            Chat(
+                id = json.optString("id", id),
+                name = json.optString("name", NEW_CHAT_NAME),
+                createdAt = json.optLong("created", 0L),
+                updatedAt = json.optLong("updated", 0L),
+                messages = messages
+            )
+        } catch (e: Exception) {
+            NovaLog.quiet("ChatStore", e)
+            null
         }
-        Chat(
-            id = json.optString("id", id),
-            name = json.optString("name", NEW_CHAT_NAME),
-            createdAt = json.optLong("created", 0L),
-            updatedAt = json.optLong("updated", 0L),
-            messages = messages
-        )
-    } catch (e: Exception) {
-        NovaLog.quiet("ChatStore", e)
-        null
+    }
+
+    /**
+     * v9.33.124: true when [text] is shaped like a JSON object - which is the
+     * only thing a conversation can be. Pure string work: no JSON runtime, no
+     * exception, nothing to mock.
+     */
+    internal fun isObject(text: String): Boolean {
+        val t = text.trim()
+        return t.length >= 2 && t.startsWith("{") && t.endsWith("}")
     }
 
     fun load(context: Context, id: String): Chat? = try {

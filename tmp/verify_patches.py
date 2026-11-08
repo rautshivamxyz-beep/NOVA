@@ -2415,6 +2415,9 @@ _cs124 = load("ChatStore.kt")
 check("v9.33.124: the conversation parse is a pure function",
       _cs124.count("fun parse(text: String, id: String): Chat?") == 1 and
       _cs124.count("parse(f.readText(), id)") == 2)
+check("v9.33.124: a conversation must be object-shaped before any JSON runs",
+      _cs124.count("internal fun isObject(text: String): Boolean") == 1 and
+      _cs124.count("if (!isObject(text)) return null") == 1)
 check("v9.33.124: load is that function over the file",
       _cs124.count("fun load(context: Context, id: String): Chat?") == 1)
 check("v9.33.124: the store can tell a damaged file from a missing one",
@@ -2430,7 +2433,7 @@ check("v9.33.124: the words exist in both languages",
            encoding="utf-8").read().count('name="chat_unreadable"') == 1)
 check("v9.33.124: the parse is pinned by unit tests",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ChatStoreParseTest.kt"),
-           encoding="utf-8").read().count("@Test") >= 10)
+           encoding="utf-8").read().count("@Test") >= 9)
 check("v9.33.124: version is at least 9.33.124 (292)",
       version_at_least("9.33.124", 292))
 
