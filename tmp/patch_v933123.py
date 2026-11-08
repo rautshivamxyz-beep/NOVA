@@ -424,7 +424,8 @@ check("v9.33.123: the scheduled-texts store tells unreadable from empty",
 check("v9.33.123: adding a send refuses to rewrite a store it could not read",
       _sr.count("val all = loadOrNull(ctx) ?: return false") == 1)
 check("v9.33.123: firing due sends never rewrites an unreadable store",
-            _sr.count("val all = loadOrNull(ctx) ?: return\n") == 1)
+      _sr.count("loadOrNull(ctx) ?: return") == 2 and
+      _sr.count("loadOrNull(ctx) ?: return false") == 1)
 check("v9.33.123: the message is escaped into the line and unescaped back",
       _sr.count("internal fun esc(s: String): String") == 1 and
       _sr.count("internal fun unesc(s: String): String") == 1 and
@@ -448,6 +449,11 @@ if ver.count(OLD_V122) != 1:
     print("FATAL: the v9.33.122 tail anchor did not match exactly once")
     sys.exit(1)
 write(VERIFY, ver.replace(OLD_V122, NEW_V122))
+# v9.33.123: a patch script that writes the verifier can write a
+# SyntaxError into it - one mis-escaped newline inside a triple-quoted
+# string becomes an unterminated literal, and the apply run dies before
+# it commits anything. Compile what was written.
+compile(read(VERIFY), VERIFY, "exec")
 
 # ---------------------------------------------------------------- verify
 print("")
@@ -458,7 +464,8 @@ check("SendReceiver: read through the one atomic read",
 check("SendReceiver: add refuses an unreadable store",
       "val all = loadOrNull(ctx) ?: return false" in send)
 check("SendReceiver: fireDue refuses an unreadable store",
-      "val all = loadOrNull(ctx) ?: return\n" in send)
+      send.count("loadOrNull(ctx) ?: return") == 2 and
+      send.count("loadOrNull(ctx) ?: return false") == 1)
 check("SendReceiver: the message is escaped", "esc(s.message)" in send)
 check("SendReceiver: the message is unescaped", "unesc(p[3])" in send)
 check("SendReceiver: one pure encode", "internal fun encode(list: List<Send>): String" in send)
