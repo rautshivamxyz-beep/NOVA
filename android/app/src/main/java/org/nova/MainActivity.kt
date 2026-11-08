@@ -229,8 +229,17 @@ class MainActivity : Activity() {
         // v9.33.42: pick up the remote-model settings for this run
         RemoteEngine.configure(this)
 
-        currentChat = if (settings.currentChatId.isNotBlank()) {
-            ChatStore.load(this, settings.currentChatId) ?: ChatStore.newChat()
+        // v9.33.124 "A conversation that could not be read is not a new chat":
+        // load answers null for a damaged file exactly as it does for a missing
+        // one, so the last conversation opened as a brand new chat and the user
+        // was told nothing. The file is not touched - the new chat gets its own
+        // id - so say that instead of letting it look like a deletion.
+        val reopenId = settings.currentChatId
+        currentChat = if (reopenId.isNotBlank()) {
+            val reopened = ChatStore.load(this, reopenId)
+            if (reopened == null && ChatStore.unreadable(this, reopenId))
+                toast(getString(R.string.chat_unreadable))
+            reopened ?: ChatStore.newChat()
         } else ChatStore.newChat()
         settings.currentChatId = currentChat.id
         needsContextCarry = currentChat.messages.isNotEmpty()

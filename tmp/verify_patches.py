@@ -1876,7 +1876,8 @@ check("v9.33.100: the hand-rolled temp is gone",
 check("v9.33.100: no bare write of a chat file is left",
       _cs100.count("writeText(") == 0)
 check("v9.33.100: the save is still best-effort and never throws into a caller",
-      _cs100.count('NovaLog.quiet("ChatStore", e)') == 3)
+      _cs100.count('NovaLog.quiet("ChatStore", e)') == 5 and
+      _cs100.count("catch (e: Exception)") == 5)
 check("v9.33.100: version is at least 9.33.100 (268)",
       version_at_least("9.33.100", 268))
 
@@ -2405,6 +2406,33 @@ check("v9.33.123: the round trip is pinned by unit tests",
            encoding="utf-8").read().count("@Test") >= 12)
 check("v9.33.123: version is at least 9.33.123 (291)",
       version_at_least("9.33.123", 291))
+
+# v9.33.124 "A conversation that could not be read is not a new chat": the
+# conversation store was the one the sweep never reached. load answers null for
+# a damaged file exactly as for a missing one, so the last conversation opened
+# as a brand new chat with nothing said - and the chat list skips it too.
+_cs124 = load("ChatStore.kt")
+check("v9.33.124: the conversation parse is a pure function",
+      _cs124.count("fun parse(text: String, id: String): Chat?") == 1 and
+      _cs124.count("parse(f.readText(), id)") == 2)
+check("v9.33.124: load is that function over the file",
+      _cs124.count("fun load(context: Context, id: String): Chat?") == 1)
+check("v9.33.124: the store can tell a damaged file from a missing one",
+      _cs124.count("fun unreadable(context: Context, id: String): Boolean") == 1 and
+      _cs124.count("if (!f.exists()) return false") >= 1)
+check("v9.33.124: the open path asks before it opens a fresh chat",
+      ma.count("ChatStore.unreadable(this, reopenId)") == 1 and
+      ma.count("toast(getString(R.string.chat_unreadable))") == 1)
+check("v9.33.124: the words exist in both languages",
+      open(os.path.join(ROOT, "android/app/src/main/res/values/strings.xml"),
+           encoding="utf-8").read().count('name="chat_unreadable"') == 1 and
+      open(os.path.join(ROOT, "android/app/src/main/res/values-hi/strings.xml"),
+           encoding="utf-8").read().count('name="chat_unreadable"') == 1)
+check("v9.33.124: the parse is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ChatStoreParseTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 10)
+check("v9.33.124: version is at least 9.33.124 (292)",
+      version_at_least("9.33.124", 292))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

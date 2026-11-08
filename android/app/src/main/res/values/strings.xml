@@ -271,4 +271,5 @@ from: %1$s</string>
     <string name="remote_private_hint">NOVA sends just the question you typed. Your notes, documents, memories and past conversation stay on this phone. Leave this on for any server you do not own.</string>
     <string name="remote_private_on">Only your question leaves this phone</string>
     <string name="remote_private_off">Notes and documents will be sent to that machine</string>
+    <string name="chat_unreadable">I could not read that conversation — its file is still on your phone, untouched. Opening a new chat.</string>
 </resources>

@@ -76,17 +76,24 @@ object ChatStore {
         }
     }
 
-    fun load(context: Context, id: String): Chat? = try {
-        val f = File(dir(context), id + ".json")
-        if (!f.exists()) return null
-        val json = JSONObject(f.readText())
+    /**
+     * v9.33.124 "A conversation that could not be read is not a new chat": the
+     * conversation in [text], or null when [text] is not one.
+     *
+     * v9.33.101 made one malformed message ROW cost that row only. A malformed
+     * top-level object still cost the whole conversation, because the parse
+     * lived inside [load] and [load] answers null - so the caller could not
+     * tell "there is no conversation here" from "there is one and it did not
+     * parse". Pure, so a JVM test can pin both halves of that answer.
+     */
+    fun parse(text: String, id: String): Chat? = try {
+        val json = JSONObject(text)
         val messages = mutableListOf<Msg>()
         val arr = json.optJSONArray("messages") ?: JSONArray()
         for (i in 0 until arr.length()) {
             // v9.33.101: one malformed row used to throw straight out of this
-            // loop and take the WHOLE conversation with it - load() catches,
-            // returns null, and the chat is simply gone. A row that is not an
-            // object is skipped; every other message still opens.
+            // loop and take the WHOLE conversation with it. A row that is not
+            // an object is skipped; every other message still opens.
             val o = arr.optJSONObject(i) ?: continue
             messages.add(Msg(
                 if (o.optString("r") == "u") Role.USER else Role.ASSISTANT,
@@ -108,6 +115,33 @@ object ChatStore {
     } catch (e: Exception) {
         NovaLog.quiet("ChatStore", e)
         null
+    }
+
+    fun load(context: Context, id: String): Chat? = try {
+        val f = File(dir(context), id + ".json")
+        if (!f.exists()) return null
+        parse(f.readText(), id)
+    } catch (e: Exception) {
+        NovaLog.quiet("ChatStore", e)
+        null
+    }
+
+    /**
+     * v9.33.124: true when the conversation file is THERE and could not be
+     * read - the question [load] cannot answer, because it says null for a
+     * missing file too.
+     *
+     * The open path used to take that null and start a brand new chat, with
+     * nothing said. The file was never deleted (the new chat has its own id),
+     * but the chat list skips it as well, so from the inside the app looked
+     * exactly as if every message had been thrown away.
+     */
+    fun unreadable(context: Context, id: String): Boolean {
+        if (id.isBlank()) return false
+        val f = File(dir(context), id + ".json")
+        if (!f.exists()) return false
+        return try { parse(f.readText(), id) == null }
+        catch (e: Exception) { NovaLog.quiet("ChatStore", e); true }
     }
 
     /** All chats, most recently used first. v9.29.1: reads only each chat's
