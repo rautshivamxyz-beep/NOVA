@@ -2462,6 +2462,38 @@ check("v9.33.125: the answer-style block is translated",
 check("v9.33.125: version is at least 9.33.125 (293)",
       version_at_least("9.33.125", 293))
 
+# v9.33.126 "A dataset that did not finish saving is not ready": the wiki
+# downloader wrote the article count and renamed done.tmp over done.txt without
+# ever asking either save whether it worked, then reported "done - N articles
+# saved". The count now goes first, both answers are checked, and done.txt - the
+# commit point isReady() reads - is renamed last, so it can never say ready over
+# a count that never landed. The count itself is parsed by a pure function now,
+# because the old inline read threw out of the Knowledge status line.
+_wc = open(os.path.join(ROOT, BASE + "WikiCore.kt"), encoding="utf-8").read()
+_wcount = open(os.path.join(ROOT, BASE + "ncie/WikiCount.kt"), encoding="utf-8").read()
+check("v9.33.126: the wiki count is parsed by a pure function",
+      _wcount.count("fun parse(raw: String?): Int") == 1 and
+      _wcount.count("import android.") == 0)
+check("v9.33.126: a negative count is not a count",
+      _wcount.count("if (n < 0) 0 else n") == 1)
+check("v9.33.126: articleCount asks the honest read",
+      _wc.count("WikiCount.parse(NcieFiles.readOrNull(File(dir(ctx), \"count\")))") == 1)
+check("v9.33.126: the old inline read is gone",
+      _wc.count('f.readText().trim().toIntOrNull()') == 0)
+check("v9.33.126: the count write is checked before the flag",
+      _wc.count('if (!NcieFiles.write(File(d, "count"), n.toString()))') == 1)
+check("v9.33.126: the done flag rename is checked",
+      _wc.count("if (!doneTmp.renameTo(doneFile(ctx)))") == 1 and
+      _wc.count("doneTmp.renameTo(doneFile(ctx))") == 1)
+check("v9.33.126: neither failed save claims the download finished",
+      _wc.count('lastError = "download finished but could not be saved - try again"') == 1 and
+      _wc.count('lastError = "download finished but could not be marked ready - try again"') == 1)
+check("v9.33.126: the count parse is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/WikiCountTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 6)
+check("v9.33.126: version is at least 9.33.126 (294)",
+      version_at_least("9.33.126", 294))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

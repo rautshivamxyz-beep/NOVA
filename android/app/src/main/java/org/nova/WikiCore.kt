@@ -1,6 +1,7 @@
 package org.nova
 
 import org.nova.ncie.Tokens
+import org.nova.ncie.WikiCount
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -52,10 +53,13 @@ object WikiCore {
     /** True once at least one article is stored. */
     fun isReady(ctx: Context): Boolean = doneFile(ctx).exists()
 
-    fun articleCount(ctx: Context): Int {
-        val f = File(dir(ctx), "count")
-        return if (f.exists()) f.readText().trim().toIntOrNull() ?: 0 else 0
-    }
+    // v9.33.126: this used to read the file itself, so an unreadable count
+    // threw out of the Knowledge screen's status line, and every unreadable
+    // count became "0 articles" - the same answer as "nothing downloaded yet".
+    // NcieFiles.readOrNull tells those apart ("" absent, null unreadable) and
+    // WikiCount.parse is the pure half a unit test can pin.
+    fun articleCount(ctx: Context): Int =
+        WikiCount.parse(NcieFiles.readOrNull(File(dir(ctx), "count")))
 
     /** Deletes the downloaded articles. */
     fun remove(ctx: Context) {
@@ -112,8 +116,25 @@ object WikiCore {
                 }
             }
             bw.close(); dw.close()
-            doneTmp.renameTo(doneFile(ctx))
-            NcieFiles.write(File(d, "count"), n.toString())
+            // v9.33.126 "A dataset that did not finish saving is not ready":
+            // both saves here were fire-and-forget. renameTo answers false when
+            // the filesystem refuses it, and NcieFiles.write answers false when
+            // the count never landed - the code claimed "done - N articles
+            // saved" over either answer, with done.txt missing, so Knowledge
+            // showed the store as not ready and nothing anywhere said why.
+            // The count is written FIRST and the done flag LAST: the flag is
+            // the commit point, so it can never say ready over a count that
+            // never reached the disk.
+            if (!NcieFiles.write(File(d, "count"), n.toString())) {
+                lastError = "download finished but could not be saved - try again"
+                _state.value = Pair(0f, lastError ?: "")
+                return@withContext
+            }
+            if (!doneTmp.renameTo(doneFile(ctx))) {
+                lastError = "download finished but could not be marked ready - try again"
+                _state.value = Pair(0f, lastError ?: "")
+                return@withContext
+            }
             index = null
             // v9.6.0 "Engine Pack": the whole store was replaced - drop
             // the grounding index; the next retrieve rebuilds it.
