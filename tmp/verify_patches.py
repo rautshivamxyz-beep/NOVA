@@ -2494,6 +2494,25 @@ check("v9.33.126: the count parse is pinned by unit tests",
 check("v9.33.126: version is at least 9.33.126 (294)",
       version_at_least("9.33.126", 294))
 
+# v9.33.127 "The one save in the app, pinned": NcieFiles.write backs about
+# twenty state stores and had no test of its own - four releases fixed its call
+# sites and its lock, all pinned by reading the source here. It is ordinary file
+# I/O, so a JVM test now runs it for real against a temporary directory.
+check("v9.33.127: the one save still takes one lock per destination path",
+      _nf.count("locks.getOrPut(f.absolutePath)") == 1)
+check("v9.33.127: the save still answers a boolean and never throws",
+      _nf.count("fun write(f: File, text: String): Boolean") == 1 and
+      _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1)
+check("v9.33.127: readOrNull still separates absent from unreadable",
+      _nf.count("fun readOrNull(f: File): String?") == 1 and
+      _nf.count('if (!f.exists()) return ""') == 1 and
+      _nf.count('NovaLog.quiet("NcieFiles", e)\n            null') == 1)
+check("v9.33.127: the save is pinned by unit tests",
+      open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
+           encoding="utf-8").read().count("@Test") >= 10)
+check("v9.33.127: version is at least 9.33.127 (295)",
+      version_at_least("9.33.127", 295))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

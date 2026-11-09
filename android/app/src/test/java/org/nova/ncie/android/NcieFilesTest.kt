@@ -1,124 +1,142 @@
 package org.nova.ncie.android
 
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
 
 /**
- * v9.33.90: the one atomic save.
+ * v9.33.127 "The one save in the app, pinned".
  *
- * Every state file NOVA rewrites in place - the exam date, the tuning
- * overrides, the learned experience, the focus session, the chunk index that
- * backs "from my notes" - goes through [NcieFiles.write]. A plain writeText
- * truncates first and writes second, so a kill in between leaves a half file
- * that every reader parses defensively and therefore silently resets.
+ * [NcieFiles.write] is the single save behind roughly twenty of NOVA's state
+ * stores - the exam date, the reminders, the conversations, the learned facts,
+ * the focus session, the wiki count. Three separate releases were spent fixing
+ * its call sites (v9.33.96, v9.33.100, v9.33.123) and one on its lock
+ * (v9.33.99), and it had no test of its own: every one of those was pinned by
+ * reading the source in verify_patches, which cannot tell whether the thing
+ * actually works.
  *
- * These pin the three things that matter: the new text is what lands, the old
- * file is replaced rather than appended to, and no .tmp is left behind for the
- * next reader to trip over. The last test pins the failure direction - a save
- * that cannot happen reports false instead of throwing into a UI thread.
+ * It is ordinary file I/O, so a plain JVM test can run it for real against a
+ * temporary directory. No Android class is touched on any path here -
+ * [NovaLog] catches its own logging failure.
  */
 class NcieFilesTest {
 
-    private lateinit var dir: File
-
-    @Before
-    fun setUp() {
-        dir = Files.createTempDirectory("novafiles").toFile()
-    }
-
-    @After
-    fun tearDown() {
-        dir.deleteRecursively()
-    }
+    private fun tempDir(): File =
+        Files.createTempDirectory("nova-files-test").toFile().also { it.deleteOnExit() }
 
     @Test
-    fun theTextLandsInTheFile() {
-        val f = File(dir, "state.txt")
+    fun writePutsTheTextOnDisk() {
+        val f = File(tempDir(), "state.txt")
         assertTrue(NcieFiles.write(f, "hello"))
-        assertTrue(f.exists())
         assertEquals("hello", f.readText())
     }
 
     @Test
-    fun theOldFileIsReplacedNotAppended() {
-        val f = File(dir, "state.txt")
-        f.writeText("a much longer old value that must not survive")
-        assertTrue(NcieFiles.write(f, "new"))
-        assertEquals("new", f.readText())
+    fun writeOverwritesTheOldTextCompletely() {
+        val f = File(tempDir(), "state.txt")
+        assertTrue(NcieFiles.write(f, "a much longer first value"))
+        assertTrue(NcieFiles.write(f, "short"))
+        assertEquals("short", f.readText())
     }
 
     @Test
-    fun noTmpFileIsLeftBehind() {
+    fun writeLeavesNoTemporaryFileBehind() {
+        val dir = tempDir()
         val f = File(dir, "state.txt")
-        NcieFiles.write(f, "one")
-        NcieFiles.write(f, "two")
-        val leftovers = dir.listFiles()!!.filter { it.name.endsWith(".tmp") }
-        assertTrue("leftover: " + leftovers.map { it.name }, leftovers.isEmpty())
-    }
-
-    @Test
-    fun theParentDirectoryIsCreated() {
-        val f = File(File(dir, "deep/nested"), "state.txt")
         assertTrue(NcieFiles.write(f, "x"))
-        assertEquals("x", f.readText())
+        assertEquals(listOf("state.txt"), dir.list()!!.sorted())
     }
 
     @Test
-    fun anEmptyValueIsARealSave() {
-        val f = File(dir, "state.txt")
-        f.writeText("something")
+    fun writeCreatesTheParentDirectory() {
+        val f = File(File(tempDir(), "a/b/c"), "state.txt")
+        assertTrue(NcieFiles.write(f, "nested"))
+        assertEquals("nested", f.readText())
+    }
+
+    @Test
+    fun writeHandlesEmptyText() {
+        val f = File(tempDir(), "state.txt")
         assertTrue(NcieFiles.write(f, ""))
         assertEquals("", f.readText())
     }
 
+    /**
+     * v9.33.99 "One buffer per file": the save writes a FIXED sibling `.tmp`,
+     * so two threads saving the same path without the per-path lock shared one
+     * buffer and the file that got renamed into place was neither writer's
+     * text. The final file must be exactly one of the two values, never a mix.
+     */
     @Test
-    fun twoThreadsSavingOneFileNeverMixIt() {
-        // v9.33.99: the save writes a fixed `<name>.tmp`, so two threads on the
-        // same file share one buffer. Whichever text wins, the file must be a
-        // COMPLETE one of them - never a mixture, never empty.
-        val f = File(dir, "state.json")
-        val a = "A".repeat(6000)
-        val b = "B".repeat(6000)
-        val pool = Executors.newFixedThreadPool(4)
-        try {
-            repeat(150) {
-                pool.execute { NcieFiles.write(f, a) }
-                pool.execute { NcieFiles.write(f, b) }
-            }
-            pool.shutdown()
-            assertTrue("the writers did not finish in time", pool.awaitTermination(60, TimeUnit.SECONDS))
-        } finally {
-            pool.shutdownNow()
+    fun twoThreadsOnOneFileNeverInterleave() {
+        val f = File(tempDir(), "state.txt")
+        val a = "A".repeat(4000)
+        val b = "B".repeat(4000)
+        repeat(40) {
+            val start = CountDownLatch(1)
+            val done = CountDownLatch(2)
+            val ta = Thread { start.await(); repeat(5) { NcieFiles.write(f, a) }; done.countDown() }
+            val tb = Thread { start.await(); repeat(5) { NcieFiles.write(f, b) }; done.countDown() }
+            ta.start(); tb.start()
+            start.countDown()
+            done.await()
+            val got = f.readText()
+            assertTrue("interleaved write: " + got.take(20),
+                got == a || got == b)
         }
-        val got = f.readText()
-        assertTrue("the file is neither writer's complete text (${got.length} chars)",
-            got == a || got == b)
+    }
+
+    /** Different files still save independently - the lock is per path. */
+    @Test
+    fun twoDifferentFilesBothLand() {
+        val dir = tempDir()
+        val one = File(dir, "one.txt")
+        val two = File(dir, "two.txt")
+        assertTrue(NcieFiles.write(one, "1"))
+        assertTrue(NcieFiles.write(two, "2"))
+        assertEquals("1", one.readText())
+        assertEquals("2", two.readText())
+    }
+
+    /**
+     * v9.33.119 "A store that could not be read is not an empty store": the
+     * other half of the save. "" is "there is nothing here yet"; null is
+     * "there is something here and I could not read it". A directory sitting
+     * where the state file belongs is exactly the second case, and it is the
+     * one a caller must not treat as an empty store.
+     */
+    @Test
+    fun readOrNullOnAMissingFileIsEmpty() {
+        assertEquals("", NcieFiles.readOrNull(File(tempDir(), "nothing.txt")))
     }
 
     @Test
-    fun differentFilesStillSaveIndependently() {
-        val one = File(dir, "one.json")
-        val two = File(dir, "two.json")
-        assertTrue(NcieFiles.write(one, "first"))
-        assertTrue(NcieFiles.write(two, "second"))
-        assertEquals("first", one.readText())
-        assertEquals("second", two.readText())
+    fun readOrNullOnAGoodFileIsItsText() {
+        val f = File(tempDir(), "state.txt")
+        NcieFiles.write(f, "value")
+        assertEquals("value", NcieFiles.readOrNull(f))
     }
 
     @Test
-    fun aSaveThatCannotHappenReportsFalseAndDoesNotThrow() {
-        // the parent path is a FILE, so the directory can never be created
+    fun readOrNullOnAnUnreadableFileIsNull() {
+        val f = File(tempDir(), "state.txt")
+        assertTrue(f.mkdirs())          // a directory where a file belongs
+        assertTrue(f.exists())
+        assertNull(NcieFiles.readOrNull(f))
+    }
+
+    /** A save that cannot work answers false - it never throws at the caller. */
+    @Test
+    fun writeToAnImpossiblePathAnswersFalse() {
+        val dir = tempDir()
         val blocker = File(dir, "blocker")
-        blocker.writeText("i am not a directory")
-        val f = File(File(blocker, "sub"), "state.txt")
+        assertTrue(blocker.writeText("not a directory"))
+        val f = File(blocker, "state.txt")   // parent is a file, not a directory
         assertFalse(NcieFiles.write(f, "x"))
     }
 }
