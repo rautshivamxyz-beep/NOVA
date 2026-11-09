@@ -261,4 +261,17 @@
     <string name="remote_private_on">सिर्फ़ आपका सवाल इस फ़ोन से बाहर जाएगा</string>
     <string name="remote_private_off">नोट्स और दस्तावेज़ उस मशीन पर भेजे जाएँगे</string>
     <string name="chat_unreadable">यह बातचीत पढ़ी नहीं जा सकी — इसकी फ़ाइल आपके फ़ोन पर सुरक्षित है, छेड़ी नहीं गई। नई बातचीत खोली जा रही है।</string>
+    <!-- v9.33.125 "The answer style speaks Hindi too": these ten keys shipped
+         with the answer-style settings and never got a Hindi copy, so a Hindi
+         phone fell back to English for the whole block. -->
+    <string name="app_name">NOVA</string>
+    <string name="section_customization">बातचीत की सेटिंग</string>
+    <string name="show_advanced_settings">उन्नत सुविधाएँ दिखाएँ</string>
+    <string name="response_style_title">जवाब का अंदाज़</string>
+    <string name="response_style">जवाब का अंदाज़: %1$s</string>
+    <string name="style_concise">संक्षिप्त</string>
+    <string name="style_balanced">संतुलित</string>
+    <string name="style_detailed">विस्तार से</string>
+    <string name="style_creative">रचनात्मक</string>
+    <string name="style_applies_next_load">यह अंदाज़ तब लागू होगा जब मॉडल अगली बार लोड होगा या बातचीत रीसेट होगी।</string>
 </resources>

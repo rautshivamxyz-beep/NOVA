@@ -2437,6 +2437,31 @@ check("v9.33.124: the parse is pinned by unit tests",
 check("v9.33.124: version is at least 9.33.124 (292)",
       version_at_least("9.33.124", 292))
 
+# v9.33.125 "The answer style speaks Hindi too": the answer-style settings
+# shipped with ten English-only keys, so a phone set to Hindi showed that whole
+# block in English. The ten are translated now, and the invariant that would
+# have caught it on the day it happened is checked here: the two string files
+# must carry exactly the same key set, so the next string that forgets its
+# Hindi copy fails this verifier instead of shipping.
+_en_res = os.path.join(ROOT, "android/app/src/main/res/values/strings.xml")
+_hi_res = os.path.join(ROOT, "android/app/src/main/res/values-hi/strings.xml")
+_en_text = open(_en_res, encoding="utf-8").read()
+_hi_text = open(_hi_res, encoding="utf-8").read()
+_en_keys = set(re.findall(r'<string name="([^"]+)"', _en_text))
+_hi_keys = set(re.findall(r'<string name="([^"]+)"', _hi_text))
+check("v9.33.125: the Hindi string file carries every English key",
+      _en_keys <= _hi_keys)
+check("v9.33.125: the Hindi string file invents no key of its own",
+      _hi_keys <= _en_keys)
+check("v9.33.125: the answer-style block is translated",
+      all(_hi_text.count('name="%s"' % _k) == 1 for _k in
+          ["section_customization", "show_advanced_settings",
+           "response_style", "response_style_title", "style_concise",
+           "style_balanced", "style_detailed", "style_creative",
+           "style_applies_next_load"]))
+check("v9.33.125: version is at least 9.33.125 (293)",
+      version_at_least("9.33.125", 293))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
