@@ -2513,6 +2513,21 @@ check("v9.33.127: the save is pinned by unit tests",
 check("v9.33.127: version is at least 9.33.127 (295)",
       version_at_least("9.33.127", 295))
 
+# v9.33.128 correction "writeText answers Unit": the first build of v9.33.127
+# was RED on its own test source. NcieFilesTest asserted the result of
+# File.writeText, which returns Unit - the test file did not compile, so the
+# release never reached an APK. The app was never wrong and no production code
+# changed; the assertion now checks the file exists after the write.
+_nft = open(os.path.join(ROOT,
+    "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
+    encoding="utf-8").read()
+check("v9.33.128: the impossible-path test is still there",
+      _nft.count("fun writeToAnImpossiblePathAnswersFalse()") == 1)
+check("v9.33.128: no assertion wraps a Unit-returning writeText",
+      _nft.count("assertTrue(blocker.writeText(") == 0)
+check("v9.33.128: version is at least 9.33.128 (296)",
+      version_at_least("9.33.128", 296))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

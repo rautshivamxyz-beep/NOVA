@@ -135,7 +135,10 @@ class NcieFilesTest {
     fun writeToAnImpossiblePathAnswersFalse() {
         val dir = tempDir()
         val blocker = File(dir, "blocker")
-        assertTrue(blocker.writeText("not a directory"))
+        // File.writeText answers Unit, not a boolean - assert the result of the
+        // write, not the write itself (v9.33.128: this line did not compile)
+        blocker.writeText("not a directory")
+        assertTrue(blocker.isFile)
         val f = File(blocker, "state.txt")   // parent is a file, not a directory
         assertFalse(NcieFiles.write(f, "x"))
     }
