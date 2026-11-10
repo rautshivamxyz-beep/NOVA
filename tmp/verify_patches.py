@@ -2528,6 +2528,30 @@ check("v9.33.128: no assertion wraps a Unit-returning writeText",
 check("v9.33.128: version is at least 9.33.128 (296)",
       version_at_least("9.33.128", 296))
 
+# v9.33.129 "A store that could not be read is not an empty store": the
+# per-model tuning overrides were the last read-modify-write store the
+# v9.33.119 sweep never reached. setCommand read the file, set one key and
+# wrote the whole file back; the read flattened every failure to an empty
+# map, so a file that was there and unreadable made the next "set
+# temperature 0.7" delete every other knob the user had tuned while
+# answering "set to 0.7" as if nothing had happened.
+check("v9.33.129: the tuning read asks the honest read",
+      "NcieFiles.readOrNull(fileFor(c, modelFile))" in tun)
+check("v9.33.129: the tuning read can answer null for an unreadable file",
+      "internal fun readOverridesOrNull" in tun)
+check("v9.33.129: the override format is one pure parser",
+      "internal fun parseOverrides" in tun)
+check("v9.33.129: setCommand refuses to rewrite a file it could not read",
+      '?: return "Could not read the saved settings for "' in tun)
+check("v9.33.129: the old flatten-and-rewrite is gone",
+      "val vals = readOverrides(c, m.first)" not in tun)
+check("v9.33.129: the dead flattening read is gone, not merely unused",
+      "private fun readOverrides(c: Context" not in tun)
+check("v9.33.129: the override parse is pinned by unit tests",
+      "NcieTune.parseOverrides" in load_test("android/NcieTuneOverridesTest.kt"))
+check("v9.33.129: version is at least 9.33.129 (297)",
+      version_at_least("9.33.129", 297))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

@@ -239,7 +239,13 @@ object NcieTune {
         val range = RANGES[key]
         if (v == null || range == null || v < range.start || v > range.endInclusive)
             return usage()
-        val vals = readOverrides(c, m.first)
+        // v9.33.129: ask the question the flattening read cannot answer. A
+        // file that is there and unreadable must never be rewritten from an
+        // empty map - that would delete the other knobs the user set.
+        val read = readOverridesOrNull(c, m.first)
+            ?: return "Could not read the saved settings for " + m.second +
+                " (storage error). NOVA will not overwrite them - try again."
+        val vals = read
         vals[key] = v
         // v9.33.111: NcieFiles.write returns false instead of throwing
         // (v9.33.90), so this catch was dead and an unsaved setting was
@@ -297,19 +303,49 @@ object NcieTune {
             "set repeat penalty 1-2\n" +
             "Also: model settings, reset model settings"
 
-    private fun readOverrides(c: Context, modelFile: String): HashMap<String, Double> {
+    /**
+     * v9.33.129 "A store that could not be read is not an empty store",
+     * applied to the per-model tuning overrides.
+     *
+     * The tuning file is one `key=value` line per knob, and setCommand is a
+     * read-modify-write: it reads the file, sets one key, and writes the
+     * whole file back. The read used to flatten every failure to an empty
+     * map, which is indistinguishable from "this model has no overrides
+     * yet" - so a file that was there but unreadable (a truncated write, an
+     * IO error) made the very next "set temperature 0.7" rewrite the file
+     * from that empty map and delete every other knob the user had tuned,
+     * while answering "set to 0.7" as if nothing was wrong.
+     *
+     * Two answers are needed, not one: "" the file is not there yet (a
+     * fresh model, nothing to lose), null the file is there and could not
+     * be read (something to lose). This is [NcieFiles.readOrNull]'s split,
+     * the same one reminders, exams, planner, the scheduled texts and the
+     * conversation store already use.
+     *
+     * [parseOverrides] is the pure half, so one JVM test pins the format
+     * without a file and without a Context.
+     */
+    internal fun parseOverrides(text: String): HashMap<String, Double> {
         val vals = HashMap<String, Double>()
-        try {
-            val f = fileFor(c, modelFile)
-            if (f.exists()) for (l in f.readText().lines()) {
-                val i = l.indexOf('=')
-                if (i <= 0) continue
-                val k = l.substring(0, i).trim()
-                val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
-                if (k in KEYS) vals[k] = v
-            }
-        } catch (e: Exception) { NovaLog.quiet("NcieTune", e) }
+        for (l in text.lines()) {
+            val i = l.indexOf('=')
+            if (i <= 0) continue
+            val k = l.substring(0, i).trim()
+            val v = l.substring(i + 1).trim().toDoubleOrNull() ?: continue
+            if (k in KEYS) vals[k] = v
+        }
         return vals
+    }
+
+    /** The overrides for [modelFile], or null when the file could not be read. */
+    internal fun readOverridesOrNull(c: Context, modelFile: String): HashMap<String, Double>? {
+        val text = try {
+            NcieFiles.readOrNull(fileFor(c, modelFile))
+        } catch (e: Exception) {
+            NovaLog.quiet("NcieTune", e)
+            null
+        } ?: return null
+        return parseOverrides(text)
     }
 
     /** 20.0 -> "20", 0.70 -> "0.7" - values read back the way they read in. */
