@@ -196,8 +196,12 @@ object OsintEngine {
 
     private fun ip(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>) {
         val value = raw.trim().removePrefix("[").removeSuffix("]")
-        val validShape = value.matches(Regex("^[0-9.]+$")) || value.matches(Regex("^[0-9a-fA-F:]+$"))
-        require(validShape) { "Enter a literal IPv4 or IPv6 address, not a hostname." }
+        val octets = value.split('.')
+        val isIpv4 = octets.size == 4 && octets.all {
+            it.isNotEmpty() && it.length <= 3 && (it.toIntOrNull() in 0..255)
+        }
+        val isIpv6 = value.contains(':') && value.matches(Regex("^[0-9a-fA-F:.]+$"))
+        require(isIpv4 || isIpv6) { "Enter a literal IPv4 or IPv6 address, not a hostname." }
         val address = try { InetAddress.getByName(value) } catch (e: Exception) {
             throw IllegalArgumentException("That IP address is not valid.")
         }
