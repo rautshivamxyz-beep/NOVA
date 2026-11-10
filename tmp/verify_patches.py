@@ -2552,6 +2552,32 @@ check("v9.33.129: the override parse is pinned by unit tests",
 check("v9.33.129: version is at least 9.33.129 (297)",
       version_at_least("9.33.129", 297))
 
+# v9.33.130 "A memory that could not be read is not an empty memory":
+# persist() writes the WHOLE snapshot out of the in-memory store, and
+# restore() treated a snapshot it could not read exactly like no snapshot
+# at all - so one failed read meant the next recorded fact rewrote the file
+# from an empty store and deleted every fact, cached answer and weak topic
+# the user had accumulated. Same bug class as v9.33.119-129, in the one
+# store that holds what NOVA has learned.
+check("v9.33.130: the store contract separates absent from unreadable",
+      '"" is a store with nothing stored yet' in pl)
+check("v9.33.130: a failed boot read is remembered",
+      'loadFailed = true' in pl)
+check("v9.33.130: persist refuses to write over what it could not read",
+      'if (loadFailed) return' in pl)
+check("v9.33.130: the old flatten-to-empty restore is gone",
+      'val snap = store.read() ?: return' not in pl)
+check("v9.33.130: the file-backed host asks the honest read",
+      'NcieFiles.readOrNull(file)' in nl)
+check("v9.33.130: the demo stores answer absent, not unreadable",
+      'snapshot ?: ""' in load("ncie/learn/Distiller.kt"))
+check("v9.33.130: a wipe is still written after a failed read",
+      'A wipe is a' in pl)
+check("v9.33.130: the learner contract is pinned by unit tests",
+      'PersistentLearner(store)' in load_test("learn/PersistentLearnerRestoreTest.kt"))
+check("v9.33.130: version is at least 9.33.130 (298)",
+      version_at_least("9.33.130", 298))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),
