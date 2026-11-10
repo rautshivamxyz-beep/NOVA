@@ -198,7 +198,8 @@ object OsintEngine {
         val value = raw.trim().removePrefix("[").removeSuffix("]")
         val octets = value.split('.')
         val isIpv4 = octets.size == 4 && octets.all {
-            it.isNotEmpty() && it.length <= 3 && (it.toIntOrNull() in 0..255)
+            val part = it.toIntOrNull()
+            it.isNotEmpty() && it.length <= 3 && part != null && part in 0..255
         }
         val isIpv6 = value.contains(':') && value.matches(Regex("^[0-9a-fA-F:.]+$"))
         require(isIpv4 || isIpv6) { "Enter a literal IPv4 or IPv6 address, not a hostname." }
