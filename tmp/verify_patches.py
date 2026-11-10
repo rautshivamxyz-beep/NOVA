@@ -2603,6 +2603,25 @@ check("v9.33.131: the append is pinned by unit tests",
 check("v9.33.131: version is at least 9.33.131 (299)",
       version_at_least("9.33.131", 299))
 
+# v9.33.132 "A promise NOVA could not write down is not noted": three of the
+# appends that answer the user with a promise - a tracked promise, a daily
+# reminder, an expiry date - wrote with a bare appendText and answered
+# "noted" whatever happened, so a failed write left the user believing NOVA
+# was holding something it had never recorded. They go through the one save
+# now, and say so when it fails.
+check("v9.33.132: a promise goes through the one save",
+      r'NcieFiles.append(' in lo and 'the promise was NOT noted' in lo)
+check("v9.33.132: a daily reminder goes through the one save",
+      r'NcieFiles.append(' in lo and 'it was NOT set' in lo)
+check("v9.33.132: an expiry date goes through the one save",
+      r'NcieFiles.append(file(ctx), clean + "\t" + millis' in lo)
+check("v9.33.132: a reminder is only armed when it was stored",
+      lo.index('it was NOT set') < lo.index('        arm(ctx)'))
+check("v9.33.132: no raw append is left in the leftovers store",
+      'appendText(' not in lo)
+check("v9.33.132: version is at least 9.33.132 (300)",
+      version_at_least("9.33.132", 300))
+
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),
                 ("Planner.kt", _pl), ("PdfDoc.kt", _pd), ("WikiCore.kt", _wo),

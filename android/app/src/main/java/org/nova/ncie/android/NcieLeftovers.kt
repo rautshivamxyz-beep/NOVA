@@ -227,7 +227,14 @@ object NcieLedger {
 
     fun add(ctx: Context, whoWhat: String): String {
         val clean = whoWhat.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(System.currentTimeMillis().toString() + "\t" + clean + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
+        // v9.33.132 "A promise NOVA could not write down is not noted":
+        // through the one save, and "noted" only when it really was. This
+        // used to append behind the save's back and answer "I'll keep
+        // track" whatever happened, so a failed write left the user
+        // believing NOVA was holding a promise it had never recorded.
+        val saved = NcieFiles.append(
+            file(ctx), System.currentTimeMillis().toString() + "\t" + clean + "\n")
+        if (!saved) return "I couldn't save that, so the promise was NOT noted. Try again."
         return "Noted - I'll keep track. Say \"what did I promise\" any time."
     }
 
@@ -404,7 +411,11 @@ object NcieRecurring {
 
     fun add(ctx: Context, atMinutes: Int, what: String): String {
         val clean = what.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(atMinutes.toString() + "\t" + clean + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
+        // v9.33.132: the alarm is only worth arming for a reminder that was
+        // actually stored, and "I'll remind you" is only true if it was.
+        val saved = NcieFiles.append(
+            file(ctx), atMinutes.toString() + "\t" + clean + "\n")
+        if (!saved) return "I couldn't save that daily reminder, so it was NOT set. Try again."
         arm(ctx)
         return "Every day at " + NcieQuiet.fmt(atMinutes) + " I'll remind you: " + clean
     }
@@ -589,7 +600,9 @@ object NcieExpiry {
 
     fun add(ctx: Context, name: String, millis: Long): String {
         val clean = name.replace('\t', ' ').replace('\n', ' ').trim()
-        try { file(ctx).appendText(clean + "\t" + millis + "\n") } catch (e: Exception) { NovaLog.quiet("NcieLeftovers", e) }
+        // v9.33.132: "Noted" only when it was noted.
+        val saved = NcieFiles.append(file(ctx), clean + "\t" + millis + "\n")
+        if (!saved) return "I couldn't save that expiry date, so it was NOT noted. Try again."
         return "Noted: " + clean + " expires " +
             SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(millis)) + "."
     }
