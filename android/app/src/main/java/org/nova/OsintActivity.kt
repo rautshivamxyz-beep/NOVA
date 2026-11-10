@@ -16,6 +16,7 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import org.nova.ncie.android.NcieFiles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -232,12 +233,8 @@ class OsintActivity : Activity() {
         val dir = File(filesDir, "osint").apply { mkdirs() }
         val safe = report.target.replace(Regex("[^A-Za-z0-9._-]"), "_").take(36)
         val file = File(dir, "osint_${report.kind}_${safe}_${report.createdAt}.json")
-        val temp = File(dir, file.name + ".tmp")
-        temp.writeText(report.asJson(), Charsets.UTF_8)
-        if (!temp.renameTo(file)) {
-            temp.copyTo(file, overwrite = true)
-            temp.delete()
-        }
+        if (!NcieFiles.write(file, report.asJson()))
+            throw java.io.IOException("Could not save the OSINT report.")
         return file
     }
 
