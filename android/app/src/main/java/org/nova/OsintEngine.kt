@@ -101,7 +101,7 @@ object OsintEngine {
                     out.add(OsintFinding("GitLab public account", "No exact public username match returned.", gitlab, "Verified API response"))
                 } else {
                     for (i in 0 until minOf(arr.length(), 5)) {
-                        val j = arr.getJSONObject(i)
+                        val j = arr.optJSONObject(i) ?: continue
                         out.add(OsintFinding("GitLab account candidate", j.optString("username") +
                             (if (j.optString("name").isNotBlank()) " · " + j.optString("name") else ""),
                             j.optString("web_url", "https://gitlab.com/$user"), "Verified API response; candidate only"))
