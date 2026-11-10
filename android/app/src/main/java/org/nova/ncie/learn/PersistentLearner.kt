@@ -16,7 +16,13 @@ import org.nova.ncie.model.VerifyResult
 interface LearningStore {
     /** Persist the full snapshot; called after every record(). */
     fun write(snapshot: String)
-    /** Return the snapshot a previous [write] stored, or null. */
+    /**
+     * The snapshot a previous [write] stored. Two answers that look alike
+     * and are not (v9.33.130): "" is a store with nothing stored yet - a
+     * fresh install, nothing to lose - and null is a store that has
+     * something stored and could not be read. The learner refuses to
+     * overwrite a null. A host that cannot tell the two apart answers "".
+     */
     fun read(): String?
 }
 
@@ -68,6 +74,14 @@ class PersistentLearner(
     /** v0.9.4 (stage 2): rejected-answer counts per topic — the weak-
      *  topic signal. Persisted as double-tab lines in the snapshot. */
     private val weaknesses = HashMap<String, Int>()
+
+    /**
+     * v9.33.130 "A memory that could not be read is not an empty memory":
+     * true when the snapshot was there and could not be read. While it is
+     * true the learner writes nothing, so the damaged file is left exactly
+     * as it is and the next launch can try again.
+     */
+    private var loadFailed = false
 
     // v0.9.2 fix: these token sets moved ABOVE the init block. restore()
     // (which init runs) now warms the canonical-token cache for every
@@ -294,6 +308,9 @@ class PersistentLearner(
         hits = 0
         misses = 0
         fuzzyHits = 0
+        // v9.33.130: written even when the boot read failed. A wipe is a
+        // deliberate instruction, and refusing it would leave behind the
+        // very file the user asked to be rid of.
         store.write("")
         // v0.9.4 (stage 2): a wiped world has no weak topics either
         weaknesses.clear()
@@ -335,6 +352,23 @@ class PersistentLearner(
      *  debounce inside its LearningStore. v0.9.0: graded-fact lines
      *  follow the cache lines, each after a leading tab. */
     private fun persist() {
+        // v9.33.130 "A memory that could not be read is not an empty
+        // memory": persist() writes the WHOLE snapshot out of the in-memory
+        // store, and restore() used to treat a snapshot it could not read
+        // exactly like no snapshot at all. One failed read therefore meant
+        // the next recorded fact rewrote the file from an empty store and
+        // deleted every fact, every cached answer and every weak topic the
+        // user had accumulated - the same bug the v9.33.119 sweep killed in
+        // reminders, exams, planner, the scheduled texts and the
+        // conversation store, and v9.33.129 killed in the tuning overrides,
+        // here in the one store that holds what NOVA has learned.
+        //
+        // A learner that could not read its file keeps working for the
+        // session - it is a cache as well as a memory, and refusing to
+        // answer would be a worse trade - but it writes nothing, so a
+        // transient IO error cannot cost the user their memory. The next
+        // launch reads the file again and, if it reads now, carries on.
+        if (loadFailed) return
         val sb = StringBuilder()
         for ((k, v) in cache) {
             sb.append(escapeLine(k)).append('\t').append(escapeLine(v.answer)).append('\n')
@@ -352,7 +386,13 @@ class PersistentLearner(
     }
 
     private fun restore() {
-        val snap = store.read() ?: return
+        val snap = store.read()
+        if (snap == null) {
+            // v9.33.130: there IS a memory here and it could not be read.
+            // Remember that, so persist() never writes over it.
+            loadFailed = true
+            return
+        }
         for (line in snap.split('\n')) {
             if (line.isEmpty()) continue
             // v0.9.0: a leading tab marks a graded-fact line — a cache

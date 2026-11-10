@@ -16,7 +16,7 @@ fun main() {
     val snapshot = object : LearningStore {
         private var snap: String? = null
         override fun write(snapshot: String) { snap = snapshot }
-        override fun read(): String? = snap
+        override fun read(): String? = snap ?: ""
     }
 
     // 1 + 2: kernel with defaults (stub LLM, rule-based analyzer)

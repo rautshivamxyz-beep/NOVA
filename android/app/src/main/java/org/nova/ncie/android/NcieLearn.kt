@@ -212,9 +212,10 @@ object NcieLearn {
             main.removeCallbacks(flusher)
             flusher.run()
         }
-        override fun read(): String? =
-            try { if (file.exists()) file.readText() else null }
-            catch (e: Exception) { null }
+        // v9.33.130: the two answers NcieFiles.readOrNull already gives -
+        // "" nothing stored yet, null stored and unreadable - so a failed
+        // read can no longer look like an empty memory.
+        override fun read(): String? = NcieFiles.readOrNull(file)
     }
 
     /** The file-backed LearningStore for [file]. */

@@ -130,7 +130,7 @@ fun main() {
     val store = object : LearningStore {
         private var snapshot: String? = null
         override fun write(snapshot: String) { this.snapshot = snapshot }
-        override fun read(): String? = snapshot
+        override fun read(): String? = snapshot ?: ""
     }
     val learner = PersistentLearner(store)
     val knowledge = KnowledgeStore()
