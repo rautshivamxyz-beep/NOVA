@@ -142,4 +142,44 @@ class NcieFilesTest {
         val f = File(blocker, "state.txt")   // parent is a file, not a directory
         assertFalse(NcieFiles.write(f, "x"))
     }
+
+    // ------------------------------------------------------------------
+    // v9.33.131 "One save, even for an append": v9.33.127 pinned writeText
+    // as the one way NOVA saves a file, but appendText is not writeText and
+    // the skill forge still grew the user's skills file with it - not
+    // atomic, and outside the per-path lock. NcieFiles.append is the same
+    // ceremony as write, and these pin it.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun appendCreatesTheFileWhenThereIsNothingThereYet() {
+        val f = File(tempDir(), "skills.txt")
+        assertTrue(NcieFiles.append(f, "first\n"))
+        assertEquals("first\n", f.readText())
+    }
+
+    @Test
+    fun appendKeepsWhatWasAlreadyThere() {
+        val f = File(tempDir(), "skills.txt")
+        assertTrue(NcieFiles.write(f, "one\n"))
+        assertTrue(NcieFiles.append(f, "two\n"))
+        assertEquals("one\ntwo\n", f.readText())
+    }
+
+    @Test
+    fun appendLeavesNoTemporaryFileBehind() {
+        val dir = tempDir()
+        val f = File(dir, "skills.txt")
+        assertTrue(NcieFiles.append(f, "x"))
+        assertEquals(listOf("skills.txt"), dir.list()!!.sorted())
+    }
+
+    /** A file NOVA cannot read is left alone, not written onto. */
+    @Test
+    fun appendRefusesAFileItCannotRead() {
+        val f = File(tempDir(), "skills.txt")
+        assertTrue(f.mkdirs())          // a directory where a file belongs
+        assertFalse(NcieFiles.append(f, "x"))
+        assertTrue(f.isDirectory)       // and it is still that directory
+    }
 }

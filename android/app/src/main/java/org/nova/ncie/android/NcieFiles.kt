@@ -81,6 +81,29 @@ object NcieFiles {
     }
 
     /**
+     * v9.33.131 "One save, even for an append": the second write path.
+     *
+     * v9.33.127 pinned `writeText` as the one way NOVA saves a file, but
+     * `appendText` is not `writeText`, and the skill forge still used it to
+     * grow the user's skills file. That is a bare buffered append: not
+     * atomic, and outside the per-path lock every other save takes.
+     *
+     * An append cannot delete what it never read, so it did not need the
+     * readOrNull guard to be safe - but reading first is what makes it
+     * crash-safe, and it is exactly what the old call was missing. The read
+     * is the guard too: a file that is there and unreadable answers false
+     * and is left alone, because appending to a file NOVA cannot read would
+     * write a second half onto a damaged whole.
+     */
+    fun append(f: File, text: String): Boolean {
+        val lock = locks.getOrPut(f.absolutePath) { Any() }
+        return synchronized(lock) {
+            val old = readOrNull(f)
+            if (old == null) false else writeNow(f, old + text)
+        }
+    }
+
+    /**
      * The same write, appended to the list of best-effort saves that only
      * care that it happened. Kept for the call sites that already swallow.
      */

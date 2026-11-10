@@ -1848,10 +1848,16 @@ check("v9.33.98: version is at least 9.33.98 (266)",
 # ---- v9.33.99 "One buffer per file" ----
 # The save writes a fixed `<name>.tmp`, so two threads saving one file shared a
 # buffer and could interleave their bytes into a corrupt state file.
+# v9.33.131: there are two write entry points now (write and append), and
+# both must take the per-path lock. The count is tied to the number of entry
+# points rather than to a number every new one would have to remember - the
+# same re-tying v9.33.124 did for the ChatStore catch count.
 check("v9.33.99: the save takes one lock per destination path",
       _nf.count("private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()") == 1 and
       _nf.count("synchronized(lock) { writeNow(f, text) }") == 1 and
-      _nf.count("locks.getOrPut(f.absolutePath) { Any() }") == 1)
+      _nf.count("locks.getOrPut(f.absolutePath) { Any() }") ==
+          _nf.count("fun write(f: File, text: String): Boolean") +
+          _nf.count("fun append(f: File, text: String): Boolean"))
 check("v9.33.99: the body moved under the lock, not copied",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1 and
@@ -2499,7 +2505,9 @@ check("v9.33.126: version is at least 9.33.126 (294)",
 # sites and its lock, all pinned by reading the source here. It is ordinary file
 # I/O, so a JVM test now runs it for real against a temporary directory.
 check("v9.33.127: the one save still takes one lock per destination path",
-      _nf.count("locks.getOrPut(f.absolutePath)") == 1)
+      _nf.count("locks.getOrPut(f.absolutePath)") ==
+          _nf.count("fun write(f: File, text: String): Boolean") +
+          _nf.count("fun append(f: File, text: String): Boolean"))
 check("v9.33.127: the save still answers a boolean and never throws",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1)
@@ -2577,6 +2585,23 @@ check("v9.33.130: the learner contract is pinned by unit tests",
       'PersistentLearner(store)' in load_test("learn/PersistentLearnerRestoreTest.kt"))
 check("v9.33.130: version is at least 9.33.130 (298)",
       version_at_least("9.33.130", 298))
+
+# v9.33.131 "One save, even for an append": v9.33.127 pinned writeText as
+# the one way NOVA saves a file, but appendText is not writeText - the skill
+# forge still grew the user's skills file with a bare buffered append, which
+# is not atomic and took none of the per-path lock every other save takes.
+check("v9.33.131: there is one append, beside the one save",
+      'fun append(f: File, text: String): Boolean' in _nf)
+check("v9.33.131: the append takes the same per-path lock",
+      'locks.getOrPut(f.absolutePath) { Any() }' in _nf)
+check("v9.33.131: the append refuses a file it could not read",
+      'if (old == null) false else writeNow(f, old + text)' in _nf)
+check("v9.33.131: the skill forge no longer appends behind the save's back",
+      'appendText(' not in load("ncie/android/NcieSkillForge.kt"))
+check("v9.33.131: the append is pinned by unit tests",
+      'NcieFiles.append(' in load_test("android/NcieFilesTest.kt"))
+check("v9.33.131: version is at least 9.33.131 (299)",
+      version_at_least("9.33.131", 299))
 
 for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 ("FetchLogActivity.kt", _fl), ("Knowledge.kt", _kn),

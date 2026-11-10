@@ -105,14 +105,17 @@ object NcieSkillForge {
         return Triple(n, t, i)
     }
 
-    /** Append a validated skill to the user file. */
+    /** Append a validated skill to the user file.
+     *  v9.33.131: through the one save, so the append is atomic, takes the
+     *  per-path lock every other save takes, and refuses a file it could
+     *  not read instead of writing onto a damaged one. */
     private fun append(ctx: Context, name: String, trigger: String, instruction: String): Boolean =
         try {
-            file(ctx).appendText(
+            NcieFiles.append(
+                file(ctx),
                 "\n[skill]\nname=" + name + "\ntrigger=" + trigger +
                     "\ninstruction=" + instruction.replace("\n", "\\n") + "\nsource=nova\n"
             )
-            true
         } catch (e: Exception) { false }
 
     /**
