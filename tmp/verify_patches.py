@@ -2637,6 +2637,20 @@ for f, text in [("Exams.kt", _ex), ("Study.kt", _st), ("SendReceiver.kt", _sr),
                 bad.append(e.group(1))
     check("%s: no invalid string escapes" % f, not bad)
 
+# v9.33.133 "NOVA OSINT": keep the public-source module wired and routed
+# through the shared HTTPS/SOCKS network layer.
+_osint_engine = load("OsintEngine.kt")
+_osint_ui = load("OsintActivity.kt")
+_osint_manifest = open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read()
+check("v9.33.133: OSINT engine uses the shared NovaNet transport",
+      "object OsintEngine" in _osint_engine and "NovaNet.open" in _osint_engine)
+check("v9.33.133: OSINT screen is present and exposed from the drawer",
+      "class OsintActivity" in _osint_ui and ma.count('drawerRow("OSINT"') == 1)
+check("v9.33.133: OSINT activity is registered without a launcher export",
+      _osint_manifest.count('android:name=".OsintActivity" android:exported="false"') == 1)
+structural("OsintEngine.kt", _osint_engine)
+structural("OsintActivity.kt", _osint_ui)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
