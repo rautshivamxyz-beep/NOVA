@@ -150,8 +150,10 @@ object OsintEngine {
                 val registrar = j.optJSONArray("entities")?.let { arr ->
                     (0 until arr.length()).mapNotNull { idx ->
                         val entity = arr.optJSONObject(idx) ?: return@mapNotNull null
-                        if (entity.optJSONArray("roles")?.toString()?.contains("registrar") == true)
-                            entity.optJSONObject("vcardArray")?.optJSONArray(1)?.toString() else null
+                        if (entity.optJSONArray("roles")?.toString()?.contains("registrar") == true) {
+                            entity.optJSONArray("vcardArray")?.optJSONArray(1)?.toString()
+                                ?: entity.optString("handle").takeIf { it.isNotBlank() }
+                        } else null
                     }.firstOrNull()
                 }
                 if (!registrar.isNullOrBlank()) out.add(OsintFinding("Registrar data", registrar, rdapUrl))
