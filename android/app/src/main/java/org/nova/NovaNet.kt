@@ -48,7 +48,7 @@ object NovaNet {
             as HttpURLConnection
         conn.connectTimeout = connectMs
         conn.readTimeout = readMs
-        conn.instanceFollowRedirects = true
+        conn.instanceFollowRedirects = false
         conn.useCaches = false
         // v9.26.0 "Search fix": a real browser User-Agent. The old
         // "NOVA-local-assistant/1.0" string made DuckDuckGo serve an
@@ -100,28 +100,38 @@ object NovaNet {
     /** GET a URL as text, through the configured proxy (or direct). */
     fun getText(context: Context?, url: String, connectMs: Int = 10000,
                 readMs: Int = 20000): String {
-        val conn = open(context, url, connectMs, readMs)
-        try {
-            // v9.33.58 (improvement pass): force the connection (and any
-            // redirects) and refuse an https -> http downgrade, so a lookup
-            // can never silently fall back to cleartext.
-            conn.responseCode
-            val finalUrl = conn.url.toString()
-            if (url.startsWith("https", ignoreCase = true) &&
-                !finalUrl.startsWith("https", ignoreCase = true))
-                throw java.io.IOException("refusing cleartext redirect to " + finalUrl)
-            return conn.inputStream.bufferedReader().use { r ->
-                val buf = CharArray(64 * 1024)
-                val sb = StringBuilder()
-                while (sb.length < MAX_BODY) {
-                    val n = r.read(buf)
-                    if (n < 0) break
-                    sb.append(buf, 0, minOf(n, MAX_BODY - sb.length))
+        var current = url
+        var redirects = 0
+        while (true) {
+            val conn = open(context, current, connectMs, readMs)
+            try {
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                        ?: throw java.io.IOException("redirect without Location")
+                    val next = URL(URL(current), location)
+                    if (!next.protocol.equals("https", ignoreCase = true))
+                        throw java.io.IOException("refusing non-HTTPS redirect")
+                    if (++redirects > 5)
+                        throw java.io.IOException("too many redirects")
+                    current = next.toString()
+                    continue
                 }
-                sb.toString()
+                if (code !in 200..299)
+                    throw java.io.IOException("HTTP request failed: $code")
+                return conn.inputStream.bufferedReader().use { r ->
+                    val buf = CharArray(64 * 1024)
+                    val sb = StringBuilder()
+                    while (sb.length < MAX_BODY) {
+                        val n = r.read(buf)
+                        if (n < 0) break
+                        sb.append(buf, 0, minOf(n, MAX_BODY - sb.length))
+                    }
+                    sb.toString()
+                }
+            } finally {
+                conn.disconnect()
             }
-        } finally {
-            conn.disconnect()
         }
     }
 }
