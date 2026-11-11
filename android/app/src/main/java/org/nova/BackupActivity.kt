@@ -319,42 +319,110 @@ class BackupActivity : ListActivity() {
         Thread {
             var restored = 0
             var ok = false
+            val stage = File(cacheDir, "nova_restore_stage")
+            val backup = File(cacheDir, "nova_restore_backup")
+            fun deleteTree(file: File) {
+                if (file.isDirectory) file.listFiles()?.forEach { deleteTree(it) }
+                file.delete()
+            }
+            fun copyTree(from: File, to: File, skipRuntime: Boolean = false) {
+                if (!from.exists()) return
+                if (from.isDirectory) {
+                    if (skipRuntime && (from.name == "cache" || from.name == "code_cache")) return
+                    if (!to.exists() && !to.mkdirs()) throw java.io.IOException("cannot create " + to.name)
+                    from.listFiles()?.forEach { child ->
+                        if (!(skipRuntime && (child.name == "cache" || child.name == "code_cache")))
+                            copyTree(child, File(to, child.name), skipRuntime)
+                    }
+                } else {
+                    to.parentFile?.mkdirs()
+                    from.inputStream().use { input -> to.outputStream().use { output -> input.copyTo(output) } }
+                }
+            }
             try {
+                deleteTree(stage)
+                deleteTree(backup)
+                val stagedFiles = File(stage, "files")
+                val stagedPrefs = File(stage, "shared_prefs")
+                stagedFiles.mkdirs()
+                stagedPrefs.mkdirs()
                 val root = filesDir.parentFile.canonicalFile
-                // the true replace: current state goes first, then the zip
-                wipeFilesDir()
-                contentResolver.openInputStream(uri)?.use { ins ->
+                val seen = HashSet<String>()
+                var total = 0L
+                var count = 0
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw java.io.IOException("could not open selected backup")
+                input.use { ins ->
                     val bin = BufferedInputStream(ins)
                     val zin = if (password != null) wrapIn(bin, password) else bin
                     ZipInputStream(zin).use { zis ->
                         var ze: ZipEntry? = zis.nextEntry
                         while (ze != null) {
+                            if (++count > 10000) throw java.io.IOException("backup has too many entries")
+                            val name = ze.name.replace('\\', '/')
+                            val parts = name.split('/')
+                            if (name.startsWith("/") || parts.any { it == ".." || it == "." } ||
+                                name.contains(':') || name.isBlank())
+                                throw java.io.IOException("unsafe backup path")
                             if (!ze.isDirectory) {
-                                // shared_prefs/ entries restore beside filesDir
-                                val target = if (ze.name.startsWith("shared_prefs/"))
-                                    File(filesDir.parentFile, ze.name)
-                                else File(filesDir, ze.name)
-                                // a crafted zip must not escape the app data dir
-                                if (target.canonicalFile.path
-                                        .startsWith(root.path + File.separator)) {
-                                    target.parentFile?.mkdirs()
-                                    target.outputStream().use { zis.copyTo(it) }
-                                    restored++
+                                val isPrefs = name.startsWith("shared_prefs/")
+                                val relative = if (isPrefs) name.removePrefix("shared_prefs/") else name
+                                if (relative.isBlank() || relative.startsWith("shared_prefs/"))
+                                    throw java.io.IOException("invalid backup path")
+                                val targetRoot = if (isPrefs) stagedPrefs else stagedFiles
+                                val target = File(targetRoot, relative)
+                                val canonical = target.canonicalFile
+                                if (!canonical.path.startsWith(targetRoot.canonicalPath + File.separator))
+                                    throw java.io.IOException("backup path escapes staging")
+                                if (!seen.add(canonical.path))
+                                    throw java.io.IOException("duplicate backup entry")
+                                target.parentFile?.mkdirs()
+                                var entryBytes = 0L
+                                target.outputStream().use { out ->
+                                    val buffer = ByteArray(65536)
+                                    while (true) {
+                                        val n = zis.read(buffer)
+                                        if (n < 0) break
+                                        entryBytes += n
+                                        total += n
+                                        if (entryBytes > 128L * 1024 * 1024 || total > 512L * 1024 * 1024)
+                                            throw java.io.IOException("backup exceeds safe extraction limits")
+                                        out.write(buffer, 0, n)
+                                    }
                                 }
+                                restored++
                             }
                             zis.closeEntry()
                             ze = zis.nextEntry
                         }
                     }
                 }
-                ok = true
-            } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
+                if (restored == 0) throw java.io.IOException("backup contains no files")
+
+                // Keep a rollback copy until the complete staged restore is committed.
+                copyTree(filesDir, File(backup, "files"), true)
+                val currentPrefs = File(filesDir.parentFile, "shared_prefs")
+                copyTree(currentPrefs, File(backup, "shared_prefs"))
+                try {
+                    wipeFilesDir()
+                    copyTree(stagedFiles, filesDir)
+                    copyTree(stagedPrefs, currentPrefs)
+                    ok = true
+                } catch (commitError: Exception) {
+                    NovaLog.quiet("BackupActivity", commitError)
+                    wipeFilesDir()
+                    copyTree(File(backup, "files"), filesDir)
+                    copyTree(File(backup, "shared_prefs"), currentPrefs)
+                    throw commitError
+                }
+            } catch (e: Exception) {
+                NovaLog.quiet("BackupActivity", e)
+            } finally {
+                deleteTree(stage)
+                deleteTree(backup)
+            }
             runOnUiThread {
                 if (ok) {
-                    // v9.4.0 "Audit Fixes II" (audit: stale in-memory state
-                    // could be written back over the restored files): the
-                    // old "restart NOVA yourself" toast became a forced
-                    // restart - every old store and singleton dies here
                     hint?.text = getString(R.string.backup_restored, restored)
                     AlertDialog.Builder(this)
                         .setMessage(R.string.backup_restore_complete)
