@@ -132,7 +132,8 @@ nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
       nl.count("fun invalidate()") == 1)
 check("v0.8.1: records join the learner's own thread",
-      nl.count("io.execute { l.record(userText, response) }") == 1)
+      nl.count("l.record(userText, response)") == 1 and
+      nl.count("pendingRecords.add(PendingRecord") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
       nk.count("NcieLearn.invalidate()") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
