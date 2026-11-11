@@ -224,6 +224,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
+        // Warm persistent chat memory off the UI thread before the first turn.
+        org.nova.ncie.android.NcieLearn.memoryBoot(this)
         applyTheme()
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
         // v9.33.42: pick up the remote-model settings for this run

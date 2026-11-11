@@ -132,7 +132,8 @@ nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
       nl.count("fun invalidate()") == 1)
 check("v0.8.1: records join the learner's own thread",
-      nl.count("io.execute { l.record(userText, response) }") == 1)
+      nl.count("l.record(userText, response)") == 1 and
+      nl.count("pendingRecords.add(PendingRecord") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
       nk.count("NcieLearn.invalidate()") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
@@ -1634,7 +1635,8 @@ check("v9.33.90: the atomic save exists and is the only definition",
 check("v9.33.90: it writes a .tmp and renames it over the target",
       # v9.33.99: counted on the code, not on every mention - the lock comment
       # names the .tmp too
-      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
+      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") >= 2 and
+      "backup.renameTo(f)" in _nf)
 check("v9.33.90: the state files go through it",
       sum(load(f).count("NcieFiles.write(") for f in [
           "ncie/android/NcieExam.kt", "ncie/android/NcieTune.kt",

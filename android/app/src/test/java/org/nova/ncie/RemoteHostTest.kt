@@ -25,7 +25,13 @@ class RemoteHostTest {
         assertTrue(!RemoteHost.isInsecurePublic("http://10.0.0.9:8080"))
         assertTrue(!RemoteHost.isInsecurePublic("http://172.16.4.4:8080"))
         assertTrue(!RemoteHost.isInsecurePublic("http://localhost:8080"))
-        assertTrue(!RemoteHost.isInsecurePublic("http://my-laptop:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://my-laptop:8080"))
+    }
+
+    @Test
+    fun ambiguousSingleLabelHostnamesAreNotAssumedPrivate() {
+        assertFalse(RemoteHost.isPrivate("my-laptop"))
+        assertFalse(RemoteHost.isPrivate("nas"))
     }
 
     @Test

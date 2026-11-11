@@ -203,6 +203,7 @@ class SettingsActivity : Activity() {
         val answers = NovaUi.card(this)
         answers.addView(NovaUi.switchRow(this, getString(R.string.use_wiki), settings.wikiEnabled) { settings.wikiEnabled = it })
         answers.addView(NovaUi.switchRow(this, getString(R.string.learn_online), settings.onlineLearning) { settings.onlineLearning = it })
+        answers.addView(NovaUi.switchRow(this, "Automatic online lookup", settings.autoOnline) { settings.autoOnline = it })
         answers.addView(NovaUi.switchRow(this, getString(R.string.strict_answers), settings.strictMode) {
             settings.strictMode = it
             // v5.5.0: answers cached under the other mode must not be served
