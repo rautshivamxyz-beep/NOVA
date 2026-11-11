@@ -377,8 +377,15 @@ android {
         //   registries, over HTTPS through NovaNet (so the user's SOCKS proxy
         //   applies), every request bounded, every answer labelled with the
         //   source that reported it and never presented as NOVA's conclusion.
-        versionCode 302
-        versionName '9.33.134'
+        // v9.33.135 "Say where the target goes": the OSINT screen told the user
+        //   that results stay on this device, which is true and also easy to
+        //   read as "nothing about me leaves". The target does leave - it is
+        //   sent to GitHub, GitLab, the public RDAP registry and Certificate
+        //   Transparency logs. Those four are now named, once, in a dialog
+        //   before the first lookup, and the flag that records it lives in
+        //   Settings. The subtitle says "report saved on this device" instead.
+        versionCode 303
+        versionName '9.33.135'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

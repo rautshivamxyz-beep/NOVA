@@ -204,6 +204,16 @@ class Settings(context: Context) {
         get() = prefs.getInt(KEY_PROXY_PORT, 9050)
         set(value) = prefs.edit().putInt(KEY_PROXY_PORT, value).apply()
 
+    /** v9.33.135 "Say where the target goes": the OSINT workspace sends the
+     *  username, domain or IP the user typed to third-party public registries
+     *  (GitHub, GitLab, RDAP, Certificate Transparency). The screen used to
+     *  say only that the REPORT stays on this device - true, and easy to read
+     *  as "nothing about me leaves". It is disclosed once, before the first
+     *  lookup, and never again; this flag records that the user has seen it. */
+    var osintNoticeSeen: Boolean
+        get() = prefs.getBoolean(KEY_OSINT_NOTICE, false)
+        set(value) = prefs.edit().putBoolean(KEY_OSINT_NOTICE, value).apply()
+
     /** v5.4.6: documents excluded from Knowledge search via the Notes
      *  filter drawer row - "English only" during an English exam. */
     var knowledgeExcluded: MutableSet<String>
@@ -300,6 +310,7 @@ class Settings(context: Context) {
         private const val KEY_PROXY_ENABLED = "proxy_enabled"
         private const val KEY_PROXY_HOST = "proxy_host"
         private const val KEY_PROXY_PORT = "proxy_port"
+        private const val KEY_OSINT_NOTICE = "osint_notice_seen"
         private const val KEY_WEB_SEARCH_URL = "web_search_url"
         private const val KEY_KNOWLEDGE_EXCL = "knowledge_excluded"
         private const val KEY_AUTO_REPLY = "auto_reply"

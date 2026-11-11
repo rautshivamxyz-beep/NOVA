@@ -1,6 +1,7 @@
 package org.nova
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -75,7 +76,7 @@ class OsintActivity : Activity() {
         })
         root.addView(header)
         root.addView(TextView(this).apply {
-            text = "Public-source investigation · results stay on this device"
+            text = "Public-source investigation · report saved on this device"
             textSize = 12f
             setTextColor(dim)
             setPadding(0, dp(3), 0, dp(18))
@@ -197,12 +198,50 @@ class OsintActivity : Activity() {
         return root
     }
 
+    /**
+     * v9.33.135 "Say where the target goes": the first lookup discloses what
+     * actually leaves the phone. The screen promises the REPORT stays local,
+     * which is true - but the target itself is sent to GitHub, GitLab, the
+     * public RDAP registry and Certificate Transparency logs, and "results
+     * stay on this device" is exactly the sentence a person reads as "nothing
+     * about me is sent anywhere". Asking once, before the first request, is
+     * the ask-first rule the rest of the app already keeps.
+     */
+    private fun confirmDisclosureThen(action: () -> Unit) {
+        val settings = Settings(this)
+        if (settings.osintNoticeSeen) {
+            action()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("This lookup goes online")
+            .setMessage(
+                "NOVA sends the username, domain or IP you typed to third-party " +
+                "public services: GitHub and GitLab (for usernames), the public " +
+                "RDAP registry and Certificate Transparency logs (for domains " +
+                "and IPs).\n\nOnly that target is sent. The report is saved on " +
+                "this device and nothing else is uploaded. With the SOCKS proxy " +
+                "turned on in Settings, these requests go through it.\n\n" +
+                "Investigate only public information."
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Continue") { _, _ ->
+                settings.osintNoticeSeen = true
+                action()
+            }
+            .show()
+    }
+
     private fun runInvestigation() {
         val value = target.text.toString().trim()
         if (value.isBlank()) {
             target.error = "Enter a target first"
             return
         }
+        confirmDisclosureThen { startInvestigation(value) }
+    }
+
+    private fun startInvestigation(value: String) {
         runButton.isEnabled = false
         progress.visibility = View.VISIBLE
         output.text = "Working…\nNetwork checks run in the background. NOVA chat and model inference are not used."
