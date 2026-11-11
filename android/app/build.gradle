@@ -392,8 +392,16 @@ android {
         //   layer cannot convert is reported as a wrong input instead of
         //   surfacing as "Investigation failed", which is what NOVA says when a
         //   lookup really did break.
-        versionCode 304
-        versionName '9.33.136'
+        // v9.33.137 "An answer inside a bounded wait": an OSINT investigation
+        //   could sit on "Working…" for the sum of every timeout on its path -
+        //   DNS, then RDAP, then Certificate Transparency, which on a bad link
+        //   is over half a minute behind a disabled button. The collectors now
+        //   share one 20-second deadline: once it is past, the remaining
+        //   sources are skipped and the report says so, instead of being left
+        //   to time out one by one. Nothing is ever reported as "no result"
+        //   when it was simply not asked.
+        versionCode 305
+        versionName '9.33.137'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

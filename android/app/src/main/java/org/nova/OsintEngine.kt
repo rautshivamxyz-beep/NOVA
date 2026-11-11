@@ -56,27 +56,45 @@ data class OsintReport(
 object OsintEngine {
     private const val MAX_RESPONSE = 512 * 1024
 
+    /**
+     * v9.33.137 "An answer inside a bounded wait": an investigation used to be
+     * able to sit on "Working…" for the sum of every timeout in its path -
+     * a domain ran DNS, then RDAP (7s connect + 9s read) and then crt.sh, which
+     * on a bad link is over half a minute of a disabled button and no way out.
+     * The collectors now share one deadline: once it is past, the remaining
+     * sources are SKIPPED AND SAID SO, rather than left to time out one by one.
+     * Nothing is reported as "no result" when it was simply not asked.
+     */
+    private const val BUDGET_MS = 20_000L
+
+    private const val SKIPPED =
+        "The time budget was reached, so the remaining checks were skipped. Run the investigation again to retry them."
+
+    private fun past(deadline: Long): Boolean = System.currentTimeMillis() > deadline
+
     fun investigate(context: Context, kind: String, rawTarget: String): OsintReport {
         val target = rawTarget.trim()
         require(target.isNotEmpty()) { "Enter a username, domain or public IP address." }
         val findings = mutableListOf<OsintFinding>()
         val notes = mutableListOf<String>()
+        val deadline = System.currentTimeMillis() + BUDGET_MS
         when (kind.lowercase(Locale.ROOT)) {
-            "username" -> username(context, target, findings, notes)
-            "domain" -> domain(context, target, findings, notes)
-            "ip" -> ip(context, target, findings, notes)
+            "username" -> username(context, target, findings, notes, deadline)
+            "domain" -> domain(context, target, findings, notes, deadline)
+            "ip" -> ip(context, target, findings, notes, deadline)
             else -> throw IllegalArgumentException("Choose username, domain or IP investigation.")
         }
         if (findings.isEmpty()) notes.add("No result could be verified. A blocked or unavailable source is not proof that no account or record exists.")
         return OsintReport(kind, target, System.currentTimeMillis(), findings, notes)
     }
 
-    private fun username(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>) {
+    private fun username(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
         val user = raw.removePrefix("@")
         require(user.matches(Regex("^[A-Za-z0-9._-]{2,30}$"))) {
             "Username must be 2–30 characters and contain only letters, numbers, dots, underscores or hyphens."
         }
         val encoded = URLEncoder.encode(user, "UTF-8")
+        if (past(deadline)) { notes.add(SKIPPED); return }
         val github = "https://api.github.com/users/$encoded"
         try {
             val (status, body) = request(ctx, github)
@@ -92,6 +110,7 @@ object OsintEngine {
             } else notes.add("GitHub API returned HTTP $status; this check is inconclusive.")
         } catch (e: Exception) { notes.add("GitHub API check failed: ${shortError(e)}") }
 
+        if (past(deadline)) { notes.add(SKIPPED); return }
         val gitlab = "https://gitlab.com/api/v4/users?username=$encoded"
         try {
             val (status, body) = request(ctx, gitlab)
@@ -130,7 +149,7 @@ object OsintEngine {
         notes.add("Many social platforms block anonymous automated checks or return generic pages. Profile URLs are leads, not confirmed matches.")
     }
 
-    private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>) {
+    private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
         val cleaned = raw.trim().removePrefix("https://").removePrefix("http://").substringBefore('/').substringBefore('?').substringBefore('#').substringBefore(':')
         // v9.33.136: a domain the IDN layer cannot convert is a wrong INPUT,
         // not a broken app. IDN.toASCII used to throw straight out of here and
@@ -147,11 +166,13 @@ object OsintEngine {
             host.split('.').all { it.isNotEmpty() && it.length <= 63 && it.matches(Regex("^[a-z0-9-]+$")) && !it.startsWith("-") && !it.endsWith("-") }) {
             "Enter a valid domain, such as example.com."
         }
+        if (past(deadline)) { notes.add(SKIPPED); return }
         try {
             val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
             out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
         } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
 
+        if (past(deadline)) { notes.add(SKIPPED); return }
         val rdapUrl = "https://rdap.org/domain/" + URLEncoder.encode(host, "UTF-8")
         try {
             val (status, body) = request(ctx, rdapUrl)
@@ -186,6 +207,7 @@ object OsintEngine {
             } else notes.add("RDAP returned HTTP $status.")
         } catch (e: Exception) { notes.add("RDAP lookup failed: ${shortError(e)}") }
 
+        if (past(deadline)) { notes.add(SKIPPED); return }
         val ctUrl = "https://crt.sh/?q=%25." + URLEncoder.encode(host, "UTF-8") + "&output=json"
         try {
             val (status, body) = request(ctx, ctUrl)
@@ -204,7 +226,7 @@ object OsintEngine {
         notes.add("DNS and certificate records can be stale or shared by hosting providers; they do not establish who operates a domain.")
     }
 
-    private fun ip(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>) {
+    private fun ip(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
         val value = raw.trim().removePrefix("[").removeSuffix("]")
         val octets = value.split('.')
         val isIpv4 = octets.size == 4 && octets.all {
@@ -220,6 +242,7 @@ object OsintEngine {
             !address.isSiteLocalAddress && !address.isMulticastAddress) {
             "Private, loopback, link-local and multicast addresses are not queried."
         }
+        if (past(deadline)) { notes.add(SKIPPED); return }
         val url = "https://rdap.org/ip/" + URLEncoder.encode(value, "UTF-8")
         try {
             val (status, body) = request(ctx, url)
