@@ -64,13 +64,21 @@ object NcieFiles {
             if (tmp.renameTo(f)) {
                 true
             } else {
-                // Some Android filesystems refuse a rename onto an existing
-                // file. Drop the old one and try again before giving up.
-                f.delete()
-                if (tmp.renameTo(f)) true else {
-                    f.writeText(text)
-                    tmp.delete()
+                // Preserve the last known-good file until the replacement is
+                // committed. Never fall back to truncating the destination.
+                val backup = File(f.parentFile, f.name + ".bak")
+                if (backup.exists() && !backup.delete())
+                    throw java.io.IOException("could not clear stale backup")
+                val hadOld = f.exists()
+                if (hadOld && !f.renameTo(backup))
+                    throw java.io.IOException("could not preserve previous file")
+                if (tmp.renameTo(f)) {
+                    if (hadOld) backup.delete()
                     true
+                } else {
+                    if (hadOld && backup.exists() && !backup.renameTo(f))
+                        throw java.io.IOException("replacement failed and rollback failed")
+                    false
                 }
             }
         } catch (e: Exception) {
