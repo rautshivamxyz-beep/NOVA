@@ -1635,7 +1635,8 @@ check("v9.33.90: the atomic save exists and is the only definition",
 check("v9.33.90: it writes a .tmp and renames it over the target",
       # v9.33.99: counted on the code, not on every mention - the lock comment
       # names the .tmp too
-      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
+      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") >= 2 and
+      "backup.renameTo(f)" in _nf)
 check("v9.33.90: the state files go through it",
       sum(load(f).count("NcieFiles.write(") for f in [
           "ncie/android/NcieExam.kt", "ncie/android/NcieTune.kt",
