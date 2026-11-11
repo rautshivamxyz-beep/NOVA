@@ -68,6 +68,13 @@ object NcieLearn {
      *  operations can force an immediate flush. */
     @Volatile private var disk: DebouncedDisk? = null
 
+    private data class PendingRecord(
+        val question: String,
+        val response: NovaResponse,
+        val fact: LearnedFact
+    )
+    private val pendingRecords = java.util.concurrent.ConcurrentLinkedQueue<PendingRecord>()
+
     /** The quality gate: the Verifier interface's ground-truth-free
      *  quality() defaults are the gate here — no right answer needed. */
     private val quality = object : Verifier {
@@ -130,7 +137,6 @@ object NcieLearn {
             if (sources.isEmpty() && act.lastSkillMatched == null) noteGap(act, userText)
             return
         }
-        val l = learner(act) ?: return
         val response = NovaResponse(
             answer = clean,
             plan = Plan(Route.LLM, null, 0, 0, "app chat turn"),
@@ -140,17 +146,16 @@ object NcieLearn {
             llmUsed = true,
             trace = emptyList(),
         )
-        // v0.8.1: records join the learner's own thread, so an
-        // invalidate() can never interleave with a persist.
-        io.execute { l.record(userText, response) }
-        // v0.9.1 (phase 2): the same quality-gated turn is ALSO born as a
-        // graded fact — the kernel's memory system gets what the answer
-        // cache already got. verdict.qualityScore is a Double (see
-        // VerifyResult in Types.kt); with this stub Verifier a clean
-        // quality() pass scores 0.6 — the kernel's convention for a
-        // quality pass with no ground truth — so the fact is born with
-        // exactly the score of the gate that admitted it.
-        io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
+        val fact = LearnedFact.fromChat(userText, clean, verdict.qualityScore)
+        val l = learner(act)
+        if (l == null) {
+            pendingRecords.add(PendingRecord(userText, response, fact))
+            return
+        }
+        io.execute {
+            l.record(userText, response)
+            l.record(fact)
+        }
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
@@ -166,13 +171,21 @@ object NcieLearn {
                     val file = File(dir, "ncie_learn.txt")
                     learnFile = file
                     io.execute {
-                        val d = storeFor(file)
-                        disk = d
-                        val l = PersistentLearner(d)
-                        learner = l
-                        // v8.2.0 (#10 rules): the live learner upgrades the
-                        // planner — the Mastery Rule applies from here on
-                        NcieKnowledge.adoptAdaptivePlanner(l)
+                        try {
+                            val d = storeFor(file)
+                            disk = d
+                            val l = PersistentLearner(d)
+                            learner = l
+                            NcieKnowledge.adoptAdaptivePlanner(l)
+                            while (true) {
+                                val pending = pendingRecords.poll() ?: break
+                                l.record(pending.question, pending.response)
+                                l.record(pending.fact)
+                            }
+                        } catch (e: Exception) {
+                            NovaLog.quiet("NcieLearn", e)
+                            synchronized(this) { bootStarted = false }
+                        }
                     }
                 }
             }
