@@ -43,7 +43,7 @@ object RemoteHost {
     fun isPrivate(host: String): Boolean {
         val h = host.lowercase().trim()
         if (h.isEmpty()) return false
-        if (h == "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true
+        if (h == "localhost") return true
 
         if (h.contains(':')) {
             val address = try { InetAddress.getByName(h) } catch (_: Exception) { return false }
@@ -56,11 +56,8 @@ object RemoteHost {
                 (first == 0xfe && (second and 0xc0) == 0x80)
         }
 
-        if (!h.contains('.')) {
-            return h.all { it.isLetterOrDigit() || it == '-' } &&
-                h.firstOrNull()?.isLetterOrDigit() == true &&
-                h.lastOrNull()?.isLetterOrDigit() == true
-        }
+        // A single-label hostname may resolve publicly via DNS search suffixes.
+        // Only literal private IP ranges and localhost are accepted.
         val parts = h.split('.')
         if (parts.size != 4) return false
         val n = parts.map { it.toIntOrNull() ?: return false }
