@@ -179,7 +179,7 @@ object OsintEngine {
                     val rows = JSONObject(body).optJSONArray("Answer") ?: JSONArray()
                     for (i in 0 until rows.length()) {
                         val row = rows.optJSONObject(i) ?: continue
-                        if (row.optInt("type") == if (type == "A") 1 else 28) {
+                        if (row.optInt("type") == (if (type == "A") 1 else 28)) {
                             val data = row.optString("data")
                             if (data.isNotBlank()) answers.add(data)
                         }
@@ -282,24 +282,37 @@ object OsintEngine {
     }
 
     private fun request(ctx: Context, url: String): Pair<Int, String> {
-        require(url.startsWith("https://", true)) { "HTTPS only." }
-        val conn = NovaNet.open(ctx, url, connectMs = 7000, readMs = 9000)
-        try {
-            val code = conn.responseCode
-            if (!conn.url.protocol.equals("https", true)) throw java.io.IOException("Refused HTTPS downgrade.")
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = stream?.bufferedReader()?.use { reader ->
-                val chars = CharArray(8192)
-                val result = StringBuilder()
-                while (result.length < MAX_RESPONSE) {
-                    val n = reader.read(chars)
-                    if (n < 0) break
-                    result.append(chars, 0, minOf(n, MAX_RESPONSE - result.length))
+        var current = url
+        var redirects = 0
+        while (true) {
+            require(current.startsWith("https://", true)) { "HTTPS only." }
+            val conn = NovaNet.open(ctx, current, connectMs = 7000, readMs = 9000)
+            try {
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                        ?: throw java.io.IOException("redirect without Location")
+                    val next = URL(URL(current), location)
+                    if (!next.protocol.equals("https", true))
+                        throw java.io.IOException("Refused HTTPS downgrade.")
+                    if (++redirects > 5) throw java.io.IOException("Too many redirects.")
+                    current = next.toString()
+                    continue
                 }
-                result.toString()
-            }.orEmpty()
-            return code to body
-        } finally { conn.disconnect() }
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { reader ->
+                    val chars = CharArray(8192)
+                    val result = StringBuilder()
+                    while (result.length < MAX_RESPONSE) {
+                        val n = reader.read(chars)
+                        if (n < 0) break
+                        result.append(chars, 0, minOf(n, MAX_RESPONSE - result.length))
+                    }
+                    result.toString()
+                }.orEmpty()
+                return code to body
+            } finally { conn.disconnect() }
+        }
     }
 
     private fun shortError(e: Exception): String =
