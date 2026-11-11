@@ -400,8 +400,8 @@ android {
         //   sources are skipped and the report says so, instead of being left
         //   to time out one by one. Nothing is ever reported as "no result"
         //   when it was simply not asked.
-        versionCode 305
-        versionName '9.33.137'
+        versionCode 306
+        versionName '9.33.138'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
