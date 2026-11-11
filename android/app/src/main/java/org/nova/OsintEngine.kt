@@ -132,7 +132,17 @@ object OsintEngine {
 
     private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>) {
         val cleaned = raw.trim().removePrefix("https://").removePrefix("http://").substringBefore('/').substringBefore('?').substringBefore('#').substringBefore(':')
-        val host = IDN.toASCII(cleaned).lowercase(Locale.ROOT).trimEnd('.')
+        // v9.33.136: a domain the IDN layer cannot convert is a wrong INPUT,
+        // not a broken app. IDN.toASCII used to throw straight out of here and
+        // the screen rendered it as "Investigation failed" - the same message
+        // it shows when a lookup really did fail - so a typo looked like a
+        // fault. It now gets the same friendly message as any other bad domain.
+        val ascii = try {
+            IDN.toASCII(cleaned)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Enter a valid domain, such as example.com.")
+        }
+        val host = ascii.lowercase(Locale.ROOT).trimEnd('.')
         require(host.length in 4..253 && host.contains('.') &&
             host.split('.').all { it.isNotEmpty() && it.length <= 63 && it.matches(Regex("^[a-z0-9-]+$")) && !it.startsWith("-") && !it.endsWith("-") }) {
             "Enter a valid domain, such as example.com."

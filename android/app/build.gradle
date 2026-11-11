@@ -384,8 +384,16 @@ android {
         //   Transparency logs. Those four are now named, once, in a dialog
         //   before the first lookup, and the flag that records it lives in
         //   Settings. The subtitle says "report saved on this device" instead.
-        versionCode 303
-        versionName '9.33.135'
+        // v9.33.136 "The report is the evidence": the OSINT report is the only
+        //   thing the user reads and the only thing "Share report" sends, and
+        //   it had no test at all - a dropped finding or a lost source line
+        //   would have looked like a quiet result. Its text form is pure Kotlin,
+        //   so it is now pinned by assertions. Alongside it, a domain the IDN
+        //   layer cannot convert is reported as a wrong input instead of
+        //   surfacing as "Investigation failed", which is what NOVA says when a
+        //   lookup really did break.
+        versionCode 304
+        versionName '9.33.136'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
