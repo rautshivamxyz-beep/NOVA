@@ -4,7 +4,6 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.IDN
-import java.net.InetAddress
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
@@ -168,9 +167,30 @@ object OsintEngine {
         }
         if (past(deadline)) { notes.add(SKIPPED); return }
         try {
-            val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
-            out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
-        } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
+            // Use DNS-over-HTTPS through NovaNet so the target hostname is not
+            // sent to Android's system resolver when the SOCKS proxy is enabled.
+            val answers = mutableListOf<String>()
+            for (type in listOf("A", "AAAA")) {
+                if (past(deadline)) break
+                val doh = "https://cloudflare-dns.com/dns-query?name=" +
+                    URLEncoder.encode(host, "UTF-8") + "&type=" + type
+                val (status, body) = request(ctx, doh)
+                if (status == 200) {
+                    val rows = JSONObject(body).optJSONArray("Answer") ?: JSONArray()
+                    for (i in 0 until rows.length()) {
+                        val row = rows.optJSONObject(i) ?: continue
+                        if (row.optInt("type") == if (type == "A") 1 else 28) {
+                            val data = row.optString("data")
+                            if (data.isNotBlank()) answers.add(data)
+                        }
+                    }
+                }
+            }
+            if (answers.isNotEmpty())
+                out.add(OsintFinding("DNS address records", answers.distinct().joinToString("\\n"),
+                    "Cloudflare DNS-over-HTTPS via NOVA network settings", "Resolver response"))
+            else notes.add("DNS-over-HTTPS returned no A/AAAA records.")
+        } catch (e: Exception) { notes.add("DNS-over-HTTPS lookup failed: ${shortError(e)}") }
 
         if (past(deadline)) { notes.add(SKIPPED); return }
         val rdapUrl = "https://rdap.org/domain/" + URLEncoder.encode(host, "UTF-8")
