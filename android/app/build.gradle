@@ -369,15 +369,14 @@ android {
         //   edit at all regenerates and only a true repeat is free. One-off cost:
         //   the first summary of each document after the update regenerates.
         // v9.33.134 "A collector that only reads what is public": the OSINT
-        //   workspace merged as v9.33.133 source, but that tag had already
-        //   been published by the version-bump build, so the merge landed
-        //   with a versionName the release gate refuses - the pipeline went
-        //   red and the module never actually shipped. The version moves on
-        //   and the module ships here unchanged: a username, domain or IP is
-        //   looked up only in public registries, over HTTPS through NovaNet
-        //   (so the user's SOCKS proxy applies), every request bounded, every
-        //   answer labelled with the source that reported it and never
-        //   presented as NOVA's own conclusion.
+        //   workspace merged as v9.33.133 source, but that tag had already been
+        //   published by the earlier bump build, so the merge landed on a
+        //   release id the gate refuses - the pipeline went red and the module
+        //   never actually shipped. The version moves on and the module ships
+        //   here unchanged: a username, domain or IP is looked up only in public
+        //   registries, over HTTPS through NovaNet (so the user's SOCKS proxy
+        //   applies), every request bounded, every answer labelled with the
+        //   source that reported it and never presented as NOVA's conclusion.
         versionCode 302
         versionName '9.33.134'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
