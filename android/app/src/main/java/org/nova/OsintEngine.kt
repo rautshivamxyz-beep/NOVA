@@ -187,7 +187,7 @@ object OsintEngine {
                 }
             }
             if (answers.isNotEmpty())
-                out.add(OsintFinding("DNS address records", answers.distinct().joinToString("\\n"),
+                out.add(OsintFinding("DNS address records", answers.distinct().joinToString("\n"),
                     "Cloudflare DNS-over-HTTPS via NOVA network settings", "Resolver response"))
             else notes.add("DNS-over-HTTPS returned no A/AAAA records.")
         } catch (e: Exception) { notes.add("DNS-over-HTTPS lookup failed: ${shortError(e)}") }
