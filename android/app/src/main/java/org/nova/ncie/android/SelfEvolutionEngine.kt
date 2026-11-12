@@ -43,35 +43,35 @@ object SelfEvolutionEngine {
 
         val skills = try { NcieSkillForge.forged(ctx) } catch (_: Exception) { emptyList() }
         val ledger = readLines(File(ctx.filesDir, "nova_growth.txt"))
-        val answered = ledger.count { it.contains("\\tanswer\\t") || it.contains("\\tskill\\t") }
+        val answered = ledger.count { it.contains("\tanswer\t") || it.contains("\tskill\t") }
         val gaps = try {
             val f = File(ctx.filesDir, "capability_gaps.txt")
             if (f.exists()) GapStore.parse(f.readText()).top(MAX_GAP_PREVIEW) else emptyList()
         } catch (_: Exception) { emptyList() }
 
         val failedHealth = health.filter { !it.ok }
-        val sb = StringBuilder("SELF-EVOLUTION AUDIT\\n")
-        sb.append("app: ").append(version).append(" | Android ").append(Build.VERSION.RELEASE).append('\\n')
+        val sb = StringBuilder("SELF-EVOLUTION AUDIT\n")
+        sb.append("app: ").append(version).append(" | Android ").append(Build.VERSION.RELEASE).append('\n')
         sb.append("device policy: ").append(if (lowRam) "lite mode (low-RAM safeguards)" else "standard mode")
-            .append(" | RAM ").append(String.format(Locale.US, "%.1f/%.1f GB free/total", freeRam, totalRam)).append('\\n')
+            .append(" | RAM ").append(String.format(Locale.US, "%.1f/%.1f GB free/total", freeRam, totalRam)).append('\n')
         sb.append("self-tests: ").append(checks.count { it.second }).append('/')
-            .append(checks.size).append(" passed\\n")
-        for ((name, ok) in checks) sb.append(if (ok) "  PASS " else "  FAIL ").append(name).append('\\n')
+            .append(checks.size).append(" passed\n")
+        for ((name, ok) in checks) sb.append(if (ok) "  PASS " else "  FAIL ").append(name).append('\n')
         sb.append("health: ").append(if (failedHealth.isEmpty()) "all checks healthy" else failedHealth.size.toString() + " issue(s)")
-            .append(" | alarms re-armed where possible\\n")
+            .append(" | alarms re-armed where possible\n")
         if (failedHealth.isNotEmpty()) {
-            for (item in failedHealth.take(4)) sb.append("  needs attention: ").append(item.label).append(" - ").append(item.detail).append('\\n')
+            for (item in failedHealth.take(4)) sb.append("  needs attention: ").append(item.label).append(" - ").append(item.detail).append('\n')
         }
-        sb.append("learning ledger: ").append(answered).append(" answered turns recorded\\n")
+        sb.append("learning ledger: ").append(answered).append(" answered turns recorded\n")
         sb.append("validated self-authored skills: ").append(skills.size).append('/')
-            .append(20).append('\\n')
-        sb.append("measured capability gaps: ").append(gaps.size).append(" top tracked\\n")
+            .append(20).append('\n')
+        sb.append("measured capability gaps: ").append(gaps.size).append(" top tracked\n")
         for (gap in gaps) {
-            sb.append("  - ").append(gap.question.take(100)).append(" (asked ").append(gap.count).append(" times)\\n")
+            sb.append("  - ").append(gap.question.take(100)).append(" (asked ").append(gap.count).append(" times)\n")
         }
         sb.append("adaptation: ").append(if (lowRam)
             "background work stays lightweight; no extra model is loaded"
-            else "background consolidation is permitted when Android allows it").append('\\n')
+            else "background consolidation is permitted when Android allows it").append('\n')
         sb.append("model safety: weights and inference/sampling settings unchanged; generated skills remain data, not executable code")
         val report = sb.toString()
         try { NcieFiles.write(File(ctx.filesDir, REPORT), report) } catch (_: Exception) { }
@@ -88,14 +88,14 @@ object SelfEvolutionEngine {
     internal fun selfTests(): List<Pair<String, Boolean>> {
         val skill = try {
             val parsed = SkillStore.parse(
-                "[skill]\\nname=Test skill\\ntrigger=(?i)\\\\btest me\\\\b\\ninstruction=Handle {q} carefully\\nsource=nova\\n"
+                "[skill]\nname=Test skill\ntrigger=(?i)\\btest me\\b\ninstruction=Handle {q} carefully\nsource=nova\n"
             )
             parsed.size == 1 && parsed[0].name == "Test skill" &&
                 parsed[0].trigger.containsMatchIn("please test me") &&
                 parsed[0].render("test me on algebra").contains("test me on algebra")
         } catch (_: Exception) { false }
         val gaps = try {
-            val store = GapStore.parse("test capability gap\\t2\\t123\\n")
+            val store = GapStore.parse("test capability gap\t2\t123\n")
             val top = store.top(1)
             top.size == 1 && top[0].question == "test capability gap" &&
                 top[0].count == 2 && GapStore.parse(store.serialize()).top(1).firstOrNull()?.count == 2

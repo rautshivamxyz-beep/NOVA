@@ -112,7 +112,7 @@ object NcieDream {
         // never changes model weights or inference/sampling settings.
         try {
             val evolution = SelfEvolutionEngine.runNightly(ctx)
-            if (evolution.isNotBlank()) sb.append("\\n").append(evolution).append('\\n')
+            if (evolution.isNotBlank()) sb.append("\n").append(evolution).append('\n')
         } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
