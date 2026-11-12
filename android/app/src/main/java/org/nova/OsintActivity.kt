@@ -403,6 +403,7 @@ class OsintActivity : Activity() {
                         checks["dns"]?.isChecked = quick.dns
                         checks["rdap"]?.isChecked = quick.rdap
                         checks["ct"]?.isChecked = quick.certificateTransparency
+                        checks["custom"]?.isChecked = quick.customSourcesEnabled
                         budget.setText(quick.timeBudgetSeconds.toString())
                         limit.setText(quick.maxResults.toString())
                     }
