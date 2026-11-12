@@ -7,6 +7,9 @@ import java.net.URI
 data class OsintPreferences(
     val github: Boolean = true,
     val gitlab: Boolean = true,
+    val devTo: Boolean = true,
+    val hackerNews: Boolean = true,
+    val stackOverflow: Boolean = true,
     val profileLeads: Boolean = true,
     val webSearchLink: Boolean = true,
     val dns: Boolean = true,
@@ -14,7 +17,7 @@ data class OsintPreferences(
     val certificateTransparency: Boolean = true,
     val customSourcesEnabled: Boolean = false,
     val maxResults: Int = 40,
-    val timeBudgetSeconds: Int = 20,
+    val timeBudgetSeconds: Int = 45,
     val customSources: List<OsintCustomSource> = emptyList()
 ) {
     fun normalized(): OsintPreferences = copy(
@@ -24,10 +27,11 @@ data class OsintPreferences(
     )
 
     companion object {
-        fun quick() = OsintPreferences(github = true, gitlab = false, profileLeads = false,
+        fun quick() = OsintPreferences(github = true, gitlab = false, devTo = false,
+            hackerNews = false, stackOverflow = false, profileLeads = false,
             webSearchLink = true, dns = true, rdap = true, certificateTransparency = false,
-            maxResults = 15, timeBudgetSeconds = 10)
-        fun deep() = OsintPreferences(maxResults = 100, timeBudgetSeconds = 60)
+            maxResults = 15, timeBudgetSeconds = 15)
+        fun deep() = OsintPreferences(maxResults = 100, timeBudgetSeconds = 90)
         fun load(context: Context): OsintPreferences {
             val p = context.getSharedPreferences("nova_osint", Context.MODE_PRIVATE)
             val custom = p.getString("custom_sources", "").orEmpty().lineSequence()
@@ -35,11 +39,15 @@ data class OsintPreferences(
             return OsintPreferences(
                 github = p.getBoolean("github", true),
                 gitlab = p.getBoolean("gitlab", true),
+                devTo = p.getBoolean("dev_to", true),
+                hackerNews = p.getBoolean("hacker_news", true),
+                stackOverflow = p.getBoolean("stack_overflow", true),
                 profileLeads = p.getBoolean("profile_leads", true),
                 webSearchLink = p.getBoolean("web_search", true),
                 dns = p.getBoolean("dns", true),
                 rdap = p.getBoolean("rdap", true),
                 certificateTransparency = p.getBoolean("ct", true),
+                customSourcesEnabled = p.getBoolean("custom_sources_enabled", false),
                 maxResults = p.getInt("max_results", 40).coerceIn(5, 200),
                 timeBudgetSeconds = p.getInt("budget_seconds", 20).coerceIn(5, 120),
                 customSources = custom
@@ -49,6 +57,8 @@ data class OsintPreferences(
             val v = value.normalized()
             context.getSharedPreferences("nova_osint", Context.MODE_PRIVATE).edit()
                 .putBoolean("github", v.github).putBoolean("gitlab", v.gitlab)
+                .putBoolean("dev_to", v.devTo).putBoolean("hacker_news", v.hackerNews)
+                .putBoolean("stack_overflow", v.stackOverflow)
                 .putBoolean("profile_leads", v.profileLeads).putBoolean("web_search", v.webSearchLink)
                 .putBoolean("dns", v.dns).putBoolean("rdap", v.rdap)
                 .putBoolean("ct", v.certificateTransparency)
