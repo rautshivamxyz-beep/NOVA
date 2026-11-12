@@ -16,6 +16,7 @@ import org.nova.ncie.knowledge.KnowledgeStore
 import org.nova.ncie.learn.Distiller
 import org.nova.ncie.learn.LearnedFact
 import org.nova.ncie.learn.LearningStore
+import org.nova.ncie.learn.LearningEvidencePolicy
 import org.nova.ncie.learn.PersistentLearner
 import org.nova.ncie.model.Analysis
 import org.nova.ncie.model.NovaResponse
@@ -143,14 +144,13 @@ object NcieLearn {
         // v0.8.1: records join the learner's own thread, so an
         // invalidate() can never interleave with a persist.
         io.execute { l.record(userText, response) }
-        // v0.9.1 (phase 2): the same quality-gated turn is ALSO born as a
-        // graded fact — the kernel's memory system gets what the answer
-        // cache already got. verdict.qualityScore is a Double (see
-        // VerifyResult in Types.kt); with this stub Verifier a clean
-        // quality() pass scores 0.6 — the kernel's convention for a
-        // quality pass with no ground truth — so the fact is born with
-        // exactly the score of the gate that admitted it.
-        io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
+        // Long-term facts need actual grounding evidence. quality() deliberately
+        // allows ordinary source-free replies through for the chat cache, but
+        // its default 0.6 score is not a factuality check. Do not let repeated
+        // unverified guesses graduate into the permanent KnowledgeStore.
+        if (LearningEvidencePolicy.mayPersistFact(sources, verdict)) {
+            io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
+        }
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
