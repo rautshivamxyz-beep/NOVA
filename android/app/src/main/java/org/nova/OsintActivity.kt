@@ -256,7 +256,7 @@ class OsintActivity : Activity() {
      */
     private fun confirmDisclosureThen(action: () -> Unit) {
         val settings = Settings(this)
-        if (settings.osintNoticeSeen && osintPreferences.customSources.isEmpty()) {
+        if (settings.osintNoticeSeen && (!osintPreferences.customSourcesEnabled || osintPreferences.customSources.isEmpty())) {
             action()
             return
         }
@@ -274,7 +274,7 @@ class OsintActivity : Activity() {
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
-                if (osintPreferences.customSources.isEmpty()) settings.osintNoticeSeen = true
+                if (!osintPreferences.customSourcesEnabled || osintPreferences.customSources.isEmpty()) settings.osintNoticeSeen = true
                 action()
             }
             .show()
@@ -309,6 +309,7 @@ class OsintActivity : Activity() {
         addCheck("dns", "Domain DNS records", current.dns)
         addCheck("rdap", "Public RDAP registry data", current.rdap)
         addCheck("ct", "Certificate Transparency names", current.certificateTransparency)
+        addCheck("custom", "Custom public HTTPS sources", current.customSourcesEnabled)
 
         fun addField(label: String, value: String, numeric: Boolean = false): EditText {
             panel.addView(TextView(this).apply {
@@ -388,6 +389,7 @@ class OsintActivity : Activity() {
                             dns = checks["dns"]!!.isChecked,
                             rdap = checks["rdap"]!!.isChecked,
                             certificateTransparency = checks["ct"]!!.isChecked,
+                            customSourcesEnabled = checks["custom"]!!.isChecked,
                             maxResults = limit.text.toString().toIntOrNull()?.coerceIn(5, 200) ?: current.maxResults,
                             timeBudgetSeconds = budget.text.toString().toIntOrNull()?.coerceIn(5, 120) ?: current.timeBudgetSeconds,
                             customSources = parsedSources
