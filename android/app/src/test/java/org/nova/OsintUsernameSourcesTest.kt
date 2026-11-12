@@ -57,4 +57,84 @@ class OsintUsernameSourcesTest {
         )
         assertTrue(finding.confidence.contains("not a username"))
     }
+
+    @Test
+    fun `GitHub adapter accepts only the exact returned handle and collects public metadata`() {
+        val result = OsintUsernameSources.parseResponse(
+            "github", "octocat", 200,
+            """{"login":"octocat","type":"User","name":"The Octocat","public_repos":8,"followers":10,"following":5,"created_at":"2011-01-25T18:44:36Z","html_url":"https://github.com/octocat"}"""
+        )
+        assertEquals(OsintSourceState.FOUND, result?.state)
+        val value = result?.findings?.single()?.value.orEmpty()
+        assertTrue(value.contains("Public display name: The Octocat"))
+        assertTrue(value.contains("Public repositories: 8"))
+        assertTrue(value.contains("Followers: 10"))
+        assertTrue(value.contains("Account created:"))
+        val wrong = OsintUsernameSources.parseResponse(
+            "github", "octocat", 200, """{"login":"octocat-dev"}"""
+        )
+        assertEquals(OsintSourceState.NO_MATCH, wrong?.state)
+        assertTrue(wrong?.findings?.isEmpty() == true)
+    }
+
+    @Test
+    fun `provider failures are not reported as no match`() {
+        assertEquals(
+            OsintSourceState.RATE_LIMITED,
+            OsintUsernameSources.parseResponse("github", "sample", 429, "")?.state
+        )
+        assertEquals(
+            OsintSourceState.BLOCKED,
+            OsintUsernameSources.parseResponse("devto", "sample", 403, "Forbidden")?.state
+        )
+        assertEquals(
+            OsintSourceState.UNAVAILABLE,
+            OsintUsernameSources.parseResponse("hackernews", "sample", 503, "Unavailable")?.state
+        )
+        assertEquals(
+            OsintSourceState.NO_MATCH,
+            OsintUsernameSources.parseResponse("github", "sample", 404, "")?.state
+        )
+    }
+
+    @Test
+    fun `GitLab candidates are filtered to exact usernames`() {
+        val result = OsintUsernameSources.parseResponse(
+            "gitlab", "sample", 200,
+            """[{"username":"sample-dev","name":"Wrong person","web_url":"https://gitlab.com/sample-dev"},{"username":"sample","name":"Exact handle","web_url":"https://gitlab.com/sample"}]"""
+        )
+        assertEquals(OsintSourceState.FOUND, result?.state)
+        assertEquals(1, result?.findings?.size)
+        assertTrue(result?.findings?.single()?.value?.contains("Exact handle") == true)
+        val noExact = OsintUsernameSources.parseResponse(
+            "gitlab", "sample", 200,
+            """[{"username":"sample-dev","name":"Wrong person"}]"""
+        )
+        assertEquals(OsintSourceState.NO_MATCH, noExact?.state)
+    }
+
+    @Test
+    fun `Stack Overflow names remain display-name candidates`() {
+        val result = OsintUsernameSources.parseResponse(
+            "stackoverflow", "sample",
+            200,
+            """{"items":[{"display_name":"sample","reputation":25,"link":"https://stackoverflow.com/users/1","creation_date":1600000000,"badge_counts":{"gold":1,"silver":2,"bronze":3}}]}"""
+        )
+        assertEquals(OsintSourceState.FOUND, result?.state)
+        assertTrue(result?.findings?.single()?.title?.contains("candidate", true) == true)
+        assertTrue(result?.findings?.single()?.confidence?.contains("not a username") == true)
+    }
+
+    @Test
+    fun `disabled providers are represented without making requests`() {
+        val result = OsintUsernameSources.collect(
+            "sample",
+            mapOf("github" to false, "gitlab" to false, "devto" to false,
+                "hackernews" to false, "stackoverflow" to false),
+            System.currentTimeMillis() + 10_000L
+        ) { throw AssertionError("disabled provider must not request the network") }
+        assertTrue(result.findings.isEmpty())
+        assertEquals(5, result.checks.size)
+        assertTrue(result.checks.all { it.state == OsintSourceState.DISABLED })
+    }
 }
