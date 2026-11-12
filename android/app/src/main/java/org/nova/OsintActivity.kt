@@ -260,17 +260,30 @@ class OsintActivity : Activity() {
             action()
             return
         }
+        val destinations = mutableListOf<String>()
+        when (kind) {
+            "username" -> {
+                if (osintPreferences.github) destinations.add("GitHub")
+                if (osintPreferences.gitlab) destinations.add("GitLab")
+            }
+            "domain" -> {
+                if (osintPreferences.dns) destinations.add("system DNS resolver")
+                if (osintPreferences.rdap) destinations.add("public RDAP")
+                if (osintPreferences.certificateTransparency) destinations.add("Certificate Transparency")
+            }
+            "ip" -> if (osintPreferences.rdap) destinations.add("public RDAP")
+        }
+        if (osintPreferences.customSourcesEnabled) {
+            destinations.addAll(osintPreferences.customSources.map { it.name })
+        }
         AlertDialog.Builder(this)
             .setTitle("This lookup goes online")
             .setMessage(
-                "NOVA sends the username, domain or IP you typed to third-party " +
-                "public services: GitHub and GitLab (for usernames), the public " +
-                "RDAP registry and Certificate Transparency logs (for domains " +
-                "and IPs).\n\nOnly the target is sent. The report is saved on " +
-                "this device. Custom sources you configured may also receive the " +
-                "target: " + osintPreferences.customSources.joinToString { it.name } +
-                ". Review those providers before continuing. With the SOCKS proxy " +
-                "turned on in Settings, requests use it.\n\nInvestigate only public information."
+                "NOVA will send the target you entered to these enabled destinations: " +
+                (destinations.distinct().joinToString().ifBlank { "none (only local processing)" }) +
+                ".\n\nThe report is saved on this device. Custom providers return unverified data; " +
+                "check their source links. With the SOCKS proxy turned on in Settings, " +
+                "HTTP requests use it. Investigate only public information."
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
