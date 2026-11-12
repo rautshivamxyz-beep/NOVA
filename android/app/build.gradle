@@ -496,6 +496,9 @@ dependencies {
     // v9.33.14: real unit tests for the pure-JVM NCIE kernel
     // (android/app/src/test/java). Run: gradle testDebugUnitTest
     testImplementation 'junit:junit:4.13.2'
+    // Local JVM tests parse provider JSON; Android's org.json stubs throw on the JVM.
+    // Test-only: this dependency is not packaged into the APK.
+    testImplementation 'org.json:json:20240303'
 
     // llama.cpp Android binding (com.arm.aichat) - v5.7.0: speculative decoding
     implementation files('libs/llama-release.aar')
