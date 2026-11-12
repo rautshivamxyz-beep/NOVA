@@ -180,7 +180,7 @@ object OsintEngine {
         }
         if (config.webSearchLink) {
             val searchUrl = "https://html.duckduckgo.com/html/?q=%22" +
-                URLEncoder.encode(user, "UTF-8") + "%22
+                URLEncoder.encode(user, "UTF-8") + "%22"
             out.add(OsintFinding("Search the public web", "Search exact username: $user",
                 searchUrl, "Link to a public search engine; results require manual source review"))
             checks.add(OsintSourceCheck("Public web search", OsintSourceState.LINK_ONLY,
