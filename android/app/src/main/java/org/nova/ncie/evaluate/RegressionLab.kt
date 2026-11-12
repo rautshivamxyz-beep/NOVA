@@ -1,6 +1,6 @@
 package org.nova.ncie.evaluate
 
-import org.nova.ncie.android.LearningEvidencePolicy
+import org.nova.ncie.learn.LearningEvidencePolicy
 import org.nova.ncie.knowledge.KnowledgeStore
 import org.nova.ncie.learn.GapStore
 import org.nova.ncie.model.VerifyResult
@@ -16,7 +16,7 @@ object RegressionLab {
     fun run(): List<Pair<String, Boolean>> = listOf(
         check("skill parse, trigger and render") {
             val skills = SkillStore.parse(
-                "[skill]\nname=Quiz me\ntrigger=(?i)\\\\bquiz me\\\\b\n" +
+                "[skill]\nname=Quiz me\ntrigger=(?i)\\bquiz me\\b\n" +
                     "instruction=Ask questions about {q}\n"
             )
             skills.size == 1 &&
