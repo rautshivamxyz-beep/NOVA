@@ -2686,6 +2686,35 @@ check("v9.33.139: the one-said-once rule is pinned by unit tests",
 check("v9.33.139: version is at least 9.33.139 (307)",
       version_at_least("9.33.139", 307))
 
+# v9.33.140 "Nothing is deleted before it is replaced": the restore deleted the
+# user's state and only then tried to read the zip. The order is the bug, so the
+# order is what is pinned - the zip is opened, staged and counted first, and the
+# sweep that removes leftovers runs last. A null stream on either side is a
+# failure, not a quiet success, and the zip-slip rule is a pure function a unit
+# test can reach.
+check("v9.33.140: the restore reads the whole zip before it deletes anything",
+      _bak.index('val input = contentResolver.openInputStream(uri)') <
+      _bak.index('prune(filesDir, "files", keep, true)'))
+check("v9.33.140: the destructive wipe is gone",
+      'wipeFilesDir' not in _bak)
+check("v9.33.140: a restore with no files to restore is a failure",
+      'if (restored == 0) throw java.io.IOException("The backup held no files.")' in _bak)
+check("v9.33.140: a null stream is a failure on both sides",
+      _bak.count('The backup file could not be opened.') == 2)
+check("v9.33.140: an empty backup is refused instead of written",
+      'There is nothing to back up yet.' in _bak)
+check("v9.33.140: the leftover sweep still makes it a true replace",
+      'prune(filesDir, "files", keep, true)' in _bak and
+      'prune(File(root, "shared_prefs"), "shared_prefs", keep, false)' in _bak)
+check("v9.33.140: the zip-slip rule is a pure, testable function",
+      'internal fun stageTarget(staging: File, name: String): File?' in _bak)
+check("v9.33.140: the restore is pinned by unit tests",
+      'stageTarget' in open(os.path.join(ROOT, "android/app/src/test/java/org/nova/BackupRestoreTest.kt"),
+                            encoding="utf-8").read())
+check("v9.33.140: version is at least 9.33.140 (308)",
+      version_at_least("9.33.140", 308))
+structural("BackupActivity.kt", _bak)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

@@ -187,7 +187,12 @@ class BackupActivity : ListActivity() {
             var ok = false
             try {
                 val files = collectFiles()
-                contentResolver.openOutputStream(uri, "w")?.use { os ->
+                // v9.33.140: a null stream skipped the whole zip and still
+                // reported the backup saved. Same lie, other direction.
+                if (files.isEmpty()) throw java.io.IOException("There is nothing to back up yet.")
+                val out = contentResolver.openOutputStream(uri, "w")
+                    ?: throw java.io.IOException("The backup file could not be opened.")
+                out.use { os ->
                     // v9.16.10: a password wraps the zip in AES-GCM, so a
                     // backup kept in the cloud or on a laptop is unreadable
                     // without it. Blank password = plain zip, as before.
@@ -287,56 +292,99 @@ class BackupActivity : ListActivity() {
             .show()
     }
 
-    /** v9.4.0 "Audit Fixes II" (audit: restore was a merge, not a
-     *  replace): delete every file under filesDir except the cache
-     *  dirs, so what the backup lacks is really gone after a restore.
-     *  Subdirectories other than cache/code_cache are emptied and
-     *  removed - the zip recreates whatever it actually contains. */
-    private fun wipeFilesDir() {
-        fun wipe(dir: File) {
+    /**
+     * v9.33.140 "Nothing is deleted before it is replaced": where one entry of
+     * the backup is staged while the zip is still being read.
+     *
+     * The staging tree mirrors the app data folder - `files/...` for filesDir,
+     * `shared_prefs/...` beside it - so the swap later is a plain copy into
+     * place. A crafted entry cannot escape the staging folder: the resolved
+     * path must still be under it, which is what the canonical-path test
+     * below enforces. Pure file arithmetic, so a unit test pins the rule.
+     */
+    private fun stageEntry(staging: File, name: String): File? = stageTarget(staging, name)
+
+    /** Copy every staged file into place, remembering what was restored. */
+    private fun place(from: File, to: File, prefix: String, keep: MutableSet<String>): Int {
+        if (!from.isDirectory) return 0
+        var n = 0
+        from.walkTopDown().filter { it.isFile }.forEach { f ->
+            val rel = f.relativeTo(from).path
+            val target = File(to, rel)
+            target.parentFile?.mkdirs()
+            f.copyTo(target, overwrite = true)
+            keep.add(prefix + "/" + rel.replace(File.separatorChar, '/'))
+            n++
+        }
+        return n
+    }
+
+    /**
+     * The v9.4.0 "true replace", applied LAST instead of first: delete what
+     * the backup did not contain, so the state after a restore is exactly the
+     * state in the zip. Every restored file is already on disk when this runs,
+     * which is the whole point of v9.33.140 - the old order deleted first.
+     */
+    private fun prune(top: File, prefix: String, keep: Set<String>, keepRuntimeFiles: Boolean) {
+        fun walk(dir: File) {
             val kids = dir.listFiles() ?: return
             for (f in kids) {
                 if (f.isDirectory) {
                     if (f.name == "cache" || f.name == "code_cache") continue
-                    wipe(f)
-                    f.delete()
-                } else if (
-                    // v9.13.0 "Audit Fixes" (MEDIUM 8): the notification log
-                    // and its pause flag are runtime-private and EXCLUDED
-                    // from every backup (v9.3.0 privacy) - the restore wipe
-                    // must not delete what the backup never contained. The
-                    // live log stays exactly as it is.
-                    f.name != "notif_log.txt" && f.name != "notif_pause.txt") f.delete()
+                    walk(f)
+                    if ((f.listFiles() ?: emptyArray()).isEmpty()) f.delete()
+                    continue
+                }
+                // v9.13.0 "Audit Fixes" (MEDIUM 8): the notification log and its
+                // pause flag are runtime-private and EXCLUDED from every backup,
+                // so a restore must not delete what the backup never contained.
+                if (keepRuntimeFiles && (f.name == "notif_log.txt" || f.name == "notif_pause.txt")) continue
+                val rel = f.relativeTo(top).path.replace(File.separatorChar, '/')
+                if ((prefix + "/" + rel) !in keep) f.delete()
             }
         }
-        wipe(filesDir)
-        // v9.16.3: a true replace also clears the settings store
-        val sp = File(filesDir.parentFile, "shared_prefs")
-        if (sp.isDirectory) sp.listFiles()?.forEach { it.delete() }
+        walk(top)
     }
 
     private fun restoreBackup(uri: Uri, password: String?) {
         Thread {
             var restored = 0
             var ok = false
+            val root = filesDir.parentFile?.canonicalFile
+            val staging = if (root != null) File(root, STAGING_DIR) else null
             try {
-                val root = filesDir.parentFile.canonicalFile
-                // the true replace: current state goes first, then the zip
-                wipeFilesDir()
-                contentResolver.openInputStream(uri)?.use { ins ->
-                    val bin = BufferedInputStream(ins)
+                if (root == null || staging == null)
+                    throw java.io.IOException("NOVA has no app data folder.")
+                // v9.33.140 "Nothing is deleted before it is replaced": the
+                // restore used to wipe filesDir and shared_prefs FIRST and read
+                // the zip afterwards, so a zip that could not be opened, a file
+                // the picker no longer granted, a wrong password or a truncated
+                // download left NOVA with nothing at all - every chat, note,
+                // reminder, exam, learned fact and setting gone - and the screen
+                // then said "Restore failed - the zip could not be read". The
+                // current state was the thing the user came to the screen to
+                // protect. The zip is now read in full into a staging folder
+                // first; nothing of the current state goes until every byte of
+                // the backup is already on the device, and the leftover sweep
+                // that makes a restore a true replace runs last.
+                if (staging.exists() && !staging.deleteRecursively())
+                    throw java.io.IOException("The restore staging folder could not be cleared.")
+                if (!staging.mkdirs())
+                    throw java.io.IOException("The restore staging folder could not be created.")
+                // v9.33.140: a null stream used to leave the loop with ok = true,
+                // reporting a complete restore of nothing.
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw java.io.IOException("The backup file could not be opened.")
+                input.use { raw ->
+                    val bin = BufferedInputStream(raw)
                     val zin = if (password != null) wrapIn(bin, password) else bin
                     ZipInputStream(zin).use { zis ->
                         var ze: ZipEntry? = zis.nextEntry
                         while (ze != null) {
                             if (!ze.isDirectory) {
-                                // shared_prefs/ entries restore beside filesDir
-                                val target = if (ze.name.startsWith("shared_prefs/"))
-                                    File(filesDir.parentFile, ze.name)
-                                else File(filesDir, ze.name)
                                 // a crafted zip must not escape the app data dir
-                                if (target.canonicalFile.path
-                                        .startsWith(root.path + File.separator)) {
+                                val target = stageEntry(staging, ze.name)
+                                if (target != null) {
                                     target.parentFile?.mkdirs()
                                     target.outputStream().use { zis.copyTo(it) }
                                     restored++
@@ -347,8 +395,21 @@ class BackupActivity : ListActivity() {
                         }
                     }
                 }
-                ok = true
+                if (restored == 0) throw java.io.IOException("The backup held no files.")
+                // EVERY BYTE IS HERE. Only now does anything of the current
+                // state go - and even then it is overwritten, not emptied.
+                val keep = HashSet<String>()
+                restored = place(File(staging, "files"), filesDir, "files", keep) +
+                    place(File(staging, "shared_prefs"), File(root, "shared_prefs"), "shared_prefs", keep)
+                prune(filesDir, "files", keep, true)
+                prune(File(root, "shared_prefs"), "shared_prefs", keep, false)
+                ok = restored > 0
             } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
+            finally {
+                try {
+                    if (staging != null && staging.exists()) staging.deleteRecursively()
+                } catch (e: Exception) { NovaLog.quiet("BackupActivity", e) }
+            }
             runOnUiThread {
                 if (ok) {
                     // v9.4.0 "Audit Fixes II" (audit: stale in-memory state
@@ -501,7 +562,28 @@ class BackupActivity : ListActivity() {
 
     companion object {
         private const val MAGIC = "NOVABK1"
+        /** v9.33.140: where a restore is read into before anything is replaced. */
+        private const val STAGING_DIR = "nova_restore_staging"
         private const val REQ_SAVE = 4101
         private const val REQ_RESTORE = 4102
     }
+}
+
+/**
+ * v9.33.140 "Nothing is deleted before it is replaced": where one backup entry
+ * lands inside the restore staging folder, or null when it would escape it.
+ *
+ * `files/...` mirrors filesDir and `shared_prefs/...` mirrors the folder beside
+ * it. The resolved path must still sit under the staging folder, so an entry
+ * named "../../databases/x" or "shared_prefs/../../evil" is refused instead of
+ * being written outside the app's own data. Pure file arithmetic - a unit test
+ * pins it without an Activity, a zip or a device.
+ */
+internal fun stageTarget(staging: File, name: String): File? {
+    val safe = name.replace('\\', '/').trimStart('/')
+    if (safe.isEmpty()) return null
+    val target = if (safe.startsWith("shared_prefs/")) File(staging, safe)
+    else File(File(staging, "files"), safe)
+    val base = staging.canonicalFile.path
+    return if (target.canonicalFile.path.startsWith(base + File.separator)) target else null
 }

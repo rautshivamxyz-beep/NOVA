@@ -415,8 +415,22 @@ android {
         //   per collector it covered, so LIMITATIONS read as though three
         //   things had been skipped when one budget ran out once; it is said
         //   once, and a repeated limitation renders once.
-        versionCode 307
-        versionName '9.33.139'
+        // v9.33.140 "Nothing is deleted before it is replaced": the restore
+        //   wiped filesDir and shared_prefs FIRST and read the zip afterwards,
+        //   so a zip that could not be opened, a grant the picker no longer
+        //   held, a wrong password or a truncated download left NOVA with
+        //   nothing at all - every chat, note, reminder, exam, learned fact and
+        //   setting gone - and the screen then said "Restore failed - the zip
+        //   could not be read". The current state was the thing the user came
+        //   to that screen to protect. The zip is now read in full into a
+        //   staging folder first; nothing of the current state goes until every
+        //   byte of the backup is already on the device, and the leftover sweep
+        //   that makes a restore a true replace runs last. A null stream used to
+        //   report a complete restore of nothing, and on the save side a null
+        //   stream reported a backup that was never written; both now fail
+        //   loudly, and an empty backup is refused instead of being created.
+        versionCode 308
+        versionName '9.33.140'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
