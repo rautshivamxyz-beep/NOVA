@@ -331,6 +331,26 @@ class OsintActivity : Activity() {
         }
         val budget = addField("Time budget in seconds (5–120)", current.timeBudgetSeconds.toString(), true)
         val limit = addField("Maximum report findings (5–200)", current.maxResults.toString(), true)
+        val deepPreset = Button(this).apply {
+            text = "Apply deep preset"
+            isAllCaps = false
+            setOnClickListener {
+                val deep = OsintPreferences.deep()
+                checks["github"]?.isChecked = deep.github
+                checks["gitlab"]?.isChecked = deep.gitlab
+                checks["profile"]?.isChecked = deep.profileLeads
+                checks["web"]?.isChecked = deep.webSearchLink
+                checks["dns"]?.isChecked = deep.dns
+                checks["rdap"]?.isChecked = deep.rdap
+                checks["ct"]?.isChecked = deep.certificateTransparency
+                checks["custom"]?.isChecked = deep.customSourcesEnabled
+                budget.setText(deep.timeBudgetSeconds.toString())
+                limit.setText(deep.maxResults.toString())
+            }
+        }
+        panel.addView(deepPreset, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(42)))
+
         panel.addView(TextView(this).apply {
             text = "Custom public HTTPS sources (up to 10)\nOne per line: Name|https://provider.example/search?q={query}\nOnly configure providers you trust. The investigation target is sent to each enabled provider."
             setTextColor(NovaTheme.dim)
