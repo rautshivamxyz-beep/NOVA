@@ -31,6 +31,7 @@ import java.io.File
 class OsintActivity : Activity() {
     private val jobs = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var kind = "username"
+    private var osintPreferences = OsintPreferences()
     private lateinit var target: EditText
     private lateinit var output: TextView
     private lateinit var progress: ProgressBar
@@ -44,6 +45,7 @@ class OsintActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NovaTheme.apply(Settings(this).theme == "light")
+        osintPreferences = OsintPreferences.load(this)
         setContentView(buildScreen())
         restore(savedInstanceState)
     }
@@ -155,6 +157,14 @@ class OsintActivity : Activity() {
         root.addView(tabs)
         refreshTabs()
 
+        val customize = Button(this).apply {
+            text = "Customize investigation"
+            isAllCaps = false
+            setOnClickListener { showOsintSettings() }
+        }
+        root.addView(customize, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
+
         target = EditText(this).apply {
             hint = "Enter a public username"
             textSize = 15f
@@ -246,20 +256,35 @@ class OsintActivity : Activity() {
      */
     private fun confirmDisclosureThen(action: () -> Unit) {
         val settings = Settings(this)
-        if (settings.osintNoticeSeen) {
+        val destinations = mutableListOf<String>()
+        when (kind) {
+            "username" -> {
+                if (osintPreferences.github) destinations.add("GitHub")
+                if (osintPreferences.gitlab) destinations.add("GitLab")
+            }
+            "domain" -> {
+                if (osintPreferences.dns) destinations.add("system DNS resolver")
+                if (osintPreferences.rdap) destinations.add("public RDAP")
+                if (osintPreferences.certificateTransparency) destinations.add("Certificate Transparency")
+            }
+            "ip" -> if (osintPreferences.rdap) destinations.add("public RDAP")
+        }
+        if (osintPreferences.customSourcesEnabled) {
+            destinations.addAll(osintPreferences.customSources.map { it.name })
+        }
+        // Profile URL leads and a generated search link do not send requests.
+        if (destinations.isEmpty()) {
             action()
             return
         }
         AlertDialog.Builder(this)
             .setTitle("This lookup goes online")
             .setMessage(
-                "NOVA sends the username, domain or IP you typed to third-party " +
-                "public services: GitHub and GitLab (for usernames), the public " +
-                "RDAP registry and Certificate Transparency logs (for domains " +
-                "and IPs).\n\nOnly that target is sent. The report is saved on " +
-                "this device and nothing else is uploaded. With the SOCKS proxy " +
-                "turned on in Settings, these requests go through it.\n\n" +
-                "Investigate only public information."
+                "NOVA will send the target you entered to these enabled destinations: " +
+                (destinations.distinct().joinToString().ifBlank { "none (only local processing)" }) +
+                ".\n\nThe report is saved on this device. Custom providers return unverified data; " +
+                "check their source links. With the SOCKS proxy turned on in Settings, " +
+                "HTTP requests use it. Investigate only public information."
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
@@ -267,6 +292,150 @@ class OsintActivity : Activity() {
                 action()
             }
             .show()
+    }
+
+    private fun showOsintSettings() {
+        val current = osintPreferences
+        val scroll = ScrollView(this)
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(12))
+        }
+        val checks = linkedMapOf<String, android.widget.CheckBox>()
+        fun addCheck(key: String, label: String, checked: Boolean) {
+            val box = android.widget.CheckBox(this).apply {
+                text = label
+                isChecked = checked
+                setTextColor(NovaTheme.text)
+            }
+            checks[key] = box
+            panel.addView(box)
+        }
+        panel.addView(TextView(this).apply {
+            text = "Choose which public sources NOVA uses. Disabled modules make no requests."
+            setTextColor(NovaTheme.dim)
+            textSize = 12f
+        })
+        addCheck("github", "GitHub public account lookup", current.github)
+        addCheck("gitlab", "GitLab public account lookup", current.gitlab)
+        addCheck("profile", "Social profile URL leads (unverified)", current.profileLeads)
+        addCheck("web", "Public web search link", current.webSearchLink)
+        addCheck("dns", "Domain DNS records", current.dns)
+        addCheck("rdap", "Public RDAP registry data", current.rdap)
+        addCheck("ct", "Certificate Transparency names", current.certificateTransparency)
+        addCheck("custom", "Custom public HTTPS sources", current.customSourcesEnabled)
+
+        fun addField(label: String, value: String, numeric: Boolean = false): EditText {
+            panel.addView(TextView(this).apply {
+                text = label
+                setTextColor(NovaTheme.text)
+                textSize = 13f
+                setPadding(0, dp(10), 0, dp(2))
+            })
+            return EditText(this).apply {
+                setText(value)
+                textSize = 14f
+                setTextColor(NovaTheme.text)
+                setHintTextColor(NovaTheme.dim)
+                if (numeric) inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                panel.addView(this, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(46)))
+            }
+        }
+        val budget = addField("Time budget in seconds (5–120)", current.timeBudgetSeconds.toString(), true)
+        val limit = addField("Maximum report findings (5–200)", current.maxResults.toString(), true)
+        val deepPreset = Button(this).apply {
+            text = "Apply deep preset"
+            isAllCaps = false
+            setOnClickListener {
+                val deep = OsintPreferences.deep()
+                checks["github"]?.isChecked = deep.github
+                checks["gitlab"]?.isChecked = deep.gitlab
+                checks["profile"]?.isChecked = deep.profileLeads
+                checks["web"]?.isChecked = deep.webSearchLink
+                checks["dns"]?.isChecked = deep.dns
+                checks["rdap"]?.isChecked = deep.rdap
+                checks["ct"]?.isChecked = deep.certificateTransparency
+                checks["custom"]?.isChecked = deep.customSourcesEnabled
+                budget.setText(deep.timeBudgetSeconds.toString())
+                limit.setText(deep.maxResults.toString())
+            }
+        }
+        panel.addView(deepPreset, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(42)))
+
+        panel.addView(TextView(this).apply {
+            text = "Custom public HTTPS sources (up to 10)\nOne per line: Name|https://provider.example/search?q={query}\nOnly configure providers you trust. The investigation target is sent to each enabled provider."
+            setTextColor(NovaTheme.dim)
+            textSize = 12f
+            setPadding(0, dp(12), 0, dp(4))
+        })
+        val custom = EditText(this).apply {
+            setText(current.customSources.joinToString("\n") { it.toConfigLine() })
+            textSize = 12f
+            setTextColor(NovaTheme.text)
+            setHint("Public JSON API URL templates")
+            minLines = 3
+            maxLines = 6
+            gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        panel.addView(custom, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
+        scroll.addView(panel)
+
+        AlertDialog.Builder(this)
+            .setTitle("NOVA OSINT settings")
+            .setView(scroll)
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Quick preset", null)
+            .setPositiveButton("Save", null)
+            .create().apply {
+                setOnShowListener {
+                    getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                        val quick = OsintPreferences.quick()
+                        checks["github"]?.isChecked = quick.github
+                        checks["gitlab"]?.isChecked = quick.gitlab
+                        checks["profile"]?.isChecked = quick.profileLeads
+                        checks["web"]?.isChecked = quick.webSearchLink
+                        checks["dns"]?.isChecked = quick.dns
+                        checks["rdap"]?.isChecked = quick.rdap
+                        checks["ct"]?.isChecked = quick.certificateTransparency
+                        checks["custom"]?.isChecked = quick.customSourcesEnabled
+                        budget.setText(quick.timeBudgetSeconds.toString())
+                        limit.setText(quick.maxResults.toString())
+                    }
+                    getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val parsedSources = custom.text.toString().lineSequence().filter { it.isNotBlank() }
+                            .mapNotNull { OsintCustomSource.parse(it) }.take(10).toList()
+                        val invalidCount = custom.text.toString().lineSequence().count { it.isNotBlank() } - parsedSources.size
+                        if (invalidCount > 0) {
+                            Toast.makeText(this@OsintActivity,
+                                "Ignored $invalidCount invalid source line(s). Use Name|https://host/path?query={query}",
+                                Toast.LENGTH_LONG).show()
+                        }
+                        osintPreferences = OsintPreferences(
+                            github = checks["github"]!!.isChecked,
+                            gitlab = checks["gitlab"]!!.isChecked,
+                            profileLeads = checks["profile"]!!.isChecked,
+                            webSearchLink = checks["web"]!!.isChecked,
+                            dns = checks["dns"]!!.isChecked,
+                            rdap = checks["rdap"]!!.isChecked,
+                            certificateTransparency = checks["ct"]!!.isChecked,
+                            customSourcesEnabled = checks["custom"]!!.isChecked,
+                            maxResults = limit.text.toString().toIntOrNull()?.coerceIn(5, 200) ?: current.maxResults,
+                            timeBudgetSeconds = budget.text.toString().toIntOrNull()?.coerceIn(5, 120) ?: current.timeBudgetSeconds,
+                            customSources = parsedSources
+                        ).normalized()
+                        OsintPreferences.save(this@OsintActivity, osintPreferences)
+                        Toast.makeText(this@OsintActivity, "OSINT settings saved", Toast.LENGTH_SHORT).show()
+                        dismiss()
+                    }
+                }
+                show()
+            }
     }
 
     private fun runInvestigation() {
@@ -287,7 +456,7 @@ class OsintActivity : Activity() {
         jobs.launch {
             try {
                 val report = withContext(Dispatchers.IO) {
-                    OsintEngine.investigate(applicationContext, kind, value)
+                    OsintEngine.investigate(applicationContext, kind, value, osintPreferences)
                 }
                 // v9.33.139 "The report survives the save": the findings are
                 // shown BEFORE the save is attempted. The save used to sit in

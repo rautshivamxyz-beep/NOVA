@@ -84,84 +84,102 @@ object OsintEngine {
         if (SKIPPED !in notes) notes.add(SKIPPED)
     }
 
-    fun investigate(context: Context, kind: String, rawTarget: String): OsintReport {
+    fun investigate(
+        context: Context,
+        kind: String,
+        rawTarget: String,
+        preferences: OsintPreferences = OsintPreferences()
+    ): OsintReport {
         val target = rawTarget.trim()
         require(target.isNotEmpty()) { "Enter a username, domain or public IP address." }
+        val config = preferences.normalized()
         val findings = mutableListOf<OsintFinding>()
         val notes = mutableListOf<String>()
-        val deadline = System.currentTimeMillis() + BUDGET_MS
+        val deadline = System.currentTimeMillis() + config.timeBudgetSeconds * 1000L
         when (kind.lowercase(Locale.ROOT)) {
-            "username" -> username(context, target, findings, notes, deadline)
-            "domain" -> domain(context, target, findings, notes, deadline)
-            "ip" -> ip(context, target, findings, notes, deadline)
+            "username" -> username(context, target, findings, notes, deadline, config)
+            "domain" -> domain(context, target, findings, notes, deadline, config)
+            "ip" -> ip(context, target, findings, notes, deadline, config)
             else -> throw IllegalArgumentException("Choose username, domain or IP investigation.")
         }
+        if (config.customSourcesEnabled) collectCustomSources(context, target, findings, notes, deadline, config)
+        if (findings.size > config.maxResults) {
+            val removed = findings.size - config.maxResults
+            while (findings.size > config.maxResults) findings.removeAt(findings.lastIndex)
+            notes.add("$removed additional findings were omitted by the configured result limit.")
+        }
         if (findings.isEmpty()) notes.add("No result could be verified. A blocked or unavailable source is not proof that no account or record exists.")
-        return OsintReport(kind, target, System.currentTimeMillis(), findings, notes)
+        return OsintReport(kind, target, System.currentTimeMillis(), findings, notes.distinct())
     }
 
-    private fun username(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
+    private fun username(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long, config: OsintPreferences) {
         val user = raw.removePrefix("@")
         require(user.matches(Regex("^[A-Za-z0-9._-]{2,30}$"))) {
             "Username must be 2–30 characters and contain only letters, numbers, dots, underscores or hyphens."
         }
         val encoded = URLEncoder.encode(user, "UTF-8")
-        if (past(deadline)) { skipped(notes); return }
-        val github = "https://api.github.com/users/$encoded"
-        try {
-            val (status, body) = request(ctx, github)
-            if (status == 200) {
-                val j = JSONObject(body)
-                out.add(OsintFinding("GitHub public account", j.optString("login", user) +
-                    " · " + j.optString("type", "account") +
-                    (if (j.optString("name").isNotBlank()) " · name field: " + j.optString("name") else ""),
-                    j.optString("html_url", "https://github.com/$user"), "Verified API response"))
-            } else if (status == 404) {
-                out.add(OsintFinding("GitHub public account", "No public account returned for this exact username.",
-                    github, "Verified API response"))
-            } else notes.add("GitHub API returned HTTP $status; this check is inconclusive.")
-        } catch (e: Exception) { notes.add("GitHub API check failed: ${shortError(e)}") }
-
-        if (past(deadline)) { skipped(notes); return }
-        val gitlab = "https://gitlab.com/api/v4/users?username=$encoded"
-        try {
-            val (status, body) = request(ctx, gitlab)
-            if (status == 200) {
-                val arr = JSONArray(body)
-                if (arr.length() == 0) {
-                    out.add(OsintFinding("GitLab public account", "No exact public username match returned.", gitlab, "Verified API response"))
-                } else {
-                    for (i in 0 until minOf(arr.length(), 5)) {
-                        val j = arr.optJSONObject(i) ?: continue
-                        out.add(OsintFinding("GitLab account candidate", j.optString("username") +
-                            (if (j.optString("name").isNotBlank()) " · " + j.optString("name") else ""),
-                            j.optString("web_url", "https://gitlab.com/$user"), "Verified API response; candidate only"))
-                    }
-                }
-            } else notes.add("GitLab API returned HTTP $status; this check is inconclusive.")
-        } catch (e: Exception) { notes.add("GitLab API check failed: ${shortError(e)}") }
-
-        val links = listOf(
-            "GitHub" to "https://github.com/$user",
-            "GitLab" to "https://gitlab.com/$user",
-            "Reddit" to "https://www.reddit.com/user/$user/",
-            "Instagram" to "https://www.instagram.com/$user/",
-            "X" to "https://x.com/$user",
-            "TikTok" to "https://www.tiktok.com/@$user",
-            "Pinterest" to "https://www.pinterest.com/$user/",
-            "Medium" to "https://medium.com/@$user"
-        )
-        links.forEach { (site, url) ->
-            out.add(OsintFinding("$site profile URL", url, url, "Candidate URL — not proof an account exists"))
+        if (config.github) {
+            if (past(deadline)) { skipped(notes); return }
+            val github = "https://api.github.com/users/$encoded"
+            try {
+                val (status, body) = request(ctx, github)
+                if (status == 200) {
+                    val j = JSONObject(body)
+                    out.add(OsintFinding("GitHub public account", j.optString("login", user) +
+                        " · " + j.optString("type", "account") +
+                        (if (j.optString("name").isNotBlank()) " · name field: " + j.optString("name") else ""),
+                        j.optString("html_url", "https://github.com/$user"), "Verified API response"))
+                } else if (status == 404) {
+                    out.add(OsintFinding("GitHub public account", "No public account returned for this exact username.",
+                        github, "Verified API response"))
+                } else notes.add("GitHub API returned HTTP $status; this check is inconclusive.")
+            } catch (e: Exception) { notes.add("GitHub API check failed: ${shortError(e)}") }
         }
-        out.add(OsintFinding("Search the public web", "Search exact username: \"$user\"",
+
+        if (config.gitlab) {
+            if (past(deadline)) { skipped(notes); return }
+            val gitlab = "https://gitlab.com/api/v4/users?username=$encoded"
+            try {
+                val (status, body) = request(ctx, gitlab)
+                if (status == 200) {
+                    val arr = JSONArray(body)
+                    if (arr.length() == 0) {
+                        out.add(OsintFinding("GitLab public account", "No exact public username match returned.", gitlab, "Verified API response"))
+                    } else {
+                        for (i in 0 until minOf(arr.length(), 5)) {
+                            val j = arr.optJSONObject(i) ?: continue
+                            out.add(OsintFinding("GitLab account candidate", j.optString("username") +
+                                (if (j.optString("name").isNotBlank()) " · " + j.optString("name") else ""),
+                                j.optString("web_url", "https://gitlab.com/$user"), "Verified API response; candidate only"))
+                        }
+                    }
+                } else notes.add("GitLab API returned HTTP $status; this check is inconclusive.")
+            } catch (e: Exception) { notes.add("GitLab API check failed: ${shortError(e)}") }
+        }
+
+        if (config.profileLeads) {
+            val links = listOf(
+                "GitHub" to "https://github.com/$user",
+                "GitLab" to "https://gitlab.com/$user",
+                "Reddit" to "https://www.reddit.com/user/$user/",
+                "Instagram" to "https://www.instagram.com/$user/",
+                "X" to "https://x.com/$user",
+                "TikTok" to "https://www.tiktok.com/@$user",
+                "Pinterest" to "https://www.pinterest.com/$user/",
+                "Medium" to "https://medium.com/@$user"
+            )
+            links.forEach { (site, url) ->
+                out.add(OsintFinding("$site profile URL", url, url, "Candidate URL — not proof an account exists"))
+            }
+        }
+        if (config.webSearchLink) out.add(OsintFinding("Search the public web", "Search exact username: \"$user\"",
             "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode("\"$user\"", "UTF-8"),
             "Search link; inspect sources manually"))
         notes.add("A username is not a real-world identity. Similar handles can belong to different people.")
         notes.add("Many social platforms block anonymous automated checks or return generic pages. Profile URLs are leads, not confirmed matches.")
     }
 
-    private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
+    private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long, config: OsintPreferences) {
         val cleaned = raw.trim().removePrefix("https://").removePrefix("http://").substringBefore('/').substringBefore('?').substringBefore('#').substringBefore(':')
         // v9.33.136: a domain the IDN layer cannot convert is a wrong INPUT,
         // not a broken app. IDN.toASCII used to throw straight out of here and
@@ -178,12 +196,15 @@ object OsintEngine {
             host.split('.').all { it.isNotEmpty() && it.length <= 63 && it.matches(Regex("^[a-z0-9-]+$")) && !it.startsWith("-") && !it.endsWith("-") }) {
             "Enter a valid domain, such as example.com."
         }
-        if (past(deadline)) { skipped(notes); return }
-        try {
-            val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
-            out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
-        } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
+        if (config.dns) {
+            if (past(deadline)) { skipped(notes); return }
+            try {
+                val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
+                out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
+            } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
+        }
 
+        if (config.rdap) {
         if (past(deadline)) { skipped(notes); return }
         val rdapUrl = "https://rdap.org/domain/" + URLEncoder.encode(host, "UTF-8")
         try {
@@ -219,6 +240,8 @@ object OsintEngine {
             } else notes.add("RDAP returned HTTP $status.")
         } catch (e: Exception) { notes.add("RDAP lookup failed: ${shortError(e)}") }
 
+        }
+        if (config.certificateTransparency) {
         if (past(deadline)) { skipped(notes); return }
         val ctUrl = "https://crt.sh/?q=%25." + URLEncoder.encode(host, "UTF-8") + "&output=json"
         try {
@@ -235,10 +258,11 @@ object OsintEngine {
                     ctUrl, "Certificate-log records; historical entries may be included"))
             } else notes.add("Certificate transparency service returned HTTP $status.")
         } catch (e: Exception) { notes.add("Certificate transparency lookup failed: ${shortError(e)}") }
+        }
         notes.add("DNS and certificate records can be stale or shared by hosting providers; they do not establish who operates a domain.")
     }
 
-    private fun ip(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long) {
+    private fun ip(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long, config: OsintPreferences) {
         val value = raw.trim().removePrefix("[").removeSuffix("]")
         val octets = value.split('.')
         val isIpv4 = octets.size == 4 && octets.all {
@@ -254,23 +278,81 @@ object OsintEngine {
             !address.isSiteLocalAddress && !address.isMulticastAddress) {
             "Private, loopback, link-local and multicast addresses are not queried."
         }
-        if (past(deadline)) { skipped(notes); return }
-        val url = "https://rdap.org/ip/" + URLEncoder.encode(value, "UTF-8")
-        try {
-            val (status, body) = request(ctx, url)
-            if (status == 200) {
-                val j = JSONObject(body)
-                listOf("name" to "Network name", "handle" to "Network handle", "country" to "Country",
-                    "startAddress" to "Range start", "endAddress" to "Range end", "type" to "Network type",
-                    "port43" to "WHOIS server").forEach { (key, label) ->
-                    val v = j.optString(key)
-                    if (v.isNotBlank() && v != "null") out.add(OsintFinding(label, v, url))
-                }
-                out.add(OsintFinding("RDAP response", "Registry data returned successfully.", url, "Verified RDAP response"))
-            } else notes.add("RDAP returned HTTP $status.")
-        } catch (e: Exception) { notes.add("IP RDAP lookup failed: ${shortError(e)}") }
+        if (config.rdap) {
+            if (past(deadline)) { skipped(notes); return }
+            val url = "https://rdap.org/ip/" + URLEncoder.encode(value, "UTF-8")
+            try {
+                val (status, body) = request(ctx, url)
+                if (status == 200) {
+                    val j = JSONObject(body)
+                    listOf("name" to "Network name", "handle" to "Network handle", "country" to "Country",
+                        "startAddress" to "Range start", "endAddress" to "Range end", "type" to "Network type",
+                        "port43" to "WHOIS server").forEach { (key, label) ->
+                        val v = j.optString(key)
+                        if (v.isNotBlank() && v != "null") out.add(OsintFinding(label, v, url))
+                    }
+                    out.add(OsintFinding("RDAP response", "Registry data returned successfully.", url, "Verified RDAP response"))
+                } else notes.add("RDAP returned HTTP $status.")
+            } catch (e: Exception) { notes.add("IP RDAP lookup failed: ${shortError(e)}") }
+        }
         notes.add("IP geolocation is approximate and usually identifies a network/provider, not a person's home or exact location.")
         notes.add("Only public IP registry information is queried. No port scan or service probing is performed.")
+    }
+
+    /** User-configured HTTPS JSON endpoints. Targets are sent only to sources the user added. */
+    private fun collectCustomSources(
+        ctx: Context, target: String, out: MutableList<OsintFinding>,
+        notes: MutableList<String>, deadline: Long, config: OsintPreferences
+    ) {
+        for (source in config.customSources.take(10)) {
+            if (past(deadline)) { skipped(notes); return }
+            if (!source.isValid()) {
+                notes.add("Custom source '${source.name}' was skipped: invalid HTTPS URL template.")
+                continue
+            }
+            try {
+                val url = source.urlTemplate.replace("{query}", URLEncoder.encode(target, "UTF-8"))
+                val host = java.net.URI(url).host ?: throw IllegalArgumentException("Missing host")
+                if (host.equals("localhost", true) || host.endsWith(".localhost", true) ||
+                    host.endsWith(".local", true) || host.equals("127.0.0.1") || host == "::1") {
+                    notes.add("Custom source '${source.name}' was skipped: local hosts are not allowed.")
+                    continue
+                }
+                val normalizedHost = host.removePrefix("[").removeSuffix("]")
+                if (!normalizedHost.contains('.') && !normalizedHost.contains(':')) {
+                    notes.add("Custom source '${source.name}' was skipped: use a fully qualified public hostname.")
+                    continue
+                }
+                // Validate literal IP endpoints without resolving hostnames locally: local DNS
+                // resolution would bypass a user's SOCKS proxy and disclose a custom host.
+                val isIpLiteral = normalizedHost.contains(':') || normalizedHost.matches(Regex("^[0-9.]+$"))
+                if (isIpLiteral) {
+                    val address = InetAddress.getByName(normalizedHost)
+                    if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
+                        address.isSiteLocalAddress || address.isMulticastAddress) {
+                        notes.add("Custom source '${source.name}' was skipped: private or reserved IP endpoints are not allowed.")
+                        continue
+                    }
+                }
+                if (host.endsWith(".local", true) || host.endsWith(".internal", true) ||
+                    host.endsWith(".lan", true) || host.endsWith(".localhost", true)) {
+                    notes.add("Custom source '${source.name}' was skipped: local hostnames are not allowed.")
+                    continue
+                }
+                val (status, body) = request(ctx, url)
+                if (status in 200..299 && body.isNotBlank()) {
+                    val summary = try {
+                        JSONObject(body).toString()
+                    } catch (_: Exception) {
+                        try { JSONArray(body).toString() } catch (_: Exception) { body }
+                    }
+                    out.add(OsintFinding("Custom source: ${source.name}",
+                        summary.take(1800), url, "Unverified provider response; review the source"))
+                } else notes.add("Custom source '${source.name}' returned HTTP $status.")
+            } catch (e: Exception) {
+                notes.add("Custom source '${source.name}' failed: ${shortError(e)}")
+            }
+        }
     }
 
     private fun request(ctx: Context, url: String): Pair<Int, String> {

@@ -429,8 +429,10 @@ android {
         //   report a complete restore of nothing, and on the save side a null
         //   stream reported a backup that was never written; both now fail
         //   loudly, and an empty backup is refused instead of being created.
-        versionCode 308
-        versionName '9.33.140'
+        // v9.33.141: configurable OSINT modules, per-investigation limits,
+        // and opt-in custom public HTTPS source adapters. No inference settings changed.
+        versionCode 309
+        versionName '9.33.141'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
