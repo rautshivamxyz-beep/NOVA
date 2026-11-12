@@ -208,7 +208,7 @@ class OsintActivity : Activity() {
         root.addView(resultTitle)
         val scroll = ScrollView(this)
         output = TextView(this).apply {
-            text = "Choose a search type and enter a target.\n\nUsername checks include public GitHub/GitLab APIs and profile leads. Domain checks include DNS, RDAP and certificate transparency. IP checks query public RDAP registry data."
+            text = "Choose a search type and enter a target.\n\nUsername checks can query public GitHub, GitLab, DEV Community, Hacker News and Stack Overflow APIs. Each source is reported separately as found, no match, blocked, failed or skipped. Other social profile links are leads only and are not automatically verified."
             textSize = 13f
             setTextColor(fg)
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -261,6 +261,9 @@ class OsintActivity : Activity() {
             "username" -> {
                 if (osintPreferences.github) destinations.add("GitHub")
                 if (osintPreferences.gitlab) destinations.add("GitLab")
+                if (osintPreferences.devTo) destinations.add("DEV Community")
+                if (osintPreferences.hackerNews) destinations.add("Hacker News")
+                if (osintPreferences.stackOverflow) destinations.add("Stack Exchange API")
             }
             "domain" -> {
                 if (osintPreferences.dns) destinations.add("system DNS resolver")
@@ -318,7 +321,10 @@ class OsintActivity : Activity() {
         })
         addCheck("github", "GitHub public account lookup", current.github)
         addCheck("gitlab", "GitLab public account lookup", current.gitlab)
-        addCheck("profile", "Social profile URL leads (unverified)", current.profileLeads)
+        addCheck("devto", "DEV Community public profile", current.devTo)
+        addCheck("hackernews", "Hacker News public profile and contribution counts", current.hackerNews)
+        addCheck("stackoverflow", "Stack Overflow exact display-name candidates", current.stackOverflow)
+        addCheck("profile", "Social profile URL leads (not checked)", current.profileLeads)
         addCheck("web", "Public web search link", current.webSearchLink)
         addCheck("dns", "Domain DNS records", current.dns)
         addCheck("rdap", "Public RDAP registry data", current.rdap)
@@ -352,6 +358,9 @@ class OsintActivity : Activity() {
                 val deep = OsintPreferences.deep()
                 checks["github"]?.isChecked = deep.github
                 checks["gitlab"]?.isChecked = deep.gitlab
+                checks["devto"]?.isChecked = deep.devTo
+                checks["hackernews"]?.isChecked = deep.hackerNews
+                checks["stackoverflow"]?.isChecked = deep.stackOverflow
                 checks["profile"]?.isChecked = deep.profileLeads
                 checks["web"]?.isChecked = deep.webSearchLink
                 checks["dns"]?.isChecked = deep.dns
@@ -398,6 +407,9 @@ class OsintActivity : Activity() {
                         val quick = OsintPreferences.quick()
                         checks["github"]?.isChecked = quick.github
                         checks["gitlab"]?.isChecked = quick.gitlab
+                        checks["devto"]?.isChecked = quick.devTo
+                        checks["hackernews"]?.isChecked = quick.hackerNews
+                        checks["stackoverflow"]?.isChecked = quick.stackOverflow
                         checks["profile"]?.isChecked = quick.profileLeads
                         checks["web"]?.isChecked = quick.webSearchLink
                         checks["dns"]?.isChecked = quick.dns
@@ -419,6 +431,9 @@ class OsintActivity : Activity() {
                         osintPreferences = OsintPreferences(
                             github = checks["github"]!!.isChecked,
                             gitlab = checks["gitlab"]!!.isChecked,
+                            devTo = checks["devto"]!!.isChecked,
+                            hackerNews = checks["hackernews"]!!.isChecked,
+                            stackOverflow = checks["stackoverflow"]!!.isChecked,
                             profileLeads = checks["profile"]!!.isChecked,
                             webSearchLink = checks["web"]!!.isChecked,
                             dns = checks["dns"]!!.isChecked,

@@ -2651,6 +2651,36 @@ check("v9.33.133: OSINT activity is registered without a launcher export",
 structural("OsintEngine.kt", _osint_engine)
 structural("OsintActivity.kt", _osint_ui)
 
+# v9.33.142 "Source results are evidence, not identity": username providers
+# are independent modules and every attempted provider receives an honest state.
+_osint_sources = load("OsintUsernameSources.kt")
+_osint_preferences = load("OsintPreferences.kt")
+_osint_sources_test = open(os.path.join(ROOT, "android/app/src/test/java/org/nova/OsintUsernameSourcesTest.kt"),
+                           encoding="utf-8").read()
+check("v9.33.142: username lookup uses an independent adapter registry",
+      "interface OsintUsernameSourceAdapter" in _osint_sources and
+      "OsintUsernameSources.collect" in _osint_engine)
+check("v9.33.142: public modules include the five supported providers",
+      all(name in _osint_sources for name in
+          ["GitHubUsernameSource", "GitLabUsernameSource", "DevToUsernameSource",
+           "HackerNewsUsernameSource", "StackOverflowUsernameSource"]))
+check("v9.33.142: account lookup requires an exact handle match",
+      "OsintUsernameMatch.isExact" in _osint_sources and
+      "substring similarity is never an identity signal" in _osint_sources)
+check("v9.33.142: source coverage distinguishes no match, errors, blocks and skips",
+      all(name in _osint_sources for name in
+          ["NO_MATCH", "ERROR", "BLOCKED", "RATE_LIMITED", "UNAVAILABLE", "SKIPPED", "DISABLED"]))
+check("v9.33.142: source toggles are saved and restored",
+      all(name in _osint_preferences for name in
+          ['"dev_to"', '"hacker_news"', '"stack_overflow"', '"custom_sources_enabled"']))
+check("v9.33.142: the report carries source coverage and provenance",
+      '"source_checks"' in _osint_engine and '"checked_at_epoch_ms"' in _osint_engine and
+      "SOURCE COVERAGE" in _osint_engine)
+check("v9.33.142: exact matching and coverage states have regression tests",
+      "substring matches are not accepted as exact usernames" in _osint_sources_test and
+      "distinguishes no match from a failed request" in _osint_sources_test)
+structural("OsintUsernameSources.kt", _osint_sources)
+
 # v9.33.139 "The report survives the save": three ways a finished OSINT report
 # could be lost after its network work was paid for - a failed save replacing
 # it on screen, a share button left live with nothing to share, and a rotation
@@ -2674,10 +2704,13 @@ check("v9.33.139: the report survives a rotation",
 check("v9.33.139: share sends the text that is on screen",
       'val text = latestText ?: return' in _osint_ui and
       'latest: OsintReport?' not in _osint_ui)
-check("v9.33.139: the skip sentence is said once",
+check("v9.33.139: legacy collectors report shared-deadline skips once",
       'internal fun skipped(notes: MutableList<String>)' in _osint_engine and
       'if (past(deadline)) { notes.add(SKIPPED); return }' not in _osint_engine and
-      _osint_engine.count('skipped(notes)') >= 6)
+      _osint_engine.count('skipped(notes)') >= 3)
+check("v9.33.142: username adapters report each unstarted source as skipped",
+      'OsintSourceState.SKIPPED' in _osint_sources and
+      'shared time budget expired before this source was checked' in _osint_sources)
 check("v9.33.139: a repeated limitation renders once",
       'notes.distinct().forEach' in _osint_engine)
 check("v9.33.139: the one-said-once rule is pinned by unit tests",

@@ -6,8 +6,11 @@ NOVA's OSINT workspace is a configurable, public-source research tool. It does n
 
 The **Customize investigation** screen can independently enable or disable:
 
-- GitHub public account lookup
-- GitLab public account lookup
+- GitHub public account lookup (exact handle)
+- GitLab public account lookup (exact handle)
+- DEV Community public profile lookup (exact handle)
+- Hacker News public profile and contribution counts (exact handle)
+- Stack Overflow public display-name search (exact display-name candidates only)
 - Candidate profile URL generation (these URLs are leads, not verified accounts)
 - A public-web search link
 - Domain DNS records
@@ -15,7 +18,7 @@ The **Customize investigation** screen can independently enable or disable:
 - Certificate Transparency names
 - User-configured public HTTPS sources
 
-The selected modules, result limit, and time budget are saved locally in the app. The quick preset reduces the number of checks; all other settings can be adjusted individually.
+The selected modules, result limit, and time budget are saved locally in the app. The quick preset reduces the number of checks; the deep preset enables the public profile adapters and uses a longer time budget. Each provider has an independent adapter, so one provider failure does not prevent other checks.
 
 ## Custom public sources
 
@@ -48,4 +51,6 @@ This first adapter version supports unauthenticated public GET endpoints. It doe
 
 ## Evidence quality
 
-Every finding retains a source URL and a confidence label. Candidate profile URLs and custom provider responses are explicitly unverified. A username or name match is not proof that two accounts belong to the same person. Reports are saved locally and can be shared by the user.
+The report includes a **source coverage** section for each built-in username provider: found, no match, blocked, rate limited, unavailable, error, skipped, or disabled. “No match” means only that this provider returned no exact account for this query; it does not prove the account does not exist elsewhere. Stack Overflow searches display names and therefore returns candidates, not verified usernames.
+
+Every finding retains a source URL and a calibrated confidence label. Exact handles establish only that a public account exists on that platform; they do not establish who controls it or link two accounts to the same person. NOVA does not collect email addresses, phone numbers, private messages, home addresses, or live-location data. Candidate profile URLs and custom provider responses remain explicitly unverified. Reports are saved locally and can be shared by the user.
