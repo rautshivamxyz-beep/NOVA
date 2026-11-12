@@ -48,6 +48,26 @@ class LearningEvidencePolicyTest {
     }
 
     @Test
+    fun weakLexicalOverlapDoesNotEnterDurableMemory() {
+        assertFalse(
+            LearningEvidencePolicy.mayPersistFact(
+                listOf("a source with limited overlap"),
+                VerifyResult(true, 0.635, "quality checks passed (grounding 30%)")
+            )
+        )
+    }
+
+    @Test
+    fun exactlyHalfGroundedTermsMeetsTheEvidenceFloor() {
+        assertTrue(
+            LearningEvidencePolicy.mayPersistFact(
+                listOf("source material"),
+                VerifyResult(true, LearningEvidencePolicy.MIN_GROUNDED_SCORE, "quality checks passed")
+            )
+        )
+    }
+
+    @Test
     fun borderlineSourceFreeScoreIsNotEnough() {
         assertFalse(
             LearningEvidencePolicy.mayPersistFact(
