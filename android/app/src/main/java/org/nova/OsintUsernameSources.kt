@@ -6,7 +6,7 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /** The state of one provider check. FOUND never means that a real-world identity was proved. */
-internal enum class OsintSourceState(val label: String) {
+enum class OsintSourceState(val label: String) {
     FOUND("FOUND"),
     NO_MATCH("NO MATCH"),
     INCONCLUSIVE("INCONCLUSIVE"),
