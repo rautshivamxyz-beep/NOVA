@@ -12,6 +12,7 @@ data class OsintPreferences(
     val dns: Boolean = true,
     val rdap: Boolean = true,
     val certificateTransparency: Boolean = true,
+    val customSourcesEnabled: Boolean = false,
     val maxResults: Int = 40,
     val timeBudgetSeconds: Int = 20,
     val customSources: List<OsintCustomSource> = emptyList()
@@ -51,6 +52,7 @@ data class OsintPreferences(
                 .putBoolean("profile_leads", v.profileLeads).putBoolean("web_search", v.webSearchLink)
                 .putBoolean("dns", v.dns).putBoolean("rdap", v.rdap)
                 .putBoolean("ct", v.certificateTransparency)
+                .putBoolean("custom_sources_enabled", v.customSourcesEnabled)
                 .putInt("max_results", v.maxResults).putInt("budget_seconds", v.timeBudgetSeconds)
                 .putString("custom_sources", v.customSources.joinToString("\n") { it.toConfigLine() })
                 .apply()
