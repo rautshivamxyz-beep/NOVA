@@ -20,9 +20,14 @@ object LearningEvidencePolicy {
      * source-grounding comparison could be performed.
      */
     fun mayPersistFact(sources: List<String>, verdict: VerifyResult): Boolean {
-        if (!verdict.passed || verdict.qualityScore <= SOURCE_FREE_SCORE) return false
+        if (!verdict.passed || verdict.qualityScore < MIN_GROUNDED_SCORE) return false
         return sources.any { it.isNotBlank() }
     }
 
     const val SOURCE_FREE_SCORE = 0.6
+
+    // quality() computes 0.5 + 0.45 * lexical source coverage. A 0.725
+    // floor requires at least 50% of significant answer terms to occur in
+    // the supplied source, rather than accepting the 30% drift boundary.
+    const val MIN_GROUNDED_SCORE = 0.725
 }
