@@ -293,4 +293,16 @@ internal object OsintUsernameSources {
     }
 
     internal fun moduleIds(): Set<String> = adapters.map { it.id }.toSet()
+
+    /** Pure parser seam for regression tests; production collection still uses NovaNet. */
+    internal fun parseResponse(
+        moduleId: String,
+        username: String,
+        status: Int,
+        body: String
+    ): OsintSourceOutcome? {
+        val adapter = adapters.firstOrNull { it.id == moduleId } ?: return null
+        val url = adapter.requestUrl(username)
+        return adapter.parse(username, url, OsintHttpResponse(status, body))
+    }
 }
