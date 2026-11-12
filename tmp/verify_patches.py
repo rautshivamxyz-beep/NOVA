@@ -2651,6 +2651,41 @@ check("v9.33.133: OSINT activity is registered without a launcher export",
 structural("OsintEngine.kt", _osint_engine)
 structural("OsintActivity.kt", _osint_ui)
 
+# v9.33.139 "The report survives the save": three ways a finished OSINT report
+# could be lost after its network work was paid for - a failed save replacing
+# it on screen, a share button left live with nothing to share, and a rotation
+# rebuilding the screen from nothing - plus the skip sentence that could be
+# said once per collector. Each one is pinned here so a later refactor cannot
+# quietly put it back.
+_osint_test = open(os.path.join(ROOT, "android/app/src/test/java/org/nova/OsintReportTest.kt"),
+                   encoding="utf-8").read()
+check("v9.33.139: the report is shown before the save is attempted",
+      'latestText = report.asText()' in _osint_ui and
+      _osint_ui.index('latestText = report.asText()') < _osint_ui.index('saveReport(report)'))
+check("v9.33.139: a failed save keeps the report and says so",
+      'could NOT be saved on this device' in _osint_ui and
+      'Report could not be saved on this device' in _osint_ui)
+check("v9.33.139: nothing is left to share when the run failed",
+      _osint_ui.count('shareButton.isEnabled = false') >= 2)
+check("v9.33.139: the report survives a rotation",
+      'override fun onSaveInstanceState' in _osint_ui and
+      'putString("report_text"' in _osint_ui and
+      'state.getString("report_text")' in _osint_ui)
+check("v9.33.139: share sends the text that is on screen",
+      'val text = latestText ?: return' in _osint_ui and
+      'latest: OsintReport?' not in _osint_ui)
+check("v9.33.139: the skip sentence is said once",
+      'internal fun skipped(notes: MutableList<String>)' in _osint_engine and
+      'if (past(deadline)) { notes.add(SKIPPED); return }' not in _osint_engine and
+      _osint_engine.count('skipped(notes)') >= 6)
+check("v9.33.139: a repeated limitation renders once",
+      'notes.distinct().forEach' in _osint_engine)
+check("v9.33.139: the one-said-once rule is pinned by unit tests",
+      'OsintEngine.skipped(notes)' in _osint_test and
+      'a limitation said twice is printed once' in _osint_test)
+check("v9.33.139: version is at least 9.33.139 (307)",
+      version_at_least("9.33.139", 307))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

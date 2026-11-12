@@ -400,8 +400,23 @@ android {
         //   sources are skipped and the report says so, instead of being left
         //   to time out one by one. Nothing is ever reported as "no result"
         //   when it was simply not asked.
-        versionCode 306
-        versionName '9.33.138'
+        // v9.33.139 "The report survives the save": three ways a finished
+        //   OSINT report could be lost after the network work was already
+        //   paid for. A save that failed - a full disk, an unwritable folder -
+        //   sat in the same try as the investigation, so it replaced a
+        //   complete report on screen with "Investigation failed", the message
+        //   NOVA uses when a lookup really did break; the report now stays and
+        //   the screen says plainly that it could not be saved. "Share report"
+        //   stayed enabled after a failed run with nothing to share. And a
+        //   rotation rebuilt the screen from nothing, so the report and the
+        //   share button vanished with it - the search type, the target and
+        //   the report text are now kept across the rebuild. Alongside them,
+        //   the skip sentence the v9.33.137 deadline adds could be added once
+        //   per collector it covered, so LIMITATIONS read as though three
+        //   things had been skipped when one budget ran out once; it is said
+        //   once, and a repeated limitation renders once.
+        versionCode 307
+        versionName '9.33.139'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

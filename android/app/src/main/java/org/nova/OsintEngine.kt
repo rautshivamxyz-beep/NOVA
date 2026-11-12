@@ -36,7 +36,8 @@ data class OsintReport(
             append("\n  Confidence: ").append(it.confidence).append("\n")
         }
         append("\nLIMITATIONS\n")
-        notes.forEach { append("• ").append(it).append("\n") }
+        // v9.33.139: the same limitation said twice is not two limitations.
+        notes.distinct().forEach { append("• ").append(it).append("\n") }
     }
 
     fun asJson(): String {
@@ -72,6 +73,17 @@ object OsintEngine {
 
     private fun past(deadline: Long): Boolean = System.currentTimeMillis() > deadline
 
+    /**
+     * v9.33.139 "Said once": the deadline can fall between any two collectors,
+     * so domain() reached its skip branch up to three times and added the SAME
+     * sentence to LIMITATIONS each time. The report then read as though three
+     * different things had been skipped, when one budget had run out once.
+     * The sentence is said once, however many collectors it covered.
+     */
+    internal fun skipped(notes: MutableList<String>) {
+        if (SKIPPED !in notes) notes.add(SKIPPED)
+    }
+
     fun investigate(context: Context, kind: String, rawTarget: String): OsintReport {
         val target = rawTarget.trim()
         require(target.isNotEmpty()) { "Enter a username, domain or public IP address." }
@@ -94,7 +106,7 @@ object OsintEngine {
             "Username must be 2–30 characters and contain only letters, numbers, dots, underscores or hyphens."
         }
         val encoded = URLEncoder.encode(user, "UTF-8")
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         val github = "https://api.github.com/users/$encoded"
         try {
             val (status, body) = request(ctx, github)
@@ -110,7 +122,7 @@ object OsintEngine {
             } else notes.add("GitHub API returned HTTP $status; this check is inconclusive.")
         } catch (e: Exception) { notes.add("GitHub API check failed: ${shortError(e)}") }
 
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         val gitlab = "https://gitlab.com/api/v4/users?username=$encoded"
         try {
             val (status, body) = request(ctx, gitlab)
@@ -166,13 +178,13 @@ object OsintEngine {
             host.split('.').all { it.isNotEmpty() && it.length <= 63 && it.matches(Regex("^[a-z0-9-]+$")) && !it.startsWith("-") && !it.endsWith("-") }) {
             "Enter a valid domain, such as example.com."
         }
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         try {
             val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
             out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
         } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
 
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         val rdapUrl = "https://rdap.org/domain/" + URLEncoder.encode(host, "UTF-8")
         try {
             val (status, body) = request(ctx, rdapUrl)
@@ -207,7 +219,7 @@ object OsintEngine {
             } else notes.add("RDAP returned HTTP $status.")
         } catch (e: Exception) { notes.add("RDAP lookup failed: ${shortError(e)}") }
 
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         val ctUrl = "https://crt.sh/?q=%25." + URLEncoder.encode(host, "UTF-8") + "&output=json"
         try {
             val (status, body) = request(ctx, ctUrl)
@@ -242,7 +254,7 @@ object OsintEngine {
             !address.isSiteLocalAddress && !address.isMulticastAddress) {
             "Private, loopback, link-local and multicast addresses are not queried."
         }
-        if (past(deadline)) { notes.add(SKIPPED); return }
+        if (past(deadline)) { skipped(notes); return }
         val url = "https://rdap.org/ip/" + URLEncoder.encode(value, "UTF-8")
         try {
             val (status, body) = request(ctx, url)

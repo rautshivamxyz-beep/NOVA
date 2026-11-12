@@ -93,6 +93,33 @@ class OsintReportTest {
     }
 
     @Test
+    fun `a limitation said twice is printed once`() {
+        // v9.33.139: the deadline can fall between any two collectors, so the
+        // same "time budget was reached" sentence was added up to three times
+        // and the report read as though three different checks had been
+        // skipped. One budget running out once is one limitation.
+        val skipped = "The time budget was reached, so the remaining checks were skipped."
+        val text = report(notes = listOf(skipped, "DNS records can be stale.", skipped)).asText()
+        assertEquals(1, Regex(Regex.escape(skipped)).findAll(text).count())
+        assertTrue(text.contains("DNS records can be stale."))
+    }
+
+    @Test
+    fun `skipping twice says it once and keeps other notes`() {
+        // The engine half of the same rule: the collectors call skipped()
+        // once per source they had to drop, and only the first call writes.
+        val notes = mutableListOf<String>()
+        OsintEngine.skipped(notes)
+        OsintEngine.skipped(notes)
+        OsintEngine.skipped(notes)
+        assertEquals(1, notes.size)
+        notes.add("RDAP returned HTTP 404.")
+        OsintEngine.skipped(notes)
+        assertEquals(2, notes.size)
+        assertTrue(notes.contains("RDAP returned HTTP 404."))
+    }
+
+    @Test
     fun `an empty report is still a complete report`() {
         // No findings and no notes must not produce a bare header: the two
         // sections the user is told to read must both be there.
