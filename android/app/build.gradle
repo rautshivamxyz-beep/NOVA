@@ -435,8 +435,8 @@ android {
         // coverage states, and provenance-rich username reports. No inference settings changed.
         // v9.33.144: only source-grounded answers enter durable factual memory;
         // source-free quality passes remain ordinary chat, not verified facts.
-        versionCode 312
-        versionName '9.33.144'
+        versionCode 313
+        versionName '9.33.145'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
