@@ -102,7 +102,7 @@ object OsintEngine {
             "ip" -> ip(context, target, findings, notes, deadline, config)
             else -> throw IllegalArgumentException("Choose username, domain or IP investigation.")
         }
-        collectCustomSources(context, target, findings, notes, deadline, config)
+        if (config.customSourcesEnabled) collectCustomSources(context, target, findings, notes, deadline, config)
         if (findings.size > config.maxResults) {
             val removed = findings.size - config.maxResults
             while (findings.size > config.maxResults) findings.removeAt(findings.lastIndex)
