@@ -5,7 +5,7 @@ import android.os.Build
 import org.nova.DeviceCapabilities
 import org.nova.NovaHealth
 import org.nova.ncie.learn.GapStore
-import org.nova.ncie.skill.SkillStore
+import org.nova.ncie.evaluate.RegressionLab
 import java.io.File
 import java.util.Locale
 
@@ -84,24 +84,8 @@ object SelfEvolutionEngine {
         if (f.exists()) f.readText().take(8_000) else ""
     } catch (_: Exception) { "" }
 
-    /** Deterministic tests of the data formats that power self-learning. */
-    internal fun selfTests(): List<Pair<String, Boolean>> {
-        val skill = try {
-            val parsed = SkillStore.parse(
-                "[skill]\nname=Test skill\ntrigger=(?i)\\btest me\\b\ninstruction=Handle {q} carefully\nsource=nova\n"
-            )
-            parsed.size == 1 && parsed[0].name == "Test skill" &&
-                parsed[0].trigger.containsMatchIn("please test me") &&
-                parsed[0].render("test me on algebra").contains("test me on algebra")
-        } catch (_: Exception) { false }
-        val gaps = try {
-            val store = GapStore.parse("test capability gap\t2\t123\n")
-            val top = store.top(1)
-            top.size == 1 && top[0].question == "test capability gap" &&
-                top[0].count == 2 && GapStore.parse(store.serialize()).top(1).firstOrNull()?.count == 2
-        } catch (_: Exception) { false }
-        return listOf("skill parser + trigger + rendering" to skill, "capability-gap persistence" to gaps)
-    }
+    /** Deterministic, model-free regression checks for core learning systems. */
+    internal fun selfTests(): List<Pair<String, Boolean>> = RegressionLab.run()
 
     private fun readLines(file: File): List<String> = try {
         if (file.exists()) file.readLines().takeLast(400) else emptyList()
