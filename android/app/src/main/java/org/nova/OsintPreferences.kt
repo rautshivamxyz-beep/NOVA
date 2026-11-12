@@ -49,7 +49,7 @@ data class OsintPreferences(
                 certificateTransparency = p.getBoolean("ct", true),
                 customSourcesEnabled = p.getBoolean("custom_sources_enabled", false),
                 maxResults = p.getInt("max_results", 40).coerceIn(5, 200),
-                timeBudgetSeconds = p.getInt("budget_seconds", 20).coerceIn(5, 120),
+                timeBudgetSeconds = p.getInt("budget_seconds", 45).coerceIn(5, 120),
                 customSources = custom
             )
         }
