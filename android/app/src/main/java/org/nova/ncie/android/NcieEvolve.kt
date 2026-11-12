@@ -109,6 +109,8 @@ object NcieEvolve {
             sb.append("newest: ").append(recent.joinToString(", ")).append('\n')
         }
         if (distill.isNotBlank()) sb.append('\n').append(distill.trim()).append('\n')
+        val selfCheck = try { SelfEvolutionEngine.lastSummary(ctx) } catch (e: Exception) { "" }
+        if (selfCheck.isNotBlank()) sb.append("\\n").append(selfCheck)
         return sb.toString()
     }
 }

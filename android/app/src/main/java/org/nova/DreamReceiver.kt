@@ -14,6 +14,9 @@ class DreamReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         try {
             NcieDream.run(context)
+            // The nightly cycle consolidates graded memory after the report
+            // is written. It runs on NcieLearn's private I/O executor.
+            org.nova.ncie.android.NcieEvolve.grow(context)
             NcieDream.schedule(context)
         } catch (e: Exception) { NovaLog.quiet("DreamReceiver", e) }
     }
