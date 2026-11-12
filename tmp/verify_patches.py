@@ -2704,10 +2704,13 @@ check("v9.33.139: the report survives a rotation",
 check("v9.33.139: share sends the text that is on screen",
       'val text = latestText ?: return' in _osint_ui and
       'latest: OsintReport?' not in _osint_ui)
-check("v9.33.139: the skip sentence is said once",
+check("v9.33.139: legacy collectors report shared-deadline skips once",
       'internal fun skipped(notes: MutableList<String>)' in _osint_engine and
       'if (past(deadline)) { notes.add(SKIPPED); return }' not in _osint_engine and
-      _osint_engine.count('skipped(notes)') >= 6)
+      _osint_engine.count('skipped(notes)') >= 3)
+check("v9.33.142: username adapters report each unstarted source as skipped",
+      'OsintSourceState.SKIPPED' in _osint_sources and
+      'shared time budget expired before this source was checked' in _osint_sources)
 check("v9.33.139: a repeated limitation renders once",
       'notes.distinct().forEach' in _osint_engine)
 check("v9.33.139: the one-said-once rule is pinned by unit tests",
