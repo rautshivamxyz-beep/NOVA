@@ -22,13 +22,24 @@ data class OsintReport(
     val target: String,
     val createdAt: Long,
     val findings: List<OsintFinding>,
-    val notes: List<String>
+    val notes: List<String>,
+    val checks: List<OsintSourceCheck> = emptyList()
 ) {
     fun asText(): String = buildString {
         append("NOVA OSINT REPORT\n")
         append("Type: ").append(kind).append("\nTarget: ").append(target)
         append("\nTime: ").append(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(createdAt)))
-        append("\n\nFINDINGS\n")
+        if (checks.isNotEmpty()) {
+            append("\n\nSOURCE COVERAGE\n")
+            checks.forEach { check ->
+                append("• ").append(check.source).append(": ").append(check.state.label)
+                    .append(" — ").append(check.detail)
+                if (check.elapsedMs > 0L) append(" (").append(check.elapsedMs).append(" ms)")
+                append("\n")
+                if (check.url.isNotBlank()) append("  Source: ").append(check.url).append("\n")
+            }
+        }
+        append("\nFINDINGS\n")
         if (findings.isEmpty()) append("No verified findings.\n")
         findings.forEach {
             append("\n• ").append(it.title).append("\n  ").append(it.value)
@@ -48,9 +59,20 @@ data class OsintReport(
         }
         val caveats = JSONArray()
         notes.forEach { caveats.put(it) }
+        val sourceChecks = JSONArray()
+        checks.forEach { check ->
+            sourceChecks.put(JSONObject()
+                .put("source", check.source)
+                .put("state", check.state.name)
+                .put("detail", check.detail)
+                .put("url", check.url)
+                .put("elapsed_ms", check.elapsedMs)
+                .put("checked_at_epoch_ms", check.checkedAtEpochMs))
+        }
         return JSONObject().put("tool", "NOVA OSINT").put("type", kind)
             .put("target", target).put("created_at_epoch_ms", createdAt)
-            .put("findings", rows).put("limitations", caveats).toString(2)
+            .put("findings", rows).put("source_checks", sourceChecks)
+            .put("limitations", caveats).toString(2)
     }
 }
 
@@ -95,9 +117,10 @@ object OsintEngine {
         val config = preferences.normalized()
         val findings = mutableListOf<OsintFinding>()
         val notes = mutableListOf<String>()
+        val sourceChecks = mutableListOf<OsintSourceCheck>()
         val deadline = System.currentTimeMillis() + config.timeBudgetSeconds * 1000L
         when (kind.lowercase(Locale.ROOT)) {
-            "username" -> username(context, target, findings, notes, deadline, config)
+            "username" -> username(context, target, findings, notes, sourceChecks, deadline, config)
             "domain" -> domain(context, target, findings, notes, deadline, config)
             "ip" -> ip(context, target, findings, notes, deadline, config)
             else -> throw IllegalArgumentException("Choose username, domain or IP investigation.")
@@ -109,58 +132,38 @@ object OsintEngine {
             notes.add("$removed additional findings were omitted by the configured result limit.")
         }
         if (findings.isEmpty()) notes.add("No result could be verified. A blocked or unavailable source is not proof that no account or record exists.")
-        return OsintReport(kind, target, System.currentTimeMillis(), findings, notes.distinct())
+        return OsintReport(kind, target, System.currentTimeMillis(), findings, notes.distinct(), sourceChecks)
     }
 
-    private fun username(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long, config: OsintPreferences) {
+    private fun username(
+        ctx: Context,
+        raw: String,
+        out: MutableList<OsintFinding>,
+        notes: MutableList<String>,
+        checks: MutableList<OsintSourceCheck>,
+        deadline: Long,
+        config: OsintPreferences
+    ) {
         val user = raw.removePrefix("@")
         require(user.matches(Regex("^[A-Za-z0-9._-]{2,30}$"))) {
             "Username must be 2–30 characters and contain only letters, numbers, dots, underscores or hyphens."
         }
-        val encoded = URLEncoder.encode(user, "UTF-8")
-        if (config.github) {
-            if (past(deadline)) { skipped(notes); return }
-            val github = "https://api.github.com/users/$encoded"
-            try {
-                val (status, body) = request(ctx, github)
-                if (status == 200) {
-                    val j = JSONObject(body)
-                    out.add(OsintFinding("GitHub public account", j.optString("login", user) +
-                        " · " + j.optString("type", "account") +
-                        (if (j.optString("name").isNotBlank()) " · name field: " + j.optString("name") else ""),
-                        j.optString("html_url", "https://github.com/$user"), "Verified API response"))
-                } else if (status == 404) {
-                    out.add(OsintFinding("GitHub public account", "No public account returned for this exact username.",
-                        github, "Verified API response"))
-                } else notes.add("GitHub API returned HTTP $status; this check is inconclusive.")
-            } catch (e: Exception) { notes.add("GitHub API check failed: ${shortError(e)}") }
+        val enabled = mapOf(
+            "github" to config.github,
+            "gitlab" to config.gitlab,
+            "devto" to config.devTo,
+            "hackernews" to config.hackerNews,
+            "stackoverflow" to config.stackOverflow
+        )
+        val collection = OsintUsernameSources.collect(user, enabled, deadline) { url ->
+            val (status, body) = request(ctx, url)
+            OsintHttpResponse(status, body)
         }
-
-        if (config.gitlab) {
-            if (past(deadline)) { skipped(notes); return }
-            val gitlab = "https://gitlab.com/api/v4/users?username=$encoded"
-            try {
-                val (status, body) = request(ctx, gitlab)
-                if (status == 200) {
-                    val arr = JSONArray(body)
-                    if (arr.length() == 0) {
-                        out.add(OsintFinding("GitLab public account", "No exact public username match returned.", gitlab, "Verified API response"))
-                    } else {
-                        for (i in 0 until minOf(arr.length(), 5)) {
-                            val j = arr.optJSONObject(i) ?: continue
-                            out.add(OsintFinding("GitLab account candidate", j.optString("username") +
-                                (if (j.optString("name").isNotBlank()) " · " + j.optString("name") else ""),
-                                j.optString("web_url", "https://gitlab.com/$user"), "Verified API response; candidate only"))
-                        }
-                    }
-                } else notes.add("GitLab API returned HTTP $status; this check is inconclusive.")
-            } catch (e: Exception) { notes.add("GitLab API check failed: ${shortError(e)}") }
-        }
+        out.addAll(collection.findings)
+        checks.addAll(collection.checks)
 
         if (config.profileLeads) {
             val links = listOf(
-                "GitHub" to "https://github.com/$user",
-                "GitLab" to "https://gitlab.com/$user",
                 "Reddit" to "https://www.reddit.com/user/$user/",
                 "Instagram" to "https://www.instagram.com/$user/",
                 "X" to "https://x.com/$user",
@@ -169,14 +172,24 @@ object OsintEngine {
                 "Medium" to "https://medium.com/@$user"
             )
             links.forEach { (site, url) ->
-                out.add(OsintFinding("$site profile URL", url, url, "Candidate URL — not proof an account exists"))
+                out.add(OsintFinding("$site profile URL lead", url, url,
+                    "Candidate URL only — NOVA did not verify that this account exists"))
             }
+            checks.add(OsintSourceCheck("Manual profile URL leads", OsintSourceState.LINK_ONLY,
+                "Generated possible profile URLs; these platforms were not queried or verified."))
         }
-        if (config.webSearchLink) out.add(OsintFinding("Search the public web", "Search exact username: \"$user\"",
-            "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode("\"$user\"", "UTF-8"),
-            "Search link; inspect sources manually"))
+        if (config.webSearchLink) {
+            val searchUrl = "https://html.duckduckgo.com/html/?q=" +
+                URLEncoder.encode("\\"$user\\"", "UTF-8")
+            out.add(OsintFinding("Search the public web", "Search exact username: \\"$user\\"",
+                searchUrl, "Link to a public search engine; results require manual source review"))
+            checks.add(OsintSourceCheck("Public web search", OsintSourceState.LINK_ONLY,
+                "Created a search link only; NOVA did not retrieve or verify search results.", searchUrl))
+        }
         notes.add("A username is not a real-world identity. Similar handles can belong to different people.")
-        notes.add("Many social platforms block anonymous automated checks or return generic pages. Profile URLs are leads, not confirmed matches.")
+        notes.add("An exact platform handle confirms only that an account exists on that platform; it does not prove who controls it.")
+        notes.add("Stack Overflow results are display-name candidates, not username or identity confirmation.")
+        notes.add("NOVA checks public provider responses only. It does not access private accounts, private messages, contact details or live location.")
     }
 
     private fun domain(ctx: Context, raw: String, out: MutableList<OsintFinding>, notes: MutableList<String>, deadline: Long, config: OsintPreferences) {
