@@ -433,8 +433,8 @@ android {
         // and opt-in custom public HTTPS source adapters. No inference settings changed.
         // v9.33.142: modular exact-handle public profile adapters, clearer source
         // coverage states, and provenance-rich username reports. No inference settings changed.
-        versionCode 310
-        versionName '9.33.142'
+        versionCode 311
+        versionName '9.33.143'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

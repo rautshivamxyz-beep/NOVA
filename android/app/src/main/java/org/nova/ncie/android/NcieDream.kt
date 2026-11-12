@@ -107,6 +107,13 @@ object NcieDream {
             val digest = NcieLeftovers.dailyDigest(ctx)
             if (digest.isNotBlank()) sb.append(digest)
         } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
+        // The nightly self-evolution audit is deterministic and local. It
+        // reports measured gaps, health, skills and parser self-tests; it
+        // never changes model weights or inference/sampling settings.
+        try {
+            val evolution = SelfEvolutionEngine.runNightly(ctx)
+            if (evolution.isNotBlank()) sb.append("\n").append(evolution).append('\n')
+        } catch (e: Exception) { NovaLog.quiet("NcieDream", e) }
         sb.append("tomorrow: review the weak areas above, then say 'study'.")
         val text = sb.toString()
         // v9.33.103: the one atomic save - a half-written report was shown as a whole one
