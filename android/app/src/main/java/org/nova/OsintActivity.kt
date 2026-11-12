@@ -256,10 +256,6 @@ class OsintActivity : Activity() {
      */
     private fun confirmDisclosureThen(action: () -> Unit) {
         val settings = Settings(this)
-        if (settings.osintNoticeSeen && (!osintPreferences.customSourcesEnabled || osintPreferences.customSources.isEmpty())) {
-            action()
-            return
-        }
         val destinations = mutableListOf<String>()
         when (kind) {
             "username" -> {
@@ -276,6 +272,11 @@ class OsintActivity : Activity() {
         if (osintPreferences.customSourcesEnabled) {
             destinations.addAll(osintPreferences.customSources.map { it.name })
         }
+        // Profile URL leads and a generated search link do not send requests.
+        if (destinations.isEmpty()) {
+            action()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("This lookup goes online")
             .setMessage(
@@ -287,7 +288,7 @@ class OsintActivity : Activity() {
             )
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
-                if (!osintPreferences.customSourcesEnabled || osintPreferences.customSources.isEmpty()) settings.osintNoticeSeen = true
+                settings.osintNoticeSeen = true
                 action()
             }
             .show()
