@@ -318,10 +318,25 @@ object OsintEngine {
                     notes.add("Custom source '${source.name}' was skipped: local hosts are not allowed.")
                     continue
                 }
-                val resolved = InetAddress.getAllByName(host)
-                if (resolved.isEmpty() || resolved.any { it.isAnyLocalAddress || it.isLoopbackAddress ||
-                        it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress }) {
-                    notes.add("Custom source '${source.name}' was skipped: host did not resolve exclusively to public addresses.")
+                val normalizedHost = host.removePrefix("[").removeSuffix("]")
+                if (!normalizedHost.contains('.') && !normalizedHost.contains(':')) {
+                    notes.add("Custom source '${source.name}' was skipped: use a fully qualified public hostname.")
+                    continue
+                }
+                // Validate literal IP endpoints without resolving hostnames locally: local DNS
+                // resolution would bypass a user's SOCKS proxy and disclose a custom host.
+                val isIpLiteral = normalizedHost.contains(':') || normalizedHost.matches(Regex("^[0-9.]+$"))
+                if (isIpLiteral) {
+                    val address = InetAddress.getByName(normalizedHost)
+                    if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
+                        address.isSiteLocalAddress || address.isMulticastAddress) {
+                        notes.add("Custom source '${source.name}' was skipped: private or reserved IP endpoints are not allowed.")
+                        continue
+                    }
+                }
+                if (host.endsWith(".local", true) || host.endsWith(".internal", true) ||
+                    host.endsWith(".lan", true) || host.endsWith(".localhost", true)) {
+                    notes.add("Custom source '${source.name}' was skipped: local hostnames are not allowed.")
                     continue
                 }
                 val (status, body) = request(ctx, url)
