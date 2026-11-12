@@ -179,9 +179,9 @@ object OsintEngine {
                 "Generated possible profile URLs; these platforms were not queried or verified."))
         }
         if (config.webSearchLink) {
-            val searchUrl = "https://html.duckduckgo.com/html/?q=" +
-                URLEncoder.encode("\\"$user\\"", "UTF-8")
-            out.add(OsintFinding("Search the public web", "Search exact username: \\"$user\\"",
+            val searchUrl = "https://html.duckduckgo.com/html/?q=%22" +
+                URLEncoder.encode(user, "UTF-8") + "%22
+            out.add(OsintFinding("Search the public web", "Search exact username: $user",
                 searchUrl, "Link to a public search engine; results require manual source review"))
             checks.add(OsintSourceCheck("Public web search", OsintSourceState.LINK_ONLY,
                 "Created a search link only; NOVA did not retrieve or verify search results.", searchUrl))
