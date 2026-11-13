@@ -7,7 +7,7 @@ import org.junit.Test
 class SelfEvolutionEngineTest {
     @Test fun selfLearningDataChecksPass() {
         val checks = SelfEvolutionEngine.selfTests()
-        assertEquals(2, checks.size)
+        assertEquals(8, checks.size)
         assertTrue(checks.all { it.second })
     }
 }
