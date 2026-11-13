@@ -1,0 +1,453 @@
+From d484ca31d51af5d4507f750d1d5c88876ad41725 Mon Sep 17 00:00:00 2001
+From: rautshivamxyz-beep <rautshivamxyz@gmail.com>
+Date: Fri, 13 Nov 2026 03:48:03 +0000
+Subject: [PATCH] v9.33.146 "A timer cannot crash the app"
+
+The "timer 10 minutes" phone command parsed its own duration three lines
+into a chat turn, and both of its arithmetic lines were reachable from
+ordinary typed text:
+
+  val n = m.groupValues[1].toInt()      // NumberFormatException
+  'h' -> n * 3600                       // Int overflow, negative length
+
+Nothing on the path caught either. tryPhoneCommand is called straight
+from ncieSend with no try/catch around it, so "timer 99999999999999
+minutes" threw NumberFormatException out of a chat message and took the
+whole app down - one typed sentence, no model involved. "timer 1000000
+hours" is the quieter one: 1000000 * 3600 wrapped Int to a negative
+number and the clock app was handed a nonsense length.
+
+The duration is now parsed by NcieTimer, a pure function with no Android
+imports: the digits are read as a Long, the range is checked BEFORE any
+multiplication (every unit multiplies by at least 1, so a count already
+above the limit can never come back under it), and a digit run that does
+not even fit a Long is answered the same way as any other over-long
+timer. Nothing in the parser can throw.
+
+The limit is 24 hours - a kitchen timer, not a calendar - and an
+over-long request is refused in words rather than silently clamped to a
+number the user never asked for. The confirmation toast now states the
+duration NOVA actually handed to the clock app ("Timer set: 1 hour 30
+minutes") instead of echoing the user's own text back.
+
+The same pattern had a third failure: the integer-only regex read
+"timer 1.5 hours" as the "5 hours" inside it and set FIVE hours - four
+and a half hours too long, with a toast that agreed with the wrong
+number. A fractional duration is now read as a fraction (a comma works
+as the decimal mark too), in integer arithmetic so no float rounding
+enters the seconds value.
+
+TimerSpecTest pins all three by name - the Int-overflowing digit run,
+the Int-overflowing hour count, and the fractional duration - plus a
+hostile-input sweep asserting the parser never throws. verify_patches
+gains eleven checks, including one that fails if the crashing inline
+expression ever comes back, and the version floor moves to 9.33.146
+(314).
+
+No inference setting, model weight, permission or network path changed:
+this is a phone-command parser, and it is fully offline.
+---
+ android/app/build.gradle                      |   7 +-
+ .../src/main/java/org/nova/MainActivity.kt    |  23 +--
+ .../java/org/nova/ncie/android/NcieTimer.kt   | 122 ++++++++++++++
+ .../org/nova/ncie/android/TimerSpecTest.kt    | 150 ++++++++++++++++++
+ tmp/verify_patches.py                         |  43 +++++
+ 5 files changed, 334 insertions(+), 11 deletions(-)
+ create mode 100644 android/app/src/main/java/org/nova/ncie/android/NcieTimer.kt
+ create mode 100644 android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt
+
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index 5fafa55..92f704b 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -436,8 +436,11 @@ android {
+         // v9.33.144: only source-grounded answers enter durable factual memory;
+         // source-free quality passes remain ordinary chat, not verified facts.
+         // v9.33.145: nightly self-audit exercises eight deterministic regression checks.
+-        versionCode 313
+-        versionName '9.33.145'
++        // v9.33.146: the "timer" command cannot crash the app - the duration is parsed
++        // as a Long, range-checked before multiplying, and a fractional duration
++        // ("timer 1.5 hours") now sets 90 minutes instead of five hours.
++        versionCode 314
++        versionName '9.33.146'
+         // v6.0.0: arm64 only by default. CI also builds a universal APK
+         // (arm64 + x86_64, for emulators/Chromebooks) with:
+         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
+diff --git a/android/app/src/main/java/org/nova/MainActivity.kt b/android/app/src/main/java/org/nova/MainActivity.kt
+index b726f63..cd5c16a 100644
+--- a/android/app/src/main/java/org/nova/MainActivity.kt
++++ b/android/app/src/main/java/org/nova/MainActivity.kt
+@@ -3049,17 +3049,22 @@ Study:
+             }
+             timer != null -> {
+                 // v8.5.0: "timer 10 minutes" -> the clock app's timer
+-                val m = Regex("(?i)(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\b")
+-                    .find(timer.groupValues[1])
+-                if (m == null) { toast("Try: timer 10 minutes"); return true }
+-                val n = m.groupValues[1].toInt()
+-                val secs = when (m.groupValues[2].lowercase()[0]) {
+-                    'h' -> n * 3600
+-                    'm' -> n * 60
+-                    else -> n
++                // v9.33.146: the duration is parsed by NcieTimer, which
++                // reads the digits as a Long and range-checks them BEFORE
++                // multiplying. The inline toInt() this replaces threw
++                // NumberFormatException on a long digit run and the inline
++                // n * 3600 overflowed Int on a big hour count - both straight
++                // out of a chat turn, with no catch on the path, so one typed
++                // message could take the app down.
++                val spec = org.nova.ncie.android.NcieTimer.parse(timer.groupValues[1])
++                if (spec == null) { toast("Try: timer 10 minutes"); return true }
++                if (spec.tooLong) {
++                    toast("Timer is too long - the longest NOVA will set is 24 hours")
++                    return true
+                 }
+                 try {
+-                    if (startClockTimer(secs)) toast("Timer set: " + m.value)
++                    if (startClockTimer(spec.seconds))
++                        toast("Timer set: " + org.nova.ncie.android.NcieTimer.label(spec.seconds))
+                 } catch (e: Exception) { toast("No clock app found") }
+                 return true
+             }
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieTimer.kt b/android/app/src/main/java/org/nova/ncie/android/NcieTimer.kt
+new file mode 100644
+index 0000000..ad8888f
+--- /dev/null
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieTimer.kt
+@@ -0,0 +1,122 @@
++package org.nova.ncie.android
++
++/**
++ * v9.33.146 "A timer cannot crash the app": the parser behind the
++ * "timer 10 minutes" phone command.
++ *
++ * The command used to parse its own duration inline in MainActivity:
++ *
++ *     val n = m.groupValues[1].toInt()
++ *     'h' -> n * 3600
++ *
++ * with no error handling anywhere on the path - tryPhoneCommand is called
++ * straight from the chat turn. Both lines are reachable from ordinary typed
++ * text and both fail badly:
++ *
++ *  - "timer 99999999999999 minutes" -> toInt() throws NumberFormatException.
++ *    Nothing catches it, so the whole app goes down on one chat message.
++ *  - "timer 1000000 hours" -> 1000000 * 3600 overflows Int to a negative
++ *    number, so the clock app is handed a nonsense length.
++ *
++ * The arithmetic is now a pure function with no Android imports: the digits
++ * are read as a Long, the range is checked BEFORE any multiplication (every
++ * unit multiplies by at least 1, so a count already above [MAX_SECONDS] can
++ * never come back under it), and an absurd digit count that does not even
++ * fit a Long is answered the same way as any other over-long timer. Nothing
++ * here can throw, so the command can no longer crash a turn.
++ *
++ * Pure JVM, so TimerSpecTest pins it with `gradle testDebugUnitTest`.
++ */
++object NcieTimer {
++
++    /**
++     * The longest timer NOVA will set: 24 hours.
++     *
++     * A kitchen timer, not a calendar. A clock app that is handed a month of
++     * seconds either rejects it or fires in the far future with no way for
++     * the user to see what happened, and an over-long request is almost
++     * always a typo or a misheard number. Saying so is more honest than
++     * silently clamping to a value the user never asked for.
++     */
++    const val MAX_SECONDS = 86_400
++
++    /**
++     * "10 minutes", "2 hrs", "90s", "1.5 hours" - one number (with an
++     * optional fractional part) and one unit word.
++     *
++     * v9.33.146: the fraction is here because the integer-only pattern read
++     * "timer 1.5 hours" as the "5 hours" inside it and set FIVE hours - the
++     * user got a timer four and a half hours longer than the one they asked
++     * for, with a toast agreeing with the wrong number. A comma is accepted
++     * as the decimal mark too, since that is how much of the world writes it.
++     */
++    private val SPEC = Regex(
++        "(?i)(\\d+)(?:[.,](\\d+))?\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\b")
++
++    /**
++     * A recognised duration.
++     *
++     * [tooLong] is a real answer, not a failure: the text WAS a timer request,
++     * it just asked for more than [MAX_SECONDS]. Keeping the two apart is what
++     * lets the caller tell "I did not understand that" apart from "that is too
++     * long", and answer each honestly.
++     */
++    data class Spec(val seconds: Int, val tooLong: Boolean)
++
++    /**
++     * The duration in [spec], or null when it is not a timer request at all.
++     *
++     * Never throws: an unparseable, zero-length or over-long count is a
++     * [Spec] or a null, never an exception.
++     */
++    fun parse(spec: String): Spec? {
++        val m = SPEC.find(spec) ?: return null
++        val digits = m.groupValues[1]
++        // 19 digits does not fit a Long either - still "far too long", and
++        // still an answer rather than a crash
++        val whole = digits.toLongOrNull() ?: return Spec(0, true)
++        val mult = when (m.groupValues[3].lowercase()[0]) {
++            'h' -> 3600L
++            'm' -> 60L
++            else -> 1L
++        }
++        // every unit multiplies by at least 1, so this one check makes both
++        // multiplications below overflow-free
++        if (whole > MAX_SECONDS) return Spec(0, true)
++        var secs = whole * mult
++        // the fractional part, in integer arithmetic - "1.5 hours" is 5400,
++        // not the 18000 the integer-only pattern used to read out of it
++        val frac = m.groupValues[2]
++        if (frac.isNotEmpty()) {
++            val scale = if (frac.length > 9) 9 else frac.length
++            val num = frac.substring(0, scale).toLongOrNull() ?: 0L
++            var den = 1L
++            repeat(scale) { den *= 10L }
++            secs += (num * mult + den / 2L) / den
++        }
++        if (secs > MAX_SECONDS) return Spec(0, true)
++        // "timer 0 minutes" is a timer request that asks for nothing
++        if (secs < 1L) return null
++        return Spec(secs.toInt(), false)
++    }
++
++    /**
++     * "5400" -> "1 hour 30 minutes", for the confirmation toast.
++     *
++     * The old toast echoed the user's own words back ("Timer set: 10
++     * minutes"), which is fine until the number is over-long or in a unit
++     * that hides what was set. This states what NOVA actually handed to the
++     * clock app.
++     */
++    fun label(seconds: Int): String {
++        if (seconds <= 0) return "0 seconds"
++        val h = seconds / 3600
++        val m = (seconds % 3600) / 60
++        val s = seconds % 60
++        val parts = ArrayList<String>(3)
++        if (h > 0) parts.add(h.toString() + if (h == 1) " hour" else " hours")
++        if (m > 0) parts.add(m.toString() + if (m == 1) " minute" else " minutes")
++        if (s > 0) parts.add(s.toString() + if (s == 1) " second" else " seconds")
++        return parts.joinToString(" ")
++    }
++}
+diff --git a/android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt b/android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt
+new file mode 100644
+index 0000000..c0c9884
+--- /dev/null
++++ b/android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt
+@@ -0,0 +1,150 @@
++package org.nova.ncie.android
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNotNull
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++/**
++ * v9.33.146: the "timer" phone command's duration parser.
++ *
++ * The two shipped bugs are the reason this test exists, so both are pinned
++ * directly: a digit run too long for an Int (which threw NumberFormatException
++ * straight out of a chat turn) and an hour count that overflowed the Int
++ * multiplication into a negative length. Neither may throw, ever - a phone
++ * command must not be able to take the app down - so every absurd input below
++ * is asserted to come back as an ordinary answer.
++ *
++ * Pure JVM, no Android imports: `gradle testDebugUnitTest`.
++ */
++class TimerSpecTest {
++
++    private fun secs(spec: String): Int? = NcieTimer.parse(spec)?.seconds
++
++    private fun tooLong(spec: String): Boolean = NcieTimer.parse(spec)?.tooLong == true
++
++    @Test
++    fun readsMinutesHoursAndSeconds() {
++        assertEquals(600, secs("10 minutes"))
++        assertEquals(600, secs("10 min"))
++        assertEquals(600, secs("10m"))
++        assertEquals(7200, secs("2 hours"))
++        assertEquals(7200, secs("2 hrs"))
++        assertEquals(7200, secs("2h"))
++        assertEquals(90, secs("90 seconds"))
++        assertEquals(90, secs("90s"))
++    }
++
++    @Test
++    fun acceptsTheSpacingAndCaseUsersActuallyType() {
++        assertEquals(600, secs("10   minutes"))
++        assertEquals(600, secs("10MINUTES"))
++        assertEquals(600, secs("Ten 10 Minutes"))
++        assertEquals(300, secs("5 m"))
++    }
++
++    @Test
++    fun aDurationThatIsNotThereIsNotATimer() {
++        assertNull(secs("ten minutes"))
++        assertNull(secs("a while"))
++        assertNull(secs("10"))
++        assertNull(secs("10 bananas"))
++        assertNull(secs(""))
++    }
++
++    /**
++     * The v9.33.146 crash: 14 digits does not fit an Int. The old inline
++     * toInt() threw NumberFormatException with no catch anywhere on the path.
++     */
++    @Test
++    fun anIntOverflowingDigitRunIsAnAnswerNotACrash() {
++        val spec = NcieTimer.parse("99999999999999 minutes")
++        assertNotNull(spec)
++        assertTrue(spec!!.tooLong)
++        assertEquals(0, spec.seconds)
++    }
++
++    /** 30 digits does not fit a Long either - still just "too long". */
++    @Test
++    fun aDigitRunTooLongForALongIsStillJustTooLong() {
++        assertTrue(tooLong("999999999999999999999999999999 hours"))
++    }
++
++    /**
++     * The v9.33.146 overflow: 1,000,000 hours is 3.6e9 seconds, which wrapped
++     * to a negative Int and was handed to the clock app as a nonsense length.
++     */
++    @Test
++    fun anHourCountThatOverflowedIntIsTooLong() {
++        assertTrue(tooLong("1000000 hours"))
++        assertTrue(tooLong("100000 hours"))
++    }
++
++    @Test
++    fun theLongestAllowedTimerIsTwentyFourHours() {
++        assertEquals(NcieTimer.MAX_SECONDS, secs("24 hours"))
++        assertEquals(NcieTimer.MAX_SECONDS, secs("1440 minutes"))
++        assertEquals(NcieTimer.MAX_SECONDS, secs("86400 seconds"))
++        assertTrue(tooLong("25 hours"))
++        assertTrue(tooLong("1441 minutes"))
++        assertTrue(tooLong("86401 seconds"))
++    }
++
++    /** "timer 0 minutes" asks for nothing - answered as a usage hint. */
++    @Test
++    fun aZeroLengthTimerIsNotATimer() {
++        assertNull(secs("0 minutes"))
++        assertNull(secs("0s"))
++    }
++
++    @Test
++    fun nothingInThisParserCanThrow() {
++        val hostile = listOf(
++            "99999999999999999999999999999999999999999999999999 h",
++            "0" + "9".repeat(400) + " minutes",
++            "-5 minutes", "+5 minutes", "5.5 hours", "1e9 seconds",
++            "\u0000", "minutes", "m")
++        for (s in hostile) {
++            // the call itself must not throw; either answer is acceptable
++            val spec = NcieTimer.parse(s)
++            if (spec != null) assertFalse("0-second spec leaked for: " + s,
++                spec.seconds == 0 && !spec.tooLong)
++        }
++    }
++
++    /**
++     * "timer 1.5 hours" used to set FIVE hours: the integer-only pattern
++     * matched the "5 hours" inside "1.5 hours", and the toast echoed it back.
++     */
++    @Test
++    fun aFractionalDurationSetsWhatTheUserAskedFor() {
++        assertEquals(5400, secs("1.5 hours"))
++        assertEquals(1800, secs("0.5 hours"))
++        assertEquals(5400, secs("1,5 hours"))
++        assertEquals(135, secs("2.25 minutes"))
++        assertEquals(30, secs("0.5 minutes"))
++        assertEquals(2, secs("1.9 seconds"))
++    }
++
++    @Test
++    fun theConfirmationSaysWhatWasActuallySet() {
++        assertEquals("10 minutes", NcieTimer.label(600))
++        assertEquals("1 minute", NcieTimer.label(60))
++        assertEquals("2 hours", NcieTimer.label(7200))
++        assertEquals("1 hour 30 minutes", NcieTimer.label(5400))
++        assertEquals("1 second", NcieTimer.label(1))
++        assertEquals("45 minutes", NcieTimer.label(45 * 60))
++        assertEquals("0 seconds", NcieTimer.label(0))
++    }
++
++    /** The study-routine timer NOVA arms itself still parses cleanly. */
++    @Test
++    fun theStudyRoutineLengthIsStillAccepted() {
++        val spec = NcieTimer.parse("45 minutes")
++        assertNotNull(spec)
++        assertEquals(45 * 60, spec!!.seconds)
++        assertFalse(spec.tooLong)
++    }
++}
+diff --git a/tmp/verify_patches.py b/tmp/verify_patches.py
+index d17d1c6..1ccdf84 100644
+--- a/tmp/verify_patches.py
++++ b/tmp/verify_patches.py
+@@ -2748,6 +2748,49 @@ check("v9.33.140: version is at least 9.33.140 (308)",
+       version_at_least("9.33.140", 308))
+ structural("BackupActivity.kt", _bak)
+ 
++# v9.33.146 "A timer cannot crash the app": the "timer 10 minutes" phone
++# command parsed its own duration inline, three lines into a chat turn -
++# `m.groupValues[1].toInt()` with no catch anywhere on the path, and an
++# `n * 3600` that overflows Int. "timer 99999999999999 minutes" took the
++# whole app down. The parse is now a pure, unit-tested function and the
++# crashing lines are gone; both bugs are pinned by name below.
++_timer = load("ncie/android/NcieTimer.kt")
++_timer_test = open(os.path.join(
++    ROOT, "android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt"),
++    encoding="utf-8").read()
++check("v9.33.146: the timer duration is parsed by a pure function",
++      'fun parse(spec: String): Spec?' in _timer)
++check("v9.33.146: the parser has no Android imports",
++      'import android' not in _timer and 'import org.nova.' not in _timer)
++# the KDoc above the object quotes the old crashing line on purpose, so the
++# absence check runs against the CODE only - everything after the header
++# comment closes - not against the prose that documents the bug.
++_timer_code = _timer.split("*/", 1)[1] if "*/" in _timer else _timer
++check("v9.33.146: the digits are read as a Long, never straight to Int",
++      'digits.toLongOrNull()' in _timer_code and
++      'groupValues[1].toInt()' not in _timer_code)
++check("v9.33.146: the range is checked before any multiplication",
++      _timer.index('if (whole > MAX_SECONDS)') < _timer.index('whole * mult'))
++check("v9.33.146: a fractional duration is read as a fraction",
++      '(?:[.,]' in _timer and 'num * mult' in _timer and 'den / 2L' in _timer)
++check("v9.33.146: the crashing inline parse is gone from the command",
++      '.find(timer.groupValues[1])' not in ma and
++      'val n = m.groupValues[1].toInt()' not in ma)
++check("v9.33.146: the command goes through the parser",
++      'NcieTimer.parse(timer.groupValues[1])' in ma)
++check("v9.33.146: an over-long timer is answered, not silently clamped",
++      'Timer is too long - the longest NOVA will set is 24 hours' in ma)
++check("v9.33.146: the toast states the duration that was actually set",
++      'NcieTimer.label(spec.seconds)' in ma)
++check("v9.33.146: both shipped bugs are pinned by unit tests",
++      'anIntOverflowingDigitRunIsAnAnswerNotACrash' in _timer_test and
++      'anHourCountThatOverflowedIntIsTooLong' in _timer_test and
++      'aFractionalDurationSetsWhatTheUserAskedFor' in _timer_test and
++      'nothingInThisParserCanThrow' in _timer_test)
++check("v9.33.146: version is at least 9.33.146 (314)",
++      version_at_least("9.33.146", 314))
++structural("NcieTimer.kt", _timer)
++
+ print("")
+ if fails:
+     print("VERIFY FAILED: %d problem(s)" % len(fails))
+-- 
+2.39.5
+
