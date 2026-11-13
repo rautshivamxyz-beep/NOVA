@@ -3049,17 +3049,22 @@ Study:
             }
             timer != null -> {
                 // v8.5.0: "timer 10 minutes" -> the clock app's timer
-                val m = Regex("(?i)(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\b")
-                    .find(timer.groupValues[1])
-                if (m == null) { toast("Try: timer 10 minutes"); return true }
-                val n = m.groupValues[1].toInt()
-                val secs = when (m.groupValues[2].lowercase()[0]) {
-                    'h' -> n * 3600
-                    'm' -> n * 60
-                    else -> n
+                // v9.33.146: the duration is parsed by NcieTimer, which
+                // reads the digits as a Long and range-checks them BEFORE
+                // multiplying. The inline toInt() this replaces threw
+                // NumberFormatException on a long digit run and the inline
+                // n * 3600 overflowed Int on a big hour count - both straight
+                // out of a chat turn, with no catch on the path, so one typed
+                // message could take the app down.
+                val spec = org.nova.ncie.android.NcieTimer.parse(timer.groupValues[1])
+                if (spec == null) { toast("Try: timer 10 minutes"); return true }
+                if (spec.tooLong) {
+                    toast("Timer is too long - the longest NOVA will set is 24 hours")
+                    return true
                 }
                 try {
-                    if (startClockTimer(secs)) toast("Timer set: " + m.value)
+                    if (startClockTimer(spec.seconds))
+                        toast("Timer set: " + org.nova.ncie.android.NcieTimer.label(spec.seconds))
                 } catch (e: Exception) { toast("No clock app found") }
                 return true
             }

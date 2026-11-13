@@ -436,8 +436,11 @@ android {
         // v9.33.144: only source-grounded answers enter durable factual memory;
         // source-free quality passes remain ordinary chat, not verified facts.
         // v9.33.145: nightly self-audit exercises eight deterministic regression checks.
-        versionCode 313
-        versionName '9.33.145'
+        // v9.33.146: the "timer" command cannot crash the app - the duration is parsed
+        // as a Long, range-checked before multiplying, and a fractional duration
+        // ("timer 1.5 hours") now sets 90 minutes instead of five hours.
+        versionCode 314
+        versionName '9.33.146'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

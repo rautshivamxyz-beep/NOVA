@@ -2748,6 +2748,49 @@ check("v9.33.140: version is at least 9.33.140 (308)",
       version_at_least("9.33.140", 308))
 structural("BackupActivity.kt", _bak)
 
+# v9.33.146 "A timer cannot crash the app": the "timer 10 minutes" phone
+# command parsed its own duration inline, three lines into a chat turn -
+# `m.groupValues[1].toInt()` with no catch anywhere on the path, and an
+# `n * 3600` that overflows Int. "timer 99999999999999 minutes" took the
+# whole app down. The parse is now a pure, unit-tested function and the
+# crashing lines are gone; both bugs are pinned by name below.
+_timer = load("ncie/android/NcieTimer.kt")
+_timer_test = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/ncie/android/TimerSpecTest.kt"),
+    encoding="utf-8").read()
+check("v9.33.146: the timer duration is parsed by a pure function",
+      'fun parse(spec: String): Spec?' in _timer)
+check("v9.33.146: the parser has no Android imports",
+      'import android' not in _timer and 'import org.nova.' not in _timer)
+# the KDoc above the object quotes the old crashing line on purpose, so the
+# absence check runs against the CODE only - everything after the header
+# comment closes - not against the prose that documents the bug.
+_timer_code = _timer.split("*/", 1)[1] if "*/" in _timer else _timer
+check("v9.33.146: the digits are read as a Long, never straight to Int",
+      'digits.toLongOrNull()' in _timer_code and
+      'groupValues[1].toInt()' not in _timer_code)
+check("v9.33.146: the range is checked before any multiplication",
+      _timer.index('if (whole > MAX_SECONDS)') < _timer.index('whole * mult'))
+check("v9.33.146: a fractional duration is read as a fraction",
+      '(?:[.,]' in _timer and 'num * mult' in _timer and 'den / 2L' in _timer)
+check("v9.33.146: the crashing inline parse is gone from the command",
+      '.find(timer.groupValues[1])' not in ma and
+      'val n = m.groupValues[1].toInt()' not in ma)
+check("v9.33.146: the command goes through the parser",
+      'NcieTimer.parse(timer.groupValues[1])' in ma)
+check("v9.33.146: an over-long timer is answered, not silently clamped",
+      'Timer is too long - the longest NOVA will set is 24 hours' in ma)
+check("v9.33.146: the toast states the duration that was actually set",
+      'NcieTimer.label(spec.seconds)' in ma)
+check("v9.33.146: both shipped bugs are pinned by unit tests",
+      'anIntOverflowingDigitRunIsAnAnswerNotACrash' in _timer_test and
+      'anHourCountThatOverflowedIntIsTooLong' in _timer_test and
+      'aFractionalDurationSetsWhatTheUserAskedFor' in _timer_test and
+      'nothingInThisParserCanThrow' in _timer_test)
+check("v9.33.146: version is at least 9.33.146 (314)",
+      version_at_least("9.33.146", 314))
+structural("NcieTimer.kt", _timer)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
