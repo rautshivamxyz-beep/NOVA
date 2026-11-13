@@ -129,7 +129,7 @@ object NovaNudge {
         try { state(ctx).readText().trim().toLong() } catch (e: Exception) { 0L }
 
     private fun mark(ctx: Context) {
-        try { NcieFiles.write(state(ctx), System.currentTimeMillis().toString()) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        NcieFiles.writeOrNote(state(ctx), System.currentTimeMillis().toString(), "NovaJarvis")
     }
 
     /** Schedule the periodic nudge check (idempotent). */
@@ -226,8 +226,8 @@ object NovaTriggers {
     }
 
     private fun saveFired(ctx: Context, m: Map<String, Long>) {
-        try { NcieFiles.write(File(ctx.filesDir, "triggers_fired.txt"),
-            m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        NcieFiles.writeOrNote(File(ctx.filesDir, "triggers_fired.txt"),
+            m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n", "NovaJarvis")
     }
 
     /** Fire any trigger whose condition now holds. Returns what it said. */

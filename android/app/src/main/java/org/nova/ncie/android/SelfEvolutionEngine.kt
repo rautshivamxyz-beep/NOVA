@@ -74,9 +74,27 @@ object SelfEvolutionEngine {
             else "background consolidation is permitted when Android allows it").append('\n')
         sb.append("model safety: weights and inference/sampling settings unchanged; generated skills remain data, not executable code")
         val report = sb.toString()
-        try { NcieFiles.write(File(ctx.filesDir, REPORT), report) } catch (_: Exception) { }
-        return report
+        // v9.33.147: this was `try { NcieFiles.write(...) } catch (_: Exception) { }`
+        // - dead code since v9.33.90, which made the write return false
+        // instead of throwing. The report is the one thing this cycle hands
+        // the user, so a run that never reached the disk used to look exactly
+        // like a run that did, and lastSummary() then answered "" next time
+        // with nothing anywhere explaining why.
+        val saved = NcieFiles.writeOrNote(File(ctx.filesDir, REPORT), report, "SelfEvolutionEngine")
+        return reportWithSaveState(report, saved)
     }
+
+    /**
+     * v9.33.147: the report, plus an honest note when it never reached the disk.
+     *
+     * The audit is shown to the user and re-read by [lastSummary] on the next
+     * run, so "saved" and "not saved" are different outcomes and the report
+     * has to say which one it is. Pure, so a JVM test can pin both answers.
+     */
+    internal fun reportWithSaveState(report: String, saved: Boolean): String =
+        if (saved) report
+        else report + "\nWARNING: this report could not be saved to the device - " +
+            "it is in this reply only and will be gone at the next launch."
 
     /** Last completed audit, without starting another cycle. */
     fun lastSummary(ctx: Context): String = try {

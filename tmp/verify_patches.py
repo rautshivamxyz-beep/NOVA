@@ -1281,6 +1281,36 @@ check("v7.4/v7.6 order: calculator/phone commands before model check",
       i_tools != -1 and i_model != -1 and i_tools < i_model)
 
 # ---- structural sanity: braces/parens balance + no invalid escapes ----
+def _src(rel):
+    """A source file's text, by path relative to BASE."""
+    return open(os.path.join(ROOT, BASE + rel), encoding="utf-8").read()
+
+
+def _any_code(needle):
+    """True when [needle] appears on a line of CODE in any Kotlin source file.
+
+    Comment lines are skipped on purpose: the v9.33.147 checks document the
+    dead `try { NcieFiles.write(...) } catch` they removed, and a check that
+    counted its own explanation would fail on the fix that wrote it.
+    """
+    root = os.path.join(ROOT, "android/app/src/main/java")
+    for dirpath, _dirs, files in os.walk(root):
+        for f in files:
+            if not f.endswith(".kt"):
+                continue
+            try:
+                lines = open(os.path.join(dirpath, f), encoding="utf-8").read().splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                t = line.strip()
+                if t.startswith("//") or t.startswith("*") or t.startswith("/*"):
+                    continue
+                if needle in line:
+                    return True
+    return False
+
+
 def structural(f, text):
     i, n = 0, len(text)
     braces = parens = 0
@@ -1635,8 +1665,11 @@ check("v9.33.90: it writes a .tmp and renames it over the target",
       # v9.33.99: counted on the code, not on every mention - the lock comment
       # names the .tmp too
       _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
+# v9.33.147: writeOrNote is a wrapper over the same atomic write, so a state
+# file that saves through either entry point still saves through NcieFiles.
 check("v9.33.90: the state files go through it",
-      sum(load(f).count("NcieFiles.write(") for f in [
+      sum(load(f).count("NcieFiles.write(") +
+          load(f).count("NcieFiles.writeOrNote(") for f in [
           "ncie/android/NcieExam.kt", "ncie/android/NcieTune.kt",
           "ncie/android/NcieEngines.kt", "ncie/android/NcieFocus.kt",
           "ncie/android/NcieValue.kt", "ncie/android/NcieSummary.kt",
@@ -2790,6 +2823,53 @@ check("v9.33.146: both shipped bugs are pinned by unit tests",
 check("v9.33.146: version is at least 9.33.146 (314)",
       version_at_least("9.33.146", 314))
 structural("NcieTimer.kt", _timer)
+
+# v9.33.147 "A save that returned false is a swallowed failure too": v9.33.90
+# made NcieFiles.write answer false instead of throwing, which silently turned
+# every `try { write(...) } catch { }` into dead code. Six sites were still
+# written that way, so a save that never reached the disk left no trace at all.
+# They now ask the answer and record it; the nightly audit says so in words.
+_novalog = load("NovaLog.kt")
+_nciefiles = load("ncie/android/NcieFiles.kt")
+_selfev = load("ncie/android/SelfEvolutionEngine.kt")
+_novalog_test = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/NovaLogTest.kt"),
+    encoding="utf-8").read()
+_selfev_test = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt"),
+    encoding="utf-8").read()
+check("v9.33.147: NovaLog can record a failure that has no exception",
+      'fun note(tag: String, message: String)' in _novalog and
+      'count.incrementAndGet()' in _novalog)
+check("v9.33.147: recording a note can never throw",
+      'catch (_: Throwable)' in _novalog)
+check("v9.33.147: the save answer is recorded, not dropped",
+      'fun writeOrNote(f: File, text: String, tag: String): Boolean' in _nciefiles and
+      'if (!ok) NovaLog.note(tag, "could not save " + f.name)' in _nciefiles)
+check("v9.33.147: no dead try/catch is left around a save",
+      not _any_code('try { NcieFiles.write'))
+check("v9.33.147: the six sites go through writeOrNote",
+      _src("ncie/android/NcieEvolve.kt").count("NcieFiles.writeOrNote(") == 1 and
+      _src("ncie/android/NcieLearn.kt").count("NcieFiles.writeOrNote(") == 1 and
+      _src("ncie/android/NcieSummary.kt").count("NcieFiles.writeOrNote(") == 2 and
+      _src("ncie/android/NovaJarvis.kt").count("NcieFiles.writeOrNote(") == 2)
+check("v9.33.147: the nightly audit reports whether its report was saved",
+      'val saved = NcieFiles.writeOrNote(File(ctx.filesDir, REPORT), report, "SelfEvolutionEngine")' in _selfev and
+      'return reportWithSaveState(report, saved)' in _selfev and
+      'internal fun reportWithSaveState(report: String, saved: Boolean): String' in _selfev)
+check("v9.33.147: an unsaved report says it will be gone",
+      'this report could not be saved to the device' in _selfev and
+      'gone at the next launch' in _selfev)
+check("v9.33.147: the new record is pinned by unit tests",
+      'aNotedFailureIsCounted' in _novalog_test and
+      'notingNeverThrowsEvenWithTheStubLogger' in _novalog_test and
+      'anUnsavedReportSaysSo' in _selfev_test and
+      'theWarningKeepsTheWholeReport' in _selfev_test)
+check("v9.33.147: version is at least 9.33.147 (315)",
+      version_at_least("9.33.147", 315))
+structural("NovaLog.kt", _novalog)
+structural("ncie/android/NcieFiles.kt", _nciefiles)
+structural("ncie/android/SelfEvolutionEngine.kt", _selfev)
 
 print("")
 if fails:

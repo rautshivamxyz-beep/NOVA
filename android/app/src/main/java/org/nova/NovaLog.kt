@@ -42,6 +42,32 @@ object NovaLog {
         }
     }
 
+    /**
+     * v9.33.147 "A save that returned false is a swallowed failure too":
+     * record a failure that has no exception to carry it.
+     *
+     * v9.33.90 changed NcieFiles.write from "throws" to "returns false", so
+     * every `try { write(...) } catch { }` in the app quietly became dead
+     * code: the catch could never run, and a save that never reached the disk
+     * left no trace anywhere. [quiet] is typed for a Throwable and cannot take
+     * that answer, so the false simply vanished - which is the one outcome
+     * this object exists to prevent. This is its counterpart for an answer.
+     *
+     * It counts in the same session tally [summary] reports, because "the
+     * save failed" is exactly the kind of failure that must not be
+     * indistinguishable from "there was nothing to save". Never throws.
+     */
+    fun note(tag: String, message: String) {
+        count.incrementAndGet()
+        val line = tag + ": " + message
+        last = line
+        try {
+            android.util.Log.d("NOVA", "swallowed - " + line)
+        } catch (_: Throwable) {
+            // logging must never be the thing that fails
+        }
+    }
+
     /** How many exceptions have been swallowed this session. */
     fun swallowedCount(): Int = count.get()
 

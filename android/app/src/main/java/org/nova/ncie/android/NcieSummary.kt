@@ -120,7 +120,7 @@ object NcieSummary {
             } catch (e: Exception) { "" } finally { NcieChat.generating = false }
         val clean = reply.trim()
         if (clean.isEmpty() || clean.startsWith("[engine")) return false
-        return try { NcieFiles.write(summaryFile(c, id), clean) } catch (e: Exception) { false }
+        return NcieFiles.writeOrNote(summaryFile(c, id), clean, "NcieSummary")
     }
 
     /**
@@ -145,6 +145,6 @@ object NcieSummary {
     } catch (e: Exception) { 0 }
 
     private fun writeCount(c: Context, id: String, n: Int) {
-        try { NcieFiles.write(countFile(c, id), n.toString()) } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
+        NcieFiles.writeOrNote(countFile(c, id), n.toString(), "NcieSummary")
     }
 }

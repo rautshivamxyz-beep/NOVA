@@ -83,7 +83,7 @@ object NcieEvolve {
         try {
             NcieLearn.memoryDistill(ctx) { distill ->
                 val body = report(ctx, distill)
-                try { NcieFiles.write(File(ctx.filesDir, "growth_report.txt"), body) } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
+                NcieFiles.writeOrNote(File(ctx.filesDir, "growth_report.txt"), body, "NcieEvolve")
                 onReport?.invoke(body)
             }
         } catch (e: Exception) {

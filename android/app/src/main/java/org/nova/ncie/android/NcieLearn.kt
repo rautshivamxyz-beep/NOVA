@@ -290,7 +290,7 @@ object NcieLearn {
                 try { gapFile(ctx).readText() } catch (e: Exception) { "" }
             ).also { gapStore = it }
             g.note(question, System.currentTimeMillis())
-            try { NcieFiles.write(gapFile(ctx), g.serialize()) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
+            NcieFiles.writeOrNote(gapFile(ctx), g.serialize(), "NcieLearn")
         }
     }
 

@@ -112,6 +112,30 @@ object NcieFiles {
     }
 
     /**
+     * v9.33.147: [write], with its answer recorded when the answer is false.
+     *
+     * A best-effort save may still fail, but it may not fail INVISIBLY. The
+     * call sites this replaces were written as
+     *
+     *     try { NcieFiles.write(f, text) } catch (e: Exception) { NovaLog.quiet(...) }
+     *
+     * which stopped meaning anything at v9.33.90: [write] returns false
+     * instead of throwing, so that catch is dead code and the false was
+     * dropped on the floor. A growth report, a capability-gap list, a summary
+     * count, a Jarvis trigger mark - all state the app reasons from later -
+     * could stop saving and nothing anywhere would say so.
+     *
+     * The answer is still the answer; this only makes sure the health screen's
+     * tally hears about it. Never throws, so it is safe in the same places
+     * [write] is.
+     */
+    fun writeOrNote(f: File, text: String, tag: String): Boolean {
+        val ok = write(f, text)
+        if (!ok) NovaLog.note(tag, "could not save " + f.name)
+        return ok
+    }
+
+    /**
      * v9.33.119 "A store that could not be read is not an empty store": the
      * one read, the other half of [write].
      *
