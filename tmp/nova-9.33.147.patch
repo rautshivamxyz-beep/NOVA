@@ -1,0 +1,479 @@
+From 4b9d1ee24f6a5b49106b780d2bc76ef504b9b48c Mon Sep 17 00:00:00 2001
+From: rautshivamxyz-beep <rautshivamxyz@gmail.com>
+Date: Fri, 13 Nov 2026 03:51:55 +0000
+Subject: [PATCH] v9.33.147 "A save that returned false is a swallowed failure
+ too"
+
+v9.33.90 made NcieFiles.write answer false instead of throwing, which is
+the right design - but it silently turned every
+
+    try { NcieFiles.write(f, text) } catch (e: Exception) { NovaLog.quiet(...) }
+
+in the app into dead code. The catch could never run. The false was then
+dropped on the floor, because NovaLog.quiet is typed for a Throwable and
+there was no Throwable to give it.
+
+So six saves could stop working without a trace anywhere: the growth
+report, the capability-gap list, the summary and its count, Jarvis's
+trigger mark and its fired-trigger log. All of it is state NOVA reasons
+from later, and the health screen - the one place that is supposed to
+say "something was swallowed this session" - never heard about any of it.
+v9.33.108 and v9.33.111 fixed this exact class by hand in NcieFocus,
+NcieExam and NcieTune; these six were the rest of it.
+
+NovaLog gains note(tag, message): the counterpart to quiet() for an
+answer instead of an exception. It counts in the same session tally the
+health screen reads, records the last one, and cannot throw - it is
+called from inside best-effort save paths, where a logging failure would
+be worse than the thing being logged.
+
+NcieFiles gains writeOrNote(f, text, tag), which is write() with its
+answer recorded when the answer is false. The six sites now ask the one
+save function for its answer and let it be heard.
+
+The nightly self-audit was the same bug with a user in front of it: it
+wrote its report inside a dead catch and then returned the report, so a
+cycle that never reached the disk looked exactly like one that did, and
+lastSummary() answered "" next run with nothing explaining why. It now
+passes the real answer through reportWithSaveState(), which appends a
+plain warning when the report was not saved. The warning never replaces
+the report it is warning about.
+
+NovaLogTest pins the record (counted, last-wins, shares one tally with
+quiet, and never throws even with the stub android.util.Log a JVM test
+runs against); SelfEvolutionEngineTest pins both halves of the report
+answer. verify_patches gains nine checks, one of which fails if a dead
+try/catch around a save is ever written again - checked against code
+lines only, since the fix documents the pattern it removed.
+
+The v9.33.90 invariant that the state files save through NcieFiles now
+counts writeOrNote as well: it is a wrapper over the same atomic write,
+so the invariant it protects is unchanged.
+
+No inference setting, model weight, permission or network path changed.
+---
+ android/app/build.gradle                      |  7 +-
+ android/app/src/main/java/org/nova/NovaLog.kt | 26 ++++++
+ .../java/org/nova/ncie/android/NcieEvolve.kt  |  2 +-
+ .../java/org/nova/ncie/android/NcieFiles.kt   | 24 ++++++
+ .../java/org/nova/ncie/android/NcieLearn.kt   |  2 +-
+ .../java/org/nova/ncie/android/NcieSummary.kt |  4 +-
+ .../java/org/nova/ncie/android/NovaJarvis.kt  |  6 +-
+ .../nova/ncie/android/SelfEvolutionEngine.kt  | 22 ++++-
+ .../app/src/test/java/org/nova/NovaLogTest.kt | 61 ++++++++++++++
+ .../ncie/android/SelfEvolutionEngineTest.kt   | 28 +++++++
+ tmp/verify_patches.py                         | 82 ++++++++++++++++++-
+ 11 files changed, 252 insertions(+), 12 deletions(-)
+ create mode 100644 android/app/src/test/java/org/nova/NovaLogTest.kt
+
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index 92f704b..056b264 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -439,8 +439,11 @@ android {
+         // v9.33.146: the "timer" command cannot crash the app - the duration is parsed
+         // as a Long, range-checked before multiplying, and a fractional duration
+         // ("timer 1.5 hours") now sets 90 minutes instead of five hours.
+-        versionCode 314
+-        versionName '9.33.146'
++        // v9.33.147: a save that answers false is recorded, not dropped - the dead
++        // try/catch left over from v9.33.90 is gone, and the nightly audit says so
++        // when its report could not be saved.
++        versionCode 315
++        versionName '9.33.147'
+         // v6.0.0: arm64 only by default. CI also builds a universal APK
+         // (arm64 + x86_64, for emulators/Chromebooks) with:
+         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
+diff --git a/android/app/src/main/java/org/nova/NovaLog.kt b/android/app/src/main/java/org/nova/NovaLog.kt
+index 3b6d53d..29df3db 100644
+--- a/android/app/src/main/java/org/nova/NovaLog.kt
++++ b/android/app/src/main/java/org/nova/NovaLog.kt
+@@ -42,6 +42,32 @@ object NovaLog {
+         }
+     }
+ 
++    /**
++     * v9.33.147 "A save that returned false is a swallowed failure too":
++     * record a failure that has no exception to carry it.
++     *
++     * v9.33.90 changed NcieFiles.write from "throws" to "returns false", so
++     * every `try { write(...) } catch { }` in the app quietly became dead
++     * code: the catch could never run, and a save that never reached the disk
++     * left no trace anywhere. [quiet] is typed for a Throwable and cannot take
++     * that answer, so the false simply vanished - which is the one outcome
++     * this object exists to prevent. This is its counterpart for an answer.
++     *
++     * It counts in the same session tally [summary] reports, because "the
++     * save failed" is exactly the kind of failure that must not be
++     * indistinguishable from "there was nothing to save". Never throws.
++     */
++    fun note(tag: String, message: String) {
++        count.incrementAndGet()
++        val line = tag + ": " + message
++        last = line
++        try {
++            android.util.Log.d("NOVA", "swallowed - " + line)
++        } catch (_: Throwable) {
++            // logging must never be the thing that fails
++        }
++    }
++
+     /** How many exceptions have been swallowed this session. */
+     fun swallowedCount(): Int = count.get()
+ 
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieEvolve.kt b/android/app/src/main/java/org/nova/ncie/android/NcieEvolve.kt
+index 6e71675..e0ee12c 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieEvolve.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieEvolve.kt
+@@ -83,7 +83,7 @@ object NcieEvolve {
+         try {
+             NcieLearn.memoryDistill(ctx) { distill ->
+                 val body = report(ctx, distill)
+-                try { NcieFiles.write(File(ctx.filesDir, "growth_report.txt"), body) } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
++                NcieFiles.writeOrNote(File(ctx.filesDir, "growth_report.txt"), body, "NcieEvolve")
+                 onReport?.invoke(body)
+             }
+         } catch (e: Exception) {
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieFiles.kt b/android/app/src/main/java/org/nova/ncie/android/NcieFiles.kt
+index 9ac3829..492edfc 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieFiles.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieFiles.kt
+@@ -111,6 +111,30 @@ object NcieFiles {
+         write(f, text)
+     }
+ 
++    /**
++     * v9.33.147: [write], with its answer recorded when the answer is false.
++     *
++     * A best-effort save may still fail, but it may not fail INVISIBLY. The
++     * call sites this replaces were written as
++     *
++     *     try { NcieFiles.write(f, text) } catch (e: Exception) { NovaLog.quiet(...) }
++     *
++     * which stopped meaning anything at v9.33.90: [write] returns false
++     * instead of throwing, so that catch is dead code and the false was
++     * dropped on the floor. A growth report, a capability-gap list, a summary
++     * count, a Jarvis trigger mark - all state the app reasons from later -
++     * could stop saving and nothing anywhere would say so.
++     *
++     * The answer is still the answer; this only makes sure the health screen's
++     * tally hears about it. Never throws, so it is safe in the same places
++     * [write] is.
++     */
++    fun writeOrNote(f: File, text: String, tag: String): Boolean {
++        val ok = write(f, text)
++        if (!ok) NovaLog.note(tag, "could not save " + f.name)
++        return ok
++    }
++
+     /**
+      * v9.33.119 "A store that could not be read is not an empty store": the
+      * one read, the other half of [write].
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieLearn.kt b/android/app/src/main/java/org/nova/ncie/android/NcieLearn.kt
+index 7d344d3..a703776 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieLearn.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieLearn.kt
+@@ -290,7 +290,7 @@ object NcieLearn {
+                 try { gapFile(ctx).readText() } catch (e: Exception) { "" }
+             ).also { gapStore = it }
+             g.note(question, System.currentTimeMillis())
+-            try { NcieFiles.write(gapFile(ctx), g.serialize()) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
++            NcieFiles.writeOrNote(gapFile(ctx), g.serialize(), "NcieLearn")
+         }
+     }
+ 
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieSummary.kt b/android/app/src/main/java/org/nova/ncie/android/NcieSummary.kt
+index 715be34..990f899 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieSummary.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieSummary.kt
+@@ -120,7 +120,7 @@ object NcieSummary {
+             } catch (e: Exception) { "" } finally { NcieChat.generating = false }
+         val clean = reply.trim()
+         if (clean.isEmpty() || clean.startsWith("[engine")) return false
+-        return try { NcieFiles.write(summaryFile(c, id), clean) } catch (e: Exception) { false }
++        return NcieFiles.writeOrNote(summaryFile(c, id), clean, "NcieSummary")
+     }
+ 
+     /**
+@@ -145,6 +145,6 @@ object NcieSummary {
+     } catch (e: Exception) { 0 }
+ 
+     private fun writeCount(c: Context, id: String, n: Int) {
+-        try { NcieFiles.write(countFile(c, id), n.toString()) } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
++        NcieFiles.writeOrNote(countFile(c, id), n.toString(), "NcieSummary")
+     }
+ }
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt b/android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt
+index 0cc0dce..566a0dc 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NovaJarvis.kt
+@@ -129,7 +129,7 @@ object NovaNudge {
+         try { state(ctx).readText().trim().toLong() } catch (e: Exception) { 0L }
+ 
+     private fun mark(ctx: Context) {
+-        try { NcieFiles.write(state(ctx), System.currentTimeMillis().toString()) } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
++        NcieFiles.writeOrNote(state(ctx), System.currentTimeMillis().toString(), "NovaJarvis")
+     }
+ 
+     /** Schedule the periodic nudge check (idempotent). */
+@@ -226,8 +226,8 @@ object NovaTriggers {
+     }
+ 
+     private fun saveFired(ctx: Context, m: Map<String, Long>) {
+-        try { NcieFiles.write(File(ctx.filesDir, "triggers_fired.txt"),
+-            m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
++        NcieFiles.writeOrNote(File(ctx.filesDir, "triggers_fired.txt"),
++            m.entries.joinToString("\n") { it.key + "\t" + it.value } + "\n", "NovaJarvis")
+     }
+ 
+     /** Fire any trigger whose condition now holds. Returns what it said. */
+diff --git a/android/app/src/main/java/org/nova/ncie/android/SelfEvolutionEngine.kt b/android/app/src/main/java/org/nova/ncie/android/SelfEvolutionEngine.kt
+index 54e804c..f91d0ac 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/SelfEvolutionEngine.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/SelfEvolutionEngine.kt
+@@ -74,10 +74,28 @@ object SelfEvolutionEngine {
+             else "background consolidation is permitted when Android allows it").append('\n')
+         sb.append("model safety: weights and inference/sampling settings unchanged; generated skills remain data, not executable code")
+         val report = sb.toString()
+-        try { NcieFiles.write(File(ctx.filesDir, REPORT), report) } catch (_: Exception) { }
+-        return report
++        // v9.33.147: this was `try { NcieFiles.write(...) } catch (_: Exception) { }`
++        // - dead code since v9.33.90, which made the write return false
++        // instead of throwing. The report is the one thing this cycle hands
++        // the user, so a run that never reached the disk used to look exactly
++        // like a run that did, and lastSummary() then answered "" next time
++        // with nothing anywhere explaining why.
++        val saved = NcieFiles.writeOrNote(File(ctx.filesDir, REPORT), report, "SelfEvolutionEngine")
++        return reportWithSaveState(report, saved)
+     }
+ 
++    /**
++     * v9.33.147: the report, plus an honest note when it never reached the disk.
++     *
++     * The audit is shown to the user and re-read by [lastSummary] on the next
++     * run, so "saved" and "not saved" are different outcomes and the report
++     * has to say which one it is. Pure, so a JVM test can pin both answers.
++     */
++    internal fun reportWithSaveState(report: String, saved: Boolean): String =
++        if (saved) report
++        else report + "\nWARNING: this report could not be saved to the device - " +
++            "it is in this reply only and will be gone at the next launch."
++
+     /** Last completed audit, without starting another cycle. */
+     fun lastSummary(ctx: Context): String = try {
+         val f = File(ctx.filesDir, REPORT)
+diff --git a/android/app/src/test/java/org/nova/NovaLogTest.kt b/android/app/src/test/java/org/nova/NovaLogTest.kt
+new file mode 100644
+index 0000000..8c5ed92
+--- /dev/null
++++ b/android/app/src/test/java/org/nova/NovaLogTest.kt
+@@ -0,0 +1,61 @@
++package org.nova
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++/**
++ * v9.33.147: the record a save leaves when it returns false.
++ *
++ * v9.33.90 made NcieFiles.write answer false instead of throwing, which
++ * silently turned every `try { write(...) } catch { }` in the app into dead
++ * code - the catch could never run, and a failed save left no trace. [NovaLog.note]
++ * is the counterpart to [NovaLog.quiet] for that answer, so what matters here
++ * is that it records, that it is counted, and above all that it never throws:
++ * it is called from inside best-effort save paths, where a logging failure
++ * would be worse than the thing being logged.
++ *
++ * Pure JVM: android.util.Log is the stub jar here, which is exactly the
++ * hostile environment [note] promises to survive.
++ */
++class NovaLogTest {
++
++    @Test
++    fun aNotedFailureIsCounted() {
++        val before = NovaLog.swallowedCount()
++        NovaLog.note("Test", "could not save thing.txt")
++        assertEquals(before + 1, NovaLog.swallowedCount())
++    }
++
++    @Test
++    fun theLastNoteIsWhatTheHealthScreenShows() {
++        NovaLog.note("NcieFiles", "could not save reminders.txt")
++        assertEquals("NcieFiles: could not save reminders.txt", NovaLog.last)
++        assertTrue(NovaLog.summary().contains("could not save reminders.txt"))
++    }
++
++    @Test
++    fun notingNeverThrowsEvenWithTheStubLogger() {
++        // android.util.Log is unavailable under a JVM unit test; the call must
++        // still complete and still be recorded
++        val before = NovaLog.swallowedCount()
++        NovaLog.note("NcieFiles", "could not save growth_report.txt")
++        assertEquals(before + 1, NovaLog.swallowedCount())
++    }
++
++    @Test
++    fun quietAndNoteShareOneTally() {
++        val before = NovaLog.swallowedCount()
++        NovaLog.quiet("Test", IllegalStateException("boom"))
++        NovaLog.note("Test", "could not save x.txt")
++        assertEquals(before + 2, NovaLog.swallowedCount())
++    }
++
++    @Test
++    fun anEmptyTagOrMessageIsStillRecorded() {
++        val before = NovaLog.swallowedCount()
++        NovaLog.note("", "")
++        assertEquals(before + 1, NovaLog.swallowedCount())
++        assertEquals(": ", NovaLog.last)
++    }
++}
+diff --git a/android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt b/android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt
+index 00ac18a..2e002c5 100644
+--- a/android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt
++++ b/android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt
+@@ -10,4 +10,32 @@ class SelfEvolutionEngineTest {
+         assertEquals(8, checks.size)
+         assertTrue(checks.all { it.second })
+     }
++
++    /**
++     * v9.33.147: the nightly audit is shown to the user and re-read by
++     * lastSummary() on the next run, so "saved" and "not saved" are different
++     * outcomes. It used to answer the same way for both - the write sat inside
++     * a try/catch that had been dead since v9.33.90 - so a report that never
++     * reached the disk was presented as if it had.
++     */
++    @Test fun aSavedReportIsUnchanged() {
++        val report = "SELF-EVOLUTION AUDIT\nself-tests: 8/8 passed"
++        assertEquals(report, SelfEvolutionEngine.reportWithSaveState(report, true))
++    }
++
++    @Test fun anUnsavedReportSaysSo() {
++        val report = "SELF-EVOLUTION AUDIT\nself-tests: 8/8 passed"
++        val out = SelfEvolutionEngine.reportWithSaveState(report, false)
++        assertTrue(out.startsWith(report))
++        assertTrue(out.contains("WARNING: this report could not be saved"))
++        assertTrue(out.contains("gone at the next launch"))
++    }
++
++    /** The warning must never replace the report it is warning about. */
++    @Test fun theWarningKeepsTheWholeReport() {
++        val report = "SELF-EVOLUTION AUDIT\n  PASS skill parse\n  FAIL gap ranking"
++        val out = SelfEvolutionEngine.reportWithSaveState(report, false)
++        assertTrue(out.contains("  PASS skill parse"))
++        assertTrue(out.contains("  FAIL gap ranking"))
++    }
+ }
+diff --git a/tmp/verify_patches.py b/tmp/verify_patches.py
+index 1ccdf84..7838784 100644
+--- a/tmp/verify_patches.py
++++ b/tmp/verify_patches.py
+@@ -1281,6 +1281,36 @@ check("v7.4/v7.6 order: calculator/phone commands before model check",
+       i_tools != -1 and i_model != -1 and i_tools < i_model)
+ 
+ # ---- structural sanity: braces/parens balance + no invalid escapes ----
++def _src(rel):
++    """A source file's text, by path relative to BASE."""
++    return open(os.path.join(ROOT, BASE + rel), encoding="utf-8").read()
++
++
++def _any_code(needle):
++    """True when [needle] appears on a line of CODE in any Kotlin source file.
++
++    Comment lines are skipped on purpose: the v9.33.147 checks document the
++    dead `try { NcieFiles.write(...) } catch` they removed, and a check that
++    counted its own explanation would fail on the fix that wrote it.
++    """
++    root = os.path.join(ROOT, "android/app/src/main/java")
++    for dirpath, _dirs, files in os.walk(root):
++        for f in files:
++            if not f.endswith(".kt"):
++                continue
++            try:
++                lines = open(os.path.join(dirpath, f), encoding="utf-8").read().splitlines()
++            except OSError:
++                continue
++            for line in lines:
++                t = line.strip()
++                if t.startswith("//") or t.startswith("*") or t.startswith("/*"):
++                    continue
++                if needle in line:
++                    return True
++    return False
++
++
+ def structural(f, text):
+     i, n = 0, len(text)
+     braces = parens = 0
+@@ -1635,8 +1665,11 @@ check("v9.33.90: it writes a .tmp and renames it over the target",
+       # v9.33.99: counted on the code, not on every mention - the lock comment
+       # names the .tmp too
+       _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
++# v9.33.147: writeOrNote is a wrapper over the same atomic write, so a state
++# file that saves through either entry point still saves through NcieFiles.
+ check("v9.33.90: the state files go through it",
+-      sum(load(f).count("NcieFiles.write(") for f in [
++      sum(load(f).count("NcieFiles.write(") +
++          load(f).count("NcieFiles.writeOrNote(") for f in [
+           "ncie/android/NcieExam.kt", "ncie/android/NcieTune.kt",
+           "ncie/android/NcieEngines.kt", "ncie/android/NcieFocus.kt",
+           "ncie/android/NcieValue.kt", "ncie/android/NcieSummary.kt",
+@@ -2791,6 +2824,53 @@ check("v9.33.146: version is at least 9.33.146 (314)",
+       version_at_least("9.33.146", 314))
+ structural("NcieTimer.kt", _timer)
+ 
++# v9.33.147 "A save that returned false is a swallowed failure too": v9.33.90
++# made NcieFiles.write answer false instead of throwing, which silently turned
++# every `try { write(...) } catch { }` into dead code. Six sites were still
++# written that way, so a save that never reached the disk left no trace at all.
++# They now ask the answer and record it; the nightly audit says so in words.
++_novalog = load("NovaLog.kt")
++_nciefiles = load("ncie/android/NcieFiles.kt")
++_selfev = load("ncie/android/SelfEvolutionEngine.kt")
++_novalog_test = open(os.path.join(
++    ROOT, "android/app/src/test/java/org/nova/NovaLogTest.kt"),
++    encoding="utf-8").read()
++_selfev_test = open(os.path.join(
++    ROOT, "android/app/src/test/java/org/nova/ncie/android/SelfEvolutionEngineTest.kt"),
++    encoding="utf-8").read()
++check("v9.33.147: NovaLog can record a failure that has no exception",
++      'fun note(tag: String, message: String)' in _novalog and
++      'count.incrementAndGet()' in _novalog)
++check("v9.33.147: recording a note can never throw",
++      'catch (_: Throwable)' in _novalog)
++check("v9.33.147: the save answer is recorded, not dropped",
++      'fun writeOrNote(f: File, text: String, tag: String): Boolean' in _nciefiles and
++      'if (!ok) NovaLog.note(tag, "could not save " + f.name)' in _nciefiles)
++check("v9.33.147: no dead try/catch is left around a save",
++      not _any_code('try { NcieFiles.write'))
++check("v9.33.147: the six sites go through writeOrNote",
++      _src("ncie/android/NcieEvolve.kt").count("NcieFiles.writeOrNote(") == 1 and
++      _src("ncie/android/NcieLearn.kt").count("NcieFiles.writeOrNote(") == 1 and
++      _src("ncie/android/NcieSummary.kt").count("NcieFiles.writeOrNote(") == 2 and
++      _src("ncie/android/NovaJarvis.kt").count("NcieFiles.writeOrNote(") == 2)
++check("v9.33.147: the nightly audit reports whether its report was saved",
++      'val saved = NcieFiles.writeOrNote(File(ctx.filesDir, REPORT), report, "SelfEvolutionEngine")' in _selfev and
++      'return reportWithSaveState(report, saved)' in _selfev and
++      'internal fun reportWithSaveState(report: String, saved: Boolean): String' in _selfev)
++check("v9.33.147: an unsaved report says it will be gone",
++      'this report could not be saved to the device' in _selfev and
++      'gone at the next launch' in _selfev)
++check("v9.33.147: the new record is pinned by unit tests",
++      'aNotedFailureIsCounted' in _novalog_test and
++      'notingNeverThrowsEvenWithTheStubLogger' in _novalog_test and
++      'anUnsavedReportSaysSo' in _selfev_test and
++      'theWarningKeepsTheWholeReport' in _selfev_test)
++check("v9.33.147: version is at least 9.33.147 (315)",
++      version_at_least("9.33.147", 315))
++structural("NovaLog.kt", _novalog)
++structural("ncie/android/NcieFiles.kt", _nciefiles)
++structural("ncie/android/SelfEvolutionEngine.kt", _selfev)
++
+ print("")
+ if fails:
+     print("VERIFY FAILED: %d problem(s)" % len(fails))
+-- 
+2.39.5
+
