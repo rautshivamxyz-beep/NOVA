@@ -1,0 +1,92 @@
+name: Apply NOVA v9.33.147
+
+# One-shot applier for the v9.33.147 release ("A save that returned false is a
+# swallowed failure too").
+#
+# Improvement over apply-933146.yml: the patch and this workflow live on a
+# THROWAWAY BRANCH, not on main. main therefore never receives a staging
+# commit, so no redundant nova-apk build is spent re-releasing the version that
+# is already out (v9.33.146), and there is nothing to delete from main
+# afterwards - the release commit is the only thing that lands.
+#
+# nova-apk only triggers on a push to main, so committing to this branch costs
+# nothing. The push below uses GITHUB_TOKEN, which does not trigger workflows
+# either: nova-apk.yml is dispatched by hand afterwards.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the branch that carries the patch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Stage the patch outside the worktree
+        run: |
+          cp tmp/nova-9.33.147.patch "$RUNNER_TEMP/nova-9.33.147.patch"
+          ls -l "$RUNNER_TEMP/nova-9.33.147.patch"
+
+      - name: Switch the worktree to main
+        run: |
+          git fetch origin main
+          git checkout -B release origin/main
+          echo "building on main at $(git rev-parse --short HEAD)"
+
+      - name: Refuse if this version is already released
+        run: |
+          if git rev-parse -q --verify "refs/tags/v9.33.147" >/dev/null; then
+            echo "FATAL: v9.33.147 is already released - nothing to apply."
+            exit 1
+          fi
+          echo "v9.33.147 is not yet released - safe to apply."
+
+      - name: Refuse if this patch was already applied
+        run: |
+          if grep -q "fun writeOrNote" \
+             android/app/src/main/java/org/nova/ncie/android/NcieFiles.kt 2>/dev/null; then
+            echo "FATAL: writeOrNote already exists - the patch was applied before."
+            exit 1
+          fi
+          echo "main does not carry writeOrNote - clean to apply."
+
+      - name: Apply the release patch
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git am --3way "$RUNNER_TEMP/nova-9.33.147.patch"
+          echo "release commit: $(git log -1 --format='%h %s')"
+          git show --stat --format="" HEAD
+
+      - name: The release must not carry its own tooling
+        run: |
+          # the patch and this workflow were never on main, so nothing needs
+          # deleting - assert that rather than trusting it
+          if git ls-files --error-unmatch tmp/nova-9.33.147.patch >/dev/null 2>&1; then
+            echo "FATAL: the patch is inside the release commit"; exit 1
+          fi
+          if git ls-files --error-unmatch .github/workflows/apply-933147.yml >/dev/null 2>&1; then
+            echo "FATAL: the applier is inside the release commit"; exit 1
+          fi
+          echo "release commit carries source only"
+
+      - name: Verify the patched tree before it is pushed
+        run: python3 tmp/verify_patches.py .
+
+      - name: Confirm the version the release claims
+        run: |
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          CODE="$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle | head -1)"
+          echo "versionName=$VER versionCode=$CODE"
+          [ "$VER" = "9.33.147" ] || { echo "FATAL: versionName is $VER"; exit 1; }
+          [ "$CODE" = "315" ] || { echo "FATAL: versionCode is $CODE"; exit 1; }
+
+      - name: Push the release commit to main
+        run: git push origin HEAD:main
