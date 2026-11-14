@@ -2911,6 +2911,28 @@ check("v9.33.148: version is at least 9.33.148 (316)",
       version_at_least("9.33.148", 316))
 structural("ChatStore.kt", _chatstore)
 
+# v9.33.149 "The reply is saved, or it says so": v9.33.148 gave the
+# conversation save an answer, but the save that actually decides whether a
+# turn survives - the one at the end of every reply - still threw it away, and
+# its catch swallowed CancellationException too. It asks now, and says so once
+# per session. The two parachute saves lose a catch that could never run.
+_main = _src("MainActivity.kt")
+check("v9.33.149: the turn-end save asks for its answer",
+      'val turnSaved = try {' in _main and
+      'if (!turnSaved) warnChatNotSaved()' in _main)
+check("v9.33.149: a cancelled turn is not swallowed by the save",
+      'catch (e: CancellationException) {' in _main and
+      'throw e' in _main)
+check("v9.33.149: the warning is said once, not after every reply",
+      'private var warnedUnsavedChat = false' in _main and
+      'if (warnedUnsavedChat) return' in _main and
+      'ChatStore.saveNotice(false)' in _main)
+check("v9.33.149: no dead catch is left around a conversation save in the chat screen",
+      'try { ChatStore.save' not in _main)
+check("v9.33.149: version is at least 9.33.149 (317)",
+      version_at_least("9.33.149", 317))
+structural("MainActivity.kt", _main)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

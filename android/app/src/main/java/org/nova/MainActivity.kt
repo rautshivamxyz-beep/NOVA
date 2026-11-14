@@ -153,6 +153,18 @@ class MainActivity : Activity() {
     internal var pendingCards = false
     private var pendingAutosend: String? = null
 
+    /** v9.33.149: the "could not save this chat" warning is said once per
+     *  session. A disk that is full is full on every turn, and a toast after
+     *  every single reply would be worse than the problem it reports. */
+    private var warnedUnsavedChat = false
+
+    /** v9.33.149: say, once, that the conversation did not reach the disk. */
+    private fun warnChatNotSaved() {
+        if (warnedUnsavedChat) return
+        warnedUnsavedChat = true
+        toast(ChatStore.saveNotice(false) ?: "Could not save this chat to the phone")
+    }
+
     /** Compressed summary of older turns (auto-compact). */
     internal var compactSummary: String? = null
     internal var compacting = false
@@ -1344,7 +1356,11 @@ class MainActivity : Activity() {
             // still runs (it also stores the answer); this one is the
             // parachute.
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(this@MainActivity, genChat) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+                // v9.33.149: the catch here could never run - ChatStore.save
+                // answers false instead of throwing (v9.33.90/v9.33.148) - and
+                // it was dead code of exactly the kind v9.33.147 removed from
+                // six other files. The answer is recorded by writeOrNote.
+                ChatStore.save(this@MainActivity, genChat)
             }
         }
         val replyMsg: Msg
@@ -1635,9 +1651,22 @@ class MainActivity : Activity() {
                             }
                     }
                     // persist the conversation
-                    try {
+                    // v9.33.149 "The reply is saved, or it says so": this is
+                    // the save that decides whether the turn the user is
+                    // looking at survives the app. It threw its answer away,
+                    // so a full disk lost the whole conversation while the
+                    // reply sat on screen looking saved. It also caught every
+                    // Exception - including CancellationException - so a
+                    // cancelled turn carried on as if the work had finished.
+                    val turnSaved = try {
                         withContext(Dispatchers.IO) { ChatStore.save(this@MainActivity, genChat) }
-                    } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        NovaLog.quiet("MainActivity", e)
+                        false
+                    }
+                    if (!turnSaved) warnChatNotSaved()
                     // v7.6: the save above SUSPENDS the Main thread - the
                     // user can switch chats during it. Re-check before
                     // continuing/compacting, or the continuation lands in
@@ -2692,7 +2721,8 @@ class MainActivity : Activity() {
         currentChat.messages.add(reply); adapter.add(reply)
         scrollToEnd()
         scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(this@MainActivity, currentChat) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+            // v9.33.149: same dead catch as above - the save answers, never throws.
+            ChatStore.save(this@MainActivity, currentChat)
         }
         return true
     }
