@@ -44,12 +44,17 @@ jobs:
       - name: Refuse if this patch was already applied
         run: |
           echo "main is at $(git rev-parse --short HEAD)"
-          if grep -rq "try { ChatStore.save" \
-             android/app/src/main/java/org/nova/ncie/android/ 2>/dev/null; then
-            echo "FATAL: a dead save catch is still present - the patch was applied before."
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          if [ "$VER" = "9.33.150" ]; then
+            echo "FATAL: main already claims versionName 9.33.150 - the patch was applied before."
             exit 1
           fi
-          echo "main carries no dead save catch - clean to apply."
+          if ! grep -rq "try { ChatStore.save" \
+             android/app/src/main/java/org/nova/ncie/android/ 2>/dev/null; then
+            echo "FATAL: no dead save catch left to remove - main is not the tree this patch expects."
+            exit 1
+          fi
+          echo "main is at $VER with the dead catches still present - clean to apply."
 
       - name: Apply the release patch
         run: |
