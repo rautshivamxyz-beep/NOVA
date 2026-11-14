@@ -1,0 +1,81 @@
+name: Apply NOVA v9.33.148
+
+# One-shot applier for the v9.33.148 release ("The conversation answers for
+# itself").
+#
+# Same proven mechanism as apply-933147.yml: the release travels as a mailable
+# git patch so the commit that lands on main is the real one - same message,
+# same author, same diff. This applies it, runs the full source verifier
+# against the patched tree, checks the version it claims, and only then pushes.
+# It deletes itself and the patch in the very commit it pushes, so main is left
+# holding nothing but the release.
+#
+# The push uses the workflow's own GITHUB_TOKEN, which does not trigger other
+# workflows: nova-apk.yml is dispatched by hand afterwards.
+#
+# Note for the next release: staging this on a throwaway branch instead of main
+# was tried and does NOT work - workflow_dispatch only resolves a workflow that
+# exists on the DEFAULT branch, so the applier itself has to be committed to
+# main (which costs one redundant nova-apk build, see the plan's P1).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out main with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Refuse if this version is already released
+        run: |
+          if git rev-parse -q --verify "refs/tags/v9.33.148" >/dev/null; then
+            echo "FATAL: v9.33.148 is already released - nothing to apply."
+            exit 1
+          fi
+          echo "v9.33.148 is not yet released - safe to apply."
+
+      - name: Refuse if this patch was already applied
+        run: |
+          echo "main is at $(git rev-parse --short HEAD)"
+          if grep -q "fun saveNotice" \
+             android/app/src/main/java/org/nova/ChatStore.kt 2>/dev/null; then
+            echo "FATAL: saveNotice already exists - the patch was applied before."
+            exit 1
+          fi
+          echo "main does not carry saveNotice - clean to apply."
+
+      - name: Apply the release patch
+        run: |
+          git config user.name "rautshivamxyz-beep"
+          git config user.email "rautshivamxyz@gmail.com"
+          git am --3way tmp/nova-9.33.148.patch
+          echo "applied: $(git log -1 --format='%h %s')"
+
+      - name: The release removes its own one-shot files
+        run: |
+          git rm -q tmp/nova-9.33.148.patch .github/workflows/apply-933148.yml
+          git commit -q --amend --no-edit
+          echo "release commit: $(git log -1 --format='%h %s')"
+          git show --stat --format="" HEAD
+
+      - name: Verify the patched tree before it is pushed
+        run: python3 tmp/verify_patches.py .
+
+      - name: Confirm the version the release claims
+        run: |
+          VER="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)"
+          CODE="$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle | head -1)"
+          echo "versionName=$VER versionCode=$CODE"
+          [ "$VER" = "9.33.148" ] || { echo "FATAL: versionName is $VER"; exit 1; }
+          [ "$CODE" = "316" ] || { echo "FATAL: versionCode is $CODE"; exit 1; }
+
+      - name: Push the release commit to main
+        run: git push origin HEAD:main
