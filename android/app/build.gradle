@@ -442,8 +442,8 @@ android {
         // v9.33.147: a save that answers false is recorded, not dropped - the dead
         // try/catch left over from v9.33.90 is gone, and the nightly audit says so
         // when its report could not be saved.
-        versionCode 315
-        versionName '9.33.147'
+        versionCode 316
+        versionName '9.33.148'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

@@ -278,9 +278,16 @@ class ChatsActivity : Activity() {
             .setPositiveButton(R.string.action_save) { _, _ ->
                 val name = edit.text.toString().trim()
                 if (name.isNotBlank()) {
+                    val old = chat.name
                     chat.name = name
-                    ChatStore.save(this, chat)
+                    // v9.33.148: a rename that could not be saved is not a
+                    // rename. The list was refreshed from memory either way,
+                    // so the new name showed until the next launch and then
+                    // silently reverted - with nothing said at any point.
+                    val saved = ChatStore.save(this, chat)
+                    if (!saved) chat.name = old
                     refresh()
+                    ChatStore.saveNotice(saved)?.let { toast(it) }
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)

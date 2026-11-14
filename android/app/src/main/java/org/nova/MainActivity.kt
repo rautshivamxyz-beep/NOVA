@@ -938,9 +938,13 @@ class MainActivity : Activity() {
      *  read aloud again. */
     private fun deleteMessage(m: Msg) {
         if (!currentChat.messages.remove(m)) return
-        ChatStore.save(this, currentChat)
+        // v9.33.148: "Message deleted" is only true if the deletion reached the
+        // disk. A save that answered false used to leave the message back in
+        // the chat at the next launch while the screen had already said it was
+        // gone.
+        val saved = ChatStore.save(this, currentChat)
         displayChatMessages()
-        toast("Message deleted")
+        toast(ChatStore.saveNotice(saved) ?: "Message deleted")
     }
 
     private fun newConversation() {

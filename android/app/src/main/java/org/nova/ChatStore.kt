@@ -41,8 +41,25 @@ object ChatStore {
             updatedAt = System.currentTimeMillis()
         )
 
-    fun save(context: Context, chat: Chat) {
-        try {
+    /**
+     * v9.33.148 "The conversation answers for itself": [save] now answers
+     * whether the conversation is on the disk.
+     *
+     * v9.33.147 gave every best-effort save a way to be heard and fixed the
+     * six sites that were throwing their answer away - but the conversation
+     * store, the one file the user cannot re-type, was still written with
+     * `NcieFiles.write(...)` and the answer dropped on the floor. A full
+     * disk or a storage fault therefore lost a whole chat in silence, and
+     * the screen went on showing it as if it were saved.
+     *
+     * The JSON is still built inside the try, because building it can throw;
+     * the write itself never does (v9.33.90), so it has moved out of the
+     * catch - a `catch` around a call that cannot throw is the dead code
+     * v9.33.147 was about. The answer is recorded in the swallowed-failure
+     * tally by [NcieFiles.writeOrNote] and returned to the caller.
+     */
+    fun save(context: Context, chat: Chat): Boolean {
+        val json = try {
             // Auto-name from the first user message until renamed
             if (chat.name == NEW_CHAT_NAME) {
                 chat.messages.firstOrNull { it.role == Role.USER && it.text.isNotBlank() }?.let {
@@ -54,27 +71,42 @@ object ChatStore {
             for (m in chat.messages) {
                 arr.put(JSONObject().put("r", if (m.role == Role.USER) "u" else "a").put("t", m.text).put("d", m.done))
             }
-            val json = JSONObject()
+            JSONObject()
                 .put("id", chat.id)
                 .put("name", chat.name)
                 .put("created", chat.createdAt)
                 .put("updated", chat.updatedAt)
                 .put("messages", arr)
-            // v9.33.100 "The conversation store joins the one atomic save":
-            // this was the last store still hand-rolling its own `<id>.tmp`.
-            // It is also the most-written state file in the app - MainActivity
-            // saves a chat from the UI thread while a Dispatchers.IO coroutine
-            // saves the same chat mid-stream - so the fixed temp name meant two
-            // threads sharing one buffer (v9.33.99), and its own fallback
-            // dropped the temp before writing the target directly. Both are
-            // gone: NcieFiles.write takes one lock per destination path and
-            // never removes the old file until the new one is really in place.
-            NcieFiles.write(File(dir(context), chat.id + ".json"), json.toString())
+                .toString()
         } catch (e: Exception) {
-            // best effort — never crash the app for storage
+            // a message NOVA cannot serialise must not crash the app
             NovaLog.quiet("ChatStore", e)
+            return false
         }
+        // v9.33.100 "The conversation store joins the one atomic save":
+        // this was the last store still hand-rolling its own `<id>.tmp`.
+        // It is also the most-written state file in the app - MainActivity
+        // saves a chat from the UI thread while a Dispatchers.IO coroutine
+        // saves the same chat mid-stream - so the fixed temp name meant two
+        // threads sharing one buffer (v9.33.99), and its own fallback
+        // dropped the temp before writing the target directly. Both are
+        // gone: NcieFiles.write takes one lock per destination path and
+        // never removes the old file until the new one is really in place.
+        return NcieFiles.writeOrNote(File(dir(context), chat.id + ".json"), json, "ChatStore")
     }
+
+    /**
+     * v9.33.148: what to say when [save] answers false, or null when there is
+     * nothing to say because it worked.
+     *
+     * Pure on purpose: the write needs a Context and a real filesystem, so
+     * the sentence is the half of this a JVM unit test can pin. A screen that
+     * has just claimed "Message deleted" or accepted a rename is the place a
+     * silent save failure turns into a lie, and it needs the words.
+     */
+    fun saveNotice(saved: Boolean): String? =
+        if (saved) null
+        else "Could not save this chat to the phone - it will be gone when NOVA closes"
 
     /**
      * v9.33.124 "A conversation that could not be read is not a new chat": the

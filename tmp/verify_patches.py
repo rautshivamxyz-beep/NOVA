@@ -2871,6 +2871,46 @@ structural("NovaLog.kt", _novalog)
 structural("ncie/android/NcieFiles.kt", _nciefiles)
 structural("ncie/android/SelfEvolutionEngine.kt", _selfev)
 
+# v9.33.148 "The conversation answers for itself": v9.33.147 gave every
+# best-effort save a way to be heard and fixed the six sites that threw their
+# answer away - but the conversation store, the one file the user cannot
+# re-type, still called NcieFiles.write(...) and dropped the Boolean. A full
+# disk lost a whole chat in silence while the screen showed it as saved.
+# save() now answers, and the two screens that claim something happened
+# ("Message deleted", an accepted rename) ask before they say it.
+_chatstore = _src("ChatStore.kt")
+_chatsact = _src("ChatsActivity.kt")
+_chatstore_save_test = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/ChatStoreSaveTest.kt"),
+    encoding="utf-8").read()
+check("v9.33.148: the conversation save answers for itself",
+      'fun save(context: Context, chat: Chat): Boolean' in _chatstore)
+check("v9.33.148: the conversation save records a failed write",
+      'return NcieFiles.writeOrNote(File(dir(context), chat.id + ".json"), json, "ChatStore")'
+      in _chatstore)
+check("v9.33.148: no dead catch is left around the conversation write",
+      'NcieFiles.write(File(dir(context)' not in _chatstore and
+      not _any_code('try { NcieFiles.write'))
+check("v9.33.148: a serialisation failure answers false, not a crash",
+      'return false' in _chatstore)
+check("v9.33.148: the notice is pure and says what it costs",
+      'fun saveNotice(saved: Boolean): String? =' in _chatstore and
+      'it will be gone when NOVA closes' in _chatstore)
+check("v9.33.148: a delete is only announced when it was saved",
+      'val saved = ChatStore.save(this, currentChat)' in _src("MainActivity.kt") and
+      'toast(ChatStore.saveNotice(saved) ?: "Message deleted")' in _src("MainActivity.kt"))
+check("v9.33.148: a rename that could not be saved is not a rename",
+      'val saved = ChatStore.save(this, chat)' in _chatsact and
+      'if (!saved) chat.name = old' in _chatsact and
+      'ChatStore.saveNotice(saved)?.let { toast(it) }' in _chatsact)
+check("v9.33.148: the new answers are pinned by unit tests",
+      'aSavedChatHasNothingToSay' in _chatstore_save_test and
+      'anUnsavedChatSaysItWillBeLost' in _chatstore_save_test and
+      'theTwoAnswersAreDistinguishable' in _chatstore_save_test)
+check("v9.33.148: version is at least 9.33.148 (316)",
+      version_at_least("9.33.148", 316))
+structural("ChatStore.kt", _chatstore)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
