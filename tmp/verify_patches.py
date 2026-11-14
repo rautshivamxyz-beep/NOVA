@@ -2933,6 +2933,34 @@ check("v9.33.149: version is at least 9.33.149 (317)",
       version_at_least("9.33.149", 317))
 structural("MainActivity.kt", _main)
 
+# v9.33.150 "A catch that can never run": ChatStore.save has answered false
+# instead of throwing since v9.33.90/v9.33.148, which made all 32 remaining
+# `try { ChatStore.save(...) } catch (e: Exception) { NovaLog.quiet(...) }`
+# wrappers in the chat engine dead code - and each of them also swallowed
+# CancellationException, so a cancelled turn carried on as if it had finished.
+# They are gone; the save itself stays and still records its answer.
+_engine_files = [
+    "ncie/android/NcieChat.kt",
+    "ncie/android/NcieChatExt.kt",
+    "ncie/android/NcieExam.kt",
+    "ncie/android/NcieLearn.kt",
+    "ncie/android/NcieProfile.kt",
+    "ncie/android/NcieSummary.kt",
+    "ncie/android/NcieTutor.kt",
+    "ncie/android/OnlineFetch.kt",
+]
+_engine_src = {f: _src(f) for f in _engine_files}
+check("v9.33.150: no dead catch is left around a conversation save anywhere",
+      not _any_code("try { ChatStore.save"))
+check("v9.33.150: every one of the 32 saves is still made",
+      sum(t.count("ChatStore.save(") for t in _engine_src.values()) == 32)
+check("v9.33.150: no save was dropped along with its catch",
+      all("ChatStore.save(" in t for t in _engine_src.values()))
+check("v9.33.150: version is at least 9.33.150 (318)",
+      version_at_least("9.33.150", 318))
+for _f in _engine_files:
+    structural(_f, _engine_src[_f])
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

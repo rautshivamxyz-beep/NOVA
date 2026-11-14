@@ -215,8 +215,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             adapter.add(reply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) }
-                catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -233,8 +232,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             adapter.add(reply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) }
-                catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -298,7 +296,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(freply); adapter.add(freply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -314,7 +312,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(mreply); adapter.add(mreply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -331,7 +329,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             currentChat.messages.add(lreply); adapter.add(lreply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -567,7 +565,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 adapter.add(reply)
                 scrollToEnd()
                 scope.launch(Dispatchers.IO) {
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                    ChatStore.save(act, currentChat)
                 }
                 return
             }
@@ -604,7 +602,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     adapter.add(reply)
                     scrollToEnd()
                     scope.launch(Dispatchers.IO) {
-                        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                        ChatStore.save(act, currentChat)
                     }
                     return
                 }
@@ -726,7 +724,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             adapter.add(reply)
             scrollToEnd()
             scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                ChatStore.save(act, currentChat)
             }
             return
         }
@@ -892,7 +890,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     currentChat.messages.add(cachedReply); adapter.add(cachedReply)
                     scrollToEnd()
                     toast("Answer (cached from last time)")
-                    try { ChatStore.save(this, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                    ChatStore.save(this, currentChat)
                     // v5.4.3 fix: the engine never saw this exchange - make
                     // the next real question carry the transcript, so
                     // follow-ups ("explain that again") aren't answered cold
@@ -1271,7 +1269,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 scrollToEnd()
                 toast("Answer (cached - regenerate for a fresh one)")
                 scope.launch(Dispatchers.IO) {
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                    ChatStore.save(act, currentChat)
                 }
                 needsContextCarry = true
                 return
@@ -1319,7 +1317,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                     currentChat.messages.add(m)
                     adapter.add(m)
                     scrollToEnd()
-                    try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+                    ChatStore.save(act, currentChat)
                     return@launch
                 }
                 startGeneration(turnPrompt, if (preShown) null else text)

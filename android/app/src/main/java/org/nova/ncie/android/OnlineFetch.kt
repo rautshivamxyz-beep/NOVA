@@ -64,7 +64,7 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
+            ChatStore.save(act, act.currentChat)
         }
     }
 
@@ -164,7 +164,7 @@ object OnlineFetch {
             act.adapter.add(um)
             act.scrollToEnd()
             act.scope.launch(Dispatchers.IO) {
-                try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
+                ChatStore.save(act, act.currentChat)
             }
         }
         act.scope.launch(Dispatchers.IO) {
@@ -271,7 +271,7 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
+            ChatStore.save(act, act.currentChat)
         }
     }
 
@@ -351,7 +351,7 @@ object OnlineFetch {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("OnlineFetch", e) }
+            ChatStore.save(act, act.currentChat)
         }
     }
 

@@ -719,7 +719,7 @@ object NcieTutor {
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
+            ChatStore.save(act, act.currentChat)
         }
     }
 

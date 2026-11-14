@@ -103,7 +103,7 @@ object NcieLearn {
         // v8.1.0 (opt #7): the chat save is file I/O - it moves off the
         // caller's (main) thread, where it had no business sitting
         io.execute {
-            try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
+            ChatStore.save(act, act.currentChat)
         }
         act.needsContextCarry = true
         return true

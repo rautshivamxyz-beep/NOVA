@@ -136,7 +136,7 @@ object NcieSummary {
         chat.messages.clear()
         chat.messages.addAll(keep)
         act.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(act, chat) } catch (e: Exception) { NovaLog.quiet("NcieSummary", e) }
+            ChatStore.save(act, chat)
         }
     }
 

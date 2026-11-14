@@ -212,7 +212,7 @@ internal fun MainActivity.answerMissed(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -249,7 +249,7 @@ internal fun MainActivity.answerNotifCmd(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -328,7 +328,7 @@ internal fun MainActivity.answerTune(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -388,7 +388,7 @@ internal fun MainActivity.answerFrom(text: String): Boolean {
     val reply = Msg(Role.ASSISTANT, body)
     currentChat.messages.add(reply); adapter.add(reply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -412,7 +412,7 @@ internal fun MainActivity.answerBriefing(text: String): Boolean {
     // v9.16.15 "Voice briefing": speak it aloud when TTS is ready.
     speakNow(briefText)
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -431,7 +431,7 @@ internal fun MainActivity.answerStudy(text: String): Boolean {
     val routReply = Msg(Role.ASSISTANT, NcieRoutines.startStudy(this, this))
     currentChat.messages.add(routReply); adapter.add(routReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -459,7 +459,7 @@ internal fun MainActivity.answerSummary(text: String): Boolean {
         else "No summary yet — it builds automatically as we talk.")
     currentChat.messages.add(sumReply); adapter.add(sumReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -486,7 +486,7 @@ internal fun MainActivity.answerForget(text: String): Boolean {
     val forgReply = Msg(Role.ASSISTANT, "Done — conversation cleared.")
     currentChat.messages.add(forgReply); adapter.add(forgReply); scrollToEnd()
     activity.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(activity, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(activity, currentChat)
     }
     return true
 }
@@ -506,7 +506,7 @@ internal fun postGroundReply(act: MainActivity, body: String) {
     val groundMsg = Msg(Role.ASSISTANT, body)
     act.currentChat.messages.add(groundMsg); act.adapter.add(groundMsg); act.scrollToEnd()
     act.scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(act, act.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(act, act.currentChat)
     }
 }
 
@@ -1056,7 +1056,7 @@ fun MainActivity.answerToolRequest(text: String): Boolean {
         val r = Msg(Role.ASSISTANT, s)
         self.currentChat.messages.add(r); self.adapter.add(r); self.scrollToEnd()
         self.scope.launch(Dispatchers.IO) {
-            try { ChatStore.save(self, self.currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+            ChatStore.save(self, self.currentChat)
         }
     }
 
@@ -1162,7 +1162,7 @@ internal fun MainActivity.answerLyrics(text: String): Boolean {
     adapter.add(reply)
     scrollToEnd()
     scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(act, currentChat)
     }
     return true
 }
@@ -1184,7 +1184,7 @@ internal fun MainActivity.answerJoke(text: String): Boolean {
     adapter.add(reply)
     scrollToEnd()
     scope.launch(Dispatchers.IO) {
-        try { ChatStore.save(act, currentChat) } catch (e: Exception) { NovaLog.quiet("NcieChat", e) }
+        ChatStore.save(act, currentChat)
     }
     return true
 }
