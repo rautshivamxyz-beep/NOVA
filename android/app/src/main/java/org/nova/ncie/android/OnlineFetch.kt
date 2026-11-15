@@ -18,7 +18,7 @@ import org.nova.Settings
 import org.nova.WikiCore
 import org.nova.ncie.knowledge.EntityMatch
 import org.nova.ncie.knowledge.HtmlText
-import org.nova.ncie.verify.Coverage
+import org.nova.ncie.verify.EvidencePipeline
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -187,8 +187,7 @@ object OnlineFetch {
             // never stored.
             val wrongEntity = wiki != null && entityQuestion(text) &&
                 !EntityMatch.titleMatchesEntity(wiki.first, text)
-            if (wiki != null && !wrongEntity && (Coverage.ratio(q, wiki.second) >= 0.15 ||
-                    hits(q, wiki.second) >= 2)) {
+            if (wiki != null && !wrongEntity && EvidencePipeline.acceptsFetchedSource(q, wiki.second)) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
@@ -215,7 +214,7 @@ object OnlineFetch {
                     val wrongWebEntity = entityQuestion(text) &&
                         !EntityMatch.titleMatchesEntity(page.title, text)
                     if (!wrongWebEntity &&
-                        (Coverage.ratio(q, body) >= 0.15 || hits(q, body) >= 2) &&
+                        EvidencePipeline.acceptsFetchedSource(q, body) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
