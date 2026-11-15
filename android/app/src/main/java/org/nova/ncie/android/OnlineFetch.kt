@@ -1,7 +1,5 @@
 package org.nova.ncie.android
 
-import org.nova.ncie.Tokens
-
 import org.nova.NovaLog
 
 import android.app.AlertDialog
@@ -306,23 +304,7 @@ object OnlineFetch {
     private fun joinReason(a: String, b: String): String =
         if (a.isBlank()) b else a + "; " + b
 
-    /** v9.20.0 "Search fix": how many of the query's keywords the text
-     *  contains. Used beside the Coverage ratio - a page that names two of
-     *  the query's terms is a real hit even when it cannot cover the rest
-     *  of a long question. */
-    private fun hits(q: String, text: String): Int {
-        // v9.33.76: every-script content words. The ASCII-length filter
-        // dropped a Hindi query's two-character words, so the keyword side
-        // of the acceptance gate counted zero hits for a Hindi question.
-        val terms = Tokens.contentWords(q).distinct()
-        if (terms.isEmpty()) return 0
-        // v9.33.7: whole-word match - substring matching counted "art"
-        // inside "start", inflating the 2+ keyword acceptance gate
-        val low = Tokens.norm(text)
-        return terms.count { low.contains(" " + it + " ") }
-    }
-
-    /** (title, intro extract) from Wikipedia, or null. Two requests:
+        /** (title, intro extract) from Wikipedia, or null. Two requests:
      *  the search API for the best title, then the extract API for its
      *  intro paragraphs. */
     /**
