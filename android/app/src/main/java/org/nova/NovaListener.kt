@@ -190,14 +190,15 @@ class NovaListener : NotificationListenerService() {
         fun autoReplyLogPath(ctx: Context): File = File(ctx.filesDir, "auto_reply_log.txt")
 
         fun logAutoReply(ctx: Context, who: String) {
-            // v9.33.151: this one stays a bare append ON PURPOSE. It is a
-            // log, not state: losing a line costs nothing, and it is written
-            // once per auto-reply. NcieFiles.append reads the whole file and
-            // rewrites it, which on a 60 KB log per reply is a real cost for
-            // no benefit.
+            // v9.33.153: through the one save, in its O(1) form. v9.33.151
+            // left this a bare append because NcieFiles.append rewrites the
+            // whole file, and this is written once per auto-reply - on a
+            // 60 KB log that is a real cost for no benefit. appendFast is the
+            // same lock and the same refusal to write onto a file NOVA could
+            // not read, without the copy.
             try {
                 val f = autoReplyLogPath(ctx)
-                f.appendText(System.currentTimeMillis().toString() + "\t" +
+                NcieFiles.appendFast(f, System.currentTimeMillis().toString() + "\t" +
                     who.replace('\t', ' ').replace('\n', ' ') + "\n")
                 if (f.length() > 60_000) {
                     val kept = f.readLines().takeLast(300)
@@ -286,7 +287,8 @@ class NovaListener : NotificationListenerService() {
         fun append(ctx: Context, line: String) {
             synchronized(lock) {
                 val f = logPath(ctx)
-                f.appendText(line + "\n")
+                // v9.33.153: the one save, O(1) form - see appendFast.
+                NcieFiles.appendFast(f, line + "\n")
                 // v9.3.0 privacy: 7-day expiry. The log is oldest-first, so
                 // the first line's timestamp is the cheap probe - a full
                 // filtering pass runs only when it has actually aged out.

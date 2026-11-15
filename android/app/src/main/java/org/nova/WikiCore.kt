@@ -224,12 +224,13 @@ object WikiCore {
         val line = title + paras.joinToString("") { "\u241F$it" } + "\n"
         val f = articlesFile(ctx)
         val off = f.length()
-        // v9.33.151: a bare append ON PURPOSE - this store is the wiki text
-        // itself, several megabytes, and [off] above is the byte offset the
-        // index keeps for this article. Routing it through NcieFiles.append
-        // would copy the whole store on every stored article and invalidate
-        // every offset the index holds.
-        try { f.appendText(line) } catch (e: Exception) { return false }
+        // v9.33.153: through the one save, in its O(1) form. This store is
+        // the wiki text itself, several megabytes, and [off] above is the byte
+        // offset the index keeps for this article - NcieFiles.append would
+        // copy the whole store on every stored article, and a rewrite would
+        // invalidate every offset the index holds. appendFast appends in
+        // place, under the per-path lock, and refuses a store it cannot read.
+        if (!NcieFiles.appendFast(f, line)) return false
         // v9.6.0 "Engine Pack": the stored article joins the grounding index
         NcieGround.indexUpdate(ctx, title, text)
         val cur = index ?: return true   // warmUp() will pick it up

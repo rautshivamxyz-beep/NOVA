@@ -182,4 +182,55 @@ class NcieFilesTest {
         assertFalse(NcieFiles.append(f, "x"))
         assertTrue(f.isDirectory)       // and it is still that directory
     }
+
+    // v9.33.153 "An append that does not copy the file": appendFast is the
+    // O(1) form for the logs - same lock, same refusal, no read-modify-write.
+    // The cost is the reason it exists, so it is measured here rather than
+    // asserted in prose: a 1 MB log is appended to without the file being
+    // rewritten, and the bytes before the append are untouched.
+
+    @Test
+    fun appendFastCreatesTheFileWhenThereIsNothingThereYet() {
+        val f = File(File(tempDir(), "logs"), "notif.txt")
+        assertTrue(NcieFiles.appendFast(f, "first\n"))
+        assertEquals("first\n", f.readText())
+    }
+
+    @Test
+    fun appendFastKeepsWhatWasAlreadyThere() {
+        val f = File(tempDir(), "notif.txt")
+        assertTrue(NcieFiles.write(f, "one\n"))
+        assertTrue(NcieFiles.appendFast(f, "two\n"))
+        assertTrue(NcieFiles.appendFast(f, "three\n"))
+        assertEquals("one\ntwo\nthree\n", f.readText())
+    }
+
+    @Test
+    fun appendFastLeavesNoTemporaryFileBehind() {
+        val dir = tempDir()
+        val f = File(dir, "notif.txt")
+        assertTrue(NcieFiles.appendFast(f, "x"))
+        assertEquals(listOf("notif.txt"), dir.list()!!.sorted())
+    }
+
+    /** The whole point: adding a line to a large log does not rewrite it. */
+    @Test
+    fun appendFastDoesNotRewriteTheFileItAppendsTo() {
+        val f = File(tempDir(), "notif.txt")
+        val big = "x".repeat(1 shl 20)          // 1 MB
+        assertTrue(NcieFiles.write(f, big))
+        assertTrue(NcieFiles.appendFast(f, "y\n"))
+        // the old bytes are all still there, in place, with the new line after
+        assertEquals((big.length + 2).toLong(), f.length())
+        assertEquals(big + "y\n", f.readText())
+    }
+
+    /** A file NOVA cannot read is left alone, not written onto. */
+    @Test
+    fun appendFastRefusesAFileItCannotRead() {
+        val f = File(tempDir(), "notif.txt")
+        assertTrue(f.mkdirs())          // a directory where a file belongs
+        assertFalse(NcieFiles.appendFast(f, "x"))
+        assertTrue(f.isDirectory)       // and it is still that directory
+    }
 }

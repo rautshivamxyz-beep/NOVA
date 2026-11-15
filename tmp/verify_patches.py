@@ -1893,7 +1893,9 @@ check("v9.33.99: the save takes one lock per destination path",
       _nf.count("synchronized(lock) { writeNow(f, text) }") == 1 and
       _nf.count("locks.getOrPut(f.absolutePath) { Any() }") ==
           _nf.count("fun write(f: File, text: String): Boolean") +
-          _nf.count("fun append(f: File, text: String): Boolean"))
+          _nf.count("fun append(f: File, text: String): Boolean") +
+          # v9.33.153: the third entry point (the O(1) append) takes it too.
+          _nf.count("fun appendFast(f: File, text: String): Boolean"))
 check("v9.33.99: the body moved under the lock, not copied",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1 and
@@ -2543,7 +2545,9 @@ check("v9.33.126: version is at least 9.33.126 (294)",
 check("v9.33.127: the one save still takes one lock per destination path",
       _nf.count("locks.getOrPut(f.absolutePath)") ==
           _nf.count("fun write(f: File, text: String): Boolean") +
-          _nf.count("fun append(f: File, text: String): Boolean"))
+          _nf.count("fun append(f: File, text: String): Boolean") +
+          # v9.33.153: the third entry point (the O(1) append) takes it too.
+          _nf.count("fun appendFast(f: File, text: String): Boolean"))
 check("v9.33.127: the save still answers a boolean and never throws",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1)
@@ -3000,10 +3004,13 @@ check("v9.33.151: the trigger store refuses to rewrite a list it could not read"
       'NcieFiles.readOrNull(file(ctx)) == null' in _jarvis)
 check("v9.33.151: a place is only announced as saved when it was saved",
       'return if (ok) "Saved. I will act when you are near "' in _jarvis)
-check("v9.33.151: the two high-frequency logs stay bare appends, and say why",
-      '.appendText(' in _listener and 'bare append ON PURPOSE' in _listener)
-check("v9.33.151: the multi-megabyte wiki store stays a bare append, and says why",
-      'f.appendText(line)' in _wiki and 'bare append ON PURPOSE' in _wiki)
+# v9.33.153 replaced both deliberate exceptions with NcieFiles.appendFast (the
+# O(1) form), so the exception is gone and the rule is now absolute: no bare
+# appendText is left anywhere in the app.
+check("v9.33.151: the two high-frequency logs go through the one save",
+      'NcieFiles.appendFast(f,' in _listener and '.appendText(' not in _listener)
+check("v9.33.151: the multi-megabyte wiki store goes through the one save",
+      'NcieFiles.appendFast(f, line)' in _wiki and '.appendText(' not in _wiki)
 
 # The same doctrine, other half: a save whose ANSWER is dropped cannot fail
 # visibly either. v9.33.147 did this for the call sites that wrapped a write
@@ -3073,6 +3080,42 @@ check("v9.33.152: version is at least 9.33.152 (320)",
 for _f, _t in [("ncie/android/NcieValue.kt", _value),
                ("ncie/android/NcieEngines.kt", _engines),
                ("ncie/android/NcieGround.kt", _ground)]:
+    structural(_f, _t)
+
+# v9.33.153 "An append that does not copy the file": v9.33.151 left three bare
+# appends outside the one save, all for the same measured reason - append()
+# reads the whole file and writes it back, and these three are appended to
+# once per notification, once per auto-reply, and once per stored wiki article
+# in a store that is several megabytes. appendFast is the O(1) form: the same
+# per-path lock and the same refusal to write onto a file NOVA could not read,
+# without the read-modify-write. The exceptions are gone, so the rule is now
+# absolute.
+_files = _src("ncie/android/NcieFiles.kt")
+_files_test = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
+    encoding="utf-8").read()
+
+check("v9.33.153: the one save has an O(1) append",
+      'fun appendFast(f: File, text: String): Boolean' in _files)
+check("v9.33.153: the fast append takes the same per-path lock",
+      _files.count('val lock = locks.getOrPut(f.absolutePath) { Any() }') == 3)
+check("v9.33.153: the fast append refuses a file it cannot read",
+      'if (f.exists() && (f.isDirectory || !f.canRead())) {' in _files and
+      'not appending to it' in _files)
+check("v9.33.153: the fast append opens the file for append, never truncating",
+      'java.io.FileOutputStream(f, true)' in _files)
+check("v9.33.153: no bare appendText is left anywhere in the app",
+      not _any_code(".appendText("))
+check("v9.33.153: the fast append is pinned by unit tests",
+      'appendFastDoesNotRewriteTheFileItAppendsTo' in _files_test and
+      'appendFastKeepsWhatWasAlreadyThere' in _files_test and
+      'appendFastRefusesAFileItCannotRead' in _files_test and
+      'appendFastCreatesTheFileWhenThereIsNothingThereYet' in _files_test)
+check("v9.33.153: version is at least 9.33.153 (321)",
+      version_at_least("9.33.153", 321))
+for _f, _t in [("ncie/android/NcieFiles.kt", _files),
+               ("NovaListener.kt", _listener),
+               ("WikiCore.kt", _wiki)]:
     structural(_f, _t)
 
 print("")

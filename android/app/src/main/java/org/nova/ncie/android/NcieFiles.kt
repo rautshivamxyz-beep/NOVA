@@ -104,6 +104,47 @@ object NcieFiles {
     }
 
     /**
+     * v9.33.153 "An append that does not copy the file".
+     *
+     * [append] reads the whole file and writes it back, which is what makes it
+     * crash-safe and what makes it the right answer for a state file - but it
+     * is O(size) per call. The notification log is appended to once per
+     * notification and capped at 512 KB, so routing it through [append] would
+     * rewrite half a megabyte to add one line, on the thread that has just
+     * received a notification. That cost is why the last three bare
+     * `File.appendText` calls in the app were left outside the one save.
+     *
+     * This is the O(1) form: it takes the same per-path lock, so two threads
+     * can no longer interleave their bytes into one torn line, and it refuses
+     * a file it cannot read instead of appending a second half onto a damaged
+     * whole. What it does NOT do is write atomically - a kill mid-append can
+     * still leave a partial line - which is exactly the trade a log makes and
+     * a state file must not. Use [append] or [write] for state.
+     *
+     * Never throws: a failed append answers false.
+     */
+    fun appendFast(f: File, text: String): Boolean {
+        val lock = locks.getOrPut(f.absolutePath) { Any() }
+        return synchronized(lock) {
+            try {
+                if (f.exists() && (f.isDirectory || !f.canRead())) {
+                    NovaLog.note("NcieFiles", "could not read " + f.name + " - not appending to it")
+                    return@synchronized false
+                }
+                f.parentFile?.mkdirs()
+                java.io.FileOutputStream(f, true).use { out ->
+                    out.write(text.toByteArray(Charsets.UTF_8))
+                    out.flush()
+                }
+                true
+            } catch (e: Exception) {
+                NovaLog.quiet("NcieFiles", e)
+                false
+            }
+        }
+    }
+
+    /**
      * The same write, appended to the list of best-effort saves that only
      * care that it happened. Kept for the call sites that already swallow.
      */
