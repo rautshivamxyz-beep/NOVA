@@ -1,6 +1,7 @@
 package org.nova.ncie.learn
 
 import org.nova.ncie.model.VerifyResult
+import org.nova.ncie.verify.EvidencePipeline
 
 /**
  * Decides whether a chat answer is eligible for durable factual memory.
@@ -20,8 +21,7 @@ object LearningEvidencePolicy {
      * source-grounding comparison could be performed.
      */
     fun mayPersistFact(sources: List<String>, verdict: VerifyResult): Boolean {
-        if (!verdict.passed || verdict.qualityScore < MIN_GROUNDED_SCORE) return false
-        return sources.any { it.isNotBlank() }
+        return EvidencePipeline.mayPersistMemory(sources, verdict, MIN_GROUNDED_SCORE)
     }
 
     const val SOURCE_FREE_SCORE = 0.6
