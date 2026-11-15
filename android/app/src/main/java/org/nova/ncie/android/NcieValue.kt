@@ -66,11 +66,12 @@ object NcieValue {
 
     @Synchronized
     private fun save(ctx: Context, m: Map<String, IntArray>) {
-        try {
-            val sb = StringBuilder()
-            for ((k, v) in m) sb.append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
-            NcieFiles.write(file(ctx), sb.toString())
-        } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
+        // v9.33.151: the answer is heard. These are the value counts that
+        // decide which sources earn their place in the prompt, so a save
+        // that silently stopped happening would quietly stop the tuning.
+        val sb = StringBuilder()
+        for ((k, v) in m) sb.append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
+        NcieFiles.writeOrNote(file(ctx), sb.toString(), "NcieValue")
     }
 
     /** True when [source] may be injected this turn. A source with enough

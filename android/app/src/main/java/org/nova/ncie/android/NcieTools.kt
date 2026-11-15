@@ -140,8 +140,10 @@ object NcieTools {
                         val name = (s.args["name"] ?: "nova-output.txt")
                             .replace(Regex("[^A-Za-z0-9._-]"), "_")
                         val body = text.ifBlank { items.joinToString("\n\n") { it.name + "\n" + it.text } }
-                        writeNew(ctx, name, body)
-                        text = "Wrote $name (${body.length} chars)."
+                        // v9.33.151: the reply follows the save's answer.
+                        text = if (writeNew(ctx, name, body))
+                                   "Wrote $name (${body.length} chars)."
+                               else "Could not write $name - the storage is full or unwritable."
                     }
                     else -> { }
                 }
@@ -170,11 +172,10 @@ object NcieTools {
      * user's originals, and it is written atomically (tmp + rename), so a
      * crash cannot leave a half-written file.
      */
-    private fun writeNew(ctx: Context, name: String, body: String) {
-        try {
-            val dir = File(ctx.filesDir, "recipes-out").apply { mkdirs() }
-            val dest = File(dir, name)
-            NcieFiles.write(dest, body)
-        } catch (e: Exception) { NovaLog.quiet("NcieTools", e) }
+    private fun writeNew(ctx: Context, name: String, body: String): Boolean {
+        val dir = File(ctx.filesDir, "recipes-out").apply { mkdirs() }
+        // v9.33.151: it answers, so the reply can stop claiming a write that
+        // did not happen ("Wrote x.txt (4200 chars)" over nothing on disk).
+        return NcieFiles.writeOrNote(File(dir, name), body, "NcieTools")
     }
 }

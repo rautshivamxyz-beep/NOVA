@@ -369,10 +369,13 @@ object NcieGround {
     /** Rewrite the index for the current source list: one
      *  `name\tchunkCount` line per source that has chunks. */
     private fun writeIndex(ctx: Context, names: List<String>) {
-        try {
-            NcieFiles.write(indexFile(ctx), names.filter { flashChunks[it]?.isNotEmpty() == true }
-                .joinToString("") { it + "\t" + flashChunks[it]!!.size + "\n" })
-        } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
+        // v9.33.151: the answer is heard - the index is what makes a stored
+        // article findable again, and an unheard failure here is an article
+        // that is on disk and invisible.
+        NcieFiles.writeOrNote(indexFile(ctx),
+            names.filter { flashChunks[it]?.isNotEmpty() == true }
+                .joinToString("") { it + "\t" + flashChunks[it]!!.size + "\n" },
+            "NcieGround")
     }
 
     /** Write point for ONE changed source: refresh (or, with text == null,

@@ -1866,9 +1866,12 @@ for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
             _destructive.append(_n)
 check("v9.33.98: no save deletes the old file before retrying the rename",
       not _destructive)
+# v9.33.151: "the one atomic save" has two entry points now - write() and its
+# recording form writeOrNote() - so the check asks for either rather than
+# pinning the bare name. NcieTools moved to writeOrNote in that release.
 check("v9.33.98: every hand-rolled state save goes through the one atomic save",
-      all(t.count("NcieFiles.write(") >= 1 for t in
-          [_rs98, _pd, _wo, _ex, _st, _sr, _fl, _kn, _pl, _nl, _rec, _tl]))
+      all(t.count("NcieFiles.write(") >= 1 or t.count("NcieFiles.writeOrNote(") >= 1
+          for t in [_rs98, _pd, _wo, _ex, _st, _sr, _fl, _kn, _pl, _nl, _rec, _tl]))
 check("v9.33.98: the notes store writes through it exactly once",
       _kn.count("NcieFiles.write(") == 1)
 check("v9.33.98: a failed wiki rewrite is reported, not swallowed",
@@ -2848,11 +2851,13 @@ check("v9.33.147: the save answer is recorded, not dropped",
       'if (!ok) NovaLog.note(tag, "could not save " + f.name)' in _nciefiles)
 check("v9.33.147: no dead try/catch is left around a save",
       not _any_code('try { NcieFiles.write'))
+# v9.33.151 added more of them, so this asks that every one of the six is
+# still there (a floor, never an exact count - the v9.33.72 rule).
 check("v9.33.147: the six sites go through writeOrNote",
-      _src("ncie/android/NcieEvolve.kt").count("NcieFiles.writeOrNote(") == 1 and
-      _src("ncie/android/NcieLearn.kt").count("NcieFiles.writeOrNote(") == 1 and
-      _src("ncie/android/NcieSummary.kt").count("NcieFiles.writeOrNote(") == 2 and
-      _src("ncie/android/NovaJarvis.kt").count("NcieFiles.writeOrNote(") == 2)
+      _src("ncie/android/NcieEvolve.kt").count("NcieFiles.writeOrNote(") >= 1 and
+      _src("ncie/android/NcieLearn.kt").count("NcieFiles.writeOrNote(") >= 1 and
+      _src("ncie/android/NcieSummary.kt").count("NcieFiles.writeOrNote(") >= 2 and
+      _src("ncie/android/NovaJarvis.kt").count("NcieFiles.writeOrNote(") >= 2)
 check("v9.33.147: the nightly audit reports whether its report was saved",
       'val saved = NcieFiles.writeOrNote(File(ctx.filesDir, REPORT), report, "SelfEvolutionEngine")' in _selfev and
       'return reportWithSaveState(report, saved)' in _selfev and
@@ -2960,6 +2965,74 @@ check("v9.33.150: version is at least 9.33.150 (318)",
       version_at_least("9.33.150", 318))
 for _f in _engine_files:
     structural(_f, _engine_src[_f])
+
+# v9.33.151 "An append is not a save": v9.33.90 made NcieFiles.write the one
+# atomic, per-path-locked way NOVA saves a file, and v9.33.131 routed the
+# skill forge's append through NcieFiles.append for the same reason. Ten bare
+# `File.appendText` calls were still outside it. An appendText is a buffered
+# stream on the file itself: no lock (two threads interleave into one torn
+# line), no atomicity, and it appends happily to a file NOVA could not read -
+# writing a second half onto a damaged whole. The eight that write small
+# state files are gone; the two that stay are named below.
+_tutor = _src("ncie/android/NcieTutor.kt")
+_evolve = _src("ncie/android/NcieEvolve.kt")
+_jarvis = _src("ncie/android/NovaJarvis.kt")
+_learn = _src("ncie/android/NcieLearn.kt")
+_value = _src("ncie/android/NcieValue.kt")
+_ground = _src("ncie/android/NcieGround.kt")
+_tools = _src("ncie/android/NcieTools.kt")
+_listener = _src("NovaListener.kt")
+_wiki = _src("WikiCore.kt")
+
+check("v9.33.151: no bare appendText is left in the tutor's three study stores",
+      ".appendText(" not in _tutor)
+check("v9.33.151: no bare appendText is left in the growth ledger",
+      ".appendText(" not in _evolve)
+check("v9.33.151: no bare appendText is left in the trigger or place stores",
+      ".appendText(" not in _jarvis)
+check("v9.33.151: the tutor's misses go through the one save and report a failure",
+      'if (!NcieFiles.append(' in _tutor and
+      _tutor.count('NovaLog.note("NcieTutor", "could not record') == 2)
+check("v9.33.151: a flashcard is only announced when it was saved",
+      'if (!NcieFiles.append(flashFile(act)' in _tutor and
+      'Could not save the flashcard.' in _tutor)
+check("v9.33.151: the trigger store refuses to rewrite a list it could not read",
+      'NcieFiles.readOrNull(file(ctx)) == null' in _jarvis)
+check("v9.33.151: a place is only announced as saved when it was saved",
+      'return if (ok) "Saved. I will act when you are near "' in _jarvis)
+check("v9.33.151: the two high-frequency logs stay bare appends, and say why",
+      '.appendText(' in _listener and 'bare append ON PURPOSE' in _listener)
+check("v9.33.151: the multi-megabyte wiki store stays a bare append, and says why",
+      'f.appendText(line)' in _wiki and 'bare append ON PURPOSE' in _wiki)
+
+# The same doctrine, other half: a save whose ANSWER is dropped cannot fail
+# visibly either. v9.33.147 did this for the call sites that wrapped a write
+# in a catch; these six dropped the boolean with no catch at all.
+check("v9.33.151: the learned snapshot hears its save's answer",
+      'NcieFiles.writeOrNote(file, snap, "NcieLearn")' in _learn)
+check("v9.33.151: the value counts hear their save's answer",
+      'NcieFiles.writeOrNote(file(ctx), sb.toString(), "NcieValue")' in _value)
+check("v9.33.151: the grounding index hears its save's answer",
+      '_ground' and 'NcieFiles.writeOrNote(indexFile(ctx),' in _ground)
+check("v9.33.151: the recipe output reports whether it was written",
+      'private fun writeNew(ctx: Context, name: String, body: String): Boolean' in _tools and
+      'if (writeNew(ctx, name, body))' in _tools and
+      'Could not write ' in _tools)
+check("v9.33.151: the voice language is only announced when it was saved",
+      'val saved = if (next == null) {' in _main and
+      'Could not save the voice language' in _main)
+check("v9.33.151: version is at least 9.33.151 (319)",
+      version_at_least("9.33.151", 319))
+for _f, _t in [("ncie/android/NcieTutor.kt", _tutor),
+               ("ncie/android/NcieEvolve.kt", _evolve),
+               ("ncie/android/NovaJarvis.kt", _jarvis),
+               ("ncie/android/NcieLearn.kt", _learn),
+               ("ncie/android/NcieValue.kt", _value),
+               ("ncie/android/NcieGround.kt", _ground),
+               ("ncie/android/NcieTools.kt", _tools),
+               ("NovaListener.kt", _listener),
+               ("WikiCore.kt", _wiki)]:
+    structural(_f, _t)
 
 print("")
 if fails:

@@ -196,10 +196,12 @@ object NcieLearn {
             io.execute {
                 val snap = pending ?: return@execute
                 pending = null
-                try {
-                    file.parentFile?.mkdirs()
-                    NcieFiles.write(file, snap)
-                } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
+                // v9.33.151: the answer is heard. This is the whole learned
+                // memory of the device written back as one snapshot; a save
+                // that failed here left the previous snapshot on disk with
+                // nothing anywhere saying the last two seconds of learning
+                // were lost.
+                NcieFiles.writeOrNote(file, snap, "NcieLearn")
             }
         }
         override fun write(snapshot: String) {

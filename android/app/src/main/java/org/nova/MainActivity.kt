@@ -3697,10 +3697,17 @@ Study:
             "en-IN" -> "hi-IN"
             else -> null   // back to the phone default - no file
         }
-        try {
-            if (next == null) f.delete() else org.nova.ncie.android.NcieFiles.write(f, next)
-        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
-        toast("Voice language: " + (next ?: "phone default"))
+        // v9.33.151: the toast follows the save's answer. The catch around
+        // this could never run - NcieFiles.write returns false instead of
+        // throwing - so a failed save still announced the new language, and
+        // the next start was in the old one with nothing to explain it.
+        val saved = if (next == null) {
+            !f.exists() || f.delete()
+        } else {
+            org.nova.ncie.android.NcieFiles.writeOrNote(f, next, "MainActivity")
+        }
+        if (saved) toast("Voice language: " + (next ?: "phone default"))
+        else toast("Could not save the voice language - it will reset on the next start")
     }
 
     // ------------------------------------------------------- share-in

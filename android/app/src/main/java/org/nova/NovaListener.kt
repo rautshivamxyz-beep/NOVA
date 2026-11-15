@@ -190,6 +190,11 @@ class NovaListener : NotificationListenerService() {
         fun autoReplyLogPath(ctx: Context): File = File(ctx.filesDir, "auto_reply_log.txt")
 
         fun logAutoReply(ctx: Context, who: String) {
+            // v9.33.151: this one stays a bare append ON PURPOSE. It is a
+            // log, not state: losing a line costs nothing, and it is written
+            // once per auto-reply. NcieFiles.append reads the whole file and
+            // rewrites it, which on a 60 KB log per reply is a real cost for
+            // no benefit.
             try {
                 val f = autoReplyLogPath(ctx)
                 f.appendText(System.currentTimeMillis().toString() + "\t" +

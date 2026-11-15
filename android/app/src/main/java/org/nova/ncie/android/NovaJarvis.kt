@@ -203,14 +203,28 @@ object NovaTriggers {
     } catch (e: Exception) { emptyList() }
 
     fun add(ctx: Context, cond: String, what: String) {
-        try { file(ctx).appendText(cond.trim() + "\t" + what.trim() + "\n") } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        // v9.33.151: a trigger the user asked for is state, not a log line -
+        // it goes through the one save, under its lock, and it refuses a file
+        // it could not read instead of writing a fresh list over it.
+        NcieFiles.append(file(ctx), cond.trim() + "\t" + what.trim() + "\n")
     }
 
     fun removeAt(ctx: Context, index: Int) {
-        try {
-            val l = all(ctx).toMutableList()
-            if (index in l.indices) { l.removeAt(index); NcieFiles.write(file(ctx), l.joinToString("\n") { it.cond + "\t" + it.what } + "\n") }
-        } catch (e: Exception) { NovaLog.quiet("NovaJarvis", e) }
+        // v9.33.151: read-modify-write refuses an unreadable file (the
+        // v9.33.119 rule). [all] flattens "could not read" to an empty list,
+        // and writing that back would delete every trigger the user had.
+        if (NcieFiles.readOrNull(file(ctx)) == null) {
+            NovaLog.quiet("NovaTriggers", java.io.IOException("unreadable trigger list - not overwriting it"))
+            return
+        }
+        val l = all(ctx).toMutableList()
+        if (index !in l.indices) return
+        l.removeAt(index)
+        // v9.33.151: the answer is heard. It used to be dropped, so a delete
+        // that never reached the disk still looked like a delete - the
+        // trigger came back on the next read.
+        NcieFiles.writeOrNote(file(ctx),
+            l.joinToString("") { it.cond + "\t" + it.what + "\n" }, "NovaJarvis")
     }
 
     /** The last fire time per trigger, so nothing repeats within the hour. */
@@ -298,10 +312,14 @@ object NovaTriggers {
         if (!hasLocation(ctx)) return "I need location permission first - say \"allow location\"."
         val loc = here(ctx) ?: return "I have no location fix yet. Open Maps once, then try again."
         val key = name.trim().lowercase().ifBlank { "home" }
-        return try {
-            File(ctx.filesDir, "places.txt").appendText(key + "\t" + loc.latitude + "\t" + loc.longitude + "\n")
-            "Saved. I will act when you are near " + key + "."
-        } catch (e: Exception) { "Could not save the place." }
+        // v9.33.151: the one save answers, so "Saved." is only said when it
+        // saved. A bare append never threw for a full disk, so the catch that
+        // used to answer here was the only thing standing between a failed
+        // write and a promise NOVA could not keep.
+        val ok = NcieFiles.append(File(ctx.filesDir, "places.txt"),
+            key + "\t" + loc.latitude + "\t" + loc.longitude + "\n")
+        return if (ok) "Saved. I will act when you are near " + key + "."
+               else "Could not save the place."
     }
 
     private fun metres(a: android.location.Location, la: Double, lo: Double): Double {

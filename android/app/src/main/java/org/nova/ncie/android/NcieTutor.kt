@@ -113,25 +113,32 @@ object NcieTutor {
     private fun oneLine(s: String) =
         s.replace("\t", " ").replace("\n", " ").replace(SEP, ' ')
 
-    /** millis<TAB>topic<TAB>question - one line per wrong answer. */
+    /** millis<TAB>topic<TAB>question - one line per wrong answer.
+     *  v9.33.151: through the one save. A bare `appendText` is a buffered
+     *  stream on the file itself - no per-path lock, so the background write
+     *  here and a foreground one can interleave into one torn line - and it
+     *  appends happily to a file NOVA could not read, writing a second half
+     *  onto a damaged whole. [NcieFiles.append] reads first, refuses a file
+     *  it cannot read, and takes the same lock every other save takes. */
     private fun appendMiss(ctx: Context, topic: String, question: String) {
-        try {
-            missFile(ctx).apply { parentFile?.mkdirs() }.appendText(
+        if (!NcieFiles.append(
+                missFile(ctx),
                 System.currentTimeMillis().toString() + "\t" +
                     topic.replace("\t", " ").replace("\n", " ") + "\t" +
-                    question.replace("\t", " ").replace("\n", " ") + "\n")
-        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
+                    question.replace("\t", " ").replace("\n", " ") + "\n"))
+            NovaLog.note("NcieTutor", "could not record the missed question")
     }
 
     /** v9.3.0: millis<TAB>front<TAB>back - one line per wrong flashcard,
      *  in flash_miss.txt (NOT the weak-areas log). */
     private fun appendFlashMiss(ctx: Context, front: String, back: String) {
-        try {
-            flashMissFile(ctx).apply { parentFile?.mkdirs() }.appendText(
+        // v9.33.151: the one save, same reason as [appendMiss].
+        if (!NcieFiles.append(
+                flashMissFile(ctx),
                 System.currentTimeMillis().toString() + "\t" +
                     front.replace("\t", " ").replace("\n", " ") + "\t" +
-                    back.replace("\t", " ").replace("\n", " ") + "\n")
-        } catch (e: Exception) { NovaLog.quiet("NcieTutor", e) }
+                    back.replace("\t", " ").replace("\n", " ") + "\n"))
+            NovaLog.note("NcieTutor", "could not record the missed flashcard")
     }
 
     /** Drop the (topic, question) entry the user just re-answered
@@ -308,10 +315,11 @@ object NcieTutor {
             postReply(act, "Add one like this: add flashcard capital of France = Paris")
             return
         }
-        try {
-            flashFile(act).apply { parentFile?.mkdirs() }
-                .appendText(oneLine(front) + SEP + oneLine(back) + "\n")
-        } catch (e: Exception) {
+        // v9.33.151: the save answers now, so the catch that answered for it
+        // is gone. It could never run: [NcieFiles.append] returns false
+        // instead of throwing, and the bare append it replaces did not throw
+        // for a full disk either.
+        if (!NcieFiles.append(flashFile(act), oneLine(front) + SEP + oneLine(back) + "\n")) {
             postReply(act, "Could not save the flashcard.")
             return
         }

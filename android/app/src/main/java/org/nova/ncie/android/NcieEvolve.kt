@@ -50,15 +50,18 @@ object NcieEvolve {
         io.execute {
             try {
                 val f = file(ctx)
-                f.appendText(
+                // v9.33.151: the one save. This ledger is the growth record
+                // the evolve pass reasons from, so a line that never reached
+                // the disk is a fact NOVA forgot it had learned.
+                NcieFiles.append(f,
                     System.currentTimeMillis().toString() + "\t" + kind + "\t" +
-                        q.replace('\n', ' ').take(140) + "\n"
-                )
+                        q.replace('\n', ' ').take(140) + "\n")
                 // v9.31.5: only compact when the file actually grew past the cap
                 if (f.length() > 40_000) {
                     val lines = f.readLines()
                     if (lines.size > MAX_LINES)
-                        NcieFiles.write(f, lines.takeLast(MAX_LINES).joinToString("\n") + "\n")
+                        NcieFiles.writeOrNote(f,
+                            lines.takeLast(MAX_LINES).joinToString("\n") + "\n", "NcieEvolve")
                 }
             } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
         }
@@ -67,9 +70,9 @@ object NcieEvolve {
     /** One forged skill (called by the forge). */
     fun noteForged(ctx: Context, name: String) {
         io.execute {
-            try {
-                file(ctx).appendText(System.currentTimeMillis().toString() + "\tskill+\t" + name + "\n")
-            } catch (e: Exception) { NovaLog.quiet("NcieEvolve", e) }
+            // v9.33.151: the one save, same reason as [note].
+            NcieFiles.append(file(ctx),
+                System.currentTimeMillis().toString() + "\tskill+\t" + name + "\n")
         }
     }
 
