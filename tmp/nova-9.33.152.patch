@@ -1,0 +1,294 @@
+From 99f326470cde1216100691bec157c3a958b63988 Mon Sep 17 00:00:00 2001
+From: rautshivamxyz-beep <rautshivamxyz@gmail.com>
+Date: Sun, 15 Nov 2026 03:50:21 +0000
+Subject: [PATCH] v9.33.152 "A store that could not be read is still not an
+ empty store"
+
+v9.33.119 gave NcieFiles.readOrNull two answers: "" means the file is not
+there yet (a fresh install, nothing to lose) and null means it IS there and
+could not be read (something to lose). It then made reminders, exams and
+planner.json refuse to save over the second, because those three write back
+what they read and adding one item to an empty list deletes everything else.
+
+Four stores were still read-modify-written through a read that flattens both
+answers to empty, and each of them loses real user state the same way:
+
+  - experience.txt, the ledger of questions the user regenerated an answer to.
+    One unreadable read persisted the new line as the entire ledger.
+  - answer_cache.txt, up to 200 remembered answers. This is the one the user
+    feels: the cache is what makes a repeat question instant, so losing it
+    reads as NOVA getting slower and repeating itself for no reason.
+  - context_value.txt, the per-source injected/helped counts that decide
+    which sources earn their place in the prompt. Worse than a lost file: the
+    flattened empty map was CACHED in `stats`, so one transient read error
+    became the truth for the rest of the process, the tracker restarted from
+    zero, and it began injecting sources it had already proved useless.
+  - the grounding index, one `name<TAB>chunkCount` line per source. Writing
+    the one changed source back over a failed read deleted every other line,
+    and an article missing from the index is an article NOVA can no longer
+    ground an answer in - on disk and invisible.
+
+The writers ask now and refuse: NcieEngines gets a `writable` read that
+returns null for "there and unreadable" while its readers keep the flattening
+one, NcieValue stops caching a failed read and will not save a map built on
+one, and indexUpdate leaves the index alone when it cannot read it. Every one
+of them records the refusal through NovaLog.note, so the health screen's
+tally hears about it - the v9.33.147 rule. A lost increment is recoverable; a
+wiped store is not.
+
+The checks hold it: no writer reads through the flattening read, every writer
+refuses, the readers still flatten, and the four refusals each say so.
+---
+ android/app/build.gradle                      |  4 +-
+ .../java/org/nova/ncie/android/NcieEngines.kt | 37 ++++++++++++--
+ .../java/org/nova/ncie/android/NcieGround.kt  | 25 +++++++---
+ .../java/org/nova/ncie/android/NcieValue.kt   | 50 ++++++++++++++-----
+ tmp/verify_patches.py                         | 41 +++++++++++++++
+ 5 files changed, 132 insertions(+), 25 deletions(-)
+
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index ee064b2..33aed36 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -442,8 +442,8 @@ android {
+         // v9.33.147: a save that answers false is recorded, not dropped - the dead
+         // try/catch left over from v9.33.90 is gone, and the nightly audit says so
+         // when its report could not be saved.
+-        versionCode 319
+-        versionName '9.33.151'
++        versionCode 320
++        versionName '9.33.152'
+         // v6.0.0: arm64 only by default. CI also builds a universal APK
+         // (arm64 + x86_64, for emulators/Chromebooks) with:
+         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieEngines.kt b/android/app/src/main/java/org/nova/ncie/android/NcieEngines.kt
+index 0cf1e04..e618d7e 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieEngines.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieEngines.kt
+@@ -48,6 +48,25 @@ object NcieEngines {
+         if (f.exists()) f.readLines() else emptyList()
+     } catch (e: Exception) { emptyList() }
+ 
++    /**
++     * v9.33.152 "A store that could not be read is still not an empty store".
++     *
++     * [readLines] above flattens both of [NcieFiles.readOrNull]'s answers to
++     * one - "nothing there" and "there and unreadable" both come back empty -
++     * and that is right for a reader. It is fatal for a read-modify-write:
++     * both writers here load the store, add one line and write the result
++     * back, so a read that failed would persist ONE entry as the whole store.
++     * For the answer cache that is every remembered answer gone, which the
++     * user feels as NOVA getting slower and repeating itself.
++     *
++     * Null means "the file is there and could not be read" - the writers
++     * refuse, and leave the store alone.
++     */
++    private fun writable(f: File): List<String>? {
++        val text = NcieFiles.readOrNull(f) ?: return null
++        return text.lines().filter { it.isNotEmpty() }
++    }
++
+     // ------------------------------------------------ Experience Engine
+ 
+     /** The user regenerated the answer to [question] - log it. One line
+@@ -59,10 +78,15 @@ object NcieEngines {
+             val q = question.trim().replace("\n", " ")
+             if (q.isEmpty()) return
+             synchronized(storeLock) {
+-                val lines = readLines(experienceFile(ctx)).toMutableList()
++                val stored = writable(experienceFile(ctx))
++                if (stored == null) {
++                    NovaLog.note("NcieEngines", "could not read the experience log - not overwriting it")
++                    return
++                }
++                val lines = stored.toMutableList()
+                 lines.add(System.currentTimeMillis().toString() + "\t" + q)
+                 while (lines.size > CAP) lines.removeAt(0)
+-                NcieFiles.write(experienceFile(ctx), lines.joinToString("\n") + "\n")
++                NcieFiles.writeOrNote(experienceFile(ctx), lines.joinToString("\n") + "\n", "NcieEngines")
+             }
+         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
+     }
+@@ -113,11 +137,16 @@ object NcieEngines {
+             val a = answer.trim()
+             if (q.isEmpty() || a.isEmpty() || a.length > 4000) return
+             synchronized(storeLock) {
+-                val lines = readLines(answerFile(ctx)).toMutableList()
++                val stored = writable(answerFile(ctx))
++                if (stored == null) {
++                    NovaLog.note("NcieEngines", "could not read the answer cache - not overwriting it")
++                    return
++                }
++                val lines = stored.toMutableList()
+                 lines.removeAll { it.substringBefore(SEP).trim().lowercase() == q.lowercase() }
+                 lines.add(escape(q) + SEP + escape(a))
+                 while (lines.size > CAP) lines.removeAt(0)
+-                NcieFiles.write(answerFile(ctx), lines.joinToString("\n") + "\n")
++                NcieFiles.writeOrNote(answerFile(ctx), lines.joinToString("\n") + "\n", "NcieEngines")
+             }
+         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
+     }
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieGround.kt b/android/app/src/main/java/org/nova/ncie/android/NcieGround.kt
+index d581474..73e59f2 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieGround.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieGround.kt
+@@ -388,14 +388,25 @@ object NcieGround {
+             if (text == null) flashChunks.remove(name)
+             else flashChunks[name] = chunksOf(text)
+             val f = indexFile(ctx)
+-            val map = LinkedHashMap<String, Int>()
+-            if (f.exists()) for (l in f.readLines()) {
+-                val p = l.split('\t', limit = 2)
+-                if (p.size == 2) map[p[0]] = p[1].trim().toIntOrNull() ?: -1
++            // v9.33.152: read-modify-write refuses an index it could not read
++            // (the v9.33.119 rule). Writing the one changed source back over a
++            // failed read deleted every other source's line, and an article
++            // missing from the index is an article NOVA can no longer ground
++            // an answer in - it is on disk and invisible.
++            val readable = NcieFiles.readOrNull(f)
++            if (readable == null) {
++                NovaLog.note("NcieGround", "could not read the grounding index - not overwriting it")
++            } else {
++                val map = LinkedHashMap<String, Int>()
++                for (l in readable.lines()) {
++                    val p = l.split('\t', limit = 2)
++                    if (p.size == 2) map[p[0]] = p[1].trim().toIntOrNull() ?: -1
++                }
++                if (text == null) map.remove(name)
++                else map[name] = flashChunks[name]!!.size
++                NcieFiles.writeOrNote(f, map.entries.joinToString("") { it.key + "\t" + it.value + "\n" },
++                    "NcieGround")
+             }
+-            if (text == null) map.remove(name)
+-            else map[name] = flashChunks[name]!!.size
+-            NcieFiles.write(f, map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
+         } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
+         // v9.9.0: keep the semantic chunk embeddings in step with this
+         // write (fire-and-forget; deleteIndex when the source is gone).
+diff --git a/android/app/src/main/java/org/nova/ncie/android/NcieValue.kt b/android/app/src/main/java/org/nova/ncie/android/NcieValue.kt
+index 22460b4..5101047 100644
+--- a/android/app/src/main/java/org/nova/ncie/android/NcieValue.kt
++++ b/android/app/src/main/java/org/nova/ncie/android/NcieValue.kt
+@@ -43,29 +43,55 @@ object NcieValue {
+ 
+     private fun file(ctx: Context) = File(ctx.filesDir, "context_value.txt")
+ 
++    /**
++     * v9.33.152 "A store that could not be read is still not an empty store":
++     * the v9.33.119 rule, applied to the last store that read-modify-writes.
++     *
++     * This file is read, changed and written back, so the read's two answers
++     * matter: "" means a fresh install with nothing to lose, null means the
++     * file is THERE and could not be read. Flattening the second to the first
++     * and writing the result back replaced every source's counts with the one
++     * entry just recorded - the tracker silently restarted from zero and began
++     * injecting sources it had already proved useless.
++     *
++     * The empty map is not cached either. A failed read used to be remembered
++     * as the truth for the rest of the process, so one transient error stuck
++     * until the app was killed.
++     */
++    @Volatile private var unreadable = false
++
+     @Synchronized
+     private fun load(ctx: Context): MutableMap<String, IntArray> {
+         stats?.let { return it }
+         val m = HashMap<String, IntArray>()
+-        try {
+-            val f = file(ctx)
+-            if (f.exists()) {
+-                for (line in f.readLines()) {
+-                    val p = line.split('\t')
+-                    if (p.size == 3) {
+-                        val inj = p[1].toIntOrNull() ?: continue
+-                        val use = p[2].toIntOrNull() ?: continue
+-                        if (inj >= 0 && use >= 0 && use <= inj) m[p[0]] = intArrayOf(inj, use)
+-                    }
+-                }
++        val text = NcieFiles.readOrNull(file(ctx))
++        if (text == null) {
++            unreadable = true
++            NovaLog.note("NcieValue", "could not read the value counts - not overwriting them")
++            return m
++        }
++        unreadable = false
++        for (line in text.lines()) {
++            val p = line.split('\t')
++            if (p.size == 3) {
++                val inj = p[1].toIntOrNull() ?: continue
++                val use = p[2].toIntOrNull() ?: continue
++                if (inj >= 0 && use >= 0 && use <= inj) m[p[0]] = intArrayOf(inj, use)
+             }
+-        } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
++        }
+         stats = m
+         return m
+     }
+ 
+     @Synchronized
+     private fun save(ctx: Context, m: Map<String, IntArray>) {
++        // v9.33.152: refuse to write a map that was built on a failed read.
++        // The file stays as it was - a lost increment is recoverable, a wiped
++        // store is not.
++        if (unreadable) {
++            NovaLog.note("NcieValue", "not saving the value counts - the stored file could not be read")
++            return
++        }
+         // v9.33.151: the answer is heard. These are the value counts that
+         // decide which sources earn their place in the prompt, so a save
+         // that silently stopped happening would quietly stop the tuning.
+diff --git a/tmp/verify_patches.py b/tmp/verify_patches.py
+index b435c53..604cf22 100644
+--- a/tmp/verify_patches.py
++++ b/tmp/verify_patches.py
+@@ -3034,6 +3034,47 @@ for _f, _t in [("ncie/android/NcieTutor.kt", _tutor),
+                ("WikiCore.kt", _wiki)]:
+     structural(_f, _t)
+ 
++# v9.33.152 "A store that could not be read is still not an empty store":
++# v9.33.119 split NcieFiles.readOrNull's two answers ("nothing there" vs
++# "there and unreadable") and made reminders, exams and planner.json refuse to
++# save over the second. Four stores were still read-modify-written through a
++# read that flattened both answers to empty, so one unreadable read persisted
++# a single entry as the whole store: the experience ledger, the answer cache,
++# the context-value counts and the grounding index.
++_value = _src("ncie/android/NcieValue.kt")
++_engines = _src("ncie/android/NcieEngines.kt")
++
++check("v9.33.152: the value counts read through the two-answer read",
++      'val text = NcieFiles.readOrNull(file(ctx))' in _value and
++      'readLines()' not in _value)
++check("v9.33.152: a failed value read is not cached as the truth",
++      '@Volatile private var unreadable = false' in _value and
++      'unreadable = true' in _value and
++      'unreadable = false' in _value)
++check("v9.33.152: the value counts are not written back over a failed read",
++      'if (unreadable) {' in _value and
++      'not saving the value counts - the stored file could not be read' in _value)
++check("v9.33.152: the engine stores have a writers' read that refuses",
++      'private fun writable(f: File): List<String>?' in _engines and
++      'NcieFiles.readOrNull(f) ?: return null' in _engines)
++check("v9.33.152: both engine writers refuse a store they could not read",
++      _engines.count('could not read the') == 2 and
++      'readLines(experienceFile(ctx)).toMutableList()' not in _engines and
++      'readLines(answerFile(ctx)).toMutableList()' not in _engines)
++check("v9.33.152: the readers keep the flattening read",
++      'private fun readLines(f: File)' in _engines and
++      'readLines(experienceFile(ctx))' in _engines and
++      'readLines(answerFile(ctx))' in _engines)
++check("v9.33.152: the grounding index is not written back over a failed read",
++      'val readable = NcieFiles.readOrNull(f)' in _ground and
++      'could not read the grounding index - not overwriting it' in _ground)
++check("v9.33.152: version is at least 9.33.152 (320)",
++      version_at_least("9.33.152", 320))
++for _f, _t in [("ncie/android/NcieValue.kt", _value),
++               ("ncie/android/NcieEngines.kt", _engines),
++               ("ncie/android/NcieGround.kt", _ground)]:
++    structural(_f, _t)
++
+ print("")
+ if fails:
+     print("VERIFY FAILED: %d problem(s)" % len(fails))
+-- 
+2.39.5
+
