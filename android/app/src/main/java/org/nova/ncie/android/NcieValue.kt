@@ -43,29 +43,55 @@ object NcieValue {
 
     private fun file(ctx: Context) = File(ctx.filesDir, "context_value.txt")
 
+    /**
+     * v9.33.152 "A store that could not be read is still not an empty store":
+     * the v9.33.119 rule, applied to the last store that read-modify-writes.
+     *
+     * This file is read, changed and written back, so the read's two answers
+     * matter: "" means a fresh install with nothing to lose, null means the
+     * file is THERE and could not be read. Flattening the second to the first
+     * and writing the result back replaced every source's counts with the one
+     * entry just recorded - the tracker silently restarted from zero and began
+     * injecting sources it had already proved useless.
+     *
+     * The empty map is not cached either. A failed read used to be remembered
+     * as the truth for the rest of the process, so one transient error stuck
+     * until the app was killed.
+     */
+    @Volatile private var unreadable = false
+
     @Synchronized
     private fun load(ctx: Context): MutableMap<String, IntArray> {
         stats?.let { return it }
         val m = HashMap<String, IntArray>()
-        try {
-            val f = file(ctx)
-            if (f.exists()) {
-                for (line in f.readLines()) {
-                    val p = line.split('\t')
-                    if (p.size == 3) {
-                        val inj = p[1].toIntOrNull() ?: continue
-                        val use = p[2].toIntOrNull() ?: continue
-                        if (inj >= 0 && use >= 0 && use <= inj) m[p[0]] = intArrayOf(inj, use)
-                    }
-                }
+        val text = NcieFiles.readOrNull(file(ctx))
+        if (text == null) {
+            unreadable = true
+            NovaLog.note("NcieValue", "could not read the value counts - not overwriting them")
+            return m
+        }
+        unreadable = false
+        for (line in text.lines()) {
+            val p = line.split('\t')
+            if (p.size == 3) {
+                val inj = p[1].toIntOrNull() ?: continue
+                val use = p[2].toIntOrNull() ?: continue
+                if (inj >= 0 && use >= 0 && use <= inj) m[p[0]] = intArrayOf(inj, use)
             }
-        } catch (e: Exception) { NovaLog.quiet("NcieValue", e) }
+        }
         stats = m
         return m
     }
 
     @Synchronized
     private fun save(ctx: Context, m: Map<String, IntArray>) {
+        // v9.33.152: refuse to write a map that was built on a failed read.
+        // The file stays as it was - a lost increment is recoverable, a wiped
+        // store is not.
+        if (unreadable) {
+            NovaLog.note("NcieValue", "not saving the value counts - the stored file could not be read")
+            return
+        }
         // v9.33.151: the answer is heard. These are the value counts that
         // decide which sources earn their place in the prompt, so a save
         // that silently stopped happening would quietly stop the tuning.

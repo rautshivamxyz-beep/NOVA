@@ -388,14 +388,25 @@ object NcieGround {
             if (text == null) flashChunks.remove(name)
             else flashChunks[name] = chunksOf(text)
             val f = indexFile(ctx)
-            val map = LinkedHashMap<String, Int>()
-            if (f.exists()) for (l in f.readLines()) {
-                val p = l.split('\t', limit = 2)
-                if (p.size == 2) map[p[0]] = p[1].trim().toIntOrNull() ?: -1
+            // v9.33.152: read-modify-write refuses an index it could not read
+            // (the v9.33.119 rule). Writing the one changed source back over a
+            // failed read deleted every other source's line, and an article
+            // missing from the index is an article NOVA can no longer ground
+            // an answer in - it is on disk and invisible.
+            val readable = NcieFiles.readOrNull(f)
+            if (readable == null) {
+                NovaLog.note("NcieGround", "could not read the grounding index - not overwriting it")
+            } else {
+                val map = LinkedHashMap<String, Int>()
+                for (l in readable.lines()) {
+                    val p = l.split('\t', limit = 2)
+                    if (p.size == 2) map[p[0]] = p[1].trim().toIntOrNull() ?: -1
+                }
+                if (text == null) map.remove(name)
+                else map[name] = flashChunks[name]!!.size
+                NcieFiles.writeOrNote(f, map.entries.joinToString("") { it.key + "\t" + it.value + "\n" },
+                    "NcieGround")
             }
-            if (text == null) map.remove(name)
-            else map[name] = flashChunks[name]!!.size
-            NcieFiles.write(f, map.entries.joinToString("") { it.key + "\t" + it.value + "\n" })
         } catch (e: Exception) { NovaLog.quiet("NcieGround", e) }
         // v9.9.0: keep the semantic chunk embeddings in step with this
         // write (fire-and-forget; deleteIndex when the source is gone).

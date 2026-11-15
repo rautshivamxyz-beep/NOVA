@@ -48,6 +48,25 @@ object NcieEngines {
         if (f.exists()) f.readLines() else emptyList()
     } catch (e: Exception) { emptyList() }
 
+    /**
+     * v9.33.152 "A store that could not be read is still not an empty store".
+     *
+     * [readLines] above flattens both of [NcieFiles.readOrNull]'s answers to
+     * one - "nothing there" and "there and unreadable" both come back empty -
+     * and that is right for a reader. It is fatal for a read-modify-write:
+     * both writers here load the store, add one line and write the result
+     * back, so a read that failed would persist ONE entry as the whole store.
+     * For the answer cache that is every remembered answer gone, which the
+     * user feels as NOVA getting slower and repeating itself.
+     *
+     * Null means "the file is there and could not be read" - the writers
+     * refuse, and leave the store alone.
+     */
+    private fun writable(f: File): List<String>? {
+        val text = NcieFiles.readOrNull(f) ?: return null
+        return text.lines().filter { it.isNotEmpty() }
+    }
+
     // ------------------------------------------------ Experience Engine
 
     /** The user regenerated the answer to [question] - log it. One line
@@ -59,10 +78,15 @@ object NcieEngines {
             val q = question.trim().replace("\n", " ")
             if (q.isEmpty()) return
             synchronized(storeLock) {
-                val lines = readLines(experienceFile(ctx)).toMutableList()
+                val stored = writable(experienceFile(ctx))
+                if (stored == null) {
+                    NovaLog.note("NcieEngines", "could not read the experience log - not overwriting it")
+                    return
+                }
+                val lines = stored.toMutableList()
                 lines.add(System.currentTimeMillis().toString() + "\t" + q)
                 while (lines.size > CAP) lines.removeAt(0)
-                NcieFiles.write(experienceFile(ctx), lines.joinToString("\n") + "\n")
+                NcieFiles.writeOrNote(experienceFile(ctx), lines.joinToString("\n") + "\n", "NcieEngines")
             }
         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }
@@ -113,11 +137,16 @@ object NcieEngines {
             val a = answer.trim()
             if (q.isEmpty() || a.isEmpty() || a.length > 4000) return
             synchronized(storeLock) {
-                val lines = readLines(answerFile(ctx)).toMutableList()
+                val stored = writable(answerFile(ctx))
+                if (stored == null) {
+                    NovaLog.note("NcieEngines", "could not read the answer cache - not overwriting it")
+                    return
+                }
+                val lines = stored.toMutableList()
                 lines.removeAll { it.substringBefore(SEP).trim().lowercase() == q.lowercase() }
                 lines.add(escape(q) + SEP + escape(a))
                 while (lines.size > CAP) lines.removeAt(0)
-                NcieFiles.write(answerFile(ctx), lines.joinToString("\n") + "\n")
+                NcieFiles.writeOrNote(answerFile(ctx), lines.joinToString("\n") + "\n", "NcieEngines")
             }
         } catch (e: Exception) { NovaLog.quiet("NcieEngines", e) }
     }

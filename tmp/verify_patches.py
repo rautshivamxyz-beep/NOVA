@@ -3034,6 +3034,47 @@ for _f, _t in [("ncie/android/NcieTutor.kt", _tutor),
                ("WikiCore.kt", _wiki)]:
     structural(_f, _t)
 
+# v9.33.152 "A store that could not be read is still not an empty store":
+# v9.33.119 split NcieFiles.readOrNull's two answers ("nothing there" vs
+# "there and unreadable") and made reminders, exams and planner.json refuse to
+# save over the second. Four stores were still read-modify-written through a
+# read that flattened both answers to empty, so one unreadable read persisted
+# a single entry as the whole store: the experience ledger, the answer cache,
+# the context-value counts and the grounding index.
+_value = _src("ncie/android/NcieValue.kt")
+_engines = _src("ncie/android/NcieEngines.kt")
+
+check("v9.33.152: the value counts read through the two-answer read",
+      'val text = NcieFiles.readOrNull(file(ctx))' in _value and
+      'readLines()' not in _value)
+check("v9.33.152: a failed value read is not cached as the truth",
+      '@Volatile private var unreadable = false' in _value and
+      'unreadable = true' in _value and
+      'unreadable = false' in _value)
+check("v9.33.152: the value counts are not written back over a failed read",
+      'if (unreadable) {' in _value and
+      'not saving the value counts - the stored file could not be read' in _value)
+check("v9.33.152: the engine stores have a writers' read that refuses",
+      'private fun writable(f: File): List<String>?' in _engines and
+      'NcieFiles.readOrNull(f) ?: return null' in _engines)
+check("v9.33.152: both engine writers refuse a store they could not read",
+      _engines.count('could not read the') == 2 and
+      'readLines(experienceFile(ctx)).toMutableList()' not in _engines and
+      'readLines(answerFile(ctx)).toMutableList()' not in _engines)
+check("v9.33.152: the readers keep the flattening read",
+      'private fun readLines(f: File)' in _engines and
+      'readLines(experienceFile(ctx))' in _engines and
+      'readLines(answerFile(ctx))' in _engines)
+check("v9.33.152: the grounding index is not written back over a failed read",
+      'val readable = NcieFiles.readOrNull(f)' in _ground and
+      'could not read the grounding index - not overwriting it' in _ground)
+check("v9.33.152: version is at least 9.33.152 (320)",
+      version_at_least("9.33.152", 320))
+for _f, _t in [("ncie/android/NcieValue.kt", _value),
+               ("ncie/android/NcieEngines.kt", _engines),
+               ("ncie/android/NcieGround.kt", _ground)]:
+    structural(_f, _t)
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
