@@ -4,6 +4,7 @@ import org.nova.ncie.learn.LearningEvidencePolicy
 import org.nova.ncie.knowledge.KnowledgeStore
 import org.nova.ncie.learn.GapStore
 import org.nova.ncie.model.VerifyResult
+import org.nova.ncie.verify.EvidencePipeline
 import org.nova.ncie.skill.SkillStore
 
 /**
@@ -57,6 +58,24 @@ object RegressionLab {
             !LearningEvidencePolicy.mayPersistFact(
                 listOf("The Taj Mahal is in Agra"),
                 VerifyResult(false, 0.95, "failed")
+            )
+        },
+        check("research gate accepts a relevant fetched source") {
+            EvidencePipeline.acceptsFetchedSource(
+                "photosynthesis light energy plants",
+                "Photosynthesis captures light energy and supports plant growth."
+            )
+        },
+        check("research gate rejects unrelated fetched material") {
+            !EvidencePipeline.acceptsFetchedSource(
+                "photosynthesis light energy plants",
+                "The Taj Mahal is a white marble monument in Agra."
+            )
+        },
+        check("research gate uses whole-word matching") {
+            !EvidencePipeline.acceptsFetchedSource(
+                "art astronomy geology biology",
+                "The startup began in a remote area with a large garden."
             )
         },
         check("knowledge retrieval finds matching source material") {
