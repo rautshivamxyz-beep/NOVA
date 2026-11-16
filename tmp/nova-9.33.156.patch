@@ -1,9 +1,9 @@
-From d1f843558492b3ee1b34f625fcabe211933bbe81 Mon Sep 17 00:00:00 2001
+From 1e592a858a64497a1fe1c9fde6265b8a4c83ef2e Mon Sep 17 00:00:00 2001
 From: rautshivamxyz-beep <rautshivamxyz@gmail.com>
 Date: Mon, 16 Nov 2026 03:49:22 +0000
 Subject: [PATCH] v9.33.156 "One number for the suite"
 
-Three things, one theme: a check that cannot notice its own absence is not a
+Two things, one theme: a check that cannot notice its own absence is not a
 check.
 
 1. The release build was RED and it was not v9.33.155's fault. PR #113 added
@@ -22,40 +22,21 @@ check.
    folded into the next one) is still allowed to be empty; a block that lost
    its checks is not.
 
-3. nova-apk.yml no longer builds for a workflow-only push. Every release is
-   staged on main as a one-shot applier touching nothing but
-   .github/workflows/**, and that commit started a full release build of the
-   tree it was about to replace: six minutes of runner and a red run in the
-   history that reads like a broken release when it is only the stale tree.
+The staging build of every release still costs a runner, because a push that
+touches only .github/workflows/** starts a full release build of the tree it is
+about to replace. That fix belongs in nova-apk.yml, and a release commit cannot
+carry a workflow change: the applier's GITHUB_TOKEN is refused with "refusing to
+allow a GitHub App to create or update workflow ... without workflows
+permission". So it goes in separately, through the file API, and is parked in
+the plan as P1.
 ---
- .github/workflows/nova-apk.yml                |  9 ++++
  android/app/build.gradle                      |  4 +-
  .../org/nova/ncie/evaluate/RegressionLab.kt   | 13 +++++
  .../ncie/android/SelfEvolutionEngineTest.kt   |  6 ++-
  .../nova/ncie/evaluate/RegressionLabTest.kt   |  2 +-
- tmp/verify_patches.py                         | 53 +++++++++++++++++++
- 6 files changed, 83 insertions(+), 4 deletions(-)
+ tmp/verify_patches.py                         | 47 +++++++++++++++++++
+ 5 files changed, 68 insertions(+), 4 deletions(-)
 
-diff --git a/.github/workflows/nova-apk.yml b/.github/workflows/nova-apk.yml
-index b76d56a..4f7d080 100644
---- a/.github/workflows/nova-apk.yml
-+++ b/.github/workflows/nova-apk.yml
-@@ -4,6 +4,15 @@ on:
-   push:
-     branches:
-       - main
-+    # v9.33.156: every release is staged on main as a one-shot applier that
-+    # touches nothing but .github/workflows/**. That commit used to start a
-+    # full release build of the tree it was about to replace - six minutes of
-+    # runner, and a red run in the history that looks like a broken release
-+    # when it is only the stale tree the applier is fixing. A push that changes
-+    # no app source cannot need a release build.
-+    paths-ignore:
-+      - '.github/workflows/**'
-+      - 'tmp/*.patch'
- concurrency:
-   group: nova-apk
-   cancel-in-progress: false
 diff --git a/android/app/build.gradle b/android/app/build.gradle
 index 4256ee7..089d544 100644
 --- a/android/app/build.gradle
@@ -130,7 +111,7 @@ index 3769e4e..ba71887 100644
      }
  }
 diff --git a/tmp/verify_patches.py b/tmp/verify_patches.py
-index a66b782..0e5d356 100644
+index a66b782..a60bf89 100644
 --- a/tmp/verify_patches.py
 +++ b/tmp/verify_patches.py
 @@ -29,7 +29,15 @@ FILES = ["MainActivity.kt", "KnowledgeActivity.kt"]
@@ -149,7 +130,7 @@ index a66b782..0e5d356 100644
      print(("PASS  " if cond else "FAIL  ") + name)
      if not cond:
          fails.append(name)
-@@ -3142,6 +3150,51 @@ check("v9.33.155: the shared gate is pinned by unit tests",
+@@ -3142,6 +3150,45 @@ check("v9.33.155: the shared gate is pinned by unit tests",
  check("v9.33.155: version is at least 9.33.155 (323)",
        version_at_least("9.33.155", 323))
  
@@ -191,12 +172,6 @@ index a66b782..0e5d356 100644
 +      not re.search(r"assertEquals\(\s*\d+\s*,\s*(checks|results)\.size\s*\)",
 +                    load_test("evaluate/RegressionLabTest.kt") +
 +                    load_test("android/SelfEvolutionEngineTest.kt")))
-+# A staging commit that touches only .github/workflows/** used to start a full
-+# release build of the tree it was about to replace.
-+_apk = open(os.path.join(ROOT, ".github/workflows/nova-apk.yml"), encoding="utf-8").read()
-+check("v9.33.156: a workflow-only push does not start a release build",
-+      "paths-ignore:" in _apk and "'.github/workflows/**'" in _apk and
-+      _apk.count("workflow_dispatch:") == 1)
 +
  print("")
  if fails:
