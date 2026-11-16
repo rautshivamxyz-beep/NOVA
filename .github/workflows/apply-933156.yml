@@ -13,6 +13,11 @@ name: Apply NOVA v9.33.156
 # unit tests" - not on that release's own test, but on SelfEvolutionEngineTest,
 # which still asserted a regression suite of 8 while PR #113 had grown it to 11.
 #
+# v9.33.156 also changes nova-apk.yml, and the first run of this applier was
+# rejected on the push: "refusing to allow a GitHub App to create or update
+# workflow .github/workflows/nova-apk.yml without workflows permission". So the
+# token needs the workflows scope, not just contents.
+#
 # The push uses the workflow's own GITHUB_TOKEN, which does not trigger other
 # workflows: nova-apk.yml is dispatched by hand afterwards.
 
@@ -21,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   apply:
