@@ -14,6 +14,19 @@ import org.nova.ncie.skill.SkillStore
  * loading the language model, network, embeddings, or Android services.
  */
 object RegressionLab {
+
+    /**
+     * v9.33.156 "One number for the suite".
+     *
+     * The size of [run] used to be written out as a literal in TWO tests.
+     * PR #113 added three research-gate checks and updated one of them, so
+     * `SelfEvolutionEngineTest` kept asserting 8 against a suite of 11 and the
+     * release build went red on a test that had nothing to do with the change.
+     * The number now lives here, once: adding a check means bumping this and
+     * nothing else, and both tests read it from here.
+     */
+    const val EXPECTED_CHECKS = 11
+
     fun run(): List<Pair<String, Boolean>> = listOf(
         check("skill parse, trigger and render") {
             val skills = SkillStore.parse(

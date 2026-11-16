@@ -29,7 +29,15 @@ FILES = ["MainActivity.kt", "KnowledgeActivity.kt"]
 
 fails = []
 
+# v9.33.156: every check that runs is also counted. The suite is the only
+# thing standing between a refactor and a silent feature loss, and until now
+# nothing noticed when a block quietly disappeared from this file - only when
+# one of the remaining assertions went stale. A floor turns a deleted block
+# into a red build instead of a quieter, greener one.
+_ran = []
+
 def check(name, cond):
+    _ran.append(name)
     print(("PASS  " if cond else "FAIL  ") + name)
     if not cond:
         fails.append(name)
@@ -3141,6 +3149,45 @@ check("v9.33.155: the shared gate is pinned by unit tests",
       "minWholeWordHits" in load_test("verify/EvidencePipelineTest.kt"))
 check("v9.33.155: version is at least 9.33.155 (323)",
       version_at_least("9.33.155", 323))
+
+# ---- v9.33.156 "The verifier cannot shrink" ----
+# A check that is deleted is worse than a check that fails: the build stays
+# green while the feature it guarded is free to leave. Two floors fix that -
+# the total number of checks, and one check in every release block.
+_FLOOR = 1004
+check("v9.33.156: the whole check suite still runs (>= %d checks)" % _FLOOR,
+      len(_ran) >= _FLOOR)
+_src = open(os.path.join(ROOT, "tmp/verify_patches.py"), encoding="utf-8").read()
+_missing = []
+for _m in re.finditer(r"^# ---- (v[0-9][^\s]*).*$", _src, re.M):
+    _tail = _src[_m.end():_m.end() + 2400]
+    _nxt = re.search(r"^# ---- ", _tail, re.M)
+    if _nxt:
+        _tail = _tail[:_nxt.start()]
+    # A stacked header (a release whose line was folded into the next one) is
+    # allowed to hold no check of its own: only a block that carries code and
+    # still asserts nothing is a hole.
+    _code = "\n".join(_l for _l in _tail.split("\n")
+                      if _l.strip() and not _l.strip().startswith("#"))
+    if _code and "check(" not in _code:
+        _missing.append(_m.group(1))
+check("v9.33.156: every release block still carries a check"
+      + ("" if not _missing else " (empty: %s)" % ", ".join(_missing)),
+      not _missing)
+check("v9.33.156: version is at least 9.33.156 (324)",
+      version_at_least("9.33.156", 324))
+# The regression suite's size is owned in ONE place. PR #113 added three checks
+# and bumped the literal in RegressionLabTest only, so SelfEvolutionEngineTest
+# kept asserting 8 against a suite of 11 and the release build went red.
+_rlab = load("ncie/evaluate/RegressionLab.kt")
+check("v9.33.156: the regression suite size has one home (RegressionLab)",
+      _rlab.count("const val EXPECTED_CHECKS = ") == 1 and
+      "RegressionLab.EXPECTED_CHECKS" in load_test("evaluate/RegressionLabTest.kt") and
+      "RegressionLab.EXPECTED_CHECKS" in load_test("android/SelfEvolutionEngineTest.kt"))
+check("v9.33.156: no test pins the regression suite to a literal size",
+      not re.search(r"assertEquals\(\s*\d+\s*,\s*(checks|results)\.size\s*\)",
+                    load_test("evaluate/RegressionLabTest.kt") +
+                    load_test("android/SelfEvolutionEngineTest.kt")))
 
 print("")
 if fails:

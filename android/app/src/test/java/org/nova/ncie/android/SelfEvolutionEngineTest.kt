@@ -3,11 +3,15 @@ package org.nova.ncie.android
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.nova.ncie.evaluate.RegressionLab
 
 class SelfEvolutionEngineTest {
     @Test fun selfLearningDataChecksPass() {
         val checks = SelfEvolutionEngine.selfTests()
-        assertEquals(8, checks.size)
+        // v9.33.156: the expected size comes from RegressionLab, the one place
+        // that owns it. This test asserted a literal 8 while the suite grew to
+        // 11, and it turned the release build red for a change it never saw.
+        assertEquals(RegressionLab.EXPECTED_CHECKS, checks.size)
         assertTrue(checks.all { it.second })
     }
 
