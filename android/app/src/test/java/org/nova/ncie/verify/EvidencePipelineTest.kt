@@ -26,6 +26,19 @@ class EvidencePipelineTest {
         ))
     }
 
+    @Test fun wholeWordHitCountIsHonoured() {
+        // v9.33.155: the 2-whole-word rule is a parameter, not a magic number
+        // buried in the caller - raising it must actually refuse a page that
+        // covers only two of the query's words.
+        val query = "quantum entanglement experiment"
+        val source = "Quantum entanglement is mentioned once in this long page " +
+            "about mountains, rivers, cities, food, music, films and travel."
+        assertFalse(EvidencePipeline.acceptsFetchedSource(
+            query, source, minCoverage = 1.0, minWholeWordHits = 99
+        ))
+        assertTrue(EvidencePipeline.acceptsFetchedSource(query, source))
+    }
+
     @Test fun blankResearchInputsFailClosed() {
         assertFalse(EvidencePipeline.acceptsFetchedSource(" ", "some source text"))
         assertFalse(EvidencePipeline.acceptsFetchedSource("photosynthesis", " "))

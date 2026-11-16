@@ -833,9 +833,14 @@ check("v9.21.0: the new screens are registered (manifest)",
       open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".HealthActivity") == 1 and
       open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count(".SetupActivity") == 1)
 # ---- v9.20.0 "Search fix": the fetch gate + honest failures ----
+# v9.33.155: the fetch acceptance rule no longer lives inside OnlineFetch -
+# PR #113 moved it to org.nova.ncie.verify.EvidencePipeline so research and
+# durable memory share one decision. The rule itself (2 whole-word hits, or
+# 15% coverage) is unchanged; these checks follow it to its new home.
+_evp = load("ncie/verify/EvidencePipeline.kt")
 check("v9.20.0: the fetch gate accepts a 2-keyword match (OnlineFetch)",
-      of_.count("fun hits(") == 1 and of_.count("hits(q, wiki.second) >= 2") == 1 and
-      of_.count("Coverage.ratio(q,") == 2)
+      of_.count("EvidencePipeline.acceptsFetchedSource(") == 2 and
+      _evp.count("minWholeWordHits: Int = 2") == 1)
 check("v9.20.0: failures name their cause (OnlineFetch)",
       of_.count("Couldn't fetch anything (") == 1 and of_.count("fun joinReason(") == 1)
 check("v9.20.0: Wikipedia + DuckDuckGo each get a fallback (OnlineFetch)",
@@ -990,7 +995,7 @@ check("v9.16.2: a camera button on the typing row (MainActivity)",
 check("v9.16.2: summariser prompts thinned (MainActivity)",
       ma.count("Combine these section notes") == 2)
 check("v9.16.2: online fetch tries several Wikipedia hits + looser gate (OnlineFetch)",
-      of_.count("srlimit=3") == 1 and of_.count("Coverage.ratio(q,") == 2)
+      of_.count("srlimit=3") == 1 and of_.count("EvidencePipeline.acceptsFetchedSource(") == 2)
 # ---- v9.16.1 "Thin Prompt + Hardening" ----
 _vst = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/Settings.kt"), encoding="utf-8").read()
 check("v9.16.1: thin base system prompt (Settings)",
@@ -1141,7 +1146,8 @@ check("v8.4.0: failures noted, gaps logged (NcieLearn)",
 check("v8.4.0: weak topics surface on the Memory screen (NcieLearn)",
       nl.count("weakTopics") == 1)
 check("v8.4.0: the fetcher gates with Coverage and sends keywords only",
-      of_.count("Coverage.ratio") == 2 and of_.count("wikipedia.org") == 4)
+      _evp.count("Coverage.ratio(query, sourceText)") == 1 and
+      of_.count("wikipedia.org") == 4)
 check("v8.4.0: skills parsed by the kernel (NcieSkills)",
       nsk.count("SkillStore.parse") == 2)
 check("v8.4.0: kernel stage files synced (Coverage, SkillStore, GapStore)",
@@ -1367,7 +1373,7 @@ check("v9.33.76: Tokens defines contentWords (the one content-word rule)",
 check("v9.33.76: tool-result scoring uses every-script terms",
       "Tokens.contentWords(query)" in ntools)
 check("v9.33.76: the search acceptance gate uses every-script terms",
-      "Tokens.contentWords(q).distinct()" in nof)
+      "Tokens.contentWords(query).distinct()" in _evp)
 check("v9.33.76: document excerpt ranking uses every-script terms",
       "Tokens.contentWords(ql)" in ma)
 check("v9.33.76: document-window overlap uses every-script terms",
@@ -3117,6 +3123,24 @@ for _f, _t in [("ncie/android/NcieFiles.kt", _files),
                ("NovaListener.kt", _listener),
                ("WikiCore.kt", _wiki)]:
     structural(_f, _t)
+
+# ---- v9.33.155 "One gate, one place" ----
+# PR #113 replaced the fetch matcher that used to live in OnlineFetch with
+# EvidencePipeline.acceptsFetchedSource. The four checks above were rewritten
+# to follow the rule; these pin the shape of the move so it cannot drift back
+# into a second, private copy of the gate.
+check("v9.33.155: the fetch gate has exactly one home (EvidencePipeline)",
+      _evp.count("fun acceptsFetchedSource(") == 1 and
+      of_.count("fun hits(") == 0 and
+      of_.count("Coverage.ratio") == 0)
+check("v9.33.155: the gate reads every-script content words, not ASCII length",
+      "Tokens.contentWords(query).distinct()" in _evp and
+      "Tokens.norm(sourceText)" in _evp)
+check("v9.33.155: the shared gate is pinned by unit tests",
+      "acceptsFetchedSource" in load_test("verify/EvidencePipelineTest.kt") and
+      "minWholeWordHits" in load_test("verify/EvidencePipelineTest.kt"))
+check("v9.33.155: version is at least 9.33.155 (323)",
+      version_at_least("9.33.155", 323))
 
 print("")
 if fails:
