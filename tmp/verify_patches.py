@@ -3240,9 +3240,9 @@ check("v9.33.160: model reuse preserves speculative-decoding setting changes",
       "activeSpecDecoding != specDecoding" in _engine and
       "engine.unloadDraftModel()" in _engine)
 check("v9.33.160: model reuse policy has JVM regression tests",
-      "samePathAndReadyModelCanBeReused" in load_test("ncie/ModelReusePolicyTest.kt") and
-      "differentPathMustReload" in load_test("ncie/ModelReusePolicyTest.kt") and
-      "samePathWithoutReadyEngineMustReload" in load_test("ncie/ModelReusePolicyTest.kt"))
+      "samePathAndReadyModelCanBeReused" in load_test("ModelReusePolicyTest.kt") and
+      "differentPathMustReload" in load_test("ModelReusePolicyTest.kt") and
+      "samePathWithoutReadyEngineMustReload" in load_test("ModelReusePolicyTest.kt"))
 check("v9.33.160: startup cache warm-up waits for the model load window",
       "while (NovaEngine.isLoading) delay(250)" in _main and
       "WikiCore.warmUp(this@MainActivity)" in _main and
