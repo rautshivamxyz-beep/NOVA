@@ -698,4 +698,4 @@ internal fun stageTarget(staging: File, name: String): File? {
     val base = staging.canonicalFile.path
     val canonical = target.canonicalFile.path
     return if (canonical == base || canonical.startsWith(base + File.separator)) target else null
-
+}
