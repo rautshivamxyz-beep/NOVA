@@ -1,5 +1,6 @@
 package org.nova.ncie.evaluate
 
+import org.nova.ncie.android.NcieDeadlines
 import org.nova.ncie.learn.LearningEvidencePolicy
 import org.nova.ncie.knowledge.KnowledgeStore
 import org.nova.ncie.learn.GapStore
@@ -25,7 +26,7 @@ object RegressionLab {
      * The number now lives here, once: adding a check means bumping this and
      * nothing else, and both tests read it from here.
      */
-    const val EXPECTED_CHECKS = 11
+    const val EXPECTED_CHECKS = 15
 
     fun run(): List<Pair<String, Boolean>> = listOf(
         check("skill parse, trigger and render") {
@@ -95,6 +96,23 @@ object RegressionLab {
             val store = KnowledgeStore()
             store.addDoc("biology", "Photosynthesis converts light energy into chemical energy in plants.")
             store.search("photosynthesis light energy", 2).any { it.doc == "biology" }
+        },
+        // v9.33.157: the deadline radar, on the device, every night.
+        check("deadline radar refuses an impossible date") {
+            NcieDeadlines.dateAt(System.currentTimeMillis(), 31, 2, null) == null
+        },
+        check("deadline radar gates a bare numeric date behind a scheduling word") {
+            val today = System.currentTimeMillis()
+            NcieDeadlines.numericDates(today, "8.5 average score").isEmpty() &&
+                NcieDeadlines.numericDates(today, "assignment due 8/5").isNotEmpty()
+        },
+        check("deadline radar trusts a year-carrying date without a hint") {
+            NcieDeadlines.numericDates(System.currentTimeMillis(), "12/06/2026").isNotEmpty()
+        },
+        check("deadline radar gates 'may' but trusts another month name") {
+            val today = System.currentTimeMillis()
+            NcieDeadlines.monthNameDates(today, "maybe 5 chapters").isEmpty() &&
+                NcieDeadlines.monthNameDates(today, "5 june").isNotEmpty()
         },
     )
 

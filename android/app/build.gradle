@@ -442,8 +442,18 @@ android {
         // v9.33.147: a save that answers false is recorded, not dropped - the dead
         // try/catch left over from v9.33.90 is gone, and the nightly audit says so
         // when its report could not be saved.
-        versionCode 324
-        versionName '9.33.156'
+        // v9.33.157 "The radar audits itself": A2's deadline radar is the
+        //   one offline feature whose answer the user acts on without a
+        //   second opinion - "what's due" is read once and believed. Its
+        //   date parsers are pure Kotlin and already pinned by
+        //   NcieDeadlinesTest, but that suite only runs in CI, so a refactor
+        //   that silently broke the radar would still ship a green build and
+        //   reach the device. The two gated parsers - a bare "d/m" that has
+        //   to earn its place next to a scheduling word, and "may" that has
+        //   to do the same - now run in the nightly on-device audit too, so
+        //   the device itself notices. Four checks, no behaviour change.
+        versionCode 325
+        versionName '9.33.157'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
