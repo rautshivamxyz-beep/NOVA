@@ -7,7 +7,7 @@ import org.junit.Test
 class EvidenceFingerprintTest {
     @Test fun fingerprintsAreStableAcrossWhitespace() {
         val a = EvidenceFingerprint.fromSources(listOf("photosynthesis  converts light"))
-        val b = EvidenceFingerprint.fromSources(listOf("photosynthesis\\nconverts   light"))
+        val b = EvidenceFingerprint.fromSources(listOf("photosynthesis\nconverts   light"))
         assertEquals(a, b)
         assertTrue(EvidenceFingerprint.isValid(a.single()))
     }
