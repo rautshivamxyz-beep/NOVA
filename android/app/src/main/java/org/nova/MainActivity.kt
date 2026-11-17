@@ -291,12 +291,24 @@ class MainActivity : Activity() {
         try { ScheduledSends.fireDue(this, foreground = true) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
 
 
-        // v9.29.5: warm the store whenever the file exists, not only when the
-        // full offline dataset was downloaded - fetched articles live there too.
-        scope.launch(Dispatchers.IO) { WikiCore.warmUp(this@MainActivity) }
-        // v7.6: warm the notes cache too - the first message of every
-        // session otherwise parsed knowledge.json on the main thread
-        scope.launch(Dispatchers.IO) { NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity) }
+        // v9.29.5: warm stores off the main thread. On a cold start, let the
+        // saved model map its weights first so large cache reads do not compete
+        // with model loading for disk bandwidth and memory on low-RAM devices.
+        scope.launch(Dispatchers.IO) {
+            val savedModel = settings.lastModelPath
+            if (savedModel != null && File(savedModel).exists()) {
+                val waitUntil = android.os.SystemClock.elapsedRealtime() + 3_000L
+                while (!NovaEngine.isLoading && !NovaEngine.isModelLoaded &&
+                    android.os.SystemClock.elapsedRealtime() < waitUntil) delay(100)
+                while (NovaEngine.isLoading) delay(250)
+            }
+            WikiCore.warmUp(this@MainActivity)
+            // Warm notes and skills off the main thread so first chat input
+            // never has to parse these stores on the UI thread.
+            NcieKnowledge.warmUp(this@MainActivity)
+            NcieKnowledge.warmUpNotes(this@MainActivity)
+            NcieSkills.ensure(this@MainActivity)
+        }
         installCrashReporter()
         // v9.29.4: auto-check for an update on launch - silent unless one is
         // actually available, and never twice for a version already deferred.
@@ -3881,7 +3893,8 @@ Study:
                     }
                 }
             } catch (e: Exception) {
-                // failed - keep full context, retry next turn
+                // Keep the full context and retry next turn, but retain a diagnostic trail.
+                NovaLog.quiet("MainActivity", e)
             }
             compacting = false
             NcieChat.generating = false
