@@ -3197,7 +3197,8 @@ _evidence = load("ncie/learn/EvidenceFingerprint.kt")
 _lfact = load("ncie/learn/LearnedFact.kt")
 check("v9.33.159: evidence fingerprints are deterministic and bounded",
       "MessageDigest.getInstance(\"SHA-256\")" in _evidence and
-      "MAX_EVIDENCE = 4" in _evidence)
+      "MAX_EVIDENCE = 4" in _evidence and
+      "fun matches(fingerprint: String, sourceText: String)" in _evidence)
 check("v9.33.159: learned facts serialize evidence and retain legacy records",
       "evidenceFingerprints.joinToString(\",\")" in _lfact and
       "f.size != 9 && f.size != 10" in _lfact)
