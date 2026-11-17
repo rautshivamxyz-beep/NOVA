@@ -3,8 +3,8 @@ package org.nova.ncie.learn
 import java.security.MessageDigest
 
 /**
- * Privacy-preserving identifiers for the local note chunks that grounded a
- * durable learned fact. Only hashes are persisted; source text is not copied
+ * Content fingerprints for the local note chunks that grounded a
+ * durable learned fact. Hashes are not encryption; source text is not copied
  * into the memory ledger.
  */
 object EvidenceFingerprint {
@@ -21,6 +21,10 @@ object EvidenceFingerprint {
         }
         return seen.toList()
     }
+
+    /** True when a retained local note chunk still matches this identifier. */
+    fun matches(fingerprint: String, sourceText: String): Boolean =
+        isValid(fingerprint) && fromSources(listOf(sourceText)).firstOrNull() == fingerprint
 
     fun isValid(value: String): Boolean =
         value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
