@@ -274,12 +274,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (answerLyrics(text)) { input.setText(""); return }
         // v9.33.18 "Make me laugh": a joke needs no model and cannot be got
         // wrong - the model used to deflect the request instead.
-        // A terse continuation belongs to the previous deterministic joke only
-        // when the immediately preceding exchange was itself a joke.
-        val priorUserText = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
-        val priorAssistantText = currentChat.messages.lastOrNull { it.role == Role.ASSISTANT }?.text
-        val anotherJoke = FollowUpIntent.isAnotherJoke(text, priorUserText, priorAssistantText)
-        if (answerJoke(text, allowFollowUp = anotherJoke)) { input.setText(""); return }
+        if (answerJoke(text)) { input.setText(""); return }
         // v8.8.0: the notification questions - "what did I miss" and
         // "any messages from X" are answered from NovaListener's local
         // log, deterministically, without the model. Nothing leaves the

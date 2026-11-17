@@ -1173,19 +1173,15 @@ internal val JOKE_Q = Regex(
     "(?i)\\b(?:make me laugh|tell me (?:a |another )?joke|say something funny|" +
         "got any jokes?|joke please|know any jokes?)\\b")
 
-internal fun MainActivity.answerJoke(text: String, allowFollowUp: Boolean = false): Boolean {
-    if (!JOKE_Q.containsMatchIn(text) && !allowFollowUp) return false
+internal fun MainActivity.answerJoke(text: String): Boolean {
+    if (!JOKE_Q.containsMatchIn(text)) return false
     val act = this
-    val previousJoke = currentChat.messages.lastOrNull { it.role == Role.ASSISTANT }?.text
     val um = Msg(Role.USER, text)
     currentChat.messages.add(um)
     adapter.add(um)
-    val reply = Msg(Role.ASSISTANT, Jokes.next(previousJoke))
+    val reply = Msg(Role.ASSISTANT, Jokes.at(System.currentTimeMillis().toInt()))
     currentChat.messages.add(reply)
     adapter.add(reply)
-    // This reply was generated outside the model's KV cache. Carry the visible
-    // exchange into the next model turn so follow-ups stay grounded.
-    needsContextCarry = true
     scrollToEnd()
     scope.launch(Dispatchers.IO) {
         ChatStore.save(act, currentChat)
