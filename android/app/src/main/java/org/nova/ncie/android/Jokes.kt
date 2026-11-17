@@ -25,5 +25,15 @@ internal object Jokes {
     /** The joke at [seed] (any int, wrapped). Deterministic and testable. */
     fun at(seed: Int): String = ALL[Math.floorMod(seed, ALL.size)]
 
+    /** Whether [text] is one of our exact deterministic answers. */
+    fun contains(text: String?): Boolean = text != null && ALL.contains(text)
+
+    /** Advance after [previous], guaranteeing a different joke on a follow-up. */
+    fun next(previous: String?): String {
+        val index = if (previous == null) -1 else ALL.indexOf(previous)
+        return if (index >= 0) ALL[(index + 1) % ALL.size]
+               else at(System.currentTimeMillis().toInt())
+    }
+
     fun count(): Int = ALL.size
 }
