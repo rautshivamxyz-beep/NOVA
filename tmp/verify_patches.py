@@ -3311,6 +3311,32 @@ check("v9.33.161: the chat follow-up and redirect rules are unit-tested",
 check("v9.33.161: version is at least 9.33.161 (329)",
       version_at_least("9.33.161", 329))
 
+# ---- v9.33.162 "Invalidate before boot; keep redirects public" ----
+_learn162 = load("ncie/android/NcieLearn.kt")
+_know162 = load("ncie/android/NcieKnowledge.kt")
+_redirect162 = load("HttpsRedirect.kt")
+check("v9.33.162: learned-cache invalidation resolves the file before lazy boot",
+      "fun invalidate(ctx: Context? = null)" in _learn162 and
+      "learningFileForInvalidation(learnFile, filesDir)" in _learn162 and
+      _learn162.index("val f = learningFileForInvalidation") < _learn162.index("val active = learner"))
+check("v9.33.162: knowledge add/remove pass their files directory to invalidation",
+      _know162.count("NcieLearn.invalidate(c)") == 2 and
+      "NcieLearn.invalidate()" not in _know162)
+check("v9.33.162: HTTPS redirects reject local, private and non-canonical numeric targets",
+      "isUnsafeDestination(host!!)" in _redirect162 and
+      "private fun unsafeIpv4" in _redirect162 and
+      "host.endsWith(\".local\")" in _redirect162 and
+      "address.isLoopbackAddress" in _redirect162)
+check("v9.33.162: lazy invalidation and redirect security are unit-tested",
+      "findsThePersistentFileWhenLazyBootHasNotStarted" in
+          load_test("android/LearningInvalidationTest.kt") and
+      "refusesLoopbackAndPrivateIpv4Redirects" in
+          load_test("HttpsRedirectTest.kt") and
+      "refusesLoopbackAndUniqueLocalIpv6Redirects" in
+          load_test("HttpsRedirectTest.kt"))
+check("v9.33.162: version is at least 9.33.162 (330)",
+      version_at_least("9.33.162", 330))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
