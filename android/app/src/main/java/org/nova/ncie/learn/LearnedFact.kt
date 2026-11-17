@@ -21,7 +21,10 @@ import java.util.Locale
  *
  *     question \t answer \t topicTokens (comma-joined) \t source \t
  *     learnedAtMillis \t lastConfirmedMillis \t score \t interactions \t
- *     provenance
+ *     provenance \t evidenceFingerprints (comma-joined SHA-256 hashes)
+ *
+ * Nine-field records from earlier releases remain readable; new records
+ * append a tenth field and use a dash when no evidence was attached.
  *
  * [parse] never throws: any malformed line returns null and is simply
  * skipped — a corrupted memory file is a performance loss, not a crash.
