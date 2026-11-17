@@ -79,6 +79,16 @@ class DistillerTest {
     }
 
     @Test
+    fun promotionKeepsEvidenceFingerprintsInTheKnowledgeDocument() {
+        val fingerprint = "a".repeat(64)
+        val grad = fact(0.8, 2).copy(question = "capital of france", evidenceFingerprints = listOf(fingerprint))
+        val learner = FakeLearner(listOf(grad))
+        val store = KnowledgeStore()
+        Distiller(learner, store).distill()
+        assertTrue(store.search("capital of france", 1).first().text.contains(fingerprint))
+    }
+
+    @Test
     fun aDistillPassPromotesForgetsAndSkips() {
         val grad = fact(0.8, 2).copy(question = "capital of france")
         val prob = fact(0.4, 1).copy(question = "an unproven guess")
