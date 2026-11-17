@@ -22,7 +22,7 @@ class LearnedFactTest {
         val f = LearnedFact.fromChat("explain photosynthesis", "Photosynthesis converts light energy into chemical energy in plants.", 0.9, listOf(source))
         val back = LearnedFact.parse(f.serialize())
         assertEquals(f.evidenceFingerprints, back?.evidenceFingerprints)
-        val legacy = "who wrote hamlet\\tShakespeare\\tshakespeare\\tCHAT\\t1\\t1\\t0.9\\t1\\tlearned from chat, quality 0.90"
+        val legacy = "who wrote hamlet\tShakespeare\tshakespeare\tCHAT\t1\t1\t0.9\t1\tlearned from chat, quality 0.90"
         assertEquals(emptyList<String>(), LearnedFact.parse(legacy)?.evidenceFingerprints)
     }
 
