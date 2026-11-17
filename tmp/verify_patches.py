@@ -140,7 +140,8 @@ nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
       nl.count("fun invalidate()") == 1)
 check("v0.8.1: records join the learner's own thread",
-      nl.count("io.execute { l.record(userText, response) }") == 1)
+      nl.count("submitMemory(act, PendingMemory(question = userText, response = response, fact = fact))") == 1 and
+      nl.count("target.record(item.question, it)") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
       nk.count("NcieLearn.invalidate()") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
@@ -667,8 +668,8 @@ check("v9.33.19: the tokenizer has unit tests",
 
 # ---- v9.33.18: a joke needs no model; silent degradations shown; a11y labels ----
 check("v9.33.18: a joke request is answered deterministically",
-      nc.count("answerJoke(text)") == 1 and
-      open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun at(") == 1)
+      nc.count("answerJoke(text, allowFollowUp = anotherJoke)") == 1 and
+      open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun next(previous: String?)") == 1)
 check("v9.33.18: the health report shows the silent degradations",
       load("NovaHealth.kt").count("fun capabilities(") == 1 and
       load("NovaHealth.kt").count("capabilities(ctx)") >= 1)
@@ -1916,8 +1917,11 @@ check("v9.33.99: the body moved under the lock, not copied",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1 and
       _nf.count("f.name + \".tmp\"") == 1)
-check("v9.33.99: the save is still the one atomic save (tmp then rename)",
-      _nf.count("tmp.writeText(text)") == 1 and _nf.count("tmp.renameTo(f)") == 2)
+check("v9.33.99: the save is still the one atomic save (synced temp then atomic replace)",
+      _nf.count("f.name + \".tmp\"") == 1 and
+      "StandardCopyOption.ATOMIC_MOVE" in _nf and
+      "out.fd.sync()" in _nf and
+      _nf.count("tmp.renameTo(f)") == 1)
 check("v9.33.99: the concurrency rule is pinned by a unit test",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
            encoding="utf-8").read().count("@Test") >= 8)
@@ -2008,8 +2012,10 @@ for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
             _bare.append(os.path.relpath(_p, os.path.join(ROOT, BASE)))
 check("v9.33.103: no bare writeText anywhere outside the one atomic save",
       not _bare)
-check("v9.33.103: the one atomic save still writes its own temp",
-      _nf.count("tmp.writeText(text)") == 1)
+check("v9.33.103: the one atomic save still writes and syncs its own temp",
+      _nf.count("FileOutputStream(tmp)") == 1 and
+      _nf.count("out.write(text.toByteArray(Charsets.UTF_8))") == 1 and
+      _nf.count("out.fd.sync()") == 1)
 check("v9.33.103: a PIN that did not reach the disk is not reported as set",
       ma.count("if (org.nova.ncie.android.NcieFiles.write(pinFile(), pinHash(p) + \"\\n\")) {") == 1 and
       ma.count('else toast("Could not save the PIN")') == 1)
