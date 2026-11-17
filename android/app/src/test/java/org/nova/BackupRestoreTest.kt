@@ -64,10 +64,21 @@ class BackupRestoreTest {
     }
 
     @Test
-    fun `an absolute-looking entry is read as relative and stays inside`() {
-        val t = stageTarget(staging, "/etc/passwd")
-        assertTrue(t != null)
-        assertTrue(t!!.canonicalPath.startsWith(staging.canonicalPath + File.separator))
+    fun `absolute paths are refused`() {
+        assertNull(stageTarget(staging, "/etc/passwd"))
+        assertNull(stageTarget(staging, "C:\\Windows\\system.ini"))
+    }
+
+    @Test
+    fun `dot segments and empty path segments are refused`() {
+        assertNull(stageTarget(staging, "notes/./file.txt"))
+        assertNull(stageTarget(staging, "notes//file.txt"))
+        assertNull(stageTarget(staging, "notes/../private.txt"))
+    }
+
+    @Test
+    fun `backslash traversal is refused`() {
+        assertNull(stageTarget(staging, "shared_prefs\\..\\..\\outside.xml"))
     }
 
     @Test

@@ -45,6 +45,17 @@ class NcieFilesTest {
     }
 
     @Test
+    fun aFailedReplacementPreservesThePreviousFile() {
+        val dir = tempDir()
+        val f = File(dir, "state.txt")
+        assertTrue(NcieFiles.write(f, "last known good"))
+        // Force the temporary-file open to fail without touching the target.
+        assertTrue(File(dir, "state.txt.tmp").mkdirs())
+        assertFalse(NcieFiles.write(f, "replacement"))
+        assertEquals("last known good", f.readText())
+    }
+
+    @Test
     fun writeLeavesNoTemporaryFileBehind() {
         val dir = tempDir()
         val f = File(dir, "state.txt")

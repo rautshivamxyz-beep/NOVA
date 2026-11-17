@@ -489,8 +489,10 @@ android {
         //   applier workflow is removed.
         // v9.33.160: reuse resident model weights, defer startup cache warm-up,
         // and record failed chat compaction without discarding conversation context.
-        versionCode 328
-        versionName '9.33.160'
+        // v9.33.161: conversation continuity, bounded HTTPS redirects, and
+        //   safer state/backup handling; model and inference tuning unchanged.
+        versionCode 329
+        versionName '9.33.161'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

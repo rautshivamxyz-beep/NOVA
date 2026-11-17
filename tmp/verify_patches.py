@@ -140,7 +140,8 @@ nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
       nl.count("fun invalidate()") == 1)
 check("v0.8.1: records join the learner's own thread",
-      nl.count("io.execute { l.record(userText, response) }") == 1)
+      nl.count("submitMemory(act, PendingMemory(question = userText, response = response, fact = fact))") == 1 and
+      nl.count("target.record(item.question, it)") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
       nk.count("NcieLearn.invalidate()") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
@@ -667,8 +668,8 @@ check("v9.33.19: the tokenizer has unit tests",
 
 # ---- v9.33.18: a joke needs no model; silent degradations shown; a11y labels ----
 check("v9.33.18: a joke request is answered deterministically",
-      nc.count("answerJoke(text)") == 1 and
-      open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun at(") == 1)
+      nc.count("answerJoke(text, allowFollowUp = anotherJoke)") == 1 and
+      open(os.path.join(ROOT, BASE + "ncie/android/Jokes.kt")).read().count("fun next(previous: String?)") == 1)
 check("v9.33.18: the health report shows the silent degradations",
       load("NovaHealth.kt").count("fun capabilities(") == 1 and
       load("NovaHealth.kt").count("capabilities(ctx)") >= 1)
@@ -1675,10 +1676,12 @@ check("v9.33.89: version is at least 9.33.89 (257)",
 _nf = load("ncie/android/NcieFiles.kt")
 check("v9.33.90: the atomic save exists and is the only definition",
       _nf.count("object NcieFiles") == 1 and _nf.count("fun write(f: File, text: String): Boolean") == 1)
-check("v9.33.90: it writes a .tmp and renames it over the target",
-      # v9.33.99: counted on the code, not on every mention - the lock comment
-      # names the .tmp too
-      _nf.count('f.name + ".tmp"') == 1 and _nf.count("renameTo(f)") == 2)
+check("v9.33.90: it writes and atomically replaces a synced temp file",
+      _nf.count('f.name + ".tmp"') == 1 and
+      "StandardCopyOption.ATOMIC_MOVE" in _nf and
+      "out.fd.sync()" in _nf and
+      _nf.count("backup.renameTo(f)") == 2 and
+      _nf.count("tmp.renameTo(f)") == 1)
 # v9.33.147: writeOrNote is a wrapper over the same atomic write, so a state
 # file that saves through either entry point still saves through NcieFiles.
 check("v9.33.90: the state files go through it",
@@ -1914,8 +1917,11 @@ check("v9.33.99: the body moved under the lock, not copied",
       _nf.count("fun write(f: File, text: String): Boolean") == 1 and
       _nf.count("private fun writeNow(f: File, text: String): Boolean") == 1 and
       _nf.count("f.name + \".tmp\"") == 1)
-check("v9.33.99: the save is still the one atomic save (tmp then rename)",
-      _nf.count("tmp.writeText(text)") == 1 and _nf.count("tmp.renameTo(f)") == 2)
+check("v9.33.99: the save is still the one atomic save (synced temp then atomic replace)",
+      _nf.count("f.name + \".tmp\"") == 1 and
+      "StandardCopyOption.ATOMIC_MOVE" in _nf and
+      "out.fd.sync()" in _nf and
+      _nf.count("tmp.renameTo(f)") == 1)
 check("v9.33.99: the concurrency rule is pinned by a unit test",
       open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/NcieFilesTest.kt"),
            encoding="utf-8").read().count("@Test") >= 8)
@@ -2006,8 +2012,10 @@ for _dir, _, _names in os.walk(os.path.join(ROOT, BASE)):
             _bare.append(os.path.relpath(_p, os.path.join(ROOT, BASE)))
 check("v9.33.103: no bare writeText anywhere outside the one atomic save",
       not _bare)
-check("v9.33.103: the one atomic save still writes its own temp",
-      _nf.count("tmp.writeText(text)") == 1)
+check("v9.33.103: the one atomic save still writes and syncs its own temp",
+      _nf.count("FileOutputStream(tmp)") == 1 and
+      _nf.index("out.write(text.toByteArray(Charsets.UTF_8))") < _nf.index("fun appendFast") and
+      _nf.count("out.fd.sync()") == 1)
 check("v9.33.103: a PIN that did not reach the disk is not reported as set",
       ma.count("if (org.nova.ncie.android.NcieFiles.write(pinFile(), pinHash(p) + \"\\n\")) {") == 1 and
       ma.count('else toast("Could not save the PIN")') == 1)
@@ -3252,6 +3260,56 @@ check("v9.33.160: failed chat compaction is retained in diagnostics",
       "Keep the full context and retry next turn" in _main)
 check("v9.33.160: version is at least 9.33.160 (328)",
       version_at_least("9.33.160", 328))
+
+# ---- v9.33.161 "Conversation continuity and safe state" ----
+_follow = load("ncie/android/FollowUpIntent.kt")
+_jokes = load("ncie/android/Jokes.kt")
+_chat_ext = load("ncie/android/NcieChatExt.kt")
+_learn161 = load("ncie/android/NcieLearn.kt")
+_net161 = load("NovaNet.kt")
+_osint161 = load("OsintEngine.kt")
+_remote161 = load("ncie/RemoteHost.kt")
+_backup161 = open(os.path.join(ROOT, BASE + "BackupActivity.kt"), encoding="utf-8").read()
+check("v9.33.161: short joke follow-ups require a matching previous joke exchange",
+      "FollowUpIntent.isAnotherJoke" in nc and
+      "Jokes.contains(previousAssistant)" in _follow and
+      "Jokes.next(previousJoke)" in _chat_ext and
+      "needsContextCarry = true" in _chat_ext)
+check("v9.33.161: learner boot drains a bounded pending memory queue",
+      "MAX_PENDING_MEMORY = 128" in _learn161 and
+      "while (pending.isNotEmpty()) applyPending" in _learn161 and
+      "submitMemory(act, PendingMemory" in _learn161)
+check("v9.33.161: automatic online lookup is opt-in by default",
+      "getBoolean(KEY_AUTO_ONLINE, false)" in load("Settings.kt") and
+      "settings.autoOnline" in sa)
+check("v9.33.161: online fetches validate a bounded HTTPS redirect chain",
+      "instanceFollowRedirects = false" in _net161 and
+      "HttpsRedirect.resolve" in _net161 and
+      "redirects > 5" in _net161)
+check("v9.33.161: OSINT DNS uses proxied DNS-over-HTTPS",
+      "cloudflare-dns.com/dns-query" in _osint161 and
+      "application/dns-json" in _osint161 and
+      "InetAddress.getAllByName(host)" not in _osint161)
+check("v9.33.161: private-only HTTP mode trusts literal private IPs, not hostnames",
+      'if (h == "localhost") return true' in _remote161 and
+      'if (!h.contains(\'.\')) return false' in _remote161 and
+      'h.endsWith(".local")' not in _remote161)
+check("v9.33.161: backup extraction has entry and byte ceilings plus rollback",
+      "MAX_RESTORE_ENTRIES = 10_000" in _backup161 and
+      "MAX_RESTORE_FILE_BYTES" in _backup161 and
+      "MAX_RESTORE_TOTAL_BYTES" in _backup161 and
+      "snapshotReady" in _backup161 and
+      "clearMutableTree(filesDir, true)" in _backup161)
+check("v9.33.161: backup paths reject absolute paths and dot segments",
+      'normalized.startsWith("/")' in _backup161 and
+      'it == "." || it == ".."' in _backup161)
+check("v9.33.161: the chat follow-up and redirect rules are unit-tested",
+      "oneMoreAfterAJokeIsRoutedAsAnotherJoke" in
+          open(os.path.join(ROOT, "android/app/src/test/java/org/nova/ncie/android/FollowUpIntentTest.kt"), encoding="utf-8").read() and
+      "refusesHttpsDowngrade" in
+          open(os.path.join(ROOT, "android/app/src/test/java/org/nova/HttpsRedirectTest.kt"), encoding="utf-8").read())
+check("v9.33.161: version is at least 9.33.161 (329)",
+      version_at_least("9.33.161", 329))
 
 print("")
 if fails:

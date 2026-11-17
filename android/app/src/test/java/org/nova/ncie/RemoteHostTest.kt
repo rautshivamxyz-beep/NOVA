@@ -25,7 +25,9 @@ class RemoteHostTest {
         assertTrue(!RemoteHost.isInsecurePublic("http://10.0.0.9:8080"))
         assertTrue(!RemoteHost.isInsecurePublic("http://172.16.4.4:8080"))
         assertTrue(!RemoteHost.isInsecurePublic("http://localhost:8080"))
-        assertTrue(!RemoteHost.isInsecurePublic("http://my-laptop:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://my-laptop:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://nas:8080"))
+        assertTrue(RemoteHost.isInsecurePublic("http://printer.local:8080"))
     }
 
     @Test
@@ -62,6 +64,9 @@ class RemoteHostTest {
         assertFalse(RemoteHost.isPrivate("172.32.0.1"))
         assertFalse(RemoteHost.isPrivate("8.8.8.8"))
         assertFalse(RemoteHost.isPrivate("not a host"))
+        assertFalse(RemoteHost.isPrivate("nas"))
+        assertFalse(RemoteHost.isPrivate("printer.local"))
+        assertFalse(RemoteHost.isPrivate("host.internal"))
     }
 
     @Test

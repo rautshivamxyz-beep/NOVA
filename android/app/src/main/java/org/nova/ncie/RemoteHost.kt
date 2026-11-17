@@ -37,13 +37,13 @@ object RemoteHost {
 
     /**
      * Recognise RFC1918 IPv4, loopback, link-local, Tailscale CGNAT, and IPv6
-     * loopback/ULA/link-local. Hostnames are allowed only for local naming
-     * conventions; arbitrary dotted hostnames are not presumed private.
+     * loopback/ULA/link-local. Only localhost is accepted as a hostname;
+     * every other private endpoint must be an explicit literal IP address.
      */
     fun isPrivate(host: String): Boolean {
         val h = host.lowercase().trim()
         if (h.isEmpty()) return false
-        if (h == "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true
+        if (h == "localhost") return true
 
         if (h.contains(':')) {
             val address = try { InetAddress.getByName(h) } catch (_: Exception) { return false }
@@ -56,11 +56,10 @@ object RemoteHost {
                 (first == 0xfe && (second and 0xc0) == 0x80)
         }
 
-        if (!h.contains('.')) {
-            return h.all { it.isLetterOrDigit() || it == '-' } &&
-                h.firstOrNull()?.isLetterOrDigit() == true &&
-                h.lastOrNull()?.isLetterOrDigit() == true
-        }
+        // Names such as "nas", "*.local" and "*.internal" may resolve via
+        // search suffixes or a configured resolver. Private-only mode accepts
+        // literal private addresses and localhost, never assumed-private names.
+        if (!h.contains('.')) return false
         val parts = h.split('.')
         if (parts.size != 4) return false
         val n = parts.map { it.toIntOrNull() ?: return false }

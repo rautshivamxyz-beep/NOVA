@@ -212,9 +212,29 @@ object OsintEngine {
         if (config.dns) {
             if (past(deadline)) { skipped(notes); return }
             try {
-                val addresses = InetAddress.getAllByName(host).map { it.hostAddress }.distinct()
-                out.add(OsintFinding("DNS address records", addresses.joinToString("\n"), "Android system DNS resolver", "Resolver response"))
-            } catch (e: Exception) { notes.add("DNS lookup failed: ${shortError(e)}") }
+                // Route A/AAAA lookups through NovaNet. With SOCKS enabled,
+                // the target hostname is sent through the configured proxy.
+                val addresses = mutableListOf<String>()
+                for (type in listOf("A", "AAAA")) {
+                    if (past(deadline)) break
+                    val doh = "https://cloudflare-dns.com/dns-query?name=" +
+                        URLEncoder.encode(host, "UTF-8") + "&type=" + type
+                    val (status, body) = request(ctx, doh, "application/dns-json")
+                    if (status != 200) continue
+                    val answers = JSONObject(body).optJSONArray("Answer") ?: JSONArray()
+                    for (i in 0 until answers.length()) {
+                        val row = answers.optJSONObject(i) ?: continue
+                        if (row.optInt("type") == (if (type == "A") 1 else 28)) {
+                            val data = row.optString("data")
+                            if (data.isNotBlank()) addresses.add(data)
+                        }
+                    }
+                }
+                if (addresses.isNotEmpty()) {
+                    out.add(OsintFinding("DNS address records", addresses.distinct().joinToString("\n"),
+                        "Cloudflare DNS-over-HTTPS via NOVA network settings", "Resolver response"))
+                } else notes.add("DNS-over-HTTPS returned no A/AAAA records.")
+            } catch (e: Exception) { notes.add("DNS-over-HTTPS lookup failed: " + shortError(e)) }
         }
 
         if (config.rdap) {
@@ -368,25 +388,39 @@ object OsintEngine {
         }
     }
 
-    private fun request(ctx: Context, url: String): Pair<Int, String> {
-        require(url.startsWith("https://", true)) { "HTTPS only." }
-        val conn = NovaNet.open(ctx, url, connectMs = 7000, readMs = 9000)
-        try {
-            val code = conn.responseCode
-            if (!conn.url.protocol.equals("https", true)) throw java.io.IOException("Refused HTTPS downgrade.")
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = stream?.bufferedReader()?.use { reader ->
-                val chars = CharArray(8192)
-                val result = StringBuilder()
-                while (result.length < MAX_RESPONSE) {
-                    val n = reader.read(chars)
-                    if (n < 0) break
-                    result.append(chars, 0, minOf(n, MAX_RESPONSE - result.length))
+    private fun request(ctx: Context, url: String, accept: String? = null): Pair<Int, String> {
+        var current = url
+        var redirects = 0
+        val visited = HashSet<String>()
+        while (true) {
+            require(current.startsWith("https://", true)) { "HTTPS only." }
+            if (!visited.add(current)) throw java.io.IOException("Redirect loop.")
+            val conn = NovaNet.open(ctx, current, connectMs = 7000, readMs = 9000)
+            try {
+                if (!accept.isNullOrBlank()) conn.setRequestProperty("Accept", accept)
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                        ?: throw java.io.IOException("Redirect without Location.")
+                    if (++redirects > 5) throw java.io.IOException("Too many redirects.")
+                    current = try { HttpsRedirect.resolve(current, location) }
+                        catch (e: Exception) { throw java.io.IOException(e.message ?: "Unsafe redirect.", e) }
+                    continue
                 }
-                result.toString()
-            }.orEmpty()
-            return code to body
-        } finally { conn.disconnect() }
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { reader ->
+                    val chars = CharArray(8192)
+                    val result = StringBuilder()
+                    while (result.length < MAX_RESPONSE) {
+                        val n = reader.read(chars)
+                        if (n < 0) break
+                        result.append(chars, 0, minOf(n, MAX_RESPONSE - result.length))
+                    }
+                    result.toString()
+                }.orEmpty()
+                return code to body
+            } finally { conn.disconnect() }
+        }
     }
 
     private fun shortError(e: Exception): String =

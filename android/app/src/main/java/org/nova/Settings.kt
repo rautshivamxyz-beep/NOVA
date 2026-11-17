@@ -119,7 +119,7 @@ class Settings(context: Context) {
      *  facts. Turning this off restores the ask-first dialog.
      */
     var autoOnline: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_ONLINE, true)
+        get() = prefs.getBoolean(KEY_AUTO_ONLINE, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_ONLINE, value).apply()
 
     /** v5.5.0: strict mode - refuse instead of inventing when the
