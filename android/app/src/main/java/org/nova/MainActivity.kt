@@ -305,9 +305,7 @@ class MainActivity : Activity() {
             WikiCore.warmUp(this@MainActivity)
             // Warm notes and skills off the main thread so first chat input
             // never has to parse these stores on the UI thread.
-            NcieKnowledge.warmUp(this@MainActivity)
-            NcieKnowledge.warmUpNotes(this@MainActivity)
-            NcieSkills.ensure(this@MainActivity)
+            NcieKnowledge.warmUp(this@MainActivity); NcieKnowledge.warmUpNotes(this@MainActivity); NcieSkills.ensure(this@MainActivity)
         }
         installCrashReporter()
         // v9.29.4: auto-check for an update on launch - silent unless one is
