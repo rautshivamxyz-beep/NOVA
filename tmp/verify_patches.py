@@ -1341,14 +1341,14 @@ def structural(f, text):
         elif c == '"':
             i += 1
             while i < n and text[i] != '"':
-                if text[i] == "\\":
+                if text[i] == "\":
                     i += 1
                 i += 1
             i += 1
         elif c == "'":
             i += 1
             while i < n and text[i] != "'":
-                if text[i] == "\\":
+                if text[i] == "\":
                     i += 1
                 i += 1
             i += 1
@@ -3196,10 +3196,10 @@ check("v9.33.156: no test pins the regression suite to a literal size",
 _evidence = load("ncie/learn/EvidenceFingerprint.kt")
 _lfact = load("ncie/learn/LearnedFact.kt")
 check("v9.33.159: evidence fingerprints are deterministic and bounded",
-      "MessageDigest.getInstance(\\"SHA-256\\")" in _evidence and
+      "MessageDigest.getInstance(\"SHA-256\")" in _evidence and
       "MAX_EVIDENCE = 4" in _evidence)
 check("v9.33.159: learned facts serialize evidence and retain legacy records",
-      "evidenceFingerprints.joinToString(\\",\\")" in _lfact and
+      "evidenceFingerprints.joinToString(\",\")" in _lfact and
       "f.size != 9 && f.size != 10" in _lfact)
 check("v9.33.159: chat learning attaches its grounding-note fingerprints",
       "LearnedFact.fromChat(userText, clean, verdict.qualityScore, sources)" in
