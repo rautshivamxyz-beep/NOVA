@@ -487,8 +487,10 @@ android {
         // v9.33.158 "The record says why": no behaviour change. The nine
         //   releases above are documented here, and the v9.33.157 one-shot
         //   applier workflow is removed.
-        versionCode 327
-        versionName '9.33.159'
+        // v9.33.160: reuse resident model weights, defer startup cache warm-up,
+        // and record failed chat compaction without discarding conversation context.
+        versionCode 328
+        versionName '9.33.160'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

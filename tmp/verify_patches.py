@@ -3221,6 +3221,38 @@ check("v9.33.159: evidence provenance is pinned by unit tests",
 check("v9.33.159: version is at least 9.33.159 (327)",
       version_at_least("9.33.159", 327))
 
+# ---- v9.33.160 "Keep resident weights resident" ----
+# Re-selecting the same ready model must not clean up or reload its weights.
+# Startup cache reads wait until the initial model-load window has settled.
+# Compaction remains fail-soft, but failures are recorded for diagnostics.
+_policy = load("ncie/ModelReusePolicy.kt")
+_engine = load("NovaEngine.kt")
+_main = load("MainActivity.kt")
+check("v9.33.160: model reuse requires the same nonblank path and a ready engine",
+      "activePath == requestedPath" in _policy and
+      "!activePath.isNullOrBlank()" in _policy and
+      "modelReady" in _policy)
+check("v9.33.160: same ready model bypasses engine cleanup and weight reload",
+      "ModelReusePolicy.canReuse" in _engine and
+      "if (!reuseLoadedModel)" in _engine and
+      "engine.loadModel(path)" in _engine)
+check("v9.33.160: model reuse preserves speculative-decoding setting changes",
+      "activeSpecDecoding != specDecoding" in _engine and
+      "engine.unloadDraftModel()" in _engine)
+check("v9.33.160: model reuse policy has JVM regression tests",
+      "samePathAndReadyModelCanBeReused" in load_test("ModelReusePolicyTest.kt") and
+      "differentPathMustReload" in load_test("ModelReusePolicyTest.kt") and
+      "samePathWithoutReadyEngineMustReload" in load_test("ModelReusePolicyTest.kt"))
+check("v9.33.160: startup cache warm-up waits for the model load window",
+      "while (NovaEngine.isLoading) delay(250)" in _main and
+      "WikiCore.warmUp(this@MainActivity)" in _main and
+      "NcieKnowledge.warmUpNotes(this@MainActivity)" in _main)
+check("v9.33.160: failed chat compaction is retained in diagnostics",
+      'NovaLog.quiet("MainActivity", e)' in _main and
+      "Keep the full context and retry next turn" in _main)
+check("v9.33.160: version is at least 9.33.160 (328)",
+      version_at_least("9.33.160", 328))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

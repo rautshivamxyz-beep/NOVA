@@ -127,6 +127,9 @@ object NovaEngine {
     }
 
     @Volatile
+    private var activeSpecDecoding: Boolean? = null
+
+    @Volatile
     private var loading = false
 
     /** True while a model load/reload is in progress. */
@@ -168,8 +171,17 @@ object NovaEngine {
 
     suspend fun load(context: Context, path: String, label: String, systemPrompt: String) {
         val engine = get(context)
-        ensureReady(engine)
-        engine.loadModel(path)
+        // Re-selecting the resident model must not tear down and reload its weights.
+        // setSystemPrompt below still applies the current prompt and resets chat context.
+        val reuseLoadedModel = org.nova.ncie.ModelReusePolicy.canReuse(
+            activeModelPath,
+            path,
+            engine.state.value is InferenceEngine.State.ModelReady
+        )
+        if (!reuseLoadedModel) {
+            ensureReady(engine)
+            engine.loadModel(path)
+        }
         // v9.33.79: read the model's own card, off the main thread. This is a
         // header walk (never the weights) and it is cached per load, so the
         // cost is a few milliseconds once per model - not per turn.
@@ -207,15 +219,24 @@ object NovaEngine {
         // targets (the draft must share the vocabulary). The binding
         // swallows failures, so speculation just stays off if anything
         // is missing.
-        try {
-            if (Settings(context.applicationContext).specDecoding) {
-                findDraftModel(context.applicationContext)?.let {
-                    engine.loadDraftModel(it.absolutePath)
+        val specDecoding = Settings(context.applicationContext).specDecoding
+        // Keep an unchanged draft model resident too. A changed setting is still
+        // applied on a same-target reload without reloading the target weights.
+        if (!reuseLoadedModel || activeSpecDecoding != specDecoding) {
+            try {
+                if (specDecoding) {
+                    val draft = findDraftModel(context.applicationContext)
+                    if (draft != null) engine.loadDraftModel(draft.absolutePath)
+                    else engine.unloadDraftModel()
+                } else {
+                    engine.unloadDraftModel()
                 }
-            } else {
-                engine.unloadDraftModel()
+                activeSpecDecoding = specDecoding
+            } catch (e: Exception) {
+                activeSpecDecoding = null
+                NovaLog.quiet("NovaEngine", e)
             }
-        } catch (e: Exception) { NovaLog.quiet("NovaEngine", e) }
+        }
     }
 
     /**
