@@ -69,6 +69,42 @@ object NcieLearn {
      *  operations can force an immediate flush. */
     @Volatile private var disk: DebouncedDisk? = null
 
+    // The first successful answer can finish before the lazy learner has
+    // loaded its disk snapshot. Keep a small FIFO so the turn is not lost.
+    // All queued work is drained on the learner's single IO executor.
+    private data class PendingMemory(
+        val question: String,
+        val response: NovaResponse? = null,
+        val fact: LearnedFact? = null,
+        val failure: Boolean = false
+    )
+    private val pendingLock = Any()
+    private val pending = java.util.ArrayDeque<PendingMemory>()
+    private const val MAX_PENDING_MEMORY = 128
+
+    private fun applyPending(target: PersistentLearner, item: PendingMemory) {
+        if (item.failure) target.noteFailure(item.question)
+        item.response?.let { target.record(item.question, it) }
+        item.fact?.let { target.record(it) }
+    }
+
+    private fun submitMemory(ctx: Context, item: PendingMemory) {
+        // Starts lazy boot without blocking the caller.
+        learner(ctx)
+        synchronized(pendingLock) {
+            val ready = learner
+            if (ready != null) {
+                io.execute { applyPending(ready, item) }
+            } else {
+                if (pending.size >= MAX_PENDING_MEMORY) {
+                    pending.removeFirst()
+                    NovaLog.note("NcieLearn", "pending memory queue full; oldest pending item dropped")
+                }
+                pending.addLast(item)
+            }
+        }
+    }
+
     /** The quality gate: the Verifier interface's ground-truth-free
      *  quality() defaults are the gate here — no right answer needed. */
     private val quality = object : Verifier {
@@ -127,11 +163,10 @@ object NcieLearn {
             // its topic's failure count grows (the Struggle Rule spends a
             // bigger budget there next time), and a turn with nothing
             // behind it (no sources, no skill) is a capability gap.
-            learner(act)?.let { l -> io.execute { l.noteFailure(userText) } }
+            submitMemory(act, PendingMemory(question = userText, failure = true))
             if (sources.isEmpty() && act.lastSkillMatched == null) noteGap(act, userText)
             return
         }
-        val l = learner(act) ?: return
         val response = NovaResponse(
             answer = clean,
             plan = Plan(Route.LLM, null, 0, 0, "app chat turn"),
@@ -141,16 +176,12 @@ object NcieLearn {
             llmUsed = true,
             trace = emptyList(),
         )
-        // v0.8.1: records join the learner's own thread, so an
-        // invalidate() can never interleave with a persist.
-        io.execute { l.record(userText, response) }
-        // Long-term facts need actual grounding evidence. quality() deliberately
-        // allows ordinary source-free replies through for the chat cache, but
-        // its default 0.6 score is not a factuality check. Do not let repeated
-        // unverified guesses graduate into the permanent KnowledgeStore.
-        if (LearningEvidencePolicy.mayPersistFact(sources, verdict)) {
-            io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore, sources)) }
-        }
+        // Source-free chat can be cached as a response, but only evidence-backed
+        // answers graduate into durable factual memory.
+        val fact = if (LearningEvidencePolicy.mayPersistFact(sources, verdict))
+            LearnedFact.fromChat(userText, clean, verdict.qualityScore, sources)
+        else null
+        submitMemory(act, PendingMemory(question = userText, response = response, fact = fact))
     }
 
     /** Lazy background boot: captures filesDir on the caller's thread, then
@@ -166,13 +197,21 @@ object NcieLearn {
                     val file = File(dir, "ncie_learn.txt")
                     learnFile = file
                     io.execute {
-                        val d = storeFor(file)
-                        disk = d
-                        val l = PersistentLearner(d)
-                        learner = l
-                        // v8.2.0 (#10 rules): the live learner upgrades the
-                        // planner — the Mastery Rule applies from here on
-                        NcieKnowledge.adoptAdaptivePlanner(l)
+                        try {
+                            val d = storeFor(file)
+                            disk = d
+                            val l = PersistentLearner(d)
+                            // v8.2.0 (#10 rules): the live learner upgrades the
+                            // planner — the Mastery Rule applies from here on.
+                            NcieKnowledge.adoptAdaptivePlanner(l)
+                            synchronized(pendingLock) {
+                                learner = l
+                                while (pending.isNotEmpty()) applyPending(l, pending.removeFirst())
+                            }
+                        } catch (e: Exception) {
+                            NovaLog.quiet("NcieLearn", e)
+                            synchronized(this) { bootStarted = false }
+                        }
                     }
                 }
             }
@@ -233,6 +272,7 @@ object NcieLearn {
      *  record. */
     fun invalidate() {
         io.execute {
+            synchronized(pendingLock) { pending.clear() }
             val f = learnFile ?: return@execute
             try { f.delete() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
             learner?.clear()
