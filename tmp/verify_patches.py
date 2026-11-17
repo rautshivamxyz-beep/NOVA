@@ -3174,8 +3174,8 @@ for _m in re.finditer(r"^# ---- (v[0-9][^\s]*).*$", _src, re.M):
 check("v9.33.156: every release block still carries a check"
       + ("" if not _missing else " (empty: %s)" % ", ".join(_missing)),
       not _missing)
-check("v9.33.157: version is at least 9.33.157 (325)",
-      version_at_least("9.33.157", 325))
+check("v9.33.158: version is at least 9.33.158 (326)",
+      version_at_least("9.33.158", 326))
 # The regression suite's size is owned in ONE place. PR #113 added three checks
 # and bumped the literal in RegressionLabTest only, so SelfEvolutionEngineTest
 # kept asserting 8 against a suite of 11 and the release build went red.

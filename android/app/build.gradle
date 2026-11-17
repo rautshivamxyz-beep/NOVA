@@ -452,8 +452,43 @@ android {
         //   to earn its place next to a scheduling word, and "may" that has
         //   to do the same - now run in the nightly on-device audit too, so
         //   the device itself notices. Four checks, no behaviour change.
-        versionCode 325
-        versionName '9.33.157'
+        // ---- v9.33.148 .. v9.33.156: reconstructed record ---------------
+        // These nine releases shipped without a changelog entry here. The
+        // entries below were written afterwards from each release's own
+        // commit title and the files it touched - they record WHAT moved.
+        // Where the original reasoning was not re-verified, none is claimed.
+        // v9.33.148 "The conversation answers for itself": the conversation
+        //   store (ChatStore) took over its own read/write path, ChatsActivity
+        //   followed it, and ChatStoreSaveTest was added to pin the save.
+        // v9.33.149 "The reply is saved, or it says so": a reply that could
+        //   not be persisted now reports that, in MainActivity.
+        // v9.33.150 "A catch that can never run": a dead try/catch was removed
+        //   across the ncie kernel (NcieChat, NcieChatExt, NcieTutor, NcieLearn,
+        //   NcieExam, NcieProfile, NcieSummary, OnlineFetch).
+        // v9.33.151 "An append is not a save": call sites that appended to a
+        //   file were separated from those that save it (MainActivity,
+        //   NovaListener, WikiCore, NovaJarvis, NcieEvolve, NcieGround,
+        //   NcieLearn, NcieTools, NcieTutor, NcieValue).
+        // v9.33.152 "A store that could not be read is still not an empty
+        //   store": an unreadable store is no longer reported as an empty one
+        //   (NcieEngines, NcieGround, NcieValue).
+        // v9.33.153 "An append that does not copy the file": the append path
+        //   stopped rewriting the whole file (NcieFiles, NovaListener,
+        //   WikiCore), pinned by the new NcieFilesTest.
+        // v9.33.154: the research gate and durable factual memory were merged
+        //   onto one shared EvidencePipeline (PR #113).
+        // v9.33.155 "One gate, one place": that shared gate was pinned by
+        //   EvidencePipelineTest, and the superseded local fetch matcher went.
+        // v9.33.156 "One number for the suite": RegressionLab.EXPECTED_CHECKS
+        //   became the single home for the suite's size (two tests had disagreed
+        //   and held the build red), and verify_patches gained a floor so that
+        //   deleting a check makes the verifier red instead of greener.
+        // -------------------------------------------------------------------
+        // v9.33.158 "The record says why": no behaviour change. The nine
+        //   releases above are documented here, and the v9.33.157 one-shot
+        //   applier workflow is removed.
+        versionCode 326
+        versionName '9.33.158'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64
