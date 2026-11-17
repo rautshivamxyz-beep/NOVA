@@ -3189,6 +3189,38 @@ check("v9.33.156: no test pins the regression suite to a literal size",
                     load_test("evaluate/RegressionLabTest.kt") +
                     load_test("android/SelfEvolutionEngineTest.kt")))
 
+
+# ---- v9.33.159 "Evidence follows the fact" ----
+# Durable learned facts retain privacy-preserving fingerprints of the local
+# note chunks that grounded them. Legacy nine-field memory records still load.
+_evidence = load("ncie/learn/EvidenceFingerprint.kt")
+_lfact = load("ncie/learn/LearnedFact.kt")
+check("v9.33.159: evidence fingerprints are deterministic and bounded",
+      "MessageDigest.getInstance(\"SHA-256\")" in _evidence and
+      "MAX_EVIDENCE = 4" in _evidence and
+      "fun matches(fingerprint: String, sourceText: String)" in _evidence)
+check("v9.33.159: learned facts serialize evidence and retain legacy records",
+      "evidenceFingerprints.joinToString(\",\")" in _lfact and
+      "f.size != 9 && f.size != 10" in _lfact)
+check("v9.33.159: chat learning attaches its grounding-note fingerprints",
+      "LearnedFact.fromChat(userText, clean, verdict.qualityScore, sources)" in
+      load("ncie/android/NcieLearn.kt"))
+check("v9.33.159: fact merges preserve distinct evidence fingerprints",
+      "old.evidenceFingerprints + fact.evidenceFingerprints" in
+      load("ncie/learn/PersistentLearner.kt"))
+check("v9.33.159: graduated facts keep evidence fingerprints",
+      "Evidence fingerprints (SHA-256 of local note chunks)" in
+      load("ncie/learn/Distiller.kt"))
+check("v9.33.159: evidence provenance is pinned by unit tests",
+      "evidenceFingerprintsRoundTrip" in
+      load_test("learn/LearnedFactTest.kt") and
+      "LegacyNineFieldLinesStillLoad" in
+      load_test("learn/LearnedFactTest.kt") and
+      "promotionKeepsEvidenceFingerprintsInTheKnowledgeDocument" in
+      load_test("learn/DistillerTest.kt"))
+check("v9.33.159: version is at least 9.33.159 (327)",
+      version_at_least("9.33.159", 327))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

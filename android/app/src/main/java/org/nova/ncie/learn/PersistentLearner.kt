@@ -237,6 +237,8 @@ class PersistentLearner(
                 interactions = old.interactions + 1,
                 lastConfirmedMillis = fact.lastConfirmedMillis,
                 provenance = fact.provenance,
+                evidenceFingerprints = (old.evidenceFingerprints + fact.evidenceFingerprints)
+                    .distinct().take(EvidenceFingerprint.MAX_EVIDENCE),
             )
         } ?: fact.copy(question = key)
         facts[key] = merged

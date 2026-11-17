@@ -21,7 +21,10 @@ import java.util.Locale
  *
  *     question \t answer \t topicTokens (comma-joined) \t source \t
  *     learnedAtMillis \t lastConfirmedMillis \t score \t interactions \t
- *     provenance
+ *     provenance \t evidenceFingerprints (comma-joined SHA-256 hashes)
+ *
+ * Nine-field records from earlier releases remain readable; new records
+ * append a tenth field and use a dash when no evidence was attached.
  *
  * [parse] never throws: any malformed line returns null and is simply
  * skipped — a corrupted memory file is a performance loss, not a crash.
@@ -43,6 +46,8 @@ data class LearnedFact(
     val interactions: Int,
     /** One human-readable line, e.g. "learned from chat, quality 0.82". */
     val provenance: String,
+    /** SHA-256 fingerprints of local note chunks used to ground this fact. */
+    val evidenceFingerprints: List<String> = emptyList(),
 ) {
 
     /** The one escaped line [parse] reads back. */
@@ -56,6 +61,7 @@ data class LearnedFact(
         score.toString(),
         interactions.toString(),
         escapeLine(provenance),
+        escapeLine(if (evidenceFingerprints.isEmpty()) "-" else evidenceFingerprints.joinToString(",")),
     ).joinToString("\t")
 
     override fun toString(): String =
@@ -67,7 +73,7 @@ data class LearnedFact(
         const val SOURCE_CHAT = "CHAT"
 
         /** Birth: a fresh fact from a quality-gated chat turn. */
-        fun fromChat(question: String, answer: String, qualityScore: Double): LearnedFact {
+        fun fromChat(question: String, answer: String, qualityScore: Double, sources: List<String> = emptyList()): LearnedFact {
             val now = System.currentTimeMillis()
             val score = qualityScore.coerceIn(0.0, 1.0)
             return LearnedFact(
@@ -80,6 +86,7 @@ data class LearnedFact(
                 score = score,
                 interactions = 1,
                 provenance = "learned from chat, quality ${"%.2f".format(Locale.ROOT, score)}",
+                evidenceFingerprints = EvidenceFingerprint.fromSources(sources),
             )
         }
 
@@ -91,7 +98,7 @@ data class LearnedFact(
         fun parse(line: String): LearnedFact? {
             try {
                 val f = line.split('\t')
-                if (f.size != 9) return null
+                if (f.size != 9 && f.size != 10) return null
                 val question = unescapeLine(f[0]) ?: return null
                 val answer = unescapeLine(f[1]) ?: return null
                 val tokens = unescapeLine(f[2]) ?: return null
@@ -101,6 +108,13 @@ data class LearnedFact(
                 val score = f[6].toDoubleOrNull() ?: return null
                 val interactions = f[7].toIntOrNull() ?: return null
                 val provenance = unescapeLine(f[8]) ?: return null
+                val evidence = if (f.size == 10) {
+                    val encoded = unescapeLine(f[9]) ?: return null
+                    if (encoded.isBlank() || encoded == "-") emptyList() else encoded.split(",")
+                } else emptyList()
+                if (evidence.size > EvidenceFingerprint.MAX_EVIDENCE ||
+                    evidence.distinct().size != evidence.size ||
+                    evidence.any { !EvidenceFingerprint.isValid(it) }) return null
                 if (question.isEmpty() || answer.isEmpty()) return null
                 if (source.isEmpty() || provenance.isEmpty()) return null
                 if (learnedAt < 0 || lastConfirmed < learnedAt) return null
@@ -116,6 +130,7 @@ data class LearnedFact(
                     score = score,
                     interactions = interactions,
                     provenance = provenance,
+                    evidenceFingerprints = evidence,
                 )
             } catch (_: Exception) {
                 return null

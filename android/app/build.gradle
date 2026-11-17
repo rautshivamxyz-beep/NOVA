@@ -487,8 +487,8 @@ android {
         // v9.33.158 "The record says why": no behaviour change. The nine
         //   releases above are documented here, and the v9.33.157 one-shot
         //   applier workflow is removed.
-        versionCode 326
-        versionName '9.33.158'
+        versionCode 327
+        versionName '9.33.159'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

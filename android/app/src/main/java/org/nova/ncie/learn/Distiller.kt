@@ -101,7 +101,10 @@ class Distiller(
      *  question — the chunker then keeps them together, so a retrieval
      *  hit returns the answer in context. */
     private fun docTextOf(fact: LearnedFact): String =
-        fact.question.trim() + "\n\n" + fact.answer.trim()
+        fact.question.trim() + "\n\n" + fact.answer.trim() +
+            if (fact.evidenceFingerprints.isEmpty()) "" else
+                "\n\nEvidence fingerprints (SHA-256 of local note chunks):\n" +
+                    fact.evidenceFingerprints.joinToString("\n")
 
     companion object {
         /** Score a fact needs to graduate (blend-decayed over time). */
