@@ -149,7 +149,7 @@ object NcieLearn {
         // its default 0.6 score is not a factuality check. Do not let repeated
         // unverified guesses graduate into the permanent KnowledgeStore.
         if (LearningEvidencePolicy.mayPersistFact(sources, verdict)) {
-            io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore)) }
+            io.execute { l.record(LearnedFact.fromChat(userText, clean, verdict.qualityScore, sources)) }
         }
     }
 
