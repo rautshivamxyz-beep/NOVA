@@ -1341,14 +1341,14 @@ def structural(f, text):
         elif c == '"':
             i += 1
             while i < n and text[i] != '"':
-                if text[i] == "\":
+                if text[i] == "\\":
                     i += 1
                 i += 1
             i += 1
         elif c == "'":
             i += 1
             while i < n and text[i] != "'":
-                if text[i] == "\":
+                if text[i] == "\\":
                     i += 1
                 i += 1
             i += 1
