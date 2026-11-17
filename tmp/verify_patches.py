@@ -3327,13 +3327,14 @@ check("v9.33.162: HTTPS redirects reject local, private and non-canonical numeri
       "private fun unsafeIpv4" in _redirect162 and
       "host.endsWith(\".local\")" in _redirect162 and
       "address.isLoopbackAddress" in _redirect162)
+_redirect_test162 = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/HttpsRedirectTest.kt"),
+    encoding="utf-8").read()
 check("v9.33.162: lazy invalidation and redirect security are unit-tested",
       "findsThePersistentFileWhenLazyBootHasNotStarted" in
           load_test("android/LearningInvalidationTest.kt") and
-      "refusesLoopbackAndPrivateIpv4Redirects" in
-          load_test("HttpsRedirectTest.kt") and
-      "refusesLoopbackAndUniqueLocalIpv6Redirects" in
-          load_test("HttpsRedirectTest.kt"))
+      "refusesLoopbackAndPrivateIpv4Redirects" in _redirect_test162 and
+      "refusesLoopbackAndUniqueLocalIpv6Redirects" in _redirect_test162)
 check("v9.33.162: version is at least 9.33.162 (330)",
       version_at_least("9.33.162", 330))
 
