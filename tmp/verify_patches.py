@@ -3214,7 +3214,9 @@ check("v9.33.159: evidence provenance is pinned by unit tests",
       "evidenceFingerprintsRoundTrip" in
       load_test("learn/LearnedFactTest.kt") and
       "legacyNineFieldLinesStillLoad" in
-      load_test("learn/LearnedFactTest.kt"))
+      load_test("learn/LearnedFactTest.kt") and
+      "promotionKeepsEvidenceFingerprintsInTheKnowledgeDocument" in
+      load_test("learn/DistillerTest.kt"))
 check("v9.33.159: version is at least 9.33.159 (327)",
       version_at_least("9.33.159", 327))
 
