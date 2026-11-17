@@ -3214,7 +3214,7 @@ check("v9.33.159: graduated facts keep evidence fingerprints",
 check("v9.33.159: evidence provenance is pinned by unit tests",
       "evidenceFingerprintsRoundTrip" in
       load_test("learn/LearnedFactTest.kt") and
-      "legacyNineFieldLinesStillLoad" in
+      "LegacyNineFieldLinesStillLoad" in
       load_test("learn/LearnedFactTest.kt") and
       "promotionKeepsEvidenceFingerprintsInTheKnowledgeDocument" in
       load_test("learn/DistillerTest.kt"))
