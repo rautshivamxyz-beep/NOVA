@@ -37,8 +37,8 @@ object RemoteHost {
 
     /**
      * Recognise RFC1918 IPv4, loopback, link-local, Tailscale CGNAT, and IPv6
-     * loopback/ULA/link-local. Hostnames are allowed only for local naming
-     * conventions; arbitrary dotted hostnames are not presumed private.
+     * loopback/ULA/link-local. Only localhost is accepted as a hostname;
+     * every other private endpoint must be an explicit literal IP address.
      */
     fun isPrivate(host: String): Boolean {
         val h = host.lowercase().trim()
