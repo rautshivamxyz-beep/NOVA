@@ -51,6 +51,10 @@ import java.util.concurrent.Executors
  * Skips. Records join the learner's own thread, so an invalidate can
  * never interleave with a persist.
  */
+/** Locate the persistent learned cache even when lazy boot has not happened yet. */
+internal fun learningFileForInvalidation(loadedFile: File?, filesDir: File?): File? =
+    loadedFile ?: filesDir?.let { File(it, "ncie_learn.txt") }
+
 object NcieLearn {
 
     private val io = Executors.newSingleThreadExecutor { r ->
@@ -267,13 +271,34 @@ object NcieLearn {
      *  boot that has not happened yet finds nothing to load. Runs on
      *  the learner's own thread, so it can never interleave with a
      *  record. */
-    fun invalidate() {
+    fun invalidate(ctx: Context? = null) {
+        // Capture only the app-private directory, not the Activity/context.
+        // Knowledge can change before lazy learner boot has ever run.
+        val filesDir = ctx?.applicationContext?.filesDir
         io.execute {
             synchronized(pendingLock) { pending.clear() }
-            val f = learnFile ?: return@execute
-            try { f.delete() } catch (e: Exception) { NovaLog.quiet("NcieLearn", e) }
-            learner?.clear()
-            disk?.flushNow()
+            val f = learningFileForInvalidation(learnFile, filesDir)
+            if (f == null) {
+                NovaLog.note("NcieLearn", "invalidation skipped: no app files directory")
+                return@execute
+            }
+            learnFile = f
+            val active = learner
+            if (active != null) {
+                // clear() writes an empty snapshot through the same debounced
+                // store; flush it before another record can be queued.
+                active.clear()
+                disk?.flushNow()
+            } else {
+                // No learner/store exists yet, so deleting the old snapshot is
+                // the only correct invalidation. The next lazy boot sees empty.
+                try {
+                    if (f.exists() && !f.delete())
+                        throw java.io.IOException("Could not delete stale learned answers")
+                } catch (e: Exception) {
+                    NovaLog.quiet("NcieLearn.invalidate", e)
+                }
+            }
         }
     }
 

@@ -138,12 +138,12 @@ check("NCIE polish: doc chunks exposed on the boundary", nk.count("fun docChunks
 # ---- v0.8.1: stale-learner fix + kernel generation budget ----
 nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
-      nl.count("fun invalidate()") == 1)
+      nl.count("fun invalidate(ctx: Context? = null)") == 1)
 check("v0.8.1: records join the learner's own thread",
       nl.count("submitMemory(act, PendingMemory(question = userText, response = response, fact = fact))") == 1 and
       nl.count("target.record(item.question, it)") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
-      nk.count("NcieLearn.invalidate()") == 2)
+      nk.count("NcieLearn.invalidate(c)") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
       nk.count("fun generationBudget(") == 1)
 lr = load("ncie/learn/Learner.kt")
@@ -3310,6 +3310,33 @@ check("v9.33.161: the chat follow-up and redirect rules are unit-tested",
           open(os.path.join(ROOT, "android/app/src/test/java/org/nova/HttpsRedirectTest.kt"), encoding="utf-8").read())
 check("v9.33.161: version is at least 9.33.161 (329)",
       version_at_least("9.33.161", 329))
+
+# ---- v9.33.162 "Invalidate before boot; keep redirects public" ----
+_learn162 = load("ncie/android/NcieLearn.kt")
+_know162 = load("ncie/android/NcieKnowledge.kt")
+_redirect162 = load("HttpsRedirect.kt")
+check("v9.33.162: learned-cache invalidation resolves the file before lazy boot",
+      "fun invalidate(ctx: Context? = null)" in _learn162 and
+      "learningFileForInvalidation(learnFile, filesDir)" in _learn162 and
+      _learn162.index("val f = learningFileForInvalidation") < _learn162.index("val active = learner"))
+check("v9.33.162: knowledge add/remove pass their files directory to invalidation",
+      _know162.count("NcieLearn.invalidate(c)") == 2 and
+      "NcieLearn.invalidate()" not in _know162)
+check("v9.33.162: HTTPS redirects reject local, private and non-canonical numeric targets",
+      "isUnsafeDestination(host!!)" in _redirect162 and
+      "private fun unsafeIpv4" in _redirect162 and
+      "host.endsWith(\".local\")" in _redirect162 and
+      "address.isLoopbackAddress" in _redirect162)
+_redirect_test162 = open(os.path.join(
+    ROOT, "android/app/src/test/java/org/nova/HttpsRedirectTest.kt"),
+    encoding="utf-8").read()
+check("v9.33.162: lazy invalidation and redirect security are unit-tested",
+      "findsThePersistentFileWhenLazyBootHasNotStarted" in
+          load_test("android/LearningInvalidationTest.kt") and
+      "refusesLoopbackAndPrivateIpv4Redirects" in _redirect_test162 and
+      "refusesLoopbackAndUniqueLocalIpv6Redirects" in _redirect_test162)
+check("v9.33.162: version is at least 9.33.162 (330)",
+      version_at_least("9.33.162", 330))
 
 print("")
 if fails:

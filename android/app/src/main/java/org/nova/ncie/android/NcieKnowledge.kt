@@ -213,7 +213,7 @@ object NcieKnowledge {
         // learned cache and move the index line - a refused save must leave
         // every derived view exactly as it was
         if (!Knowledge.addDoc(c, name, text)) return false
-        NcieLearn.invalidate()
+        NcieLearn.invalidate(c)
         // v9.6.0 "Engine Pack": the FlashMap index - refresh this
         // source's chunk-count line as the grounding layer sees it
         // (callers are already off the main thread, like the write above).
@@ -225,7 +225,7 @@ object NcieKnowledge {
      *  learned one. (Forward.) */
     fun removeDoc(c: Context, name: String): Boolean {
         if (!Knowledge.removeDoc(c, name)) return false
-        NcieLearn.invalidate()
+        NcieLearn.invalidate(c)
         // v9.6.0 "Engine Pack": the FlashMap index drops the source's line.
         NcieGround.indexUpdate(c, name, null)
         return true
