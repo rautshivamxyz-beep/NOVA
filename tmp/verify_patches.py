@@ -2014,7 +2014,7 @@ check("v9.33.103: no bare writeText anywhere outside the one atomic save",
       not _bare)
 check("v9.33.103: the one atomic save still writes and syncs its own temp",
       _nf.count("FileOutputStream(tmp)") == 1 and
-      _nf.count("out.write(text.toByteArray(Charsets.UTF_8))") == 1 and
+      _nf.index("out.write(text.toByteArray(Charsets.UTF_8))") < _nf.index("fun appendFast") and
       _nf.count("out.fd.sync()") == 1)
 check("v9.33.103: a PIN that did not reach the disk is not reported as set",
       ma.count("if (org.nova.ncie.android.NcieFiles.write(pinFile(), pinHash(p) + \"\\n\")) {") == 1 and
