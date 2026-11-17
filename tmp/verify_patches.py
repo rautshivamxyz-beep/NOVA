@@ -138,12 +138,12 @@ check("NCIE polish: doc chunks exposed on the boundary", nk.count("fun docChunks
 # ---- v0.8.1: stale-learner fix + kernel generation budget ----
 nl = load("ncie/android/NcieLearn.kt")
 check("v0.8.1: learner invalidated when notes change",
-      nl.count("fun invalidate()") == 1)
+      nl.count("fun invalidate(ctx: Context? = null)") == 1)
 check("v0.8.1: records join the learner's own thread",
       nl.count("submitMemory(act, PendingMemory(question = userText, response = response, fact = fact))") == 1 and
       nl.count("target.record(item.question, it)") == 1)
 check("v0.8.1: addDoc/removeDoc drop the learned cache",
-      nk.count("NcieLearn.invalidate()") == 2)
+      nk.count("NcieLearn.invalidate(c)") == 2)
 check("v0.8.1: kernel-sized generation leash on the boundary",
       nk.count("fun generationBudget(") == 1)
 lr = load("ncie/learn/Learner.kt")
