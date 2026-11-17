@@ -58,7 +58,7 @@ data class LearnedFact(
         score.toString(),
         interactions.toString(),
         escapeLine(provenance),
-        escapeLine(evidenceFingerprints.joinToString(",")),
+        escapeLine(if (evidenceFingerprints.isEmpty()) "-" else evidenceFingerprints.joinToString(",")),
     ).joinToString("\t")
 
     override fun toString(): String =
@@ -107,7 +107,7 @@ data class LearnedFact(
                 val provenance = unescapeLine(f[8]) ?: return null
                 val evidence = if (f.size == 10) {
                     val encoded = unescapeLine(f[9]) ?: return null
-                    if (encoded.isBlank()) emptyList() else encoded.split(",")
+                    if (encoded.isBlank() || encoded == "-") emptyList() else encoded.split(",")
                 } else emptyList()
                 if (evidence.size > EvidenceFingerprint.MAX_EVIDENCE ||
                     evidence.distinct().size != evidence.size ||
