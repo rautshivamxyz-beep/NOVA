@@ -18,11 +18,11 @@ import java.io.File
  * crash: it is a silent reset. The user's exam date is simply gone, or every
  * learned fact is quietly dropped, and nothing anywhere says why.
  *
- * [write] writes a sibling `.tmp` and renames it over the target, so a reader
- * sees either the complete old file or the complete new one. `renameTo` is
- * atomic within one filesystem, and every one of these files lives in the
- * app's own `filesDir`. The fallbacks below only exist for a filesystem that
- * refuses the rename: a direct write is still better than no file at all.
+ * [write] writes and syncs a sibling temp file, then atomically replaces the
+ * target on the same filesystem. If atomic replacement is unavailable, it
+ * preserves the previous file under a temporary backup and rolls it back if
+ * the replacement cannot be committed. A failed save never truncates the
+ * last known-good state.
  *
  * This is the same ceremony `Knowledge.kt` (v7.6), `ChatStore`, `ReminderStore`
  * and `Exams` already do by hand. It lives here so a new file does not have to
@@ -58,19 +58,41 @@ object NcieFiles {
 
     private fun writeNow(f: File, text: String): Boolean {
         val tmp = File(f.parentFile, f.name + ".tmp")
+        val backup = File(f.parentFile, f.name + ".bak")
         return try {
-            f.parentFile?.mkdirs()
-            tmp.writeText(text)
-            if (tmp.renameTo(f)) {
+            f.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw java.io.IOException("cannot create parent") }
+            // Recover a prior interrupted fallback before starting another write.
+            if (backup.exists()) {
+                if (!f.exists()) {
+                    if (!backup.renameTo(f)) throw java.io.IOException("cannot recover previous state")
+                } else if (!backup.delete()) {
+                    throw java.io.IOException("cannot clear stale backup")
+                }
+            }
+            java.io.FileOutputStream(tmp).use { out ->
+                out.write(text.toByteArray(Charsets.UTF_8))
+                out.fd.sync()
+            }
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), f.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
                 true
-            } else {
-                // Some Android filesystems refuse a rename onto an existing
-                // file. Drop the old one and try again before giving up.
-                f.delete()
-                if (tmp.renameTo(f)) true else {
-                    f.writeText(text)
-                    tmp.delete()
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                // Fallback preserves the previous file until the new file is
+                // committed. If committing fails, restore the previous file.
+                val hadOld = f.exists()
+                if (hadOld && !f.renameTo(backup))
+                    throw java.io.IOException("cannot preserve previous state")
+                if (tmp.renameTo(f)) {
+                    if (hadOld) backup.delete()
                     true
+                } else {
+                    if (hadOld && backup.exists() && !backup.renameTo(f))
+                        throw java.io.IOException("replacement failed and rollback failed")
+                    false
                 }
             }
         } catch (e: Exception) {
@@ -79,7 +101,6 @@ object NcieFiles {
             false
         }
     }
-
     /**
      * v9.33.131 "One save, even for an append": the second write path.
      *
