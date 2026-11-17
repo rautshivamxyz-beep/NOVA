@@ -3249,7 +3249,7 @@ check("v9.33.160: startup cache warm-up waits for the model load window",
       "NcieKnowledge.warmUpNotes(this@MainActivity)" in _main)
 check("v9.33.160: failed chat compaction is retained in diagnostics",
       'NovaLog.quiet("MainActivity", e)' in _main and
-      "failed - keep full context, retry next turn" in _main)
+      "Keep the full context and retry next turn" in _main)
 check("v9.33.160: version is at least 9.33.160 (328)",
       version_at_least("9.33.160", 328))
 
