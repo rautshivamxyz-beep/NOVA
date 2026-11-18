@@ -148,9 +148,11 @@ class SettingsActivity : Activity() {
         }
         col.addView(NovaUi.header(this, getString(R.string.settings_title)) { finish() })
 
-        group(col, getString(R.string.section_voice),
-            NovaUi.switchRow(this, getString(R.string.read_aloud), settings.readAloud) { settings.readAloud = it },
-            NovaUi.switchRow(this, getString(R.string.auto_listen), settings.autoListen) { settings.autoListen = it })
+        if (settings.showAdvancedSettings) {
+            group(col, getString(R.string.section_voice),
+                NovaUi.switchRow(this, getString(R.string.read_aloud), settings.readAloud) { settings.readAloud = it },
+                NovaUi.switchRow(this, getString(R.string.auto_listen), settings.autoListen) { settings.autoListen = it })
+        }
 
         group(col, getString(R.string.section_customization),
             styleRow(),
@@ -199,6 +201,7 @@ class SettingsActivity : Activity() {
         person.addView(field(settings.systemPrompt, "") { settings.systemPrompt = it })
         col.addView(person)
 
+        if (settings.showAdvancedSettings) {
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_answers)))
         val answers = NovaUi.card(this)
         answers.addView(NovaUi.switchRow(this, getString(R.string.use_wiki), settings.wikiEnabled) { settings.wikiEnabled = it })
@@ -216,6 +219,7 @@ class SettingsActivity : Activity() {
         })
         answers.addView(lengthRow())
         col.addView(answers)
+        }
 
         if (settings.showAdvancedSettings) {
         // v9.33.42 "Borrowed brain", v9.33.43 "Find my computer"
@@ -258,6 +262,7 @@ class SettingsActivity : Activity() {
 
         }
 
+        if (settings.showAdvancedSettings) {
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))
         val privacy = NovaUi.card(this)
         privacy.addView(NovaUi.small(this, getString(R.string.proxy_explainer)).apply { setPadding(0, 0, 0, dp(8)) })
@@ -295,6 +300,7 @@ class SettingsActivity : Activity() {
             }
         })
         col.addView(privacy)
+        }
 
         col.addView(NovaUi.sectionLabel(this, getString(R.string.section_appearance)))
         val looks = NovaUi.card(this)
