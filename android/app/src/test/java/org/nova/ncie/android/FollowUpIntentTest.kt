@@ -110,6 +110,27 @@ class FollowUpIntentTest {
     }
 
     @Test
+    fun relationshipEvidenceMustBeAboutTheRequestedPersonAndRelationship() {
+        val question = "who is the husband of lady gaga"
+        assertTrue(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is married to Michael Polansky."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is a singer. Bradley Cooper was married to Jennifer Esposito."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is engaged to Michael Polansky."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga and Bradley Cooper appeared together in a film; Bradley Cooper is married."
+        ))
+    }
+
+    @Test
     fun relationshipFollowUpDoesNotInventAReferent() {
         assertNull(FollowUpIntent.personFactLookup("who are his brothers", listOf("tell me a joke")))
     }
