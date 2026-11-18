@@ -40,6 +40,8 @@ object NcieAsk {
     const val MISSED_MAX = 80
     const val SUMMARY_MAX = 80
 
+    const val TOOLS_MAX = 80
+
     /**
      * NOVA's own diagnostics: "health", "nova health", "health check",
      * "what's not working", "what is broken", "fix nova", "nova setup",
@@ -68,6 +70,15 @@ object NcieAsk {
             "|^\\s*growth\\s*[.!?]*\\s*$" +
             "|^\\s*how\\s+have\\s+you\\s+grown\\s*[.!?]*\\s*$" +
             "|^\\s*what\\s+have\\s+you\\s+taught\\s+yourself\\s*[.!?]*\\s*$")
+
+
+    /** Whole-message aliases for the installed tool/source inventory. */
+    val TOOLS_Q = Regex(
+        "(?i)^\\s*(?:what\\s+tools\\s+(?:do\\s+you\\s+have|you\\s+have)|" +
+            "what\\s+are\\s+your\\s+tools|list\\s+(?:your|available)\\s+tools|" +
+            "show\\s+(?:your|available)\\s+tools|available\\s+tools|your\\s+tools)" +
+            "\\s*[.!?]*\\s*$"
+    )
 
     /**
      * v9.33.107 "A typed command is the whole message, part 2": the
@@ -119,4 +130,7 @@ object NcieAsk {
     /** The growth command - on a short message that IS the command. */
     fun skills(text: String): Boolean =
         text.length <= SKILLS_MAX && SKILLS_Q.containsMatchIn(text)
+
+    fun tools(text: String): Boolean =
+        text.length <= TOOLS_MAX && TOOLS_Q.containsMatchIn(text)
 }
