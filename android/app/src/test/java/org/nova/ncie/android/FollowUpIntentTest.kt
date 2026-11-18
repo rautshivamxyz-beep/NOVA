@@ -97,7 +97,7 @@ class FollowUpIntentTest {
         val query = "who are the brothers of thomas shelby"
         assertTrue(FollowUpIntent.hasRelationshipEvidence(
             query,
-            "Tommy Shelby's brothers are Arthur Shelby and John Shelby."
+            "Thomas Shelby's brothers are Arthur Shelby and John Shelby."
         ))
         assertFalse(FollowUpIntent.hasRelationshipEvidence(
             query,
