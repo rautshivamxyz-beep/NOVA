@@ -491,9 +491,10 @@ android {
         // and record failed chat compaction without discarding conversation context.
         // v9.33.161: conversation continuity, bounded HTTPS redirects, and
         //   safer state/backup handling; model and inference tuning unchanged.
-        // v9.33.167: prevent learned-cache replay for factual/current questions; broaden correction challenges.
         // v9.33.166: cache-aware summary injection, correction-safe learning,
         //   deterministic tool inventory, and stronger follow-up resolution.
+        // v9.33.167: prevent stale factual answers from both cache reads and writes;
+        //   expand current-fact detection and explicit correction challenges.
         versionCode 335
         versionName '9.33.167'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
