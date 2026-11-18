@@ -1712,7 +1712,11 @@ class MainActivity : Activity() {
                         // background actually contribute? Learn it, so a
                         // source that never helps stops costing prompt
                         // tokens (faster prefill, same answers).
-                        if (settings.adaptiveContext && lastWikiText.isNotEmpty()) {
+                        if (correctionTurn) {
+                            // A retraction/apology is not a fair measurement of
+                            // whether the previous turn's source was useful.
+                            lastWikiText = ""
+                        } else if (settings.adaptiveContext && lastWikiText.isNotEmpty()) {
                             NcieValue.note(this@MainActivity, "wiki",
                                 Coverage.ratio(replyMsg.text, lastWikiText) >= 0.3)
                             lastWikiText = ""
