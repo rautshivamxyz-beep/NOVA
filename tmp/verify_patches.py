@@ -999,8 +999,10 @@ check("v9.16.3: chat exam also lands in the Exams store (NcieExam)",
 # ---- v9.16.2 "Working buttons" ----
 check("v9.16.2: the stop button cancels the generation (MainActivity)",
       ma.count("if (generationJob?.isActive == true) generationJob?.cancel()") == 4)
-check("v9.16.2: a camera button on the typing row (MainActivity)",
-      ma.count("R.drawable.ic_camera") == 2 and ma.count("setOnClickListener { openCamera() }") == 1)
+check("v9.16.2: camera entry stays in the advanced tools drawer, not the composer",
+      ma.count("R.drawable.ic_camera") == 1 and
+      "if (which == 0) openCamera() else scanNotes()" in ma and
+      "setOnClickListener { openCamera() }" not in ma)
 check("v9.16.2: summariser prompts thinned (MainActivity)",
       ma.count("Combine these section notes") == 2)
 check("v9.16.2: online fetch tries several Wikipedia hits + looser gate (OnlineFetch)",
@@ -1231,13 +1233,13 @@ check("v7.9.3: the smart button sits right of the input",
 check("v7.9.2: chats header matches the other screens (20f title, 36dp back)",
       ca.count("textSize = 20f") >= 1 and ca.count("dp(36), dp(36)") >= 1)
 
-# ---- v7.9.3: one smart button - mic when empty, send when typed ----
-check("v7.9.3: smart button morphs between mic and send",
-      ma.count("micBtn") == 0 and
-      ma.count('setSendButton(R.drawable.ic_mic, textDim, "Speak")') == 1 and
-      ma.count("sendBtn.setOnClickListener { startSpeech() }") == 1 and
-      ma.index('setSendButton(R.drawable.ic_send, Color.WHITE, "Send")') <
-      ma.index('setSendButton(R.drawable.ic_mic, textDim, "Speak")'))
+# ---- v9.33.165: a predictable send-only composer ----
+_send165 = ma[ma.index("private fun updateSendLook()"):
+              ma.index("/** Runs a hidden-prompt tool action")]
+check("v9.33.165: the composer sends text only and never enables voice input",
+      "sendBtn.isEnabled = hasText" in _send165 and
+      "sendBtn.setOnClickListener { if (input.text.isNotBlank()) send() }" in _send165 and
+      "R.drawable.ic_mic" not in _send165 and "startSpeech()" not in _send165)
 
 # ---- v8.0.0: UI overhaul - midnight palette + cards everywhere ----
 check("v8.0.0: midnight palette in NovaTheme (init + dark apply)",
@@ -1267,8 +1269,9 @@ check("v8.0.0: midnight palette installed (was graphite + iris)",
       nt.count("#5B8DEF") == 2 and nt.count("#0B0D12") == 2)
 check("v7.7.0: old navy accent gone from the palette",
       nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
-check("v7.7.0/v8.0.0: send button + user bubble are gradients",
-      ma.count("GradientDrawable.Orientation.TL_BR") == 3)
+check("v9.33.165: composer uses simple enabled/disabled states",
+      "setColor(if (hasText) accent else NovaTheme.surface)" in _send165 and
+      "sendBtn.alpha = if (hasText) 1f else 0.55f" in _send165)
 check("v7.7.0: drawer widened (hide + layout)", "drawerWidthDp" in ma and ".coerceIn(280, 360)" in ma)
 check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") >= 2)
 check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
@@ -3410,6 +3413,31 @@ check("v9.33.164: direct offline entity answers are returned outside summary com
       "needsContextCarry = true" in _ncie164)
 check("v9.33.164: version is at least 9.33.164 (332)",
       version_at_least("9.33.164", 332))
+
+
+# ---- v9.33.165 "Simple core, optional features" ----
+_main165 = load("MainActivity.kt")
+_settings165 = load("SettingsActivity.kt")
+_nav165 = _main165[_main165.indexOf('drawerPane.addView(drawerRow("Search chats")'):
+                    _main165.indexOf("drawerScroller = ScrollView(this).apply {")]
+_workspace165 = _nav165.indexOf('drawerSection("WORKSPACE")')
+_tools165 = _nav165.indexOf('drawerSection("TOOLS")')
+check("v9.33.165: workspace and tools are only built behind advanced mode",
+      'if (settings.showAdvancedSettings)' in _nav165 and
+      0 <= _nav165.indexOf('if (settings.showAdvancedSettings)') < _workspace165 and
+      _workspace165 < _tools165)
+check("v9.33.165: launch does not force setup or notification permission",
+      "startActivity(Intent(this, SetupActivity::class.java))" not in _main165 and
+      "requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS)" not in _main165)
+check("v9.33.165: optional settings are hidden behind advanced mode",
+      "if (settings.showAdvancedSettings) {\\n            group(col, getString(R.string.section_voice)" in _settings165 and
+      "if (settings.showAdvancedSettings) {\\n        col.addView(NovaUi.sectionLabel(this, getString(R.string.section_answers)))" in _settings165 and
+      "if (settings.showAdvancedSettings) {\\n        col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))" in _settings165)
+check("v9.33.165: model inference configuration remains unchanged",
+      "specDecoding = it" in _settings165 and
+      "predictLength = Settings.LENGTH_OPTIONS[which]" in _settings165)
+check("v9.33.165: version is at least 9.33.165 (333)",
+      version_at_least("9.33.165", 333))
 
 print("")
 if fails:
