@@ -119,7 +119,12 @@ class NcieAskTest {
             "latest F1 champion",
             "current CEO of Microsoft",
             "tell me about Tommy Shelby",
-            "give me facts about photosynthesis"
+            "give me facts about photosynthesis",
+            "is Lady Gaga married",
+            "are whales mammals",
+            "does water boil at 100 degrees Celsius",
+            "how does photosynthesis work",
+            "was Marie Curie a physicist"
         )) {
             assertTrue("$q must not be answered from an old cache", factualAsk(q))
         }
@@ -129,6 +134,9 @@ class NcieAskTest {
     fun personalAndCreativeQuestionsAreNotMistakenForFactualLookups() {
         for (q in listOf(
             "what do you think about Lady Gaga",
+            "how are you",
+            "who are you",
+            "what can you do",
             "what tools do you have",
             "write a story about a racing driver",
             "help me plan my study timetable"
