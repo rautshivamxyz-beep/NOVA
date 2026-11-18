@@ -309,7 +309,7 @@ class MainActivity : Activity() {
         installCrashReporter()
         // v9.29.4: auto-check for an update on launch - silent unless one is
         // actually available, and never twice for a version already deferred.
-        if (settings.autoUpdate) scope.launch {
+        if (settings.showAdvancedSettings && settings.autoUpdate) scope.launch {
             delay(1500)
             checkForUpdates(silent = true)
         }
@@ -655,8 +655,7 @@ class MainActivity : Activity() {
             })
             setOnClickListener { send() }
         }
-        // v7.9.3: one smart button on the right - mic when the input
-        // is empty, send when there is text (see updateSendLook)
+        // One predictable action: this button only sends a non-empty message.
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
