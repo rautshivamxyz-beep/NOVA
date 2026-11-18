@@ -3,12 +3,12 @@
 import argparse, concurrent.futures, datetime as dt, json, os, pathlib, re, subprocess, urllib.error, urllib.request
 SCRIPT_DIR=pathlib.Path(__file__).resolve().parent; ROOT=SCRIPT_DIR.parent; RUNS=ROOT/".council"/"runs"; PATCHES=ROOT/".council"/"patches"
 def envload():
- p=ROOT/".env"
- if p.exists():
-  for line in p.read_text().splitlines():
-   line=line.strip()
-   if line and not line.startswith("#") and "=" in line:
-    k,v=line.split("=",1); os.environ.setdefault(k.strip(),v.strip().strip('"').strip("'"))
+ for p in (SCRIPT_DIR/".env",ROOT/".env"):
+  if p.exists():
+   for line in p.read_text().splitlines():
+    line=line.strip()
+    if line and not line.startswith("#") and "=" in line:
+     k,v=line.split("=",1); os.environ.setdefault(k.strip(),v.strip().strip(chr(34)).strip(chr(39)))
 def post(url,headers,data):
  req=urllib.request.Request(url,data=json.dumps(data).encode(),headers={**headers,"Content-Type":"application/json"},method="POST")
  try:
