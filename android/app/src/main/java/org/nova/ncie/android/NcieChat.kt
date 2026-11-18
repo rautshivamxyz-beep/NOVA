@@ -192,6 +192,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         }
         val text = (raw ?: input.text.toString()).trim()
         if (text.isEmpty()) return
+        val correctionFeedback = FollowUpIntent.isCorrectionFeedback(
+            text,
+            currentChat.messages.lastOrNull { it.role == Role.ASSISTANT }?.text
+        )
         val previousUserMessages = currentChat.messages
             .filter { it.role == Role.USER }
             .map { it.text }
@@ -472,6 +476,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // v9.30.0 "Growth": the self-evolution report - "growth" / "your
         // skills" shows what NOVA has taught itself (forged skills, the
         // turns it has answered, and the consolidation pass's tally).
+        if (answerToolInventory(text)) { input.setText(""); return }
         if (answerSkills(text)) { input.setText(""); return }
         // v9.31.0 "Jarvis": hands-free mode and the trigger list.
         if (answerJarvis(text)) { input.setText(""); return }
@@ -893,7 +898,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             qLow.contains(" teach me ") || qLow.contains(" what is ")
         if (settings.knowledgeEnabled && NcieKnowledge.hasDocs(this)) {
             // v5.4: cached answer from last time? -> instant, no model run
-            if (studyQ && !isChip && docPart.isEmpty() && !experienced && !preShown) {
+            if (studyQ && !isChip && docPart.isEmpty() && !experienced && !preShown && !correctionFeedback) {
                 // v9.33.97: one key rule for the read, the write and the
                 // delete - and it carries the answer length, so a longer
                 // setting is not served the old short cached answer
@@ -1066,16 +1071,14 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // so a long chat never loses its beginning. Skills keep their
         // own instruction wrapper; the docPart logic above is untouched.
         var summaryPart = ""
-        if (skill == null && !freshForCode) {
-            // v9.12.1 "Context Diet": the summary sanitizer - the
-            // summarizer sometimes preserves the meta markers of the
-            // prompts it was fed ("New message:", "Nova:", "Answer:",
-            // "(Reply", "— end"), and the model then mimics them in its
-            // replies. NcieSummary.sanitize drops those lines before
-            // the summary rides along as a preamble.
-            val chatSumm = NcieSummary.sanitize(NcieSummary.read(this, currentChat.id))
-            if (chatSumm.isNotEmpty())
-                summaryPart = "Prior conversation context (summary, not a verified factual source): $chatSumm\n\n"
+        // The model already has the active conversation in its KV cache.
+        // Re-injecting the identical rolling summary on every user turn
+        // duplicates history and slows prefill. It is needed only when the
+        // app is rebuilding context after restore or a context trim.
+        val chatSumm = NcieSummary.sanitize(NcieSummary.read(this, currentChat.id))
+        if (NcieSummary.shouldInject(chatSumm, needsContextCarry,
+                skill != null, freshForCode)) {
+            summaryPart = "Prior conversation context (summary, not a verified factual source): $chatSumm\n\n"
         }
         // v8.5.3: a study question with NOTHING local behind it must not be
         // answered from imagination - the model invented chapter contents
@@ -1110,6 +1113,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // the last thing in front of the model when it answers. The CODE rule
         // read "never describe the code instead of writing it", and NOVA
         // described the code. Each rule below now says what TO do.
+        val correctionRule = if (correctionFeedback) {
+            "(CORRECTION: Re-check the immediately previous answer against the supplied evidence and the conversation. " +
+                "If a claim was unsupported, retract it clearly. Do not defend a guess, invent a replacement, " +
+                "or claim the user said something they did not. Give a corrected fact only when supported.)\n"
+        } else ""
         val depthFeedback = FollowUpIntent.isDepthFeedback(text)
         val asksForDetail = Regex("(?i)\\b(in detail|detailed|explain fully|step by step|thorough|elaborate|deep explanation|complete explanation)\\b").containsMatchIn(text)
         val detailRule = when {
@@ -1185,7 +1193,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // v9.33.62: the standing rules are in the system prompt now; only the
         // turn-specific rules lead the prompt, then the retrieved reference
         // block, then the memory and exam lines, then the question.
-        prompt = detailRule + codeTaskRule + skillPart + contextBlock + prompt
+        prompt = correctionRule + detailRule + codeTaskRule + skillPart + contextBlock + prompt
 
         // v8.2.0: the notes that grounded THIS answer — handed to LEARN
         // so the quality gate scores the answer against what it was built
@@ -1288,7 +1296,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // v9.13.0 (re-derived d): a post-fetch completion turn skips the
         // caches too - the question is already shown and persisted, and
         // the just-fetched material should shape a fresh answer.
-        if (!experienced && skill == null && !preShown) {
+        if (!experienced && skill == null && !preShown && !correctionFeedback) {
             // v9.6.0: the Predictive Cache - an exact repeat of a normal
             // chat question is answered instantly, verbatim, before any
             // generation. Regenerating bypasses this and refreshes the
@@ -1317,13 +1325,13 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // Experience gate now too (a regenerated answer must not replay
         // verbatim from the learned cache), and a post-fetch completion
         // turn (preShown) skips it - the fetch just brought new material.
-        if (!experienced && !preShown && NcieLearn.recall(this, text)) return
+        if (!experienced && !preShown && !correctionFeedback && NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
         // v9.6.0: the Predictive Cache write happens at turn completion
         // (MainActivity) under this exact question. Experienced questions
         // and skills never enter the cache.
-        pendingAnswerQ = if (experienced || skill != null) null else text
+        pendingAnswerQ = if (experienced || skill != null || correctionFeedback) null else text
         // v9.2.0 "Rolling Chat Summary": once 12 user messages (and
         // their replies) have completed since the stored summary, fold
         // the conversation into filesDir/chat_summary.txt through the
