@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.nova.ncie.model.VerifyResult
 
-class LearningEvidencePolicyTest {
+class FactualAnswerCachePolicyTest {
 
     @Test
     fun sourceFreeFactualAnswersAreNotCached() {
