@@ -3444,6 +3444,10 @@ check("v9.33.165: the selected model and inference controls remain present",
 check("v9.33.165: the send-only composer has no mic, camera or symbol toolbar",
       "startSpeech()" not in _send165 and "ic_camera" not in _send165 and
       "symRow" not in _main165)
+check("v9.33.165: stop remains usable after the idle send button is disabled",
+      _main165.count('setSendButton(R.drawable.ic_stop, stopColor, "Stop")') == 3 and
+      _main165.count("sendBtn.isEnabled = true") >= 3 and
+      _main165.count("sendBtn.alpha = 1f") >= 3)
 check("v9.33.165: version is at least 9.33.165 (333)",
       version_at_least("9.33.165", 333))
 
