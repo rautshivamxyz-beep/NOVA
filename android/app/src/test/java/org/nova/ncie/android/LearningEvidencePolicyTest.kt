@@ -27,7 +27,7 @@ class LearningEvidencePolicyTest {
 
     @Test
     fun factualCacheEligibilityDoesNotReplaceTheDurableMemoryQualityGate() {
-        val weak = VerifyResult(passed = true, qualityScore = 0.60, reason = "weak grounding")
+        val weak = VerifyResult(passed = true, qualityScore = 0.60, notes = "weak grounding")
         assertFalse(LearningEvidencePolicy.mayPersistFact(
             listOf("source text is present"), weak
         ))
