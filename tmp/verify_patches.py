@@ -3457,7 +3457,6 @@ check("v9.33.165: version is at least 9.33.165 (333)",
 # ---- v9.33.166: high-quality conversation without repeated prompt work ----
 _chat166 = load("ncie/android/NcieChat.kt")
 _ext166 = load("ncie/android/NcieChatExt.kt")
-_ask166 = load("ncie/android/NcieAsk.kt")
 _follow166 = load("ncie/android/FollowUpIntent.kt")
 _sum166 = load("ncie/android/NcieSummary.kt")
 _main166 = load("MainActivity.kt")
@@ -3466,7 +3465,7 @@ check("v9.33.166: rolling summaries are injected only when context is rebuilt",
       "NcieSummary.shouldInject(chatSumm, needsContextCarry" in _chat166 and
       "needsContextCarry && !hasSkill && !freshForCode" in _sum166)
 check("v9.33.166: factual corrections bypass answer caches and learned memory",
-      "FollowUpIntent.isCorrectionFeedback" in _follow166 and
+      "fun isCorrectionFeedback" in _follow166 and
       "correctionRule + detailRule" in _chat166 and
       _chat166.count("!correctionFeedback") >= 4 and
       "if (!correctionTurn)" in _main166)
@@ -3478,42 +3477,11 @@ check("v9.33.166: follow-up references resolve to the last clear idea",
       "references such as this, that, those and same" in _settings166)
 check("v9.33.166: correction and summary policies have regression tests",
       "directFactualChallengesAreRecognisedOnlyWithAPreviousAnswer" in
-          load_test("ncie/android/FollowUpIntentTest.kt") and
+          load_test("android/FollowUpIntentTest.kt") and
       "rollingSummaryIsInjectedOnlyWhenTheConversationContextMustBeRebuilt" in
-          load_test("ncie/android/NcieAskTest.kt") and
+          load_test("android/NcieAskTest.kt") and
       "theToolInventoryCommandFiresOnWholeMessagesOnly" in
-          load_test("ncie/android/NcieAskTest.kt"))
-check("v9.33.166: version is at least 9.33.166 (334)",
-      version_at_least("9.33.166", 334))
-
-# ---- v9.33.166: high-quality conversation without repeated prompt work ----
-_chat166 = load("ncie/android/NcieChat.kt")
-_ext166 = load("ncie/android/NcieChatExt.kt")
-_follow166 = load("ncie/android/FollowUpIntent.kt")
-_sum166 = load("ncie/android/NcieSummary.kt")
-_main166 = load("MainActivity.kt")
-_settings166 = load("Settings.kt")
-check("v9.33.166: rolling summaries are injected only when context is rebuilt",
-      "NcieSummary.shouldInject(chatSumm, needsContextCarry" in _chat166 and
-      "needsContextCarry && !hasSkill && !freshForCode" in _sum166)
-check("v9.33.166: factual corrections bypass answer caches and learned memory",
-      "FollowUpIntent.isCorrectionFeedback" in _follow166 and
-      "correctionRule + detailRule" in _chat166 and
-      _chat166.count("!correctionFeedback") >= 4 and
-      "if (!correctionTurn)" in _main166)
-check("v9.33.166: tool inventory comes from the registered source list",
-      "answerToolInventory(text)" in _chat166 and
-      "NcieAsk.tools(text)" in _ext166 and
-      'NciePlanner.TOOLS.filter { it.first != "none" }' in _ext166)
-check("v9.33.166: follow-up references resolve to the last clear idea",
-      "references such as this, that, those and same" in _settings166)
-check("v9.33.166: correction and summary policies have regression tests",
-      "directFactualChallengesAreRecognisedOnlyWithAPreviousAnswer" in
-          load_test("ncie/android/FollowUpIntentTest.kt") and
-      "rollingSummaryIsInjectedOnlyWhenTheConversationContextMustBeRebuilt" in
-          load_test("ncie/android/NcieAskTest.kt") and
-      "theToolInventoryCommandFiresOnWholeMessagesOnly" in
-          load_test("ncie/android/NcieAskTest.kt"))
+          load_test("android/NcieAskTest.kt"))
 check("v9.33.166: version is at least 9.33.166 (334)",
       version_at_least("9.33.166", 334))
 
