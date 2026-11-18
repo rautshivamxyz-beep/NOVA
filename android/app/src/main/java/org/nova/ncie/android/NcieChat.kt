@@ -192,6 +192,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         }
         val text = (raw ?: input.text.toString()).trim()
         if (text.isEmpty()) return
+        val previousUserMessages = currentChat.messages
+            .filter { it.role == Role.USER }
+            .map { it.text }
+        val personFactLookup = FollowUpIntent.personFactLookup(text, previousUserMessages)
         // v9.13.0 "Audit Fixes" (re-derived d): the online fetch flow
         // already showed and persisted this question (OnlineFetch.fetch)
         // - this completion turn must not add or persist it a second
@@ -1106,8 +1110,13 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // the last thing in front of the model when it answers. The CODE rule
         // read "never describe the code instead of writing it", and NOVA
         // described the code. Each rule below now says what TO do.
+        val depthFeedback = FollowUpIntent.isDepthFeedback(text)
         val asksForDetail = Regex("(?i)\\b(in detail|detailed|explain fully|step by step|thorough|elaborate|deep explanation|complete explanation)\\b").containsMatchIn(text)
-        val detailRule = if (asksForDetail) "(DETAIL REQUEST: teach the complete topic in logical steps, explain why each step works, include a worked example and important exceptions. Prefer a thorough answer over a short summary.)\\n" else ""
+        val detailRule = when {
+            depthFeedback -> "(DEPTH FEEDBACK: continue the SAME subject as the previous answer. Skip the basic introduction and give more advanced, less obvious facts, mechanisms, exceptions, and why they matter. Do not ask the user to choose a subject.)\\n"
+            asksForDetail -> "(DETAIL REQUEST: teach the complete topic in logical steps, explain why each step works, include a worked example and important exceptions. Prefer a thorough answer over a short summary.)\\n"
+            else -> ""
+        }
         val codeTaskRule = if (codeReq) "(CODE TASK: deliver the actual implementation, not a description. Use one complete fenced code block with the correct language tag. Include imports, definitions, setup, and a runnable entry point when applicable. Do not use ellipses, TODO placeholders, or omit sections. Check syntax, names, types, edge cases, and consistency before replying. If something truly depends on missing information, state the assumption and still provide the most complete working version.)\\n" else ""
         // v9.33.62: the standing rules moved to Settings.RULEBOOK and are now
         // carried in the SYSTEM prompt (NovaEngine), so they are encoded once
@@ -1231,7 +1240,18 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             (wikiPart.isEmpty() || !wikiStrong ||
                 bioQuestion(text) || compareQuestion(text) || "web" in route)
         ) {
-            offerOnlineFetch(act, text)
+            offerOnlineFetch(act, text, personFactLookup)
+            return
+        }
+        // Person identity and family relationships are high-risk for this
+        // small model: without a strong local source, ask permission to verify
+        // online rather than let the model fill gaps with invented people.
+        // The source lookup remains opt-in and the decline path abstains.
+        if (!offered && lastSkillMatched == null &&
+            (EntityMatch.isPersonLookupQuestion(text) || personFactLookup != null) &&
+            docPart.isEmpty() && knowledgePart.isEmpty() && !wikiStrong
+        ) {
+            OnlineFetch.honestOffer(act, text, personFactLookup)
             return
         }
         // v9.13.2 "Small Model Honesty" (the honesty gate): a 230M-class
@@ -1323,18 +1343,40 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 compacting = false
                 val dr = directReply
                 if (dr != null) {
+                    if (!preShown) {
+                        val u = Msg(Role.USER, text)
+                        currentChat.messages.add(u)
+                        adapter.add(u)
+                    }
                     val m = Msg(Role.ASSISTANT,
                         dr + "\n\n(Source: offline Wikipedia - " + directSource + ")")
                     currentChat.messages.add(m)
                     adapter.add(m)
+                    needsContextCarry = true
                     scrollToEnd()
-                    ChatStore.save(act, currentChat)
+                    withContext(Dispatchers.IO) { ChatStore.save(act, currentChat) }
                     return@launch
                 }
                 startGeneration(turnPrompt, if (preShown) null else text)
             }
         } else {
             NcieSummary.bump(this, currentChat.id)
+            val dr = directReply
+            if (dr != null) {
+                if (!preShown) {
+                    val u = Msg(Role.USER, text)
+                    currentChat.messages.add(u)
+                    adapter.add(u)
+                }
+                val m = Msg(Role.ASSISTANT,
+                    dr + "\n\n(Source: offline Wikipedia - " + directSource + ")")
+                currentChat.messages.add(m)
+                adapter.add(m)
+                needsContextCarry = true
+                scrollToEnd()
+                scope.launch(Dispatchers.IO) { ChatStore.save(act, currentChat) }
+                return
+            }
             if ((ctxTrimmed || freshForCode) && NovaEngine.contextDirty) {
                 // v9.11.0: the dropped turns are still in the engine's
                 // KV - reset first (the same suspend-then-generate shape
