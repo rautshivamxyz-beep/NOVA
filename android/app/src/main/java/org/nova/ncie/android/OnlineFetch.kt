@@ -70,22 +70,31 @@ object OnlineFetch {
      *  only the gaps. Local material is the ALTERNATIVE now, not a
      *  blocker: the dialog says what is already covered and offers to
      *  look online anyway. Ask-first stays the law either way. */
-    fun offer(act: MainActivity, text: String, haveLocal: Boolean = false) {
-        val kws = NcieKnowledge.keyTerms(text).take(6)
-        // v9.26.0 "Search fix": a Devanagari (Hindi/Marathi) question yields
-        // no ASCII keywords, but the web understands the raw text - so search
-        // it instead of refusing. The old code dead-ended with "I can't
-        // search ... in Hindi", which read as "search does nothing".
-        val devanagari = kws.isEmpty() && DEVANAGARI.containsMatchIn(text)
+    fun offer(
+        act: MainActivity,
+        text: String,
+        haveLocal: Boolean = false,
+        queryOverride: String? = null
+    ) {
+        val previousUsers = act.currentChat.messages
+            .filter { it.role == Role.USER }
+            .map { it.text }
+        val personFollowUp = FollowUpIntent.personFactLookup(text, previousUsers)
+        val lookupText = queryOverride ?: personFollowUp ?: text
+        val familyLookup = Regex(
+            "(?i)\\b(?:brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?)\\b"
+        ).containsMatchIn(lookupText)
+        val mustVerify = EntityMatch.isPersonLookupQuestion(text) ||
+            personFollowUp != null || EntityMatch.isPersonLookupQuestion(lookupText) || familyLookup
+        val kws = NcieKnowledge.keyTerms(lookupText).take(6)
+        val devanagari = kws.isEmpty() && DEVANAGARI.containsMatchIn(lookupText)
         if (kws.isEmpty() && !devanagari) {
-            act.launchNcieSend(text, offered = true); return
+            if (mustVerify) answerOfflineAbstention(act, text)
+            else act.launchNcieSend(text, offered = true)
+            return
         }
-        // v9.32.2 "Search the question": searching the bare keywords sent "modi" to
-        // Wikipedia, where it is ambiguous, and the answer came back about his
-        // estranged wife. A natural question resolves the entity correctly, so a
-        // short question is searched as written; only a long one falls back to
-        // its key terms.
-        val q = if (devanagari || text.trim().length <= 120) text.trim().take(160)
+        val q = if (queryOverride != null) queryOverride.trim().take(160)
+                else if (devanagari || lookupText.trim().length <= 120) lookupText.trim().take(160)
                 else kws.joinToString(" ")
         val title: String; val message: String; val noBtn: String
         if (haveLocal) {
@@ -95,7 +104,7 @@ object OnlineFetch {
                 "the open web for:\n\"$q\"\n\n" +
                 "Nothing else leaves your phone. Whatever it finds stays " +
                 "offline forever."
-            noBtn = "Answer locally"
+            noBtn = if (mustVerify) "Stay offline" else "Answer locally"
         } else {
             title = "Look it up online?"
             message = "Nothing in your notes or offline Wikipedia covers " +
@@ -103,48 +112,86 @@ object OnlineFetch {
                 "enough, the open web for:\n\"$q\"\n\n" +
                 "Nothing else leaves your phone. Whatever it finds stays " +
                 "offline forever."
-            noBtn = "Answer anyway"
+            noBtn = if (mustVerify) "Stay offline" else "Answer anyway"
         }
-        // v9.32.0 "Always online": when the user has asked NOVA to look things up
-        // on its own, the dialog is skipped and the fetch runs immediately - a
-        // grounded answer is the only thing that stops the invented facts.
         if (org.nova.Settings(act).autoOnline) {
-            fetch(act, text, q)
+            fetch(act, lookupText, q)
             return
+        }
+        val decline = {
+            if (mustVerify) answerOfflineAbstention(act, text)
+            else act.launchNcieSend(text, offered = true)
         }
         AlertDialog.Builder(act)
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
-        .setNegativeButton(noBtn) { _, _ -> act.launchNcieSend(text, offered = true) }
-        .setOnCancelListener { act.launchNcieSend(text, offered = true) }
-        .show()
+            .setPositiveButton("Look it up") { _, _ -> fetch(act, lookupText, q) }
+            .setNegativeButton(noBtn) { _, _ -> decline() }
+            .setOnCancelListener { decline() }
+            .show()
     }
 
-    /** v9.13.2 "Small Model Honesty": the tiny-model honesty gate's
-     *  offer - a 230M-class model was asked a factual question nothing
-     *  local backs, so instead of generating confident word salad the
-     *  chat turn routes here. Same ask-first flow and same fetch as the
-     *  quiet offer, different honest wording; declining (or cancelling)
-     *  sends the turn back through ncieSend with offered=true, which
-     *  skips the gate and generates the model's best guess - the user
-     *  explicitly accepted that. */
-    fun honestOffer(act: MainActivity, text: String) {
-        val kws = NcieKnowledge.keyTerms(text).take(6)
-        if (kws.isEmpty()) { act.launchNcieSend(text, offered = true); return }
-        val q = if (text.trim().length <= 120) text.trim().take(160) else kws.joinToString(" ")
-        if (org.nova.Settings(act).autoOnline) { fetch(act, text, q); return }
+    /** A factual person/relationship question is never guessed from an empty source set. */
+    fun honestOffer(act: MainActivity, text: String, queryOverride: String? = null) {
+        val previousUsers = act.currentChat.messages
+            .filter { it.role == Role.USER }
+            .map { it.text }
+        val personFollowUp = FollowUpIntent.personFactLookup(text, previousUsers)
+        val lookupText = queryOverride ?: personFollowUp ?: text
+        val familyLookup = Regex(
+            "(?i)\\b(?:brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?)\\b"
+        ).containsMatchIn(lookupText)
+        val mustVerify = EntityMatch.isPersonLookupQuestion(text) ||
+            personFollowUp != null || familyLookup
+        val kws = NcieKnowledge.keyTerms(lookupText).take(6)
+        if (kws.isEmpty()) {
+            if (mustVerify) answerOfflineAbstention(act, text)
+            else act.launchNcieSend(text, offered = true)
+            return
+        }
+        val q = if (queryOverride != null) queryOverride.trim().take(160)
+                else if (lookupText.trim().length <= 120) lookupText.trim().take(160)
+                else kws.joinToString(" ")
+        if (org.nova.Settings(act).autoOnline) { fetch(act, lookupText, q); return }
+        val decline = {
+            if (mustVerify) answerOfflineAbstention(act, text)
+            else act.launchNcieSend(text, offered = true)
+        }
         AlertDialog.Builder(act)
             .setTitle("Look it up online?")
-            .setMessage("I don't know this well enough with this model — " +
-                "look it up online?\n\nQuestion: \"" + text.take(200) + "\"\n\nNOVA will search " +
-                "Wikipedia and, if that is not enough, the open web for:\n\"" + q + "\"\n\n" +
-                "Nothing else leaves your phone. Whatever it finds stays " +
-                "offline forever.")
-            .setPositiveButton("Look it up") { _, _ -> fetch(act, text, q) }
-            .setNegativeButton("Answer anyway") { _, _ -> act.launchNcieSend(text, offered = true) }
-            .setOnCancelListener { act.launchNcieSend(text, offered = true) }
+            .setMessage("I can't verify this from the available offline sources. " +
+                "Search Wikipedia and, if needed, the open web?\n\nQuestion: \"" +
+                lookupText.take(200) + "\"\n\nNothing is searched until you approve it.")
+            .setPositiveButton("Look it up") { _, _ -> fetch(act, lookupText, q) }
+            .setNegativeButton(if (mustVerify) "Stay offline" else "Answer anyway") { _, _ -> decline() }
+            .setOnCancelListener { decline() }
             .show()
+    }
+
+    private fun answerOfflineAbstention(
+        act: MainActivity,
+        text: String,
+        message: String = "I can't verify that from the offline sources available in this chat, so I won't guess. " +
+            "Ask me to check online when you want a source-checked answer."
+    ) {
+        val last = act.currentChat.messages.lastOrNull()
+        if (last?.role != Role.USER || last.text != text) {
+            val user = Msg(Role.USER, text)
+            act.currentChat.messages.add(user)
+            act.adapter.add(user)
+        }
+        act.offeredQuestionShown = null
+        val reply = Msg(Role.ASSISTANT, message)
+        act.currentChat.messages.add(reply)
+        act.adapter.add(reply)
+        act.scrollToEnd()
+        act.scope.launch(Dispatchers.IO) { ChatStore.save(act, act.currentChat) }
+    }
+
+    /** A lookup returned material, but it did not verify the requested detail. */
+    fun answerUnverified(act: MainActivity, text: String) {
+        answerOfflineAbstention(act, text,
+            "The material I found does not verify that detail. I won't invent names or relationships.")
     }
 
     private fun fetch(act: MainActivity, text: String, q: String) {
@@ -185,13 +232,19 @@ object OnlineFetch {
             // never stored.
             val wrongEntity = wiki != null && entityQuestion(text) &&
                 !EntityMatch.titleMatchesEntity(wiki.first, text)
-            if (wiki != null && !wrongEntity && EvidencePipeline.acceptsFetchedSource(q, wiki.second)) {
+            val wrongRelationship = wiki != null &&
+                FollowUpIntent.isPersonRelationQuestion(text) &&
+                !FollowUpIntent.hasRelationshipEvidence(text, wiki.second)
+            if (wiki != null && !wrongEntity && !wrongRelationship &&
+                EvidencePipeline.acceptsFetchedSource(q, wiki.second)) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
                 } else reason = "wikipedia: could not store"
             } else if (wrongEntity) {
                 reason = "wikipedia: '" + wiki!!.first + "' does not name the thing asked about"
+            } else if (wrongRelationship) {
+                reason = "wikipedia: article does not state the requested relationship"
             } else if (wiki == null) {
                 if (reason.isEmpty()) reason = "wikipedia: no usable article"
             } else reason = "wikipedia: weak match"
@@ -211,14 +264,20 @@ object OnlineFetch {
                     // A page that merely mentions a name must never become a biography.
                     val wrongWebEntity = entityQuestion(text) &&
                         !EntityMatch.titleMatchesEntity(page.title, text)
-                    if (!wrongWebEntity &&
+                    val wrongWebRelationship = FollowUpIntent.isPersonRelationQuestion(text) &&
+                        !FollowUpIntent.hasRelationshipEvidence(text, body)
+                    if (!wrongWebEntity && !wrongWebRelationship &&
                         EvidencePipeline.acceptsFetchedSource(q, body) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
                         savedWeb = page
                     } else reason = joinReason(reason,
-                        if (wrongWebEntity) "web: title does not match requested person" else "web: weak match")
+                        when {
+                            wrongWebEntity -> "web: title does not match requested person"
+                            wrongWebRelationship -> "web: article does not state the requested relationship"
+                            else -> "web: weak match"
+                        })
                 } else reason = joinReason(reason, "web: no page")
             }
             // v9.17.1: diagnose the failure on the IO thread (a proxy

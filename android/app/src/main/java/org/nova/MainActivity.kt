@@ -472,14 +472,14 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
             })
             addView(TextView(this@MainActivity).apply {
-                text = "How can I help you today?"
+                text = "What can I help with?"
                 textSize = 23f
                 setTextColor(textMain)
                 gravity = Gravity.CENTER
                 setPadding(0, dp(12), 0, dp(4))
             })
             addView(TextView(this@MainActivity).apply {
-                text = "Your private AI. Runs 100% on this phone."
+                text = "Ask a question, explore an idea, or work through a problem."
                 textSize = 13f
                 setTextColor(textDim)
                 gravity = Gravity.CENTER
@@ -502,48 +502,53 @@ class MainActivity : Activity() {
                 })
             }
             val suggestions = listOf(
-                "Explain something to me" to R.drawable.ic_lightbulb,
+                "Explain a topic" to R.drawable.ic_lightbulb,
                 "Translate to Hindi" to R.drawable.ic_globe,
-                "Help me write code" to R.drawable.ic_edit,
+                "Write some code" to R.drawable.ic_edit,
                 "Summarize a topic" to R.drawable.ic_doc
             )
-            for ((s, ico) in suggestions) {
-                addView(Button(this@MainActivity).apply {
-                    text = s
-                    isAllCaps = false
-                    compoundDrawablePadding = dp(10)
-                    setCompoundDrawablesWithIntrinsicBounds(icon(ico, NovaTheme.dim), null, null, null)
-                    textSize = 14f
-                    setTextColor(textMain)
-                    setPadding(dp(16), 0, dp(16), 0)
-                    minWidth = 0
-                    minimumWidth = 0
-                    minHeight = 0
-                    minimumHeight = 0
-                    // v7.9.2: icon on the leading edge, text right after
-                    // it - centering the icon+text block pushed every
-                    // label off-balance against the left icon
-                    gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                    background = rippleOverlay(GradientDrawable().apply {
-                        setColor(NovaTheme.pill)
-                        cornerRadius = dp(26).toFloat()
-                        setStroke(dp(1), NovaTheme.border)
+            for (pair in suggestions.chunked(2)) {
+                val suggestionRow = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                for ((s, ico) in pair) {
+                    suggestionRow.addView(Button(this@MainActivity).apply {
+                        text = s
+                        isAllCaps = false
+                        compoundDrawablePadding = dp(7)
+                        setCompoundDrawablesWithIntrinsicBounds(icon(ico, NovaTheme.dim), null, null, null)
+                        textSize = 12.5f
+                        setTextColor(textMain)
+                        setPadding(dp(10), 0, dp(8), 0)
+                        minWidth = 0
+                        minimumWidth = 0
+                        minHeight = 0
+                        minimumHeight = 0
+                        gravity = Gravity.CENTER_VERTICAL or Gravity.START
+                        maxLines = 2
+                        background = rippleOverlay(GradientDrawable().apply {
+                            setColor(NovaTheme.pill)
+                            cornerRadius = dp(16).toFloat()
+                            setStroke(dp(1), NovaTheme.border)
+                        })
+                        setOnClickListener {
+                            input.setText(
+                                when {
+                                    s.contains("Explain") -> "Explain in simple words: "
+                                    s.contains("Translate") -> "Translate to Hindi: "
+                                    s.contains("code") -> "Write me code for: "
+                                    else -> "Summarize this in 3 points: "
+                                })
+                            input.setSelection(input.text.length)
+                        }
+                    }, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+                        if (pair.first() != pair.last()) rightMargin = dp(8)
                     })
-                    setOnClickListener {
-                        input.setText(
-                            when {
-                                s.contains("Explain") -> "Explain in simple words: "
-                                s.contains("Translate") -> "Translate to Hindi: "
-                                s.contains("code") -> "Write me code for: "
-                                else -> "Summarize this in 3 points: "
-                            })
-                        input.setSelection(input.text.length)
-                    }
-                }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
-                ).apply {
-                    topMargin = dp(10)
-                })
+                }
+                addView(suggestionRow, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(58)
+                ).apply { topMargin = dp(8) })
             }
         }
         root.addView(FrameLayout(this).apply {
@@ -726,7 +731,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         updateSendLook()
 
-        // ---- Side drawer (ChatGPT style)
+        // ---- Navigation drawer: chat-first, grouped, and searchable.
         val frame = FrameLayout(this)
         scrim = View(this).apply {
             setBackgroundColor(NovaTheme.scrim)
@@ -738,156 +743,135 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         frame.addView(scrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
         drawerPane = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(NovaTheme.surface)
-            setPadding(dp(20), dp(44), dp(16), dp(20))
+            setPadding(dp(16), dp(42), dp(12), dp(20))
             visibility = View.GONE
         }
-        drawerPane.addView(TextView(this).apply {
-            text = "✦"
-            textSize = 24f
-            setTextColor(NovaTheme.accent)
-        })
-        drawerPane.addView(TextView(this).apply {
-            text = "NOVA"
-            textSize = 22f
-            letterSpacing = 0.14f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(NovaTheme.text)
-            setPadding(0, dp(2), 0, dp(4))
-        })
-        val modelLabel = settings.lastModelLabel.ifBlank { "Download a model" }
-        val modelRow = LinearLayout(this).apply {
+
+        // Brand + model selector.
+        val drawerBrand = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(2), dp(12), dp(2), dp(12))
+            setPadding(dp(4), dp(2), dp(4), dp(14))
+        }
+        val brandMark = TextView(this).apply {
+            text = "✦"
+            textSize = 23f
+            gravity = Gravity.CENTER
+            setTextColor(NovaTheme.accent)
+            background = GradientDrawable().apply {
+                setColor(NovaTheme.accentSoft)
+                cornerRadius = dp(13).toFloat()
+            }
+        }
+        drawerBrand.addView(brandMark, LinearLayout.LayoutParams(dp(42), dp(42)))
+        val brandText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), 0, 0, 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "NOVA"
+                textSize = 19f
+                letterSpacing = 0.10f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(NovaTheme.text)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Your AI workspace"
+                textSize = 11.5f
+                setTextColor(NovaTheme.dim)
+                setPadding(0, dp(2), 0, 0)
+            })
+        }
+        drawerBrand.addView(brandText, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        drawerBrand.addView(roundButton("", NovaTheme.dim).apply {
+            background = rippleOverlay(null, dp(18).toFloat())
+            setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_close, NovaTheme.dim), null, null, null)
+            contentDescription = "Close navigation"
+            setOnClickListener { closeDrawer() }
+        }, LinearLayout.LayoutParams(dp(36), dp(36)))
+        drawerPane.addView(drawerBrand)
+
+        val modelLabel = settings.lastModelLabel.ifBlank { "No model selected" }
+        val modelCard = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rippleOverlay(GradientDrawable().apply {
+                setColor(NovaTheme.cardAlt)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), NovaTheme.border)
+            }, dp(14).toFloat())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
             setOnClickListener {
                 closeDrawer()
                 startActivity(Intent(this@MainActivity, ModelsActivity::class.java))
             }
         }
-        modelRow.addView(TextView(this).apply {
+        val modelCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        modelCopy.addView(TextView(this).apply {
+            text = "CURRENT MODEL"
+            textSize = 9.5f
+            letterSpacing = 0.10f
+            setTextColor(NovaTheme.dim)
+        })
+        modelCopy.addView(TextView(this).apply {
             text = modelLabel
             textSize = 13f
-            setTextColor(NovaTheme.dim)
-            layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setTextColor(NovaTheme.text)
+            setPadding(0, dp(3), 0, 0)
         })
-        modelRow.addView(TextView(this).apply {
-            text = "›"; textSize = 16f; setTextColor(NovaTheme.dim)
+        modelCard.addView(modelCopy, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        modelCard.addView(TextView(this).apply {
+            text = "Change  ›"
+            textSize = 12f
+            setTextColor(NovaTheme.accent)
         })
-        drawerPane.addView(modelRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-        // v7.9.1 redesign: the drawer held 13 rows and overflowed small
-        // screens - the daily actions stay in the drawer, everything
-        // else moved one tap deeper into "More".
+        drawerPane.addView(modelCard, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(14)
+        })
+
         drawerPane.addView(drawerRow("New chat", R.drawable.ic_add) { newConversation() })
-        drawerPane.addView(drawerRow("All chats", R.drawable.ic_chat) {
+        drawerPane.addView(drawerRow("Search chats", R.drawable.ic_chat) {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
+
+        drawerPane.addView(drawerSection("RECENT CHATS"))
+        drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        drawerPane.addView(drawerList, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        drawerPane.addView(drawerSection("WORKSPACE"))
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
         })
-        // v0.9.2 phase 3: the memory screen lives in the drawer now -
-        // one tap from the chat, no separate launcher icon
         drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
             startActivity(Intent(this, MemoryActivity::class.java))
-        })
-        // v8.5.0: every online fetch, visible and deletable
-        drawerPane.addView(drawerRow("Fetches", R.drawable.ic_globe) {
-            startActivity(Intent(this, FetchLogActivity::class.java))
-        })
-        // v9.33.133: public-source OSINT workspace; separate from chat/model inference.
-        drawerPane.addView(drawerRow("OSINT", R.drawable.ic_globe) {
-            startActivity(Intent(this, OsintActivity::class.java))
-        })
-        // v8.7.0: the whole local state, saved to and restored from a zip
-        drawerPane.addView(drawerRow("Backup", R.drawable.ic_copy) {
-            startActivity(Intent(this, BackupActivity::class.java))
-        })
-        // v9.29.2: "Scan notes" and "Camera" did the same job (get an image
-        // -> on-device OCR -> chat) through two rows. One row, one chooser.
-        drawerPane.addView(drawerRow("Scan a page", R.drawable.ic_camera) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Scan a page")
-                .setItems(arrayOf("Take a photo", "Choose from gallery")) { _, which ->
-                    if (which == 0) openCamera() else scanNotes()
-                }
-                .show()
-        })
-        // v9.29.3: grant a folder for tool recipes (SAF, kept across restarts)
-        drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
-            try {
-                startActivityForResult(
-                    Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                    REQ_FOLDER)
-            } catch (e: Exception) { toast("No file picker available") }
-        })
-        // v8.8.0: the eyes - notification access; NovaListener logs
-        // notifications locally for "what did I miss" and "messages from X"
-        drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
-            if (NovaListener.isEnabled(this)) toast("Notification access already on")
-            else toast("Grant notification access to NOVA")
-            try {
-                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
-        })
-        // v8.8.0: the update row; v9.7.0 "Delta Updates" - it opens the
-        // Update screen now: the private releases page, or apply a
-        // downloaded NOVA-delta-*.patch against the installed APK on
-        // device and install the result
-        drawerPane.addView(drawerRow("Update", R.drawable.ic_refresh) {
-            startActivity(Intent(this, UpdateActivity::class.java))
-        })
-        // v9.21.0 "Reliable + Easy": one screen that shows whether every
-        // part of NOVA is actually working, and one that teaches the
-        // commands - the two things a silent failure needs.
-        drawerPane.addView(drawerRow("Setup & health", R.drawable.ic_settings) {
-            startActivity(Intent(this, HealthActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("Help", R.drawable.ic_lightbulb) {
-            startActivity(Intent(this, HelpActivity::class.java))
-        })
-        // v9.1.0: the app lock - set or remove the PIN (only a salted
-        // SHA-256 hash is stored, never the PIN); the blocking launch
-        // gate itself lives in onResume
-        drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
-        // v9.29.2: "Voice replies" and "Voice language" were two mic rows
-        // for one feature. One "Voice" row with a small chooser now.
-        drawerPane.addView(drawerRow("Voice", R.drawable.ic_mic) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Voice")
-                .setItems(arrayOf(
-                    if (NcieVoice.enabled) "Voice replies: ON" else "Voice replies: OFF",
-                    "Voice language: " + voiceLanguageLabel()
-                )) { _, which ->
-                    if (which == 0) {
-                        NcieVoice.enabled = !NcieVoice.enabled
-                        toast(if (NcieVoice.enabled) "Voice replies on" else "Voice replies off")
-                    } else cycleVoiceLanguage()
-                }
-                .show()
         })
         val dueCount = Study.dueCount(this)
         val studyRow = drawerRow(
             if (dueCount > 0) "Study ($dueCount due)" else "Study",
-            R.drawable.ic_edit) { Study.review(this) }
+            R.drawable.ic_lightbulb
+        ) { Study.review(this) }
         studyRow.setOnLongClickListener {
             val total = Study.totalCards(this)
-            val d = Study.dueCount(this)
+            val due = Study.dueCount(this)
             AlertDialog.Builder(this)
                 .setTitle("Study deck")
-                .setMessage("$total cards, $d due for review.")
+                .setMessage("$total cards, $due due for review.")
                 .setPositiveButton("Review") { _, _ -> Study.review(this) }
                 .setNegativeButton("Clear deck") { _, _ ->
                     AlertDialog.Builder(this)
                         .setTitle("Delete all cards?")
                         .setPositiveButton("Delete") { _, _ ->
-                            Study.clear(this); toast("Study deck cleared")
+                            Study.clear(this)
+                            toast("Study deck cleared")
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
@@ -899,46 +883,75 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Study plan", R.drawable.ic_lightbulb) {
             startActivity(Intent(this, PlannerActivity::class.java))
         })
-        drawerPane.addView(drawerRow("More", R.drawable.ic_globe) {
-            closeDrawer()
+        drawerPane.addView(drawerRow("OSINT", R.drawable.ic_globe) {
+            startActivity(Intent(this, OsintActivity::class.java))
+        })
+
+        drawerPane.addView(drawerSection("TOOLS"))
+        drawerPane.addView(drawerRow("Fetch history", R.drawable.ic_globe) {
+            startActivity(Intent(this, FetchLogActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("Scan a page", R.drawable.ic_camera) {
             AlertDialog.Builder(this)
-                .setTitle("More")
-                .setItems(arrayOf(
-                    "Help & Tips", "Notes filter", "Share chat", "Exams",
-                    "What did I miss?", "Write in my style", "Check for updates")) { _, which ->
-                    when (which) {
-                        0 -> showHelpTips()
-                        1 -> showNotesFilter()
-                        2 -> shareChat()
-                        3 -> startActivity(Intent(this, ExamsActivity::class.java))
-                        4 -> missedNotifications()
-                        5 -> writeInMyStyle()
-                        6 -> checkForUpdates()
-                    }
+                .setTitle("Scan a page")
+                .setItems(arrayOf("Take a photo", "Choose from gallery")) { _, which ->
+                    if (which == 0) openCamera() else scanNotes()
                 }
                 .show()
         })
-        drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
-        drawerPane.addView(View(this).apply { setBackgroundColor(NovaTheme.border) },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-        drawerPane.addView(TextView(this).apply {
-            text = "RECENT"
-            textSize = 11f
-            letterSpacing = 0.12f
-            setTextColor(NovaTheme.dim)
-            setPadding(dp(4), dp(14), 0, dp(6))
+        drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
+            try {
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    REQ_FOLDER)
+            } catch (e: Exception) { toast("No file picker available") }
         })
-        drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        drawerPane.addView(drawerList, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        // v7.9.1: the pane scrolls now - the drawer outgrew small screens
+        drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
+            if (NovaListener.isEnabled(this)) toast("Notification access already on")
+            else toast("Grant notification access to NOVA")
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+        })
+        drawerPane.addView(drawerRow("Exams", R.drawable.ic_edit) {
+            startActivity(Intent(this, ExamsActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("What did I miss?", R.drawable.ic_chat) { missedNotifications() })
+        drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
+        drawerPane.addView(drawerRow("Write in my style", R.drawable.ic_edit) { writeInMyStyle() })
+        drawerPane.addView(drawerRow("Share chat", R.drawable.ic_copy) { shareChat() })
+        drawerPane.addView(drawerRow("Backup & restore", R.drawable.ic_copy) {
+            startActivity(Intent(this, BackupActivity::class.java))
+        })
+
+        drawerPane.addView(drawerSection("APP"))
+        drawerPane.addView(drawerRow("Models", R.drawable.ic_lightbulb) {
+            startActivity(Intent(this, ModelsActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("Setup & health", R.drawable.ic_settings) {
+            startActivity(Intent(this, HealthActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_refresh) {
+            checkForUpdates()
+        })
+        drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
+        drawerPane.addView(drawerRow("Help", R.drawable.ic_lightbulb) {
+            startActivity(Intent(this, HelpActivity::class.java))
+        })
+        drawerPane.addView(drawerRow("Help & tips", R.drawable.ic_lightbulb) { showHelpTips() })
+        drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
+
         drawerScroller = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             visibility = View.GONE
             addView(drawerPane, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         }
-        frame.addView(drawerScroller, FrameLayout.LayoutParams(dp(304), FrameLayout.LayoutParams.MATCH_PARENT))
+        val drawerWidthDp = (resources.displayMetrics.widthPixels /
+            resources.displayMetrics.density).toInt().minus(48).coerceIn(280, 360)
+        frame.addView(drawerScroller, FrameLayout.LayoutParams(
+            dp(drawerWidthDp), FrameLayout.LayoutParams.MATCH_PARENT))
         return frame
     }
 
@@ -3520,20 +3533,32 @@ Study:
         }
     }
 
+    private fun drawerSection(label: String): View = TextView(this).apply {
+        text = label
+        textSize = 10.5f
+        letterSpacing = 0.12f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(NovaTheme.dim)
+        setPadding(dp(8), dp(18), dp(8), dp(6))
+    }
+
     private fun drawerRow(label: String, iconRes: Int, onClick: () -> Unit): View =
-        Button(this).apply {
+        TextView(this).apply {
             text = label
-            isAllCaps = false
-            textSize = 15f
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            setTextColor(NovaTheme.text)
-            background = rippleOverlay(GradientDrawable().apply {
-                cornerRadius = dp(14).toFloat()
-            }, dp(14).toFloat())
-            setPadding(dp(4), dp(12), dp(4), dp(12))
+            textSize = 14f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(if (label == "New chat") NovaTheme.accent else NovaTheme.text)
+            minHeight = dp(46)
+            setPadding(dp(12), dp(8), dp(10), dp(8))
             compoundDrawablePadding = dp(14)
-            if (iconRes != 0)
-                setCompoundDrawablesWithIntrinsicBounds(icon(iconRes, NovaTheme.dim), null, null, null)
+            if (iconRes != 0) {
+                val tint = if (label == "New chat") NovaTheme.accent else NovaTheme.dim
+                setCompoundDrawablesWithIntrinsicBounds(icon(iconRes, tint), null, null, null)
+            }
+            background = rippleOverlay(GradientDrawable().apply {
+                setColor(if (label == "New chat") NovaTheme.accentSoft else Color.TRANSPARENT)
+                cornerRadius = dp(13).toFloat()
+            }, dp(13).toFloat())
             setOnClickListener { closeDrawer(); onClick() }
         }
 
@@ -3544,7 +3569,7 @@ Study:
         scrim.visibility = View.VISIBLE
         scrim.alpha = 0f
         scrim.animate().alpha(1f).setDuration(200).start()
-        drawerScroller.translationX = -dp(304).toFloat()
+        drawerScroller.translationX = -drawerScroller.layoutParams.width.toFloat()
         drawerScroller.animate().translationX(0f).setDuration(220).start()
     }
 
@@ -3567,13 +3592,20 @@ Study:
             val title = if (first.length > 38) first.take(38) + "…" else first
             drawerList.addView(TextView(this).apply {
                 text = title
-                textSize = 14f
+                textSize = 13.5f
                 maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
                 setTextColor(NovaTheme.text)
-                setPadding(dp(4), dp(10), dp(4), dp(10))
+                setPadding(dp(12), dp(10), dp(8), dp(10))
+                compoundDrawablePadding = dp(12)
+                setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_chat, NovaTheme.dim), null, null, null)
+                background = rippleOverlay(GradientDrawable().apply {
+                    setColor(Color.TRANSPARENT)
+                    cornerRadius = dp(12).toFloat()
+                }, dp(12).toFloat())
                 setOnClickListener { openChatFromDrawer(chat.id) }
             }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(42)))
         }
         if (byTime.isEmpty()) {
             drawerList.addView(TextView(this).apply {

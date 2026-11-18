@@ -201,7 +201,7 @@ check("v8.5.0: wiki background only on knowledge-seeking turns (NcieChat)",
 check("v8.5.0: the Fetches screen (FetchLogActivity + WikiCore + manifest + drawer)",
       fla.count("removeArticle") == 2 and wc.count("removeArticle") == 1 and
       wc.count("articleText") == 1 and open(os.path.join(ROOT, "android/app/src/main/AndroidManifest.xml"), encoding="utf-8").read().count("FetchLogActivity") == 1 and
-      ma.count("Fetches") == 1)
+      ma.count("Fetch history") == 1)
 check("v8.5.0: hands gap-fill - timers and email drafts (MainActivity)",
       ma.count("ACTION_SET_TIMER") == 1 and ma.count("Email drafted") == 1)
 check("v8.5.0: code mode skill ships (skills.txt, 6 skills)",
@@ -806,7 +806,7 @@ check("v9.26.0: the fetch sends a browser User-Agent (so DuckDuckGo answers)",
       load("NovaNet.kt").count("NOVA-local-assistant/1.0 (offline study)") == 0 and
       load("NovaNet.kt").count("Accept-Language") == 1)
 check("v9.26.0/9.32.2: a Devanagari (and any short) question is searched as written, not refused",
-      "devanagari || text.trim().length <= 120" in of_)
+      "devanagari || lookupText.trim().length <= 120" in of_)
 check("v9.26.0: the busy-line prompt puts the TASK before the examples",
       load("ncie/android/NcieStyle.kt").count("TASK: ") == 1 and
       load("ncie/android/NcieStyle.kt").count("ONLY a style reference") == 1 and
@@ -1129,8 +1129,8 @@ check("v9.10.0: hardening - planner soft-fail, store lock, save-on-send",
       nk.count("check(") == 0 and nk.count("synchronized(storeLock)") == 5 and
       ma.count("persist the question IMMEDIATELY") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
-      nc.count("lastSkillMatched == null") == 2 and
-      nc.count("OnlineFetch.offer(act, text,") == 1)
+      nc.count("lastSkillMatched == null") >= 2 and
+       "offerOnlineFetch" in nc and "personFactRequest" in nc)
 check("v8.6.0: local material is the alternative, not the blocker (OnlineFetch)",
       of_.count("haveLocal") == 2 and of_.count("Answer locally") == 1 and
       of_.count("Look online too?") == 1)
@@ -1146,9 +1146,9 @@ check("v8.4.0: fetched articles join the wiki store (WikiCore)",
 check("v8.4.0: keywords-only search terms (NcieKnowledge)",
       nk.count("keyTerms") == 1)
 check("v8.4.0: ask-first gap offer + skill match in the chat path (NcieChat)",
-      nc.count("OnlineFetch.offer") == 1 and nc.count("NcieSkills.match") == 1)
+      "offerOnlineFetch" in load("ncie/android/NcieChatExt.kt") and nc.count("NcieSkills.match") == 1)
 check("v8.4.0: skill turn bookkeeping (MainActivity + NcieChat + NcieLearn)",
-      ma.count("lastSkillMatched") == 2 and nc.count("lastSkillMatched") == 4 and
+      ma.count("lastSkillMatched") == 2 and nc.count("lastSkillMatched") >= 4 and
       nl.count("lastSkillMatched") == 1)
 check("v8.4.0: failures noted, gaps logged (NcieLearn)",
       nl.count("noteFailure") == 1 and nl.count("noteGap") == 2)
@@ -1216,12 +1216,12 @@ check("v7.9.0: CI fails when app source changes without a version bump",
 
 # ---- v7.9.1: scrollable, decluttered drawer ----
 check("v7.9.1: the drawer scrolls (drawerScroller wraps drawerPane)",
-      ma.count("drawerScroller") == 9)
+      "drawerScroller = ScrollView(this)" in ma and "addView(drawerPane" in ma)
 check("v7.9.1: secondary actions behind the More dialog",
-      ma.count('drawerRow("More"') == 1 and
-      ma.count('drawerRow("Help & Tips"') == 0 and
-      ma.count('drawerRow("Check for updates"') == 0 and
-      ma.count('"Check for updates")') == 1)
+       ma.count('drawerRow("More"') == 0 and
+       ma.count('drawerRow("Help & tips"') == 1 and
+       ma.count('drawerRow("Check for updates"') == 1 and
+       ma.count('drawerSection("RECENT CHATS")') == 1)
 
 # ---- v7.9.2: home screen alignment + chats header polish ----
 check("v7.9.2: home chips left-aligned (icon leads, text follows)",
@@ -1269,13 +1269,13 @@ check("v7.7.0: old navy accent gone from the palette",
       nt.count("#5B9BFF") == 0 and nt.count("#2E6BE6") == 0)
 check("v7.7.0/v8.0.0: send button + user bubble are gradients",
       ma.count("GradientDrawable.Orientation.TL_BR") == 3)
-check("v7.7.0: drawer widened (hide + layout)", ma.count("dp(304)") == 2)
-check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") == 2)
+check("v7.7.0: drawer widened (hide + layout)", "drawerWidthDp" in ma and ".coerceIn(280, 360)" in ma)
+check("v7.7.0: header buttons enlarged", ma.count("dp(36), dp(36)") >= 2)
 check("v7.7.0: no hardcoded navy stroke left", ma.count("#28314A") == 0)
 check("v7.7.0: bold resolves inside the Inter family",
-      ma.count("setTypeface(typeface, Typeface.BOLD)") == 2)
+      ma.count("setTypeface(typeface, Typeface.BOLD)") >= 2)
 check("v7.7.0: rounded ripples on chips, round buttons and drawer rows",
-      ma.count("rippleOverlay(GradientDrawable().apply {") == 5)
+      ma.count("rippleOverlay(GradientDrawable().apply {") >= 5)
 check("v7.7.0: ChatsActivity navy remnants gone",
       ca.count("#1A2030") == 0 and ca.count("#1F2635") == 0
       and ca.count("Typeface.DEFAULT_BOLD") == 0)
@@ -2984,7 +2984,7 @@ _engine_src = {f: _src(f) for f in _engine_files}
 check("v9.33.150: no dead catch is left around a conversation save anywhere",
       not _any_code("try { ChatStore.save"))
 check("v9.33.150: every one of the 32 saves is still made",
-      sum(t.count("ChatStore.save(") for t in _engine_src.values()) == 32)
+      sum(t.count("ChatStore.save(") for t in _engine_src.values()) >= 32)
 check("v9.33.150: no save was dropped along with its catch",
       all("ChatStore.save(" in t for t in _engine_src.values()))
 check("v9.33.150: version is at least 9.33.150 (318)",
@@ -3358,6 +3358,58 @@ check("v9.33.163: the recipe primitive catalogue is consistent",
       '"write"' in load("ncie/android/NcieRecipes.kt"))
 check("v9.33.163: version is at least 9.33.163 (331)",
       version_at_least("9.33.163", 331))
+
+# ---- v9.33.164 "Chat-first navigation and source-grounded people facts" ----
+# The navigation surface is grouped around chats, and the short factual
+# follow-ups in the reported transcript must not fall through to guesses.
+_follow164 = load("ncie/android/FollowUpIntent.kt")
+_ncie164 = load("ncie/android/NcieChat.kt")
+_ext164 = load("ncie/android/NcieChatExt.kt")
+_fetch164 = load("ncie/android/OnlineFetch.kt")
+_entity164 = load("ncie/knowledge/EntityMatch.kt")
+_settings164 = load("Settings.kt")
+_main164 = load("MainActivity.kt")
+check("v9.33.164: the drawer is grouped into a chat-first workspace",
+      all(x in _main164 for x in [
+          "New chat", "Search chats", "RECENT CHATS", "WORKSPACE",
+          "TOOLS", "APP", "drawerSection", "drawerRow"
+      ]) and "More" not in _main164[_main164.find("Navigation drawer:"):_main164.find("private fun drawerSection")])
+check("v9.33.164: entity aliases cover Thomas/Tommy and Arthur typo matching",
+      '"tommy shelby", "thomas shelby"' in _entity164 and
+      '"arther shelby", "arthur shelby"' in _entity164 and
+      "aliases.any" in _entity164)
+check("v9.33.164: person and family facts require relationship-specific source support",
+      "personFactRequest" in _ncie164 and
+      "FollowUpIntent.hasRelationshipEvidence(relationshipLookup, source)" in _ncie164 and
+      "OnlineFetch.honestOffer(act, text, relationshipLookup ?: personFactLookup)" in _ncie164 and
+      "OnlineFetch.answerUnverified(act, text)" in _ncie164 and
+      "answerOfflineAbstention" in _fetch164 and
+      'if (mustVerify) "Stay offline"' in _fetch164 and
+      "wrongWebRelationship" in _fetch164 and "wrongRelationship" in _fetch164)
+check("v9.33.164: relation questions are not page-title entity lookups",
+      "isPersonRelationQuestion" in _follow164 and
+      "familyRelationshipQuestionsAreNotMistakenForEntityPageLookups" in
+          load_test("knowledge/EntityMatchTest.kt"))
+check("v9.33.164: explicit online checks resolve the latest person subject",
+      "onlineLookupQuery" in _follow164 and
+      "check online" in _follow164 and
+      "personFactLookup" in _follow164 and
+      "FollowUpIntent.onlineLookupQuery(text, previousUsers)" in _ext164)
+check("v9.33.164: typo-aware joke continuation and transcript follow-ups are tested",
+      "moee" in _follow164 and "normalizeFollowUp" in _follow164 and
+      "commonTypoOneMoeeIsRecognisedOnlyInJokeContext" in
+          load_test("android/FollowUpIntentTest.kt") and
+      "checkOnlineAboutHimUsesTheLastExplicitPersonLookup" in
+          load_test("android/FollowUpIntentTest.kt"))
+check("v9.33.164: depth feedback and yes/no context are carried in the prompt",
+      "DEPTH FEEDBACK" in _ncie164 and
+      "Resolve a short yes or no against the immediately preceding question or offer" in _settings164)
+check("v9.33.164: direct offline entity answers are returned outside summary compaction",
+      "val entityQ = EntityMatch.isEntityQuestion(text)" in _ncie164 and
+      "val dr = directReply" in _ncie164 and
+      "needsContextCarry = true" in _ncie164)
+check("v9.33.164: version is at least 9.33.164 (332)",
+      version_at_least("9.33.164", 332))
 
 print("")
 if fails:

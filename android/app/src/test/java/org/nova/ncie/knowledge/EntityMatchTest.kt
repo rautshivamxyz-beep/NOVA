@@ -57,6 +57,22 @@ class EntityMatchTest {
         assertFalse(EntityMatch.titleMatchesEntity("Anything At All", "who is the"))
     }
 
+    @Test
+    fun recognisesTommyAsThomasShelbyAndArthurTypo() {
+        assertEquals("thomas shelby", EntityMatch.entityPhrase("who is Tommy Shelby"))
+        assertEquals("arthur shelby", EntityMatch.entityPhrase("who is arther Shelby"))
+        assertTrue(EntityMatch.titleMatchesEntity("Thomas Shelby", "who is Tommy Shelby"))
+        assertTrue(EntityMatch.titleMatchesEntity("Tommy Shelby", "who is Thomas Shelby"))
+        assertTrue(EntityMatch.titleMatchesEntity("Arthur Shelby", "who is arther Shelby"))
+    }
+
+    @Test
+    fun personLookupGateDoesNotTreatDefinitionsAsPeople() {
+        assertTrue(EntityMatch.isPersonLookupQuestion("who is Thomas Shelby"))
+        assertFalse(EntityMatch.isPersonLookupQuestion("what is photosynthesis"))
+        assertFalse(EntityMatch.isPersonLookupQuestion("what can you do"))
+    }
+
     // ---- v9.33.38: the lookup-shape rule is now shared with the OFFLINE
     // Wikipedia path, which used to serve the wrong article for these ----
 
@@ -65,6 +81,14 @@ class EntityMatchTest {
         assertTrue(EntityMatch.isEntityQuestion("who is rasputin"))
         assertTrue(EntityMatch.isEntityQuestion("what is photosynthesis?"))
         assertTrue(EntityMatch.isEntityQuestion("who was mia hamm"))
+    }
+
+    @Test
+    fun familyRelationshipQuestionsAreNotMistakenForEntityPageLookups() {
+        assertFalse(EntityMatch.isEntityQuestion("who are the brothers of Thomas Shelby"))
+        assertFalse(EntityMatch.isPersonLookupQuestion("who are the brothers of Thomas Shelby"))
+        assertTrue(EntityMatch.isPersonLookupQuestion("who is Thomas Shelby"))
+        assertTrue(EntityMatch.isPersonLookupQuestion("who was Arthur Shelby"))
     }
 
     @Test
