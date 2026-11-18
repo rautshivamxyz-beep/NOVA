@@ -3359,6 +3359,56 @@ check("v9.33.163: the recipe primitive catalogue is consistent",
 check("v9.33.163: version is at least 9.33.163 (331)",
       version_at_least("9.33.163", 331))
 
+# ---- v9.33.164 "Chat-first navigation and source-grounded people facts" ----
+# The navigation surface is grouped around chats, and the short factual
+# follow-ups in the reported transcript must not fall through to guesses.
+_follow164 = load("ncie/android/FollowUpIntent.kt")
+_ncie164 = load("ncie/android/NcieChat.kt")
+_ext164 = load("ncie/android/NcieChatExt.kt")
+_fetch164 = load("ncie/android/OnlineFetch.kt")
+_entity164 = load("ncie/knowledge/EntityMatch.kt")
+_settings164 = load("Settings.kt")
+_main164 = load("MainActivity.kt")
+check("v9.33.164: the drawer is grouped into a chat-first workspace",
+      all(x in _main164 for x in [
+          "New chat", "Search chats", "RECENT CHATS", "WORKSPACE",
+          "TOOLS", "APP", "drawerSection", "drawerRow"
+      ]) and "More" not in _main164[_main164.find("Navigation drawer:"):_main164.find("private fun drawerSection")])
+check("v9.33.164: entity aliases cover Thomas/Tommy and Arthur typo matching",
+      '"tommy shelby", "thomas shelby"' in _entity164 and
+      '"arther shelby", "arthur shelby"' in _entity164 and
+      "aliases.any" in _entity164)
+check("v9.33.164: person and family facts require a source or a deterministic abstention",
+      "personFactRequest" in _ncie164 and
+      "OnlineFetch.honestOffer(act, text, personFactLookup)" in _ncie164 and
+      "OnlineFetch.answerUnverified(act, text)" in _ncie164 and
+      "answerOfflineAbstention" in _fetch164 and
+      'if (mustVerify) "Stay offline"' in _fetch164)
+check("v9.33.164: relation questions are not page-title entity lookups",
+      "isPersonRelationQuestion" in _follow164 and
+      "familyRelationshipQuestionsAreNotMistakenForEntityPageLookups" in
+          load_test("ncie/knowledge/EntityMatchTest.kt"))
+check("v9.33.164: explicit online checks resolve the latest person subject",
+      "onlineLookupQuery" in _follow164 and
+      "check online" in _follow164 and
+      "personFactLookup" in _follow164 and
+      "FollowUpIntent.onlineLookupQuery(text, previousUsers)" in _ext164)
+check("v9.33.164: typo-aware joke continuation and transcript follow-ups are tested",
+      'replace(Regex("(?i)\\\\bmoee\\\\b"), "more")' in _follow164 and
+      "commonTypoOneMoeeIsRecognisedOnlyInJokeContext" in
+          load_test("ncie/android/FollowUpIntentTest.kt") and
+      "onlineCheckAboutHimUsesTheLastExplicitPersonLookup" in
+          load_test("ncie/android/FollowUpIntentTest.kt"))
+check("v9.33.164: depth feedback and yes/no context are carried in the prompt",
+      "DEPTH FEEDBACK" in _ncie164 and
+      "Resolve a short yes or no against the immediately preceding question or offer" in _settings164)
+check("v9.33.164: direct offline entity answers are returned outside summary compaction",
+      "val entityQ = EntityMatch.isEntityQuestion(text)" in _ncie164 and
+      "val dr = directReply" in _ncie164 and
+      "needsContextCarry = true" in _ncie164)
+check("v9.33.164: version is at least 9.33.164 (332)",
+      version_at_least("9.33.164", 332))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
