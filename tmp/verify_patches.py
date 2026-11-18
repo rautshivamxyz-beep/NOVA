@@ -3378,12 +3378,14 @@ check("v9.33.164: entity aliases cover Thomas/Tommy and Arthur typo matching",
       '"tommy shelby", "thomas shelby"' in _entity164 and
       '"arther shelby", "arthur shelby"' in _entity164 and
       "aliases.any" in _entity164)
-check("v9.33.164: person and family facts require a source or a deterministic abstention",
+check("v9.33.164: person and family facts require relationship-specific source support",
       "personFactRequest" in _ncie164 and
-      "OnlineFetch.honestOffer(act, text, personFactLookup)" in _ncie164 and
+      "FollowUpIntent.hasRelationshipEvidence(relationshipLookup, source)" in _ncie164 and
+      "OnlineFetch.honestOffer(act, text, relationshipLookup ?: personFactLookup)" in _ncie164 and
       "OnlineFetch.answerUnverified(act, text)" in _ncie164 and
       "answerOfflineAbstention" in _fetch164 and
-      'if (mustVerify) "Stay offline"' in _fetch164)
+      'if (mustVerify) "Stay offline"' in _fetch164 and
+      "wrongWebRelationship" in _fetch164 and "wrongRelationship" in _fetch164)
 check("v9.33.164: relation questions are not page-title entity lookups",
       "isPersonRelationQuestion" in _follow164 and
       "familyRelationshipQuestionsAreNotMistakenForEntityPageLookups" in
@@ -3397,7 +3399,7 @@ check("v9.33.164: typo-aware joke continuation and transcript follow-ups are tes
       "moee" in _follow164 and "normalizeFollowUp" in _follow164 and
       "commonTypoOneMoeeIsRecognisedOnlyInJokeContext" in
           load_test("android/FollowUpIntentTest.kt") and
-      "onlineCheckAboutHimUsesTheLastExplicitPersonLookup" in
+      "checkOnlineAboutHimUsesTheLastExplicitPersonLookup" in
           load_test("android/FollowUpIntentTest.kt"))
 check("v9.33.164: depth feedback and yes/no context are carried in the prompt",
       "DEPTH FEEDBACK" in _ncie164 and
