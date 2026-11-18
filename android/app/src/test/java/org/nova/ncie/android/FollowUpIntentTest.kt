@@ -155,6 +155,26 @@ class FollowUpIntentTest {
     }
 
     @Test
+    fun correctionChallengesIncludeRequestsForConfidenceAndEvidence() {
+        val previous = "The current champion is Driver X."
+        for (challenge in listOf(
+            "are you sure?",
+            "is that actually correct?",
+            "that doesn't sound right",
+            "you misunderstood the question",
+            "that's not what I asked",
+            "where did you get that?",
+            "show me a source",
+            "cite your answer",
+            "prove it"
+        )) {
+            assertTrue("$challenge should trigger re-evaluation",
+                FollowUpIntent.isCorrectionFeedback(challenge, previous))
+        }
+        assertFalse(FollowUpIntent.isCorrectionFeedback("are you sure?", null))
+    }
+
+    @Test
     fun depthFeedbackKeepsTheSameTopic() {
         assertTrue(FollowUpIntent.isDepthFeedback("these are basic facts"))
         assertTrue(FollowUpIntent.isDepthFeedback("too basic, go deeper"))

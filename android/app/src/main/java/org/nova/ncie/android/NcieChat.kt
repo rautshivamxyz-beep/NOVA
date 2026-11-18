@@ -105,11 +105,33 @@ private val CREATIVE_WORDS = listOf("story", "poem", "joke", "write me", "imagin
  *  verbatim on every repeat, and the user had no way to know it was stale. */
 internal fun factualAsk(t: String): Boolean {
     val x = t.trim()
-    if (x.length > 80) return false
-    val low = " " + x.lowercase()
-    if (low.contains(" you") || low.contains("your")) return false
-    return Regex("(?i)^(who|what|where|when|which|whose|how many|how much)\\b").containsMatchIn(x) ||
-        Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
+    if (x.length > 120) return false
+
+    // These are conversational preference/capability questions, not claims
+    // about the outside world. Keep their ordinary short-turn cache path.
+    val conversational = Regex(
+        "(?i)^(?:how are you|who are you|what is your name|what can you do|" +
+            "what tools do you have|what features do you have|what skills do you have)\\b|" +
+            "\\b(?:what do you think|what is your opinion|what's your opinion|" +
+            "in your opinion|your favorite|do you like|do you prefer)\\b"
+    ).containsMatchIn(x)
+    if (conversational) return false
+
+    // Direct fact questions include yes/no forms ("is X married?") and
+    // explanatory forms ("how does X work?"), not only who/what questions.
+    // They must reach current retrieval/model reasoning instead of replaying
+    // a response that may have been produced from incomplete context.
+    val direct = Regex(
+        "(?i)^(who|what|where|when|which|whose|how|is|are|was|were|did|does|has|have)\\b"
+    ).containsMatchIn(x)
+    val hindi = Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
+    val descriptiveLookup = Regex(
+        "(?i)^(tell me about|give me facts about|facts about|biography of|bio of|history of|overview of)\\b"
+    ).containsMatchIn(x)
+    val freshnessSensitive = Regex(
+        "(?i)\\b(latest|newest|current(?:ly)?|recent|today|tonight|yesterday|now|as of|updated|price|score|ranking|rankings|champion|winner|record|statistics|stats|net worth|age|born|died|married|husband|wife|brothers?|sisters?|parents?|father|mother|children)\\b"
+    ).containsMatchIn(x)
+    return direct || hindi || descriptiveLookup || freshnessSensitive || compareQuestion(x)
 }
 
 private fun creativeRequest(text: String): Boolean {
@@ -1325,7 +1347,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // Experience gate now too (a regenerated answer must not replay
         // verbatim from the learned cache), and a post-fetch completion
         // turn (preShown) skips it - the fetch just brought new material.
-        if (!experienced && !preShown && !correctionFeedback && NcieLearn.recall(this, text)) return
+        // The predictive cache already skips fact-seeking questions. Apply the same
+        // freshness guard to Smart Skip: its source-free response cache can otherwise
+        // replay an old or hallucinated person/date/comparison answer as if verified.
+        if (!experienced && !preShown && !correctionFeedback &&
+            !factualAsk(text) && NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
         // v9.6.0: the Predictive Cache write happens at turn completion

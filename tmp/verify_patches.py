@@ -3485,6 +3485,33 @@ check("v9.33.166: correction and summary policies have regression tests",
 check("v9.33.166: version is at least 9.33.166 (334)",
       version_at_least("9.33.166", 334))
 
+# ---- v9.33.167: factual answers cannot be served from unsupported caches ----
+_chat167 = load("ncie/android/NcieChat.kt")
+_learn167 = load("ncie/android/NcieLearn.kt")
+_policy167 = load("ncie/learn/LearningEvidencePolicy.kt")
+_follow167 = load("ncie/android/FollowUpIntent.kt")
+check("v9.33.167: factual turns bypass learned answer recall",
+      "!factualAsk(text) && NcieLearn.recall(this, text)" in _chat167)
+check("v9.33.167: factual cache writes require a passing grounded score",
+      "mayCacheAnswer(factualAsk(userText), sources, verdict)" in _learn167 and
+      "return !questionIsFactual || mayPersistFact(sources, verdict)" in _policy167)
+check("v9.33.167: yes-no and explanatory questions are freshness-sensitive",
+      "(who|what|where|when|which|whose|how|is|are|was|were|did|does|has|have)" in _chat167 and
+      "compareQuestion(x)" in _chat167)
+check("v9.33.167: explicit source and confidence challenges are corrections",
+      "are you sure" in _follow167 and
+      "where did you get that" in _follow167 and
+      "prove it" in _follow167)
+check("v9.33.167: new cache and correction cases have regression tests",
+      "sourceFreeFactualAnswersAreNotCached" in
+          load_test("android/LearningEvidencePolicyTest.kt") and
+      "factSeekingAndFreshnessSensitiveQuestionsBypassAnswerCaches" in
+          load_test("android/NcieAskTest.kt") and
+      "correctionChallengesIncludeRequestsForConfidenceAndEvidence" in
+          load_test("android/FollowUpIntentTest.kt"))
+check("v9.33.167: version is at least 9.33.167 (335)",
+      version_at_least("9.33.167", 335))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))

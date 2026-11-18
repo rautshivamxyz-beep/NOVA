@@ -493,8 +493,10 @@ android {
         //   safer state/backup handling; model and inference tuning unchanged.
         // v9.33.166: cache-aware summary injection, correction-safe learning,
         //   deterministic tool inventory, and stronger follow-up resolution.
-        versionCode 334
-        versionName '9.33.166'
+        // v9.33.167: prevent stale factual answers from both cache reads and writes;
+        //   expand current-fact detection and explicit correction challenges.
+        versionCode 335
+        versionName '9.33.167'
         // v6.0.0: arm64 only by default. CI also builds a universal APK
         // (arm64 + x86_64, for emulators/Chromebooks) with:
         //   gradle assembleRelease -PNOVA_ABIS=arm64-v8a,x86_64

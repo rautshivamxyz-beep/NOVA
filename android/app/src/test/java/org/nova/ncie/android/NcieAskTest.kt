@@ -110,6 +110,42 @@ class NcieAskTest {
     }
 
     @Test
+    fun factSeekingAndFreshnessSensitiveQuestionsBypassAnswerCaches() {
+        for (q in listOf(
+            "who is Lady Gaga's husband",
+            "who are the brothers of Thomas Shelby",
+            "compare Lewis Hamilton vs Max Verstappen",
+            "difference between AC and DC",
+            "latest F1 champion",
+            "current CEO of Microsoft",
+            "tell me about Tommy Shelby",
+            "give me facts about photosynthesis",
+            "is Lady Gaga married",
+            "are whales mammals",
+            "does water boil at 100 degrees Celsius",
+            "how does photosynthesis work",
+            "was Marie Curie a physicist"
+        )) {
+            assertTrue("$q must not be answered from an old cache", factualAsk(q))
+        }
+    }
+
+    @Test
+    fun personalAndCreativeQuestionsAreNotMistakenForFactualLookups() {
+        for (q in listOf(
+            "what do you think about Lady Gaga",
+            "how are you",
+            "who are you",
+            "what can you do",
+            "what tools do you have",
+            "write a story about a racing driver",
+            "help me plan my study timetable"
+        )) {
+            assertFalse("$q may use ordinary conversation recall", factualAsk(q))
+        }
+    }
+
+    @Test
     fun aLongMessageIsNeverACommand() {
         val longHealth = "health " + "x".repeat(NcieAsk.HEALTH_MAX)
         val longSkills = "skills " + "y".repeat(NcieAsk.SKILLS_MAX)

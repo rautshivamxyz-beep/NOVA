@@ -62,7 +62,12 @@ internal object FollowUpIntent {
         "(?i)\\b(?:you(?: are|'re) wrong|that(?:'s| is) wrong|incorrect|" +
             "that(?:'s| is) false|not true|you made that up|you(?: are|'re) inventing|" +
             "you invented|inventing facts|made[- ]up facts|hallucinat(?:ed|ing|ion)|" +
-            "i told you not to invent|stop inventing)\\b"
+            "i told you not to invent|stop inventing|are you sure|" +
+            "is that (?:(?:really|actually) )?(?:correct|true|accurate)|" +
+            "that (?:does not|doesn't) sound right|you got (?:that )?wrong|" +
+            "you misunderstood (?:me|the question)|not what i asked|" +
+            "where did you get that|show me (?:a )?source|give me (?:a )?source|" +
+            "cite (?:that|your answer)|prove it)\\b"
     )
 
     /** True only when a short challenge is directed at an immediately prior answer. */

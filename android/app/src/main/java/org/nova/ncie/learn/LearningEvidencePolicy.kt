@@ -24,6 +24,21 @@ object LearningEvidencePolicy {
         return EvidencePipeline.mayPersistMemory(sources, verdict, MIN_GROUNDED_SCORE)
     }
 
+    /**
+     * Do not put an ungrounded factual answer in the reusable answer cache.
+     * Query-time bypasses protect common phrasings; this write-time rule also
+     * protects later paraphrases that a lexical fuzzy matcher may consider similar.
+     */
+    fun mayCacheAnswer(
+        questionIsFactual: Boolean,
+        sources: List<String>,
+        verdict: VerifyResult,
+    ): Boolean {
+        // Factual answers need the same strict grounding floor as durable facts:
+        // merely having an unrelated non-empty source is not enough.
+        return !questionIsFactual || mayPersistFact(sources, verdict)
+    }
+
     const val SOURCE_FREE_SCORE = 0.6
 
     // quality() computes 0.5 + 0.45 * lexical source coverage. A 0.725
