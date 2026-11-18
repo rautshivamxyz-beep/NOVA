@@ -9,27 +9,37 @@ class LearningEvidencePolicyTest {
 
     @Test
     fun sourceFreeFactualAnswersAreNotCached() {
-        assertFalse(LearningEvidencePolicy.mayCacheAnswer(true, emptyList()))
-        assertFalse(LearningEvidencePolicy.mayCacheAnswer(true, listOf("", "  ")))
+        val strong = VerifyResult(true, 0.90, "strong score without a source")
+        assertFalse(LearningEvidencePolicy.mayCacheAnswer(true, emptyList(), strong))
     }
 
     @Test
-    fun factualAnswersWithRetrievedEvidenceMayBeCached() {
+    fun merelyNonEmptyButWeakEvidenceDoesNotAuthorizeFactualCaching() {
+        val weak = VerifyResult(true, 0.60, "weak grounding")
+        assertFalse(LearningEvidencePolicy.mayCacheAnswer(
+            true, listOf("An unrelated source excerpt."), weak
+        ))
+    }
+
+    @Test
+    fun stronglyGroundedFactualAnswersMayBeCached() {
+        val strong = VerifyResult(true, 0.80, "strong grounding")
         assertTrue(LearningEvidencePolicy.mayCacheAnswer(
-            true, listOf("A source excerpt that supports the answer.")
+            true, listOf("A source excerpt that supports the answer."), strong
         ))
     }
 
     @Test
     fun ordinaryConversationAnswersCanStillBeCachedWithoutSources() {
-        assertTrue(LearningEvidencePolicy.mayCacheAnswer(false, emptyList()))
+        val ordinary = VerifyResult(true, 0.60, "source-free conversation")
+        assertTrue(LearningEvidencePolicy.mayCacheAnswer(false, emptyList(), ordinary))
     }
 
     @Test
-    fun factualCacheEligibilityDoesNotReplaceTheDurableMemoryQualityGate() {
-        val weak = VerifyResult(passed = true, qualityScore = 0.60, notes = "weak grounding")
-        assertFalse(LearningEvidencePolicy.mayPersistFact(
-            listOf("source text is present"), weak
+    fun failedGroundingNeverAuthorizesFactualCaching() {
+        val failed = VerifyResult(false, 0.95, "failed verifier")
+        assertFalse(LearningEvidencePolicy.mayCacheAnswer(
+            true, listOf("A source excerpt."), failed
         ))
     }
 }
