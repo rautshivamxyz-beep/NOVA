@@ -154,13 +154,13 @@ object NcieLearn {
                sources: List<String> = emptyList()) {
         if (userText == null) return
         if (SMALLTALK_REGEX.containsMatchIn(userText)) return
-        // A source-free factual answer cannot be verified. Do not store it as
-        // a reusable response: a later paraphrase could otherwise retrieve it
-        // through fuzzy matching even when the original query was guarded.
-        if (!LearningEvidencePolicy.mayCacheAnswer(factualAsk(userText), sources)) return
         val clean = reply.trim()
         if (clean.length < 30) return   // same bar as the study-Q cache
         val verdict = quality.quality(clean, sources)
+        // A factual answer must be strongly grounded before it enters the
+        // reusable response cache. Checking only for a non-empty source would
+        // allow a loosely related note to bless an unsupported answer.
+        if (!LearningEvidencePolicy.mayCacheAnswer(factualAsk(userText), sources, verdict)) return
         if (!verdict.passed) {
             // v8.4.0 (stages 2+4): a rejected answer is a signal now -
             // its topic's failure count grows (the Struggle Rule spends a
