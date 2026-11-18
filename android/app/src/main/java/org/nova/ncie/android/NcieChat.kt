@@ -1325,7 +1325,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // Experience gate now too (a regenerated answer must not replay
         // verbatim from the learned cache), and a post-fetch completion
         // turn (preShown) skips it - the fetch just brought new material.
-        if (!experienced && !preShown && !correctionFeedback && NcieLearn.recall(this, text)) return
+        // The predictive cache already skips fact-seeking questions. Apply the same
+        // freshness guard to Smart Skip: its source-free response cache can otherwise
+        // replay an old or hallucinated person/date/comparison answer as if verified.
+        if (!experienced && !preShown && !correctionFeedback &&
+            !factualAsk(text) && NcieLearn.recall(this, text)) return
         autoContinueCount = 0
         replyRetried = false
         // v9.6.0: the Predictive Cache write happens at turn completion
