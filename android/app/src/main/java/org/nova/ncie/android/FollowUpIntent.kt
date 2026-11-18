@@ -62,6 +62,36 @@ internal object FollowUpIntent {
         input.trim().length <= 120 && RESOLVED_PERSON_RELATION.matches(input.trim())
 
     /**
+     * A relationship query is supported only when the same retrieved text
+     * names the requested subject and contains an explicit relation term.
+     * This intentionally rejects an article that merely mentions the person.
+     */
+    fun hasRelationshipEvidence(question: String, sourceText: String): Boolean {
+        if (sourceText.isBlank()) return false
+        val relation = Regex(
+            "(?i)\\b(brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?)\\b"
+        ).find(question)?.groupValues?.get(1)?.lowercase() ?: return false
+        val subject = Regex("(?i)\\bof\\s+(.+?)\\s*[?.!]*$")
+            .find(question)?.groupValues?.get(1)?.trim() ?: return false
+        val subjectQuestion = "who is $subject"
+        if (!EntityMatch.titleMatchesEntity(sourceText, subjectQuestion)) return false
+        val relationTerms = when (relation) {
+            "brother", "brothers" -> listOf("brother", "brothers", "sibling", "siblings")
+            "sister", "sisters" -> listOf("sister", "sisters", "sibling", "siblings")
+            "parent", "parents" -> listOf("parent", "parents", "father", "mother")
+            "father" -> listOf("father", "dad")
+            "mother" -> listOf("mother", "mom")
+            "wife" -> listOf("wife", "wives", "married")
+            "husband" -> listOf("husband", "married")
+            "child", "children" -> listOf("child", "children", "son", "daughter")
+            "son", "sons" -> listOf("son", "sons", "child", "children")
+            else -> listOf("daughter", "daughters", "child", "children")
+        }
+        val source = " " + sourceText.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ") + " "
+        return relationTerms.any { term -> source.contains(" $term ") }
+    }
+
+    /**
      * Expand a short relationship follow-up only when a recent, explicit
      * person lookup supplies its referent. No guess is made from a surname
      * or from arbitrary conversation text.
