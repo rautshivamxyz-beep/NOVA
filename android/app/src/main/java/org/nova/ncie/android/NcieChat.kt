@@ -105,11 +105,24 @@ private val CREATIVE_WORDS = listOf("story", "poem", "joke", "write me", "imagin
  *  verbatim on every repeat, and the user had no way to know it was stale. */
 internal fun factualAsk(t: String): Boolean {
     val x = t.trim()
-    if (x.length > 80) return false
+    if (x.length > 120) return false
     val low = " " + x.lowercase()
     if (low.contains(" you") || low.contains("your")) return false
-    return Regex("(?i)^(who|what|where|when|which|whose|how many|how much)\\b").containsMatchIn(x) ||
-        Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
+
+    // Direct fact questions plus descriptions, comparisons and volatile facts.
+    // These must reach current retrieval/model reasoning instead of replaying
+    // a response that may have been produced from incomplete context.
+    val direct = Regex(
+        "(?i)^(who|what|where|when|which|whose|how many|how much|how old)\\b"
+    ).containsMatchIn(x)
+    val hindi = Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
+    val descriptiveLookup = Regex(
+        "(?i)^(tell me about|give me facts about|facts about|biography of|bio of|history of|overview of)\\b"
+    ).containsMatchIn(x)
+    val freshnessSensitive = Regex(
+        "(?i)\\b(latest|newest|current(?:ly)?|recent|today|tonight|yesterday|now|as of|updated|price|score|ranking|rankings|champion|winner|record|statistics|stats|net worth|age|born|died|husband|wife|brothers?|sisters?|parents?|father|mother|children)\\b"
+    ).containsMatchIn(x)
+    return direct || hindi || descriptiveLookup || freshnessSensitive || compareQuestion(x)
 }
 
 private fun creativeRequest(text: String): Boolean {
