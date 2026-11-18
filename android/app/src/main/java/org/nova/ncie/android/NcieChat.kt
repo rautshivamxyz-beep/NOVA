@@ -196,6 +196,8 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             .filter { it.role == Role.USER }
             .map { it.text }
         val personFactLookup = FollowUpIntent.personFactLookup(text, previousUserMessages)
+        val personFactRequest = EntityMatch.isPersonLookupQuestion(text) ||
+            personFactLookup != null || FollowUpIntent.isPersonRelationQuestion(text)
         // v9.13.0 "Audit Fixes" (re-derived d): the online fetch flow
         // already showed and persisted this question (OnlineFetch.fetch)
         // - this completion turn must not add or persist it a second
@@ -1009,11 +1011,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
                 lastWikiText = facts   // v9.14.0 "Sharp Memory": measured at turn end
                 // v9.32.7: a strong match on a direct entity question is the
                 // answer itself - the model is not asked to rewrite it.
-                val qLow2 = " " + text.trim().lowercase()
-                val entityQ = text.trim().length <= 60 &&
-                    !qLow2.contains(" you") && !qLow2.contains("your") &&
-                    (Regex("(?i)^(who|what)\\s+(is|was|are|were)\\b").containsMatchIn(text.trim()) ||
-                     Regex("(?i)^(kaun|kya|kahan|kab)\\b.*\\b(hai|hain|tha|thi)\\b").containsMatchIn(text.trim()))
+                val entityQ = EntityMatch.isEntityQuestion(text)
                 if (wikiStrong && entityQ) {
                     directReply = cleanSourceText(wikiHits.first().text)
                     directSource = wikiHits.first().title
@@ -1238,7 +1236,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
             lastSkillMatched == null && knowledgePart.isEmpty() &&
             (wikiPart.isEmpty() || !wikiStrong ||
-                bioQuestion(text) || compareQuestion(text) || "web" in route)
+                compareQuestion(text) || "web" in route)
         ) {
             offerOnlineFetch(act, text, personFactLookup)
             return
@@ -1247,11 +1245,11 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // small model: without a strong local source, ask permission to verify
         // online rather than let the model fill gaps with invented people.
         // The source lookup remains opt-in and the decline path abstains.
-        if (!offered && lastSkillMatched == null &&
-            (EntityMatch.isPersonLookupQuestion(text) || personFactLookup != null) &&
+        if (lastSkillMatched == null && personFactRequest &&
             docPart.isEmpty() && knowledgePart.isEmpty() && !wikiStrong
         ) {
-            OnlineFetch.honestOffer(act, text, personFactLookup)
+            if (offered) OnlineFetch.answerUnverified(act, text)
+            else OnlineFetch.honestOffer(act, text, personFactLookup)
             return
         }
         // v9.13.2 "Small Model Honesty" (the honesty gate): a 230M-class
