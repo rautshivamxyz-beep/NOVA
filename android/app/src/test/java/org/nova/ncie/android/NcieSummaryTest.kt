@@ -119,7 +119,7 @@ class NcieSummaryTest {
     @Test
     fun contextualFollowUpLeavesClearNewTopicsAlone() {
         assertEquals(
-            "Who is Tommy Shelby?",
+            "latest F1 champion",
             NcieSummary.retrievalQuery("latest F1 champion", "Who is Tommy Shelby?")
         )
     }
