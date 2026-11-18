@@ -86,6 +86,8 @@ def patch(a):
  diff=ask(p,"Generate minimal, safe, reviewable code patches. Do not invent context.",prompt,2000).strip()
  fence=chr(96)*3; diff=diff.removeprefix(fence+"diff").removeprefix(fence).removesuffix(fence).strip()
  if not diff.startswith("diff --git ") or "NO_SAFE_PATCH" in diff:raise SystemExit("No valid patch returned; no files changed.")
+ allowed={n for n,_ in files}; changed=re.findall(r"^diff --git a/(.+?) b/(.+)$",diff,re.M)
+ if not changed or any(left!=right or left not in allowed or left.startswith("/") or ".." in pathlib.PurePosixPath(left).parts for left,right in changed):raise SystemExit("Patch references an unapproved path; no files changed.")
  PATCHES.mkdir(parents=True,exist_ok=True); out=PATCHES/(dt.datetime.now().strftime("%Y%m%d-%H%M%S")+"-"+slug(a.name)+".patch");out.write_text(diff+"\n")
  check=subprocess.run(["git","apply","--check",str(out)],capture_output=True,text=True)
  if check.returncode:raise SystemExit("Patch saved but validation failed; nothing changed:\n"+check.stderr)
