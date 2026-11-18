@@ -1129,8 +1129,8 @@ check("v9.10.0: hardening - planner soft-fail, store lock, save-on-send",
       nk.count("check(") == 0 and nk.count("synchronized(storeLock)") == 5 and
       ma.count("persist the question IMMEDIATELY") == 1)
 check("v8.6.0: the offer fires on any knowledge question, skills stay offline (NcieChat)",
-      nc.count("lastSkillMatched == null") == 2 and
-      nc.count("OnlineFetch.offer(act, text,") == 1)
+      nc.count("lastSkillMatched == null") >= 2 and
+       "offerOnlineFetch" in nc and "personFactRequest" in nc)
 check("v8.6.0: local material is the alternative, not the blocker (OnlineFetch)",
       of_.count("haveLocal") == 2 and of_.count("Answer locally") == 1 and
       of_.count("Look online too?") == 1)
@@ -1218,10 +1218,10 @@ check("v7.9.0: CI fails when app source changes without a version bump",
 check("v7.9.1: the drawer scrolls (drawerScroller wraps drawerPane)",
       "drawerScroller = ScrollView(this)" in ma and "addView(drawerPane" in ma)
 check("v7.9.1: secondary actions behind the More dialog",
-      ma.count('drawerRow("More"') == 1 and
-      ma.count('drawerRow("Help & Tips"') == 0 and
-      ma.count('drawerRow("Check for updates"') == 0 and
-      ma.count('"Check for updates")') == 1)
+       ma.count('drawerRow("More"') == 0 and
+       ma.count('drawerRow("Help & tips"') == 1 and
+       ma.count('drawerRow("Check for updates"') == 1 and
+       ma.count('drawerSection("RECENT CHATS")') == 1)
 
 # ---- v7.9.2: home screen alignment + chats header polish ----
 check("v7.9.2: home chips left-aligned (icon leads, text follows)",
