@@ -39,6 +39,19 @@ object NcieSummary {
     /** History kept in memory (and on disk) after a roll. */
     private const val KEEP = 8
 
+
+    /**
+     * The native model already retains the live conversation in its KV cache.
+     * Re-send the rolling summary only when the app must rebuild that context
+     * (chat restore/context trim), not on every turn.
+     */
+    internal fun shouldInject(
+        summary: String?,
+        needsContextCarry: Boolean,
+        hasSkill: Boolean,
+        freshForCode: Boolean
+    ): Boolean = !summary.isNullOrBlank() && needsContextCarry && !hasSkill && !freshForCode
+
     private fun summaryFile(c: Context, id: String): File =
         File(c.filesDir, "chat_summary_$id.txt")
     private fun countFile(c: Context, id: String): File =

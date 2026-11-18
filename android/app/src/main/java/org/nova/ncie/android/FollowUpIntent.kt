@@ -58,6 +58,18 @@ internal object FollowUpIntent {
     fun isDepthFeedback(input: String): Boolean =
         input.trim().length <= 100 && DEPTH_FEEDBACK.containsMatchIn(input)
 
+    private val CORRECTION_FEEDBACK = Regex(
+        "(?i)\\b(?:you(?: are|'re) wrong|that(?:'s| is) wrong|incorrect|" +
+            "that(?:'s| is) false|not true|you made that up|you(?: are|'re) inventing|" +
+            "you invented|inventing facts|made[- ]up facts|hallucinat(?:ed|ing|ion)|" +
+            "i told you not to invent|stop inventing)\\b"
+    )
+
+    /** True only when a short challenge is directed at an immediately prior answer. */
+    fun isCorrectionFeedback(input: String, previousAssistant: String?): Boolean =
+        input.trim().length <= 200 && !previousAssistant.isNullOrBlank() &&
+            CORRECTION_FEEDBACK.containsMatchIn(input)
+
     fun isPersonRelationQuestion(input: String): Boolean =
         input.trim().length <= 120 && RESOLVED_PERSON_RELATION.matches(input.trim())
 

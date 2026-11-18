@@ -363,7 +363,7 @@ check("v9.33.52: the rule is unit-tested",
 check("v9.33.51: the rulebook leads the prompt, outside the data block",
       # v9.33.62: the standing rules moved into the SYSTEM prompt; only the
       # turn-specific rules still lead the per-turn prompt here.
-      load("ncie/android/NcieChat.kt").count("prompt = detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
+      load("ncie/android/NcieChat.kt").count("prompt = correctionRule + detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
       load("ncie/android/NcieChat.kt").count("val contextData = knowledgePart + wikiPart + summaryPart") == 1)
 check("v9.33.51: and it can never be truncated away",
       load("ncie/android/NcieChat.kt").count("experiencePart") == 1 and
@@ -3453,6 +3453,37 @@ check("v9.33.165: stop remains usable after the idle send button is disabled",
       _main165.count("sendBtn.alpha = 1f") >= 3)
 check("v9.33.165: version is at least 9.33.165 (333)",
       version_at_least("9.33.165", 333))
+
+# ---- v9.33.166: high-quality conversation without repeated prompt work ----
+_chat166 = load("ncie/android/NcieChat.kt")
+_ext166 = load("ncie/android/NcieChatExt.kt")
+_follow166 = load("ncie/android/FollowUpIntent.kt")
+_sum166 = load("ncie/android/NcieSummary.kt")
+_main166 = load("MainActivity.kt")
+_settings166 = load("Settings.kt")
+check("v9.33.166: rolling summaries are injected only when context is rebuilt",
+      "NcieSummary.shouldInject(chatSumm, needsContextCarry" in _chat166 and
+      "needsContextCarry && !hasSkill && !freshForCode" in _sum166)
+check("v9.33.166: factual corrections bypass answer caches and learned memory",
+      "fun isCorrectionFeedback" in _follow166 and
+      "correctionRule + detailRule" in _chat166 and
+      _chat166.count("!correctionFeedback") >= 4 and
+      "if (!correctionTurn)" in _main166)
+check("v9.33.166: tool inventory comes from the registered source list",
+      "answerToolInventory(text)" in _chat166 and
+      "NcieAsk.tools(text)" in _ext166 and
+      'NciePlanner.TOOLS.filter { it.first != "none" }' in _ext166)
+check("v9.33.166: follow-up references resolve to the last clear idea",
+      "references such as this, that, those and same" in _settings166)
+check("v9.33.166: correction and summary policies have regression tests",
+      "directFactualChallengesAreRecognisedOnlyWithAPreviousAnswer" in
+          load_test("android/FollowUpIntentTest.kt") and
+      "rollingSummaryIsInjectedOnlyWhenTheConversationContextMustBeRebuilt" in
+          load_test("android/NcieAskTest.kt") and
+      "theToolInventoryCommandFiresOnWholeMessagesOnly" in
+          load_test("android/NcieAskTest.kt"))
+check("v9.33.166: version is at least 9.33.166 (334)",
+      version_at_least("9.33.166", 334))
 
 print("")
 if fails:

@@ -136,6 +136,25 @@ class FollowUpIntentTest {
     }
 
     @Test
+    fun directFactualChallengesAreRecognisedOnlyWithAPreviousAnswer() {
+        val previous = "Lady Gaga's husband is Bradley Cooper."
+        for (challenge in listOf(
+            "that's wrong",
+            "why are you inventing facts about her husband",
+            "I told you not to invent facts",
+            "you made that up",
+            "that is not true"
+        )) {
+            assertTrue("$challenge should trigger re-evaluation",
+                FollowUpIntent.isCorrectionFeedback(challenge, previous))
+        }
+        assertFalse(FollowUpIntent.isCorrectionFeedback("that's wrong", null))
+        assertFalse(FollowUpIntent.isCorrectionFeedback("explain her music", previous))
+        assertFalse(FollowUpIntent.isCorrectionFeedback(
+            "you are wrong " + "x".repeat(220), previous))
+    }
+
+    @Test
     fun depthFeedbackKeepsTheSameTopic() {
         assertTrue(FollowUpIntent.isDepthFeedback("these are basic facts"))
         assertTrue(FollowUpIntent.isDepthFeedback("too basic, go deeper"))

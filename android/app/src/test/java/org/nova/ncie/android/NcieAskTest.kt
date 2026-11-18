@@ -70,6 +70,46 @@ class NcieAskTest {
     /** The length ceiling is still the outer gate - a long message is a
      *  study question even when it opens like a command. */
     @Test
+    fun theToolInventoryCommandFiresOnWholeMessagesOnly() {
+        for (t in listOf(
+            "what tools do you have",
+            "what tools you have",
+            "what are your tools?",
+            "list your tools",
+            "show available tools",
+            "available tools"
+        )) {
+            assertTrue("should fire: $t", NcieAsk.tools(t))
+        }
+        for (t in listOf(
+            "what tools should I learn for Python",
+            "which tools do I need for a data analyst job",
+            "what tools does this project use"
+        )) {
+            assertFalse("must remain a normal question: $t", NcieAsk.tools(t))
+        }
+        assertFalse(NcieAsk.tools("what tools do you have " + "x".repeat(NcieAsk.TOOLS_MAX)))
+    }
+
+    @Test
+    fun rollingSummaryIsInjectedOnlyWhenTheConversationContextMustBeRebuilt() {
+        assertTrue(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, false, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", false, false, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, true, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, false, true
+        ))
+        assertFalse(NcieSummary.shouldInject(" ", true, false, false))
+        assertFalse(NcieSummary.shouldInject(null, true, false, false))
+    }
+
+    @Test
     fun aLongMessageIsNeverACommand() {
         val longHealth = "health " + "x".repeat(NcieAsk.HEALTH_MAX)
         val longSkills = "skills " + "y".repeat(NcieAsk.SKILLS_MAX)
