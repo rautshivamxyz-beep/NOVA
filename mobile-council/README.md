@@ -29,7 +29,7 @@ Indus is supported only if an official developer API endpoint and credentials ar
     cp .env.example .env
     nano .env
 
-Add only API keys you actually have. Never commit keys or paste them into prompts.
+Add only API keys you actually have. Run chmod 600 .env to restrict local access. Never commit keys or paste them into prompts. Check each provider's data-use terms before sending private source code; Google's free Gemini tier may use submitted content to improve its products.
 
 ## Run
     python council.py status
