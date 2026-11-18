@@ -47,7 +47,8 @@ object NcieSummary {
     private val MEMORY_QUERY_STOP = setOf(
         "again", "also", "answer", "continue", "detail", "detailed", "elaborate",
         "explain", "further", "give", "more", "please", "same", "show", "tell",
-        "that", "these", "this", "those", "what", "which", "with", "about"
+        "that", "these", "this", "those", "what", "which", "with", "about",
+        "user", "project", "preference", "decision", "correction", "open", "topic", "person", "task"
     )
     private val MEMORY_FOLLOW_UP = Regex(
         "(?i)\\b(?:it|this|that|these|those|him|her|them|they|same|again|more|" +
