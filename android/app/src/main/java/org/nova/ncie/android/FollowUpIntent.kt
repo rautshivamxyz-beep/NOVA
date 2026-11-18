@@ -102,7 +102,8 @@ internal object FollowUpIntent {
                 ?: ""
         }
 
-        val relation = personFactLookup(query, previousUserMessages)
+        val relationText = query.replace(Regex("(?i)^about\\s+"), "").trim()
+        val relation = personFactLookup(relationText, previousUserMessages)
         if (relation != null) return relation
 
         val aboutPerson = Regex(
