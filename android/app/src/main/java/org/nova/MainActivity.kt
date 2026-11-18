@@ -77,7 +77,6 @@ class MainActivity : Activity() {
     private lateinit var emptyView: View
     internal lateinit var input: EditText
     private lateinit var sendBtn: Button
-    private lateinit var symRow: android.widget.HorizontalScrollView
     internal val adapter = MessageAdapter()
 
     init {
@@ -326,30 +325,23 @@ class MainActivity : Activity() {
         // v7.1: welcome brand-new users and point at the model download
         maybeOnboard()
 
-        // v9.21.0 "Easy": a brand-new install opens the setup wizard once -
-        // model, notification access, permissions, battery - instead of
-        // dropping the user into an empty chat box that does nothing.
-        try {
-            if (NovaHealth.needsSetup(this))
-                startActivity(Intent(this, SetupActivity::class.java))
-        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+        // First launch stays in chat. Optional setup is available from
+        // the advanced menu and never blocks ordinary use.
 
         observeEngine()
         handleSharedText()
         maybeShowCrashReport()
-        if (android.os.Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4253)
-        }
-
         // v9.0.0 "Voice": the shared engine for spoken replies and the
         // document read-aloud (replaces the private TextToSpeech instance)
-        NcieVoice.init(this)
+        if (settings.showAdvancedSettings && (settings.readAloud || settings.autoListen)) {
+            NcieVoice.init(this)
+        }
         // v9.31.0 "Jarvis": start the periodic tick that runs the spoken
         // nudges and the user's triggers (idempotent, cheap, best-effort).
-        try { org.nova.ncie.android.NovaNudge.schedule(this) } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+        if (settings.showAdvancedSettings) {
+            try { org.nova.ncie.android.NovaNudge.schedule(this) }
+            catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+        }
     }
 
 
@@ -622,38 +614,12 @@ class MainActivity : Activity() {
         docBtn = roundButton("", textDim).apply {
             setCompoundDrawablesWithIntrinsicBounds(icon(R.drawable.ic_attach, textDim), null, null, null)
             contentDescription = "Attach a document"
+            visibility = if (settings.showAdvancedSettings) View.VISIBLE else View.GONE
             setOnClickListener { openDocPicker() }
         }
         pill.addView(docBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
             rightMargin = dp(2)
         })
-        val symBtn = Button(this).apply {
-            text = "√x"; textSize = 12f; isAllCaps = false
-            setTextColor(textDim); background = null
-            minWidth = 0; minimumWidth = 0
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            setOnClickListener {
-                symRow.visibility =
-                    if (symRow.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            }
-        }
-        // v7.9.2: fixed height so the sqrt glyph lines up with the icons
-        pill.addView(symBtn, LinearLayout.LayoutParams(dp(38), dp(38)).apply {
-            rightMargin = dp(4)
-        })
-        // v9.16.2: a camera button on the typing row (it was only in the
-        // drawer) - snap a page and send it to OCR without leaving the chat
-        pill.addView(Button(this).apply {
-            text = ""
-            isAllCaps = false
-            background = null
-            minWidth = 0; minimumWidth = 0
-            setPadding(0, 0, 0, 0)
-            setCompoundDrawablesWithIntrinsicBounds(
-                icon(R.drawable.ic_camera, textDim), null, null, null)
-            contentDescription = "Take a photo"
-            setOnClickListener { openCamera() }
-        }, LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(4) })
         input = EditText(this).apply {
             hint = "Message NOVA…"
             setHintTextColor(textDim)
@@ -693,29 +659,6 @@ class MainActivity : Activity() {
         // is empty, send when there is text (see updateSendLook)
         pill.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
         inputRow.addView(pill, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        // v5.6.0: math symbol row - tap a symbol to insert it at the cursor
-        symRow = android.widget.HorizontalScrollView(this).apply {
-            visibility = View.GONE
-            setPadding(dp(8), 0, dp(8), 0)
-        }
-        val symLine = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        for (sym in listOf("π", "√", "²", "³", "½", "×", "÷", "±", "≤", "≥", "≠", "≈", "°", "∑", "θ", "→")) {
-            symLine.addView(Button(this).apply {
-                text = sym; textSize = 16f; isAllCaps = false
-                setTextColor(NovaTheme.text); background = rippleOverlay(null, dp(16).toFloat())
-                minWidth = 0; minimumWidth = 0
-                setPadding(dp(10), dp(2), dp(10), dp(2))
-                setOnClickListener {
-                    input.text.insert(input.selectionStart, sym)
-                    input.requestFocus()
-                }
-            })
-        }
-        symRow.addView(symLine)
-        root.addView(symRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         // v7.0.0: quick follow-up chips, shown above the input pill
         val chipsScroll = android.widget.HorizontalScrollView(this).apply {
@@ -847,99 +790,103 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerList, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        drawerPane.addView(drawerSection("WORKSPACE"))
-        drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
-            startActivity(Intent(this, KnowledgeActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
-            startActivity(Intent(this, MemoryActivity::class.java))
-        })
-        val dueCount = Study.dueCount(this)
-        val studyRow = drawerRow(
-            if (dueCount > 0) "Study ($dueCount due)" else "Study",
-            R.drawable.ic_lightbulb
-        ) { Study.review(this) }
-        studyRow.setOnLongClickListener {
-            val total = Study.totalCards(this)
-            val due = Study.dueCount(this)
-            AlertDialog.Builder(this)
-                .setTitle("Study deck")
-                .setMessage("$total cards, $due due for review.")
-                .setPositiveButton("Review") { _, _ -> Study.review(this) }
-                .setNegativeButton("Clear deck") { _, _ ->
-                    AlertDialog.Builder(this)
-                        .setTitle("Delete all cards?")
-                        .setPositiveButton("Delete") { _, _ ->
-                            Study.clear(this)
-                            toast("Study deck cleared")
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                }
-                .show()
-            true
-        }
-        drawerPane.addView(studyRow)
-        drawerPane.addView(drawerRow("Study plan", R.drawable.ic_lightbulb) {
-            startActivity(Intent(this, PlannerActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("OSINT", R.drawable.ic_globe) {
-            startActivity(Intent(this, OsintActivity::class.java))
-        })
+        if (settings.showAdvancedSettings) {
+            drawerPane.addView(drawerSection("WORKSPACE"))
+            drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
+                startActivity(Intent(this, KnowledgeActivity::class.java))
+            })
+            drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
+                startActivity(Intent(this, MemoryActivity::class.java))
+            })
+            val dueCount = Study.dueCount(this)
+            val studyRow = drawerRow(
+                if (dueCount > 0) "Study ($dueCount due)" else "Study",
+                R.drawable.ic_lightbulb
+            ) { Study.review(this) }
+            studyRow.setOnLongClickListener {
+                val total = Study.totalCards(this)
+                val due = Study.dueCount(this)
+                AlertDialog.Builder(this)
+                    .setTitle("Study deck")
+                    .setMessage("$total cards, $due due for review.")
+                    .setPositiveButton("Review") { _, _ -> Study.review(this) }
+                    .setNegativeButton("Clear deck") { _, _ ->
+                        AlertDialog.Builder(this)
+                            .setTitle("Delete all cards?")
+                            .setPositiveButton("Delete") { _, _ ->
+                                Study.clear(this)
+                                toast("Study deck cleared")
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                    .show()
+                true
+            }
+            drawerPane.addView(studyRow)
+            drawerPane.addView(drawerRow("Study plan", R.drawable.ic_lightbulb) {
+                startActivity(Intent(this, PlannerActivity::class.java))
+            })
+            drawerPane.addView(drawerRow("OSINT", R.drawable.ic_globe) {
+                startActivity(Intent(this, OsintActivity::class.java))
+            })
 
-        drawerPane.addView(drawerSection("TOOLS"))
-        drawerPane.addView(drawerRow("Fetch history", R.drawable.ic_globe) {
-            startActivity(Intent(this, FetchLogActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("Scan a page", R.drawable.ic_camera) {
-            AlertDialog.Builder(this)
-                .setTitle("Scan a page")
-                .setItems(arrayOf("Take a photo", "Choose from gallery")) { _, which ->
-                    if (which == 0) openCamera() else scanNotes()
-                }
-                .show()
-        })
-        drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
-            try {
-                startActivityForResult(
-                    Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                    REQ_FOLDER)
-            } catch (e: Exception) { toast("No file picker available") }
-        })
-        drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
-            if (NovaListener.isEnabled(this)) toast("Notification access already on")
-            else toast("Grant notification access to NOVA")
-            try {
-                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
-        })
-        drawerPane.addView(drawerRow("Exams", R.drawable.ic_edit) {
-            startActivity(Intent(this, ExamsActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("What did I miss?", R.drawable.ic_chat) { missedNotifications() })
-        drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
-        drawerPane.addView(drawerRow("Write in my style", R.drawable.ic_edit) { writeInMyStyle() })
-        drawerPane.addView(drawerRow("Share chat", R.drawable.ic_copy) { shareChat() })
-        drawerPane.addView(drawerRow("Backup & restore", R.drawable.ic_copy) {
-            startActivity(Intent(this, BackupActivity::class.java))
-        })
+            drawerPane.addView(drawerSection("TOOLS"))
+            drawerPane.addView(drawerRow("Fetch history", R.drawable.ic_globe) {
+                startActivity(Intent(this, FetchLogActivity::class.java))
+            })
+            drawerPane.addView(drawerRow("Scan a page", R.drawable.ic_camera) {
+                AlertDialog.Builder(this)
+                    .setTitle("Scan a page")
+                    .setItems(arrayOf("Take a photo", "Choose from gallery")) { _, which ->
+                        if (which == 0) openCamera() else scanNotes()
+                    }
+                    .show()
+            })
+            drawerPane.addView(drawerRow("Files", R.drawable.ic_doc) {
+                try {
+                    startActivityForResult(
+                        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                        REQ_FOLDER)
+                } catch (e: Exception) { toast("No file picker available") }
+            })
+            drawerPane.addView(drawerRow("Notifications", R.drawable.ic_chat) {
+                if (NovaListener.isEnabled(this)) toast("Notification access already on")
+                else toast("Grant notification access to NOVA")
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
+            })
+            drawerPane.addView(drawerRow("Exams", R.drawable.ic_edit) {
+                startActivity(Intent(this, ExamsActivity::class.java))
+            })
+            drawerPane.addView(drawerRow("What did I miss?", R.drawable.ic_chat) { missedNotifications() })
+            drawerPane.addView(drawerRow("Notes filter", R.drawable.ic_doc) { showNotesFilter() })
+            drawerPane.addView(drawerRow("Write in my style", R.drawable.ic_edit) { writeInMyStyle() })
+            drawerPane.addView(drawerRow("Share chat", R.drawable.ic_copy) { shareChat() })
+            drawerPane.addView(drawerRow("Backup & restore", R.drawable.ic_copy) {
+                startActivity(Intent(this, BackupActivity::class.java))
+            })
+        }
 
         drawerPane.addView(drawerSection("APP"))
         drawerPane.addView(drawerRow("Models", R.drawable.ic_lightbulb) {
             startActivity(Intent(this, ModelsActivity::class.java))
         })
-        drawerPane.addView(drawerRow("Setup & health", R.drawable.ic_settings) {
-            startActivity(Intent(this, HealthActivity::class.java))
-        })
-        drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_refresh) {
-            checkForUpdates()
-        })
-        drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
+        if (settings.showAdvancedSettings) {
+            drawerPane.addView(drawerRow("Setup & health", R.drawable.ic_settings) {
+                startActivity(Intent(this, HealthActivity::class.java))
+            })
+            drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_refresh) {
+                checkForUpdates()
+            })
+            drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
+            drawerPane.addView(drawerRow("Help & tips", R.drawable.ic_lightbulb) { showHelpTips() })
+        }
         drawerPane.addView(drawerRow("Help", R.drawable.ic_lightbulb) {
             startActivity(Intent(this, HelpActivity::class.java))
         })
-        drawerPane.addView(drawerRow("Help & tips", R.drawable.ic_lightbulb) { showHelpTips() })
         drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
 
         drawerScroller = ScrollView(this).apply {
@@ -1860,25 +1807,16 @@ class MainActivity : Activity() {
     /** Send button: dim when there is nothing to type, bright blue when ready. */
     private fun updateSendLook() {
         if (generating) return
-        if (input.text.isNotBlank()) {
-            sendBtn.background = rippleOverlay(GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(accent, accentDeep)).apply {
-                cornerRadius = dp(21).toFloat()
-            })
-            setSendButton(R.drawable.ic_send, Color.WHITE, "Send")
-            sendBtn.setOnClickListener { send() }
-        } else {
-            // v7.9.3: empty input turns the button into the mic - one
-            // smart button that morphs, like the big chat apps
-            sendBtn.background = rippleOverlay(GradientDrawable().apply {
-                setColor(NovaTheme.surface)
-                setStroke(dp(1), NovaTheme.border)
-                cornerRadius = dp(21).toFloat()
-            })
-            setSendButton(R.drawable.ic_mic, textDim, "Speak")
-            sendBtn.setOnClickListener { startSpeech() }
-        }
+        val hasText = input.text.isNotBlank()
+        sendBtn.background = rippleOverlay(GradientDrawable().apply {
+            setColor(if (hasText) accent else NovaTheme.surface)
+            cornerRadius = dp(21).toFloat()
+            if (!hasText) setStroke(dp(1), NovaTheme.border)
+        })
+        setSendButton(R.drawable.ic_send, if (hasText) Color.WHITE else textDim, "Send")
+        sendBtn.isEnabled = hasText
+        sendBtn.alpha = if (hasText) 1f else 0.55f
+        sendBtn.setOnClickListener { if (input.text.isNotBlank()) send() }
     }
 
     /** Runs a hidden-prompt tool action (no duplicate user bubble).
@@ -3634,6 +3572,12 @@ Study:
 
     override fun onResume() {
         super.onResume()
+        try {
+            docBtn.visibility = if (settings.showAdvancedSettings) View.VISIBLE else View.GONE
+            if (settings.showAdvancedSettings && (settings.readAloud || settings.autoListen)) {
+                NcieVoice.init(this)
+            }
+        } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         // v9.1.0: the PIN gate - covers launch (onCreate is always
         // followed by onResume) and every return to the app; the
         // process latch keeps it from re-asking mid-session
