@@ -63,7 +63,7 @@ internal object FollowUpIntent {
             "that(?:'s| is) false|not true|you made that up|you(?: are|'re) inventing|" +
             "you invented|inventing facts|made[- ]up facts|hallucinat(?:ed|ing|ion)|" +
             "i told you not to invent|stop inventing|are you sure|" +
-            "is that (?:really )?(?:correct|true|accurate)|" +
+            "is that (?:(?:really|actually) )?(?:correct|true|accurate)|" +
             "that (?:does not|doesn't) sound right|you got (?:that )?wrong|" +
             "you misunderstood (?:me|the question)|not what i asked|" +
             "where did you get that|show me (?:a )?source|give me (?:a )?source|" +
