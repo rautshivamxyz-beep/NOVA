@@ -74,6 +74,25 @@ class FollowUpIntentTest {
     }
 
     @Test
+    fun onlineCheckAboutHisBrothersExpandsToTheNamedPerson() {
+        assertEquals(
+            "who are the brothers of thomas shelby",
+            FollowUpIntent.onlineLookupQuery(
+                "check online about his brothers",
+                listOf("who is thomas Shelby")
+            )
+        )
+    }
+
+    @Test
+    fun resolvedFamilyQuestionIsRecognisedAfterLookup() {
+        assertTrue(FollowUpIntent.isPersonRelationQuestion(
+            "who are the brothers of Thomas Shelby"
+        ))
+        assertFalse(FollowUpIntent.isPersonRelationQuestion("who are the brothers"))
+    }
+
+    @Test
     fun relationshipFollowUpDoesNotInventAReferent() {
         assertNull(FollowUpIntent.personFactLookup("who are his brothers", listOf("tell me a joke")))
     }
