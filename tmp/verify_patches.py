@@ -3418,24 +3418,32 @@ check("v9.33.164: version is at least 9.33.164 (332)",
 # ---- v9.33.165 "Simple core, optional features" ----
 _main165 = load("MainActivity.kt")
 _settings165 = load("SettingsActivity.kt")
-_nav165 = _main165[_main165.indexOf('drawerPane.addView(drawerRow("Search chats")'):
-                    _main165.indexOf("drawerScroller = ScrollView(this).apply {")]
-_workspace165 = _nav165.indexOf('drawerSection("WORKSPACE")')
-_tools165 = _nav165.indexOf('drawerSection("TOOLS")')
+_nav_start165 = _main165.find('drawerPane.addView(drawerRow("Search chats")')
+_nav_end165 = _main165.find("drawerScroller = ScrollView(this).apply {")
+_nav165 = _main165[_nav_start165:_nav_end165] if _nav_start165 >= 0 and _nav_end165 > _nav_start165 else ""
+_workspace165 = _nav165.find('drawerSection("WORKSPACE")')
+_tools165 = _nav165.find('drawerSection("TOOLS")')
+_workspace_gate165 = _nav165.rfind("if (settings.showAdvancedSettings)", 0, _workspace165) if _workspace165 >= 0 else -1
 check("v9.33.165: workspace and tools are only built behind advanced mode",
-      'if (settings.showAdvancedSettings)' in _nav165 and
-      0 <= _nav165.indexOf('if (settings.showAdvancedSettings)') < _workspace165 and
-      _workspace165 < _tools165)
+      _workspace165 >= 0 and _tools165 > _workspace165 and
+      _workspace_gate165 >= 0 and
+      _nav165.find('if (settings.showAdvancedSettings)', _workspace_gate165 + 1, _tools165) == -1)
 check("v9.33.165: launch does not force setup or notification permission",
       "startActivity(Intent(this, SetupActivity::class.java))" not in _main165 and
       "requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS)" not in _main165)
-check("v9.33.165: optional settings are hidden behind advanced mode",
-      "if (settings.showAdvancedSettings) {\\n            group(col, getString(R.string.section_voice)" in _settings165 and
-      "if (settings.showAdvancedSettings) {\\n        col.addView(NovaUi.sectionLabel(this, getString(R.string.section_answers)))" in _settings165 and
-      "if (settings.showAdvancedSettings) {\\n        col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))" in _settings165)
-check("v9.33.165: model inference configuration remains unchanged",
+_voice_pos165 = _settings165.find("group(col, getString(R.string.section_voice)")
+_answers_pos165 = _settings165.find("col.addView(NovaUi.sectionLabel(this, getString(R.string.section_answers)))")
+_privacy_pos165 = _settings165.find("col.addView(NovaUi.sectionLabel(this, getString(R.string.section_privacy)))")
+check("v9.33.165: voice, answer and proxy controls are advanced-only",
+      all(pos >= 0 and _settings165.rfind("if (settings.showAdvancedSettings)", 0, pos) >= 0
+          for pos in (_voice_pos165, _answers_pos165, _privacy_pos165)))
+check("v9.33.165: the selected model and inference controls remain present",
+      "lastModelPath" in load("Settings.kt") and
       "specDecoding = it" in _settings165 and
       "predictLength = Settings.LENGTH_OPTIONS[which]" in _settings165)
+check("v9.33.165: the send-only composer has no mic, camera or symbol toolbar",
+      "startSpeech()" not in _send165 and "ic_camera" not in _send165 and
+      "symRow" not in _main165)
 check("v9.33.165: version is at least 9.33.165 (333)",
       version_at_least("9.33.165", 333))
 
