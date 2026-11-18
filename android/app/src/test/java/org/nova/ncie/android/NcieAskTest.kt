@@ -92,6 +92,24 @@ class NcieAskTest {
     }
 
     @Test
+    fun rollingSummaryIsInjectedOnlyWhenTheConversationContextMustBeRebuilt() {
+        assertTrue(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, false, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", false, false, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, true, false
+        ))
+        assertFalse(NcieSummary.shouldInject(
+            "Prior discussion about NOVA.", true, false, true
+        ))
+        assertFalse(NcieSummary.shouldInject(" ", true, false, false))
+        assertFalse(NcieSummary.shouldInject(null, true, false, false))
+    }
+
+    @Test
     fun aLongMessageIsNeverACommand() {
         val longHealth = "health " + "x".repeat(NcieAsk.HEALTH_MAX)
         val longSkills = "skills " + "y".repeat(NcieAsk.SKILLS_MAX)
