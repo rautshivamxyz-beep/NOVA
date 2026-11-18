@@ -363,7 +363,7 @@ check("v9.33.52: the rule is unit-tested",
 check("v9.33.51: the rulebook leads the prompt, outside the data block",
       # v9.33.62: the standing rules moved into the SYSTEM prompt; only the
       # turn-specific rules still lead the per-turn prompt here.
-      load("ncie/android/NcieChat.kt").count("prompt = detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
+      load("ncie/android/NcieChat.kt").count("prompt = correctionRule + detailRule + codeTaskRule + skillPart + contextBlock + prompt") == 1 and
       load("ncie/android/NcieChat.kt").count("val contextData = knowledgePart + wikiPart + summaryPart") == 1)
 check("v9.33.51: and it can never be truncated away",
       load("ncie/android/NcieChat.kt").count("experiencePart") == 1 and
