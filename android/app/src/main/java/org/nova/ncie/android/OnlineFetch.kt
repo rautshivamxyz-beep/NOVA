@@ -232,13 +232,19 @@ object OnlineFetch {
             // never stored.
             val wrongEntity = wiki != null && entityQuestion(text) &&
                 !EntityMatch.titleMatchesEntity(wiki.first, text)
-            if (wiki != null && !wrongEntity && EvidencePipeline.acceptsFetchedSource(q, wiki.second)) {
+            val wrongRelationship = wiki != null &&
+                FollowUpIntent.isPersonRelationQuestion(text) &&
+                !FollowUpIntent.hasRelationshipEvidence(text, wiki.second)
+            if (wiki != null && !wrongEntity && !wrongRelationship &&
+                EvidencePipeline.acceptsFetchedSource(q, wiki.second)) {
                 if (WikiCore.appendArticle(act, wiki.first, wiki.second)) {
                     logFetch(act, wiki.first, "wikipedia")
                     saved = wiki.first
                 } else reason = "wikipedia: could not store"
             } else if (wrongEntity) {
                 reason = "wikipedia: '" + wiki!!.first + "' does not name the thing asked about"
+            } else if (wrongRelationship) {
+                reason = "wikipedia: article does not state the requested relationship"
             } else if (wiki == null) {
                 if (reason.isEmpty()) reason = "wikipedia: no usable article"
             } else reason = "wikipedia: weak match"
@@ -258,14 +264,20 @@ object OnlineFetch {
                     // A page that merely mentions a name must never become a biography.
                     val wrongWebEntity = entityQuestion(text) &&
                         !EntityMatch.titleMatchesEntity(page.title, text)
-                    if (!wrongWebEntity &&
+                    val wrongWebRelationship = FollowUpIntent.isPersonRelationQuestion(text) &&
+                        !FollowUpIntent.hasRelationshipEvidence(text, body)
+                    if (!wrongWebEntity && !wrongWebRelationship &&
                         EvidencePipeline.acceptsFetchedSource(q, body) &&
                         WikiCore.appendArticle(act, page.title, body)) {
                         logFetch(act, page.title, page.url)
                         saved = page.title
                         savedWeb = page
                     } else reason = joinReason(reason,
-                        if (wrongWebEntity) "web: title does not match requested person" else "web: weak match")
+                        when {
+                            wrongWebEntity -> "web: title does not match requested person"
+                            wrongWebRelationship -> "web: article does not state the requested relationship"
+                            else -> "web: weak match"
+                        })
                 } else reason = joinReason(reason, "web: no page")
             }
             // v9.17.1: diagnose the failure on the IO thread (a proxy
