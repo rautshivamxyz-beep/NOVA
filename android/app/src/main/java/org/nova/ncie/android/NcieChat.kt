@@ -196,8 +196,10 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             .filter { it.role == Role.USER }
             .map { it.text }
         val personFactLookup = FollowUpIntent.personFactLookup(text, previousUserMessages)
+        val relationshipLookup = personFactLookup ?:
+            if (FollowUpIntent.isPersonRelationQuestion(text)) text else null
         val personFactRequest = EntityMatch.isPersonLookupQuestion(text) ||
-            personFactLookup != null || FollowUpIntent.isPersonRelationQuestion(text)
+            relationshipLookup != null
         // v9.13.0 "Audit Fixes" (re-derived d): the online fetch flow
         // already showed and persisted this question (OnlineFetch.fetch)
         // - this completion turn must not add or persist it a second
@@ -1245,11 +1247,14 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // small model: without a strong local source, ask permission to verify
         // online rather than let the model fill gaps with invented people.
         // The source lookup remains opt-in and the decline path abstains.
-        if (lastSkillMatched == null && personFactRequest &&
-            docPart.isEmpty() && knowledgePart.isEmpty() && !wikiStrong
-        ) {
+        val personFactSourceStrong = if (relationshipLookup != null) {
+            listOf(wikiPart, docPart, knowledgePart).any { source ->
+                FollowUpIntent.hasRelationshipEvidence(relationshipLookup, source)
+            }
+        } else docPart.isNotEmpty() || knowledgePart.isNotEmpty() || wikiStrong
+        if (lastSkillMatched == null && personFactRequest && !personFactSourceStrong) {
             if (offered) OnlineFetch.answerUnverified(act, text)
-            else OnlineFetch.honestOffer(act, text, personFactLookup)
+            else OnlineFetch.honestOffer(act, text, relationshipLookup ?: personFactLookup)
             return
         }
         // v9.13.2 "Small Model Honesty" (the honesty gate): a 230M-class
