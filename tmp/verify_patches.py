@@ -3418,7 +3418,7 @@ check("v9.33.164: version is at least 9.33.164 (332)",
 # ---- v9.33.165 "Simple core, optional features" ----
 _main165 = load("MainActivity.kt")
 _settings165 = load("SettingsActivity.kt")
-_nav_start165 = _main165.find('drawerPane.addView(drawerRow("Search chats")')
+_nav_start165 = _main165.find('drawerPane.addView(drawerRow("Search chats",')
 _nav_end165 = _main165.find("drawerScroller = ScrollView(this).apply {")
 _nav165 = _main165[_nav_start165:_nav_end165] if _nav_start165 >= 0 and _nav_end165 > _nav_start165 else ""
 _workspace165 = _nav165.find('drawerSection("WORKSPACE")')
