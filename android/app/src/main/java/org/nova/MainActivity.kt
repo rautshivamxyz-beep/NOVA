@@ -1348,6 +1348,9 @@ class MainActivity : Activity() {
         scrollToEnd()
 
         setSendButton(R.drawable.ic_stop, stopColor, "Stop")
+        // A non-empty composer is not required while a tool or reply is running.
+        sendBtn.isEnabled = true
+        sendBtn.alpha = 1f
         // v9.16.2: the stop button actually stops. It used to only change
         // the icon - the click still ran send()/startSpeech(), so tapping
         // it never cancelled the reply. Now it cancels the running
@@ -1908,6 +1911,9 @@ class MainActivity : Activity() {
         generating = true
         NcieChat.generating = true
         setSendButton(R.drawable.ic_stop, stopColor, "Stop")
+        // A non-empty composer is not required while a tool or reply is running.
+        sendBtn.isEnabled = true
+        sendBtn.alpha = 1f
         setStatus()
         scope.launch {
             try {
@@ -2107,6 +2113,9 @@ class MainActivity : Activity() {
         generating = true
         NcieChat.generating = true
         setSendButton(R.drawable.ic_stop, stopColor, "Stop")
+        // A non-empty composer is not required while a tool or reply is running.
+        sendBtn.isEnabled = true
+        sendBtn.alpha = 1f
         setStatus()
         scope.launch {
             try {
@@ -3575,6 +3584,9 @@ Study:
             docBtn.visibility = if (settings.showAdvancedSettings) View.VISIBLE else View.GONE
             if (settings.showAdvancedSettings && (settings.readAloud || settings.autoListen)) {
                 NcieVoice.init(this)
+            } else {
+                NcieVoice.stop()
+                NcieVoice.shutdown(this)
             }
         } catch (e: Exception) { NovaLog.quiet("MainActivity", e) }
         // v9.1.0: the PIN gate - covers launch (onCreate is always
