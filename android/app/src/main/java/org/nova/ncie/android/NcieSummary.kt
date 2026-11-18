@@ -113,7 +113,7 @@ object NcieSummary {
         for ((_, _, item) in scored) {
             val extra = (if (result.isEmpty()) 0 else 1) + item.length
             if (result.length + extra > maxChars) continue
-            if (result.isNotEmpty()) result.append('\\n')
+            if (result.isNotEmpty()) result.append(10.toChar())
             result.append(item)
         }
         return result.toString()
