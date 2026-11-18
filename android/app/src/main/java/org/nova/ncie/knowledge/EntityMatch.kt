@@ -29,7 +29,7 @@ object EntityMatch {
 
     /** The significant words of the question - the entity it names. */
     fun entityTerms(question: String): List<String> =
-        Tokens.split(question)
+        Tokens.split(entityPhrase(question))
             .filter { it.length > 1 && it !in STOP }
             .distinct()
 
@@ -53,7 +53,16 @@ object EntityMatch {
         // v9.33.15: a title may run the entity together ("PhysicsWallah") -
         // a term is also accepted when it is contained in the de-spaced title.
         val deSpaced = norm.replace(" ", "")
-        return terms.all { spaced.contains(" " + it + " ") || deSpaced.contains(it) }
+        return terms.all { term ->
+            val aliases = when (term) {
+                "thomas" -> listOf("thomas", "tommy")
+                "arthur" -> listOf("arthur", "arther")
+                else -> listOf(term)
+            }
+            aliases.any { alias ->
+                spaced.contains(" " + alias + " ") || deSpaced.contains(alias)
+            }
+        }
     }
 
     /** Requests to locate another person's private/current position. */
@@ -114,10 +123,27 @@ object EntityMatch {
      * with its lead-in words stripped, so it can be looked up as a page TITLE
      * ("who is physics wallah" -> "physics wallah").
      */
-    fun entityPhrase(question: String): String =
-        question.lowercase()
+    fun entityPhrase(question: String): String {
+        val phrase = question.lowercase()
             .replace(Regex("^(who|what|which|whose|where|when|why|how)\\s+(is|was|are|were|am)\\s+"), "")
             .replace(Regex("^(kaun|kya|kahan|kab)\\s+"), "")
             .replace(Regex("[?.!]+\\s*$"), "")
             .trim()
+        // Targeted aliases only: these are frequent misspellings/nicknames
+        // for the named Peaky Blinders characters, not a fuzzy global matcher.
+        return when (phrase) {
+            "tommy shelby", "thomas shelby" -> "thomas shelby"
+            "arther shelby", "arthur shelby" -> "arthur shelby"
+            else -> phrase
+        }
+    }
+
+    /** A person lookup whose result must be grounded to avoid invented biographies. */
+    fun isPersonLookupQuestion(q: String): Boolean {
+        val t = q.trim()
+        if (t.length > 80) return false
+        val low = " " + t.lowercase()
+        if (low.contains(" you") || low.contains("your")) return false
+        return Regex("(?i)^who\\s+(?:is|was|are|were)\\b").containsMatchIn(t)
+    }
 }
