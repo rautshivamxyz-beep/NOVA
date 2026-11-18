@@ -99,17 +99,17 @@ object OnlineFetch {
         val title: String; val message: String; val noBtn: String
         if (haveLocal) {
             title = "Look online too?"
-            message = "Your notes and offline Wikipedia cover this.\\n\\n" +
+            message = "Your notes and offline Wikipedia cover this.\n\n" +
                 "NOVA can also search Wikipedia and, if that is not enough, " +
-                "the open web for:\\n\\"$q\\"\\n\\n" +
+                "the open web for:\n\"$q\"\n\n" +
                 "Nothing else leaves your phone. Whatever it finds stays " +
                 "offline forever."
             noBtn = if (mustVerify) "Stay offline" else "Answer locally"
         } else {
             title = "Look it up online?"
             message = "Nothing in your notes or offline Wikipedia covers " +
-                "this.\\n\\nNOVA will search Wikipedia and, if that is not " +
-                "enough, the open web for:\\n\\"$q\\"\\n\\n" +
+                "this.\n\nNOVA will search Wikipedia and, if that is not " +
+                "enough, the open web for:\n\"$q\"\n\n" +
                 "Nothing else leaves your phone. Whatever it finds stays " +
                 "offline forever."
             noBtn = if (mustVerify) "Stay offline" else "Answer anyway"
@@ -160,8 +160,8 @@ object OnlineFetch {
         AlertDialog.Builder(act)
             .setTitle("Look it up online?")
             .setMessage("I can't verify this from the available offline sources. " +
-                "Search Wikipedia and, if needed, the open web?\\n\\nQuestion: \\"" +
-                lookupText.take(200) + "\\"\\n\\nNothing is searched until you approve it.")
+                "Search Wikipedia and, if needed, the open web?\n\nQuestion: \"" +
+                lookupText.take(200) + "\"\n\nNothing is searched until you approve it.")
             .setPositiveButton("Look it up") { _, _ -> fetch(act, lookupText, q) }
             .setNegativeButton(if (mustVerify) "Stay offline" else "Answer anyway") { _, _ -> decline() }
             .setOnCancelListener { decline() }
