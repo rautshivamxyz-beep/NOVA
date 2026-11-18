@@ -3387,7 +3387,7 @@ check("v9.33.164: person and family facts require a source or a deterministic ab
 check("v9.33.164: relation questions are not page-title entity lookups",
       "isPersonRelationQuestion" in _follow164 and
       "familyRelationshipQuestionsAreNotMistakenForEntityPageLookups" in
-          load_test("ncie/knowledge/EntityMatchTest.kt"))
+          load_test("knowledge/EntityMatchTest.kt"))
 check("v9.33.164: explicit online checks resolve the latest person subject",
       "onlineLookupQuery" in _follow164 and
       "check online" in _follow164 and
@@ -3396,9 +3396,9 @@ check("v9.33.164: explicit online checks resolve the latest person subject",
 check("v9.33.164: typo-aware joke continuation and transcript follow-ups are tested",
       'replace(Regex("(?i)\\\\bmoee\\\\b"), "more")' in _follow164 and
       "commonTypoOneMoeeIsRecognisedOnlyInJokeContext" in
-          load_test("ncie/android/FollowUpIntentTest.kt") and
+          load_test("android/FollowUpIntentTest.kt") and
       "onlineCheckAboutHimUsesTheLastExplicitPersonLookup" in
-          load_test("ncie/android/FollowUpIntentTest.kt"))
+          load_test("android/FollowUpIntentTest.kt"))
 check("v9.33.164: depth feedback and yes/no context are carried in the prompt",
       "DEPTH FEEDBACK" in _ncie164 and
       "Resolve a short yes or no against the immediately preceding question or offer" in _settings164)
