@@ -1240,7 +1240,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // "web", the online lookup is offered even when the regex heuristics
         // would not have - the model reasons about what the question needs.
         val route = if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
-            lastSkillMatched == null && knowledgePart.isEmpty()) {
+            lastSkillMatched == null && knowledgePart.isEmpty() && !correctionFeedback) {
             withContext(Dispatchers.IO) { NciePlanner.choose(act, text) }
         } else emptyList()
         if (settings.onlineLearning && !offered && seek && docPart.isEmpty() &&
