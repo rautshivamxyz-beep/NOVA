@@ -111,6 +111,10 @@ object EntityMatch {
     fun isEntityQuestion(q: String): Boolean {
         val t = q.trim()
         if (t.length > 60) return false
+        // A relationship question is about a fact WITHIN an entity, not a
+        // page whose title must repeat every word in the relationship.
+        if (Regex("(?i)\\b(?:brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?|family)\\b")
+                .containsMatchIn(t)) return false
         // a question about NOVA itself ("what can you do") is not a lookup
         val low = " " + t.lowercase()
         if (low.contains(" you") || low.contains("your")) return false
@@ -142,8 +146,10 @@ object EntityMatch {
     fun isPersonLookupQuestion(q: String): Boolean {
         val t = q.trim()
         if (t.length > 80) return false
+        if (Regex("(?i)\\b(?:brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?|family)\\b")
+                .containsMatchIn(t)) return false
         val low = " " + t.lowercase()
         if (low.contains(" you") || low.contains("your")) return false
-        return Regex("(?i)^who\\s+(?:is|was|are|were)\\b").containsMatchIn(t)
+        return Regex("(?i)^who\\s+(?:is|was)\\b").containsMatchIn(t)
     }
 }
