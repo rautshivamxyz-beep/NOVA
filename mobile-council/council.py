@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phone-first multi-provider NOVA development council; Python standard library only."""
 import argparse, concurrent.futures, datetime as dt, json, os, pathlib, re, subprocess, urllib.error, urllib.request
-ROOT=pathlib.Path.cwd(); RUNS=ROOT/".council"/"runs"; PATCHES=ROOT/".council"/"patches"
+SCRIPT_DIR=pathlib.Path(__file__).resolve().parent; ROOT=SCRIPT_DIR.parent; RUNS=ROOT/".council"/"runs"; PATCHES=ROOT/".council"/"patches"
 def envload():
  p=ROOT/".env"
  if p.exists():
@@ -20,7 +20,7 @@ def providers():
  if os.getenv("ANTHROPIC_API_KEY"):p.append(("Claude","claude",os.getenv("CLAUDE_MODEL","claude-3-5-haiku-latest")))
  for n,k,b,m in [("Grok","XAI_API_KEY","https://api.x.ai/v1","grok-3-mini"),("Groq","GROQ_API_KEY","https://api.groq.com/openai/v1","llama-3.3-70b-versatile"),("OpenAI","OPENAI_API_KEY","https://api.openai.com/v1","gpt-4.1-mini")]:
   if os.getenv(k):
-   x=n.upper(); p.append((n,"openai",os.getenv(x+"_BASE_URL",b).rstrip("/"),os.getenv(x+"_MODEL",m),os.getenv(k)))
+   x={"Grok":"XAI","Groq":"GROQ","OpenAI":"OPENAI"}[n]; p.append((n,"openai",os.getenv(x+"_BASE_URL",b).rstrip("/"),os.getenv(x+"_MODEL",m),os.getenv(k)))
  if all(os.getenv(x) for x in ("INDUS_API_KEY","INDUS_BASE_URL","INDUS_MODEL")):p.append(("Indus","openai",os.getenv("INDUS_BASE_URL").rstrip("/"),os.getenv("INDUS_MODEL"),os.getenv("INDUS_API_KEY")))
  return p
 def ask(p,system,prompt,tokens=800):
