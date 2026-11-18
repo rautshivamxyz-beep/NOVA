@@ -1075,7 +1075,7 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
             // the summary rides along as a preamble.
             val chatSumm = NcieSummary.sanitize(NcieSummary.read(this, currentChat.id))
             if (chatSumm.isNotEmpty())
-                summaryPart = "Conversation so far (summary): $chatSumm\n\n"
+                summaryPart = "Prior conversation context (summary, not a verified factual source): $chatSumm\n\n"
         }
         // v8.5.3: a study question with NOTHING local behind it must not be
         // answered from imagination - the model invented chapter contents

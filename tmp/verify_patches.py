@@ -997,8 +997,11 @@ _nex3 = open(os.path.join(ROOT, "android/app/src/main/java/org/nova/ncie/android
 check("v9.16.3: chat exam also lands in the Exams store (NcieExam)",
       _nex3.count("Exams.set(act, \"Exam\", ms)") == 1)
 # ---- v9.16.2 "Working buttons" ----
-check("v9.16.2: the stop button cancels the generation (MainActivity)",
-      ma.count("if (generationJob?.isActive == true) generationJob?.cancel()") == 4)
+check("v9.16.2: Stop requests cancellation and never pollutes the answer (MainActivity)",
+      ma.count('active.cancel(CancellationException("Stopped by user"))') == 1 and
+      'status.text = "Stopping…"' in ma and
+      "stopRequested" in ma and
+      'adapter.appendToLast(" ⏹")' not in ma)
 check("v9.16.2: camera entry stays in the advanced tools drawer, not the composer",
       ma.count("R.drawable.ic_camera") == 1 and
       "if (which == 0) openCamera() else scanNotes()" in ma and

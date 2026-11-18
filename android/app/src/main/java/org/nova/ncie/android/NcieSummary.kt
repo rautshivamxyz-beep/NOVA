@@ -109,9 +109,11 @@ object NcieSummary {
         if (recent.length > 6000) recent = recent.takeLast(6000)
         val prompt = "Below is an old summary of an earlier conversation, " +
             "followed by recent messages. Write a compact updated summary " +
-            "(max 200 words) keeping: user facts, decisions made, open " +
-            "threads, important names/numbers. OLD SUMMARY: $old. " +
-            "RECENT: $recent"
+            "(max 200 words) preserving stable user-stated facts and preferences, " +
+            "project decisions, important names and numbers, corrections, and open tasks. " +
+            "Keep speaker attribution clear: never turn an assistant claim or guess " +
+            "into a fact about the user or the world. Mark challenged or unsupported " +
+            "claims as disputed/unverified, not true. OLD SUMMARY: $old. RECENT: $recent"
         // v9.13.0 "Audit Fixes" (HIGH 6): the roll is a real generation
         // (it shares the native engine with the chat turn) - flag it so
         // the embedder's pause logic is accurate while it runs.

@@ -193,6 +193,7 @@ class MainActivity : Activity() {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     internal var generationJob: Job? = null
     private var generating = false
+    @Volatile private var stopRequested = false
     // v9.0.0 "Voice": NcieVoice owns the engine now - this alias keeps
     // the document read-aloud and the streaming read-aloud on the ONE
     // shared TextToSpeech instance (init/ready/shutdown live in NcieVoice)
@@ -1357,8 +1358,19 @@ class MainActivity : Activity() {
         // generation (token collection is cancellation-cooperative; the
         // model stays loaded).
         sendBtn.setOnClickListener {
-            if (generationJob?.isActive == true) generationJob?.cancel()
+            val active = generationJob
+            if (active?.isActive == true && !stopRequested) {
+                // Show the stop request immediately. Native token generation may
+                // take a moment to observe coroutine cancellation; never keep
+                // telling the user that the model is still generating meanwhile.
+                stopRequested = true
+                sendBtn.isEnabled = false
+                sendBtn.alpha = 0.55f
+                status.text = "Stopping…"
+                active.cancel(CancellationException("Stopped by user"))
+            }
         }
+        stopRequested = false
         generating = true
         NcieChat.generating = true
         setStatus()
@@ -1366,7 +1378,7 @@ class MainActivity : Activity() {
         // v9.29.2: if the reply stalls, the voice went silent. Fill the gap
         // with "hmm" (only while reading aloud) instead of dead air.
         scope.launch {
-            while (generating) {
+            while (generating && !stopRequested) {
                 delay(500)
                 try {
                     if (settings.readAloud && NcieVoice.isReady && tts != null &&
@@ -1438,14 +1450,17 @@ class MainActivity : Activity() {
                             scrollToEnd(force = false)
                             // thinking models (Qwen3 / LFM): hidden reasoning is
                             // running while nothing is visible yet
-                            status.text = if (stripThinking(replyMsg.text).isEmpty())
-                                "thinking…" else "generating…"
+                            if (!stopRequested) {
+                                status.text = if (stripThinking(replyMsg.text).isEmpty())
+                                    "thinking…" else "generating…"
+                            }
                             speakNewSentences(stripThinking(replyMsg.text), flush = false)
                         }
                     }
             } catch (e: CancellationException) {
+                // Keep the partial answer as plain text. Stop state belongs in
+                // the UI, never inside the answer that is saved as chat history.
                 flush()
-                if (currentChat === genChat) adapter.appendToLast(" ⏹")
                 speechCancelled = true
                 // stopped replies are truncated - never cache them
                 pendingQaKey = null
@@ -1475,6 +1490,7 @@ class MainActivity : Activity() {
                     }
                     generating = false
                     NcieChat.generating = false
+                    stopRequested = false
                     updateSendLook()
                     setStatus()
                     // drop the duplicated tail the model often repeats when a
@@ -1484,15 +1500,6 @@ class MainActivity : Activity() {
                         val added = replyMsg.text.substring(junction)
                         val b2 = cutPartialLine(before, added)
                         replyMsg.text = stripRepeatJoin(b2, dropRepeatedBlocks(b2, added))
-                    }
-                    // after a stopped reply, the next answer often starts by
-                    // repeating the stopped line - drop that echo
-                    if (newBubble) {
-                        val prev = currentChat.messages.getOrNull(currentChat.messages.size - 2)
-                        if (prev != null && prev.role == Role.ASSISTANT &&
-                            prev.text.trimEnd().endsWith("⏹")) {
-                            replyMsg.text = stripRepeatStart(replyMsg.text, prev.text)
-                        }
                     }
                     if (pendingCards) {
                         pendingCards = false

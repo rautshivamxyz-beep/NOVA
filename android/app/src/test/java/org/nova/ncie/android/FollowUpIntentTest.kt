@@ -97,7 +97,7 @@ class FollowUpIntentTest {
         val query = "who are the brothers of thomas shelby"
         assertTrue(FollowUpIntent.hasRelationshipEvidence(
             query,
-            "Tommy Shelby's brothers are Arthur Shelby and John Shelby."
+            "Thomas Shelby's brothers are Arthur Shelby and John Shelby."
         ))
         assertFalse(FollowUpIntent.hasRelationshipEvidence(
             query,
@@ -106,6 +106,27 @@ class FollowUpIntentTest {
         assertFalse(FollowUpIntent.hasRelationshipEvidence(
             query,
             "The brothers of another character are mentioned here."
+        ))
+    }
+
+    @Test
+    fun relationshipEvidenceMustBeAboutTheRequestedPersonAndRelationship() {
+        val question = "who is the husband of lady gaga"
+        assertTrue(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is married to Michael Polansky."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is a singer. Bradley Cooper was married to Jennifer Esposito."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga is engaged to Michael Polansky."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            question,
+            "Lady Gaga and Bradley Cooper appeared together in a film; Bradley Cooper is married."
         ))
     }
 
