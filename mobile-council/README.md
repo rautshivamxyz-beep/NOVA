@@ -13,7 +13,7 @@ A Termux-compatible Python sidecar for the NOVA Kotlin Android repository. The c
 No automatic merge, push or main-branch editing.
 
 ## Provider configuration
-Gemini uses GEMINI_API_KEY. Claude uses ANTHROPIC_API_KEY. Grok uses XAI_API_KEY. Groq uses GROQ_API_KEY. OpenAI uses OPENAI_API_KEY. Indus/other OpenAI-compatible services require INDUS_API_KEY, INDUS_BASE_URL and INDUS_MODEL. Optional model/base URL settings are in .env.example.
+Gemini uses GEMINI_API_KEY. Claude uses ANTHROPIC_API_KEY. Grok uses XAI_API_KEY. Groq uses GROQ_API_KEY. OpenAI uses OPENAI_API_KEY. Indus/Sarvam uses the OpenAI-compatible Sarvam endpoint: set INDUS_API_KEY, INDUS_BASE_URL=https://api.sarvam.ai/v2 and INDUS_MODEL=sarvam-105b. Other OpenAI-compatible services can use the same adapter. Sarvam documents a one-time ₹100 signup credit for verified users; after it is consumed, usage is paid.
 
 Indus is supported only if an official developer API endpoint and credentials are available. A consumer chat app is not automatically an API. Provider availability, model IDs, free tiers and rate limits vary. The tool cannot make paid services free.
 
