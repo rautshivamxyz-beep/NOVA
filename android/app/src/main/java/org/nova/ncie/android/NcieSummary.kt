@@ -1,6 +1,7 @@
 package org.nova.ncie.android
 
 import org.nova.NovaLog
+import org.nova.ncie.Tokens
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,89 @@ object NcieSummary {
     /** History kept in memory (and on disk) after a roll. */
     private const val KEEP = 8
 
+
+    private const val MAX_RETRIEVED_ITEMS = 5
+    private const val MAX_RETRIEVED_CHARS = 1100
+
+    private val MEMORY_QUERY_STOP = setOf(
+        "again", "also", "answer", "continue", "detail", "detailed", "elaborate",
+        "explain", "further", "give", "more", "please", "same", "show", "tell",
+        "that", "these", "this", "those", "what", "which", "with", "about"
+    )
+    private val MEMORY_FOLLOW_UP = Regex(
+        "(?i)\\b(?:it|this|that|these|those|him|her|them|they|same|again|more|" +
+            "continue|elaborate|expand|further)\\b|\\bwhat about\\b"
+    )
+
+    /** Resolve a short contextual follow-up against the immediately previous
+     * user topic before searching the compacted memory. Pure local string work. */
+    internal fun retrievalQuery(query: String, previousUser: String?): String {
+        val prior = previousUser?.trim().orEmpty()
+        return if (prior.isNotEmpty() && MEMORY_FOLLOW_UP.containsMatchIn(query))
+            "$prior $query"
+        else query
+    }
+
+    /**
+     * Retrieve only summary items that overlap the current topic. This runs
+     * only when chat context is being rebuilt, not on every normal turn.
+     * Items are scored by query coverage and specificity; selected items are
+     * restored to conversation order and bounded before entering the prompt.
+     */
+    internal fun retrieveRelevant(
+        summary: String?,
+        query: String,
+        previousUser: String? = null,
+        maxItems: Int = MAX_RETRIEVED_ITEMS,
+        maxChars: Int = MAX_RETRIEVED_CHARS,
+    ): String {
+        if (maxItems <= 0 || maxChars <= 0) return ""
+        val clean = sanitize(summary)
+        if (clean.isBlank()) return ""
+        val resolvedQuery = retrievalQuery(query, previousUser)
+        val queryTerms = memoryTerms(resolvedQuery)
+        if (queryTerms.isEmpty()) return ""
+
+        val candidates = clean.lines().flatMap { raw ->
+            val line = raw.trim()
+                .removePrefix("- ").removePrefix("* ").removePrefix("• ")
+            if (line.isBlank()) emptyList()
+            else line.split(Regex("(?<=[.!?।])\\\\s+"))
+                .map { it.trim() }.filter { it.isNotBlank() }
+        }.distinctBy { it.lowercase() }
+
+        if (candidates.isEmpty()) return ""
+        val scored = candidates.mapIndexedNotNull { index, item ->
+            val terms = memoryTerms(item)
+            if (terms.isEmpty()) return@mapIndexedNotNull null
+            val overlap = queryTerms.count { it in terms }
+            val minimum = if (queryTerms.size >= 3) 2 else 1
+            if (overlap < minimum) return@mapIndexedNotNull null
+            val coverage = overlap.toDouble() / queryTerms.size.coerceAtLeast(1)
+            val specificity = overlap.toDouble() / terms.size.coerceAtLeast(1)
+            val recency = (index + 1).toDouble() / candidates.size
+            val score = coverage * 0.65 + specificity * 0.25 + recency * 0.10
+            Triple(index, score, item)
+        }.sortedWith(compareByDescending<Triple<Int, Double, String>> { it.second }
+            .thenByDescending { it.first })
+            .take(maxItems)
+            .sortedBy { it.first }
+
+        val result = StringBuilder()
+        for ((_, _, item) in scored) {
+            val extra = (if (result.isEmpty()) 0 else 1) + item.length
+            if (result.length + extra > maxChars) continue
+            if (result.isNotEmpty()) result.append('\\n')
+            result.append(item)
+        }
+        return result.toString()
+    }
+
+    private fun memoryTerms(text: String): Set<String> =
+        Tokens.split(text)
+            .filter { it.length > 1 || it.all(Char::isDigit) }
+            .filter { it !in Tokens.STOP && it !in MEMORY_QUERY_STOP }
+            .toSet()
 
     /**
      * The native model already retains the live conversation in its KV cache.
@@ -120,13 +204,17 @@ object NcieSummary {
             (if (m.role == Role.USER) "You: " else "NOVA: ") + m.text.take(400)
         }
         if (recent.length > 6000) recent = recent.takeLast(6000)
-        val prompt = "Below is an old summary of an earlier conversation, " +
-            "followed by recent messages. Write a compact updated summary " +
-            "(max 200 words) preserving stable user-stated facts and preferences, " +
-            "project decisions, important names and numbers, corrections, and open tasks. " +
-            "Keep speaker attribution clear: never turn an assistant claim or guess " +
-            "into a fact about the user or the world. Mark challenged or unsupported " +
-            "claims as disputed/unverified, not true. OLD SUMMARY: $old. RECENT: $recent"
+        val prompt = "You are updating NOVA's searchable memory for this chat. " +
+            "Merge the old summary with the recent messages into at most 200 words. " +
+            "Output one standalone memory item per line; each line must make sense by itself " +
+            "and preserve the exact people, project names, numbers, dates and relationships. " +
+            "Start each item with one label: [USER], [PREFERENCE], [PROJECT], [DECISION], " +
+            "[CORRECTION], [OPEN], or [TOPIC]. Preserve stable user-stated facts, explicit " +
+            "preferences, project state and decisions, important entities, corrections, and " +
+            "unfinished tasks. Keep speaker attribution explicit. An assistant claim is not " +
+            "a user fact. A correction overrides the claim it corrects. Mark unresolved or " +
+            "unsupported claims as disputed/unverified. Remove duplicates and superseded " +
+            "details; do not invent missing information. OLD MEMORY: $old. RECENT MESSAGES: $recent"
         // v9.13.0 "Audit Fixes" (HIGH 6): the roll is a real generation
         // (it shares the native engine with the chat turn) - flag it so
         // the embedder's pause logic is accurate while it runs.
