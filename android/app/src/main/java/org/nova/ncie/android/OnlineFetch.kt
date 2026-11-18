@@ -168,7 +168,12 @@ object OnlineFetch {
             .show()
     }
 
-    private fun answerOfflineAbstention(act: MainActivity, text: String) {
+    private fun answerOfflineAbstention(
+        act: MainActivity,
+        text: String,
+        message: String = "I can't verify that from the offline sources available in this chat, so I won't guess. " +
+            "Ask me to check online when you want a source-checked answer."
+    ) {
         val last = act.currentChat.messages.lastOrNull()
         if (last?.role != Role.USER || last.text != text) {
             val user = Msg(Role.USER, text)
@@ -176,13 +181,17 @@ object OnlineFetch {
             act.adapter.add(user)
         }
         act.offeredQuestionShown = null
-        val reply = Msg(Role.ASSISTANT,
-            "I can't verify that from the offline sources available in this chat, so I won't guess. " +
-            "Ask me to check online when you want a source-checked answer.")
+        val reply = Msg(Role.ASSISTANT, message)
         act.currentChat.messages.add(reply)
         act.adapter.add(reply)
         act.scrollToEnd()
         act.scope.launch(Dispatchers.IO) { ChatStore.save(act, act.currentChat) }
+    }
+
+    /** A lookup returned material, but it did not verify the requested detail. */
+    fun answerUnverified(act: MainActivity, text: String) {
+        answerOfflineAbstention(act, text,
+            "The material I found does not verify that detail. I won't invent names or relationships.")
     }
 
     private fun fetch(act: MainActivity, text: String, q: String) {
