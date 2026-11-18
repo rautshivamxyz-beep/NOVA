@@ -73,22 +73,43 @@ internal object FollowUpIntent {
         ).find(question)?.groupValues?.get(1)?.lowercase() ?: return false
         val subject = Regex("(?i)\\bof\\s+(.+?)\\s*[?.!]*$")
             .find(question)?.groupValues?.get(1)?.trim() ?: return false
-        val subjectQuestion = "who is $subject"
-        if (!EntityMatch.titleMatchesEntity(sourceText, subjectQuestion)) return false
+        if (!EntityMatch.titleMatchesEntity(sourceText, "who is $subject")) return false
+
+        // A relation word anywhere in a biography is not evidence: an article
+        // about Lady Gaga can mention another person's marriage. Require the
+        // requested subject and relation in the SAME sentence and close enough
+        // to form an actual relationship statement.
+        val subjectPattern = subject.split(Regex("\\s+"))
+            .joinToString("\\s+") { Regex.escape(it) }
+        val subjectRegex = Regex("(?i)(?<![\\p{L}])$subjectPattern(?![\\p{L}])")
         val relationTerms = when (relation) {
             "brother", "brothers" -> listOf("brother", "brothers", "sibling", "siblings")
             "sister", "sisters" -> listOf("sister", "sisters", "sibling", "siblings")
             "parent", "parents" -> listOf("parent", "parents", "father", "mother")
             "father" -> listOf("father", "dad")
             "mother" -> listOf("mother", "mom")
-            "wife" -> listOf("wife", "wives", "married")
-            "husband" -> listOf("husband", "married")
+            "wife" -> listOf("wife", "wives", "married to")
+            "husband" -> listOf("husband", "spouse", "married to")
             "child", "children" -> listOf("child", "children", "son", "daughter")
             "son", "sons" -> listOf("son", "sons", "child", "children")
             else -> listOf("daughter", "daughters", "child", "children")
         }
-        val source = " " + sourceText.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ") + " "
-        return relationTerms.any { term -> source.contains(" $term ") }
+        val relationRegex = Regex(
+            "(?i)(?<![\\p{L}])(?:\${relationTerms.joinToString("|") { Regex.escape(it) }})(?![\\p{L}])"
+        )
+        val sentences = sourceText.split(Regex("(?<=[.!?])\\s+|[\\r\\n]+"))
+        return sentences.any { sentence ->
+            val subjectMatch = subjectRegex.find(sentence) ?: return@any false
+            val relationMatch = relationRegex.find(sentence) ?: return@any false
+            val distance = when {
+                subjectMatch.range.last < relationMatch.range.first ->
+                    relationMatch.range.first - subjectMatch.range.last
+                relationMatch.range.last < subjectMatch.range.first ->
+                    subjectMatch.range.first - relationMatch.range.last
+                else -> 0
+            }
+            distance <= 100
+        }
     }
 
     /**
