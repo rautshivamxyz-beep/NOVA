@@ -842,6 +842,11 @@ class MainActivity : Activity() {
             startActivityForResult(Intent(this@MainActivity, ChatsActivity::class.java), REQ_CHATS)
         })
 
+        drawerPane.addView(drawerSection("RECENT CHATS"))
+        drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        drawerPane.addView(drawerList, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         drawerPane.addView(drawerSection("WORKSPACE"))
         drawerPane.addView(drawerRow("Knowledge", R.drawable.ic_doc) {
             startActivity(Intent(this, KnowledgeActivity::class.java))
@@ -849,7 +854,32 @@ class MainActivity : Activity() {
         drawerPane.addView(drawerRow("Memory", R.drawable.ic_edit) {
             startActivity(Intent(this, MemoryActivity::class.java))
         })
-        drawerPane.addView(drawerRow("Study", R.drawable.ic_lightbulb) { Study.review(this) })
+        val dueCount = Study.dueCount(this)
+        val studyRow = drawerRow(
+            if (dueCount > 0) "Study ($dueCount due)" else "Study",
+            R.drawable.ic_lightbulb
+        ) { Study.review(this) }
+        studyRow.setOnLongClickListener {
+            val total = Study.totalCards(this)
+            val due = Study.dueCount(this)
+            AlertDialog.Builder(this)
+                .setTitle("Study deck")
+                .setMessage("$total cards, $due due for review.")
+                .setPositiveButton("Review") { _, _ -> Study.review(this) }
+                .setNegativeButton("Clear deck") { _, _ ->
+                    AlertDialog.Builder(this)
+                        .setTitle("Delete all cards?")
+                        .setPositiveButton("Delete") { _, _ ->
+                            Study.clear(this)
+                            toast("Study deck cleared")
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+                .show()
+            true
+        }
+        drawerPane.addView(studyRow)
         drawerPane.addView(drawerRow("Study plan", R.drawable.ic_lightbulb) {
             startActivity(Intent(this, PlannerActivity::class.java))
         })
@@ -903,7 +933,7 @@ class MainActivity : Activity() {
             startActivity(Intent(this, HealthActivity::class.java))
         })
         drawerPane.addView(drawerRow("Check for updates", R.drawable.ic_refresh) {
-            startActivity(Intent(this, UpdateActivity::class.java))
+            checkForUpdates()
         })
         drawerPane.addView(drawerRow("App lock", R.drawable.ic_settings) { appLockDialog() })
         drawerPane.addView(drawerRow("Help", R.drawable.ic_lightbulb) {
@@ -911,11 +941,6 @@ class MainActivity : Activity() {
         })
         drawerPane.addView(drawerRow("Help & tips", R.drawable.ic_lightbulb) { showHelpTips() })
         drawerPane.addView(drawerRow("Settings", R.drawable.ic_settings) { showSettings() })
-
-        drawerPane.addView(drawerSection("RECENT CHATS"))
-        drawerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        drawerPane.addView(drawerList, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         drawerScroller = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
