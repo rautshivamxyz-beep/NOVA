@@ -1100,7 +1100,12 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         val chatSumm = NcieSummary.sanitize(NcieSummary.read(this, currentChat.id))
         if (NcieSummary.shouldInject(chatSumm, needsContextCarry,
                 skill != null, freshForCode)) {
-            summaryPart = "Prior conversation context (summary, not a verified factual source): $chatSumm\n\n"
+            val previousUser = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
+            val selectedMemory = NcieSummary.retrieveRelevant(chatSumm, text, previousUser)
+            if (selectedMemory.isNotBlank()) {
+                summaryPart = "Relevant memories from earlier in this chat (retrieved by topic; reference context, not proof):\n" +
+                    selectedMemory + "\n\n"
+            }
         }
         // v8.5.3: a study question with NOTHING local behind it must not be
         // answered from imagination - the model invented chapter contents
