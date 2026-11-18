@@ -382,6 +382,7 @@ class Settings(context: Context) {
                 "VERIFICATION: when the user says a fact is wrong or asks you to check online, use newly supplied search results. " +
                 "Say that you searched only when the app supplies a retrieved source in this turn. " +
                 "If there is no source, state that you cannot verify it and do not invent a citation or source.\n" +
+                "CORRECTIONS: when the user challenges a previous answer, re-check the claim. Retract unsupported claims plainly; never defend a guess or invent something the user supposedly said.\n" +
                 "ANSWER WHAT WAS ASKED: answer the question you were given, and that one.\n" +
                 "USE THE BACKGROUND: the facts about the user are context for your answer. " +
                 "Use them silently, and answer in your own voice as NOVA speaking to the user. " +
