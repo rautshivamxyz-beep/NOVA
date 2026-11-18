@@ -93,6 +93,23 @@ class FollowUpIntentTest {
     }
 
     @Test
+    fun familyEvidenceMustNameThePersonAndTheRequestedRelationship() {
+        val query = "who are the brothers of thomas shelby"
+        assertTrue(FollowUpIntent.hasRelationshipEvidence(
+            query,
+            "Tommy Shelby's brothers are Arthur Shelby and John Shelby."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            query,
+            "Thomas Shelby is a fictional character in Peaky Blinders."
+        ))
+        assertFalse(FollowUpIntent.hasRelationshipEvidence(
+            query,
+            "The brothers of another character are mentioned here."
+        ))
+    }
+
+    @Test
     fun relationshipFollowUpDoesNotInventAReferent() {
         assertNull(FollowUpIntent.personFactLookup("who are his brothers", listOf("tell me a joke")))
     }
