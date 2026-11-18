@@ -1690,13 +1690,24 @@ class MainActivity : Activity() {
                         // phase. NcieLearn quality-gates it (blank/leaked/boiler-
                         // plate replies and internal prompts never enter the
                         // cache) and writes asynchronously; nothing blocks here.
-                        NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)
-                        // v9.30.0 "Skill Forge" + "Growth": the same good turn
-                        // may become a skill NOVA writes for itself, and every
-                        // answered turn joins the growth ledger. Both hop onto
-                        // their own background threads - nothing blocks here.
-                        org.nova.ncie.android.NcieSkillForge.maybeForge(this@MainActivity, userText, replyMsg.text)
-                        org.nova.ncie.android.NcieEvolve.note(this@MainActivity, userText, replyMsg.text)
+                        // A correction/retraction turn is feedback about a prior
+                        // answer, not a new fact to graduate into memory or a skill.
+                        val correctionTurn = if (userText == null) false else {
+                            val previousAssistant = genChat.messages
+                                .getOrNull(genChat.messages.size - 3)
+                                ?.takeIf { it.role == Role.ASSISTANT }?.text
+                            org.nova.ncie.android.FollowUpIntent.isCorrectionFeedback(
+                                userText, previousAssistant)
+                        }
+                        if (!correctionTurn) {
+                            NcieLearn.record(this@MainActivity, userText, replyMsg.text, lastAnswerSources)
+                            // v9.30.0 "Skill Forge" + "Growth": the same good turn
+                            // may become a skill NOVA writes for itself, and every
+                            // answered turn joins the growth ledger. Both hop onto
+                            // their own background threads - nothing blocks here.
+                            org.nova.ncie.android.NcieSkillForge.maybeForge(this@MainActivity, userText, replyMsg.text)
+                            org.nova.ncie.android.NcieEvolve.note(this@MainActivity, userText, replyMsg.text)
+                        }
                         // v9.14.0 "Sharp Memory": did the injected wiki
                         // background actually contribute? Learn it, so a
                         // source that never helps stops costing prompt
