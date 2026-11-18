@@ -3311,6 +3311,34 @@ check("v9.33.161: the chat follow-up and redirect rules are unit-tested",
 check("v9.33.161: version is at least 9.33.161 (329)",
       version_at_least("9.33.161", 329))
 
+# ---- v9.33.162 "The clock it can read" ----
+# "what time is it" / "what's the date" / "what day is it" are answered
+# from the phone's clock before any generation. The prompt deliberately
+# carries no date (it would cost tokens on every turn to answer a question
+# asked once a day), so these used to reach a model that could not know
+# them and get a confident invented answer. Whole-message patterns only.
+_clock = load("ncie/android/NcieClock.kt")
+check("v9.33.162: the clock answers from the phone, not the model",
+      "object NcieClock" in _clock and
+      "SimpleDateFormat(pattern, Locale.US)" in _clock and
+      "timeZone = zone" in _clock and
+      "NcieClock.answer(ask, System.currentTimeMillis())" in _chat_ext)
+check("v9.33.162: the clock runs before any generation",
+      "if (answerClock(text)) { input.setText(\"\"); return }" in nc and
+      nc.index("if (answerClock(text))") < nc.index("if (answerSenses(text))"))
+check("v9.33.162: clock patterns consume the whole message",
+      _clock.count("[.!?]*") == 3 and
+      "MAX_LEN = 60" in _clock and
+      "if (text.length > MAX_LEN) return Ask.NONE" in _clock and
+      "enum class Ask { NONE, TIME, DATE, DAY }" in _clock)
+check("v9.33.162: the clock rules are unit-tested",
+      "theReplyFollowsTheTimeZoneItIsGiven" in load_test("android/NcieClockTest.kt") and
+      "aQuestionWithExtraWordsIsNotAClockQuestion" in
+          load_test("android/NcieClockTest.kt") and
+      "theOrdinaryPhrasingsAreRecognised" in load_test("android/NcieClockTest.kt"))
+check("v9.33.162: version is at least 9.33.162 (330)",
+      version_at_least("9.33.162", 330))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
