@@ -3339,6 +3339,26 @@ check("v9.33.162: the clock rules are unit-tested",
 check("v9.33.162: version is at least 9.33.162 (330)",
       version_at_least("9.33.162", 330))
 
+# ---- v9.33.163 "Rank the name" ----
+# "match" scored only the item's body. Straight out of "list" the body is
+# empty, score() answers 0 for blank text, so every item scored 0, the sort
+# kept the original order and "match" silently did nothing. The recipe that
+# matters most (list -> match -> take 1 -> read -> answer) never worked.
+_tools163 = load("ncie/android/NcieTools.kt")
+check("v9.33.163: recipe ranking reads the name as well as the body",
+      'score(it.name + "\\n" + it.text, q)' in _tools163 and
+      'score(it.text, q)' not in _tools163 and
+      "internal fun score(text: String, query: String): Int" in _tools163)
+check("v9.33.163: the recipe ranking is unit-tested",
+      "anItemWithNoTextStillRanksOnItsName" in load_test("android/NcieToolsTest.kt") and
+      "aMatchingNameScoresFullMarks" in load_test("android/NcieToolsTest.kt") and
+      "everyTermThatAppearsIsCounted" in load_test("android/NcieToolsTest.kt"))
+check("v9.33.163: the recipe primitive catalogue is consistent",
+      _tools163.count("\" -> ") >= 10 and
+      '"write"' in load("ncie/android/NcieRecipes.kt"))
+check("v9.33.163: version is at least 9.33.163 (331)",
+      version_at_least("9.33.163", 331))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
