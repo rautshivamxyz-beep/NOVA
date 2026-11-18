@@ -840,6 +840,35 @@ internal fun MainActivity.answerFocus(text: String): Boolean {
 // model call, no network, works with no model loaded at all.
 internal val LEARNED_Q = Regex("(?i)^\\s*what\\s+have\\s+you\\s+learned\\s*[.!?]*\\s*$")
 
+
+/**
+ * A tool inventory is factual app metadata, not a generative question.
+ * Build it from the same registry used by the router so NOVA cannot invent
+ * tools such as unrestricted account access or actions that are not installed.
+ */
+internal fun MainActivity.answerToolInventory(text: String): Boolean {
+    if (!NcieAsk.tools(text)) return false
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+
+    val tools = NciePlanner.TOOLS.filter { it.first != "none" }
+    val body = buildString {
+        append("Available information tools:\n")
+        for ((name, description) in tools) {
+            append("- ").append(name).append(" — ").append(description).append('\n')
+        }
+        append("\nAccess limits:\n")
+        append("- Web lookup needs internet and the online-search setting or your approval.\n")
+        append("- Files are limited to the folder you explicitly grant NOVA.\n")
+        append("- Notifications require Android notification access.\n")
+        append("- Offline Wikipedia works only with the local wiki data installed.\n")
+        append("\nThis list describes registered information sources, not unrestricted access to private accounts or hidden data.")
+    }
+    postGroundReply(this, body)
+    return true
+}
+
 // v9.30.0 "Growth": the self-evolution commands - what NOVA has taught
 // itself. Short, typed commands only (long text is a study question).
 // v9.33.106: every branch consumes the whole message now (NcieAsk.SKILLS_Q) -
