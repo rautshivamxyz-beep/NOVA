@@ -88,7 +88,7 @@ object NcieSummary {
             val line = raw.trim()
                 .removePrefix("- ").removePrefix("* ").removePrefix("• ")
             if (line.isBlank()) emptyList()
-            else line.split(Regex("(?<=[.!?।])\\\\s+"))
+            else line.split(Regex("(?<=[.!?।])\\s+"))
                 .map { it.trim() }.filter { it.isNotBlank() }
         }.distinctBy { it.lowercase() }
 
