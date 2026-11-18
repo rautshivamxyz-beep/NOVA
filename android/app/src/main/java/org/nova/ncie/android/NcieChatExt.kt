@@ -1017,42 +1017,20 @@ internal fun bioQuestion(text: String): Boolean {
  *  and the manual "look it up online" command route through here, so the
  *  fetch stays ask-first (OnlineFetch's dialog) and the call site stays
  *  single. */
-internal fun offerOnlineFetch(act: MainActivity, text: String) {
-    OnlineFetch.offer(act, text, false)
+internal fun offerOnlineFetch(
+    act: MainActivity,
+    text: String,
+    queryOverride: String? = null
+) {
+    OnlineFetch.offer(act, text, false, queryOverride)
 }
 
-/** v9.7.0 "Quiet Fetch": parse the manual online-lookup command.
- *  v9.13.2 "Small Model Honesty": the phrase list is broad now - the
- *  old two-form regex silently missed how the user actually types it
- *  ("look up at online: compare bmw vs buggati" fell through to the
- *  model and hallucinated). Accepted, case-insensitive, each with an
- *  optional trailing colon: "look it up online", "look up online",
- *  "look up at online", "look it up on the internet", "look online",
- *  "search online", "search the web", "find it online", "google it",
- *  "search the internet". The rest of the message is the query; a
- *  bare form (or an empty rest) re-runs the last question in this
- *  chat ("" when there is none, so the caller can explain itself).
- *  Null = not the command at all. */
-internal val LOOKUP_PREFIXES = listOf(
-    "look it up online", "look up online", "look up at online",
-    "look it up on the internet", "look online", "search online",
-    "search the web", "find it online", "google it", "search the internet"
-)
-
+/** Explicit online-check language is parsed before ordinary generation. */
 internal fun MainActivity.onlineLookupQ(text: String): String? {
-    val lower = text.lowercase()
-    for (p in LOOKUP_PREFIXES) {
-        if (!lower.startsWith(p)) continue
-        var q = text.substring(p.length).trim(' ', ':')
-        if (q.lowercase().startsWith("for ")) q = q.substring(4)
-        q = q.trim()
-        if (q.isEmpty()) {
-            val last = currentChat.messages.lastOrNull { it.role == Role.USER }?.text
-            return last?.trim() ?: ""
-        }
-        return q
-    }
-    return null
+    val previousUsers = currentChat.messages
+        .filter { it.role == Role.USER }
+        .map { it.text }
+    return FollowUpIntent.onlineLookupQuery(text, previousUsers)
 }
 
 // v9.29.3 "Tool recipes": "build a tool to ..." authors a recipe from
