@@ -123,9 +123,17 @@ object NcieTools {
                         text = NovaEngineAdapter.generate(
                             "Summarise the following in 5 short bullet points, one line each:\n\n" + src, 300)
                     }
+                    // v9.33.163: rank the NAME too. After "list" every item's
+                    // text is still empty (nothing has been read yet), and
+                    // score() answers 0 for blank text - so the ranking was
+                    // all zeros, the sort kept the original order, and
+                    // "match" silently did nothing. The recipe that matters
+                    // most (list -> match -> take 1 -> read -> answer) was the
+                    // one that never worked. The name is what a "find the file
+                    // about X" request actually matches on.
                     "match" -> {
                         val q = s.args["query"] ?: ""
-                        items = items.map { it to score(it.text, q) }
+                        items = items.map { it to score(it.name + "\n" + it.text, q) }
                             .sortedByDescending { it.second }.map { it.first }
                     }
                     "answer" -> {
@@ -157,7 +165,13 @@ object NcieTools {
         return out.take(MAX_OUT)
     }
 
-    private fun score(text: String, query: String): Int {
+    /**
+     * v9.33.163: [score] is internal so a JVM test can pin the ranking - it
+     * is the only part of the recipe pipeline that is pure arithmetic over
+     * the item, and getting it wrong is invisible (every score is 0 and the
+     * sort keeps the original order, which looks like a working feature).
+     */
+    internal fun score(text: String, query: String): Int {
         if (query.isBlank() || text.isBlank()) return 0
         val t = text.lowercase()
         // v9.33.76: every-script content words (a 2-character Devanagari
