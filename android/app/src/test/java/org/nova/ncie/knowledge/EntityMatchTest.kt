@@ -84,6 +84,14 @@ class EntityMatchTest {
     }
 
     @Test
+    fun familyRelationshipQuestionsAreNotMistakenForEntityPageLookups() {
+        assertFalse(EntityMatch.isEntityQuestion("who are the brothers of Thomas Shelby"))
+        assertFalse(EntityMatch.isPersonLookupQuestion("who are the brothers of Thomas Shelby"))
+        assertTrue(EntityMatch.isPersonLookupQuestion("who is Thomas Shelby"))
+        assertTrue(EntityMatch.isPersonLookupQuestion("who was Arthur Shelby"))
+    }
+
+    @Test
     fun aQuestionAboutNovaItselfIsNotALookup() {
         assertFalse(EntityMatch.isEntityQuestion("what can you do"))
         assertFalse(EntityMatch.isEntityQuestion("what are your skills"))
