@@ -106,21 +106,30 @@ private val CREATIVE_WORDS = listOf("story", "poem", "joke", "write me", "imagin
 internal fun factualAsk(t: String): Boolean {
     val x = t.trim()
     if (x.length > 120) return false
-    val low = " " + x.lowercase()
-    if (low.contains(" you") || low.contains("your")) return false
 
-    // Direct fact questions plus descriptions, comparisons and volatile facts.
-    // These must reach current retrieval/model reasoning instead of replaying
+    // These are conversational preference/capability questions, not claims
+    // about the outside world. Keep their ordinary short-turn cache path.
+    val conversational = Regex(
+        "(?i)^(?:how are you|who are you|what is your name|what can you do|" +
+            "what tools do you have|what features do you have|what skills do you have)\\b|" +
+            "\\b(?:what do you think|what is your opinion|what's your opinion|" +
+            "in your opinion|your favorite|do you like|do you prefer)\\b"
+    ).containsMatchIn(x)
+    if (conversational) return false
+
+    // Direct fact questions include yes/no forms ("is X married?") and
+    // explanatory forms ("how does X work?"), not only who/what questions.
+    // They must reach current retrieval/model reasoning instead of replaying
     // a response that may have been produced from incomplete context.
     val direct = Regex(
-        "(?i)^(who|what|where|when|which|whose|how many|how much|how old)\\b"
+        "(?i)^(who|what|where|when|which|whose|how|is|are|was|were|did|does|has|have)\\b"
     ).containsMatchIn(x)
     val hindi = Regex("(?i)^(kaun|kya|kahan|kab|kitne)\\b").containsMatchIn(x)
     val descriptiveLookup = Regex(
         "(?i)^(tell me about|give me facts about|facts about|biography of|bio of|history of|overview of)\\b"
     ).containsMatchIn(x)
     val freshnessSensitive = Regex(
-        "(?i)\\b(latest|newest|current(?:ly)?|recent|today|tonight|yesterday|now|as of|updated|price|score|ranking|rankings|champion|winner|record|statistics|stats|net worth|age|born|died|husband|wife|brothers?|sisters?|parents?|father|mother|children)\\b"
+        "(?i)\\b(latest|newest|current(?:ly)?|recent|today|tonight|yesterday|now|as of|updated|price|score|ranking|rankings|champion|winner|record|statistics|stats|net worth|age|born|died|married|husband|wife|brothers?|sisters?|parents?|father|mother|children)\\b"
     ).containsMatchIn(x)
     return direct || hindi || descriptiveLookup || freshnessSensitive || compareQuestion(x)
 }
