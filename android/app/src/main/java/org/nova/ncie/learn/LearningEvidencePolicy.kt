@@ -29,8 +29,14 @@ object LearningEvidencePolicy {
      * Query-time bypasses protect common phrasings; this write-time rule also
      * protects later paraphrases that a lexical fuzzy matcher may consider similar.
      */
-    fun mayCacheAnswer(questionIsFactual: Boolean, sources: List<String>): Boolean {
-        return !questionIsFactual || sources.any { it.isNotBlank() }
+    fun mayCacheAnswer(
+        questionIsFactual: Boolean,
+        sources: List<String>,
+        verdict: VerifyResult,
+    ): Boolean {
+        // Factual answers need the same strict grounding floor as durable facts:
+        // merely having an unrelated non-empty source is not enough.
+        return !questionIsFactual || mayPersistFact(sources, verdict)
     }
 
     const val SOURCE_FREE_SCORE = 0.6
