@@ -94,8 +94,9 @@ internal object FollowUpIntent {
             "son", "sons" -> listOf("son", "sons", "child", "children")
             else -> listOf("daughter", "daughters", "child", "children")
         }
+        val relationAlternatives = relationTerms.joinToString("|") { Regex.escape(it) }
         val relationRegex = Regex(
-            "(?i)(?<![\\p{L}])(?:\${relationTerms.joinToString("|") { Regex.escape(it) }})(?![\\p{L}])"
+            "(?i)(?<![\\p{L}])(?:" + relationAlternatives + ")(?![\\p{L}])"
         )
         val sentences = sourceText.split(Regex("(?<=[.!?])\\s+|[\\r\\n]+"))
         return sentences.any { sentence ->
