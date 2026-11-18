@@ -790,6 +790,25 @@ internal fun MainActivity.answerSenses(text: String): Boolean {
     return true
 }
 
+// v9.33.162 "The clock it can read": "what time is it" / "what's the
+// date" / "what day is it" - answered from the phone's clock, before any
+// generation. Nothing in the prompt carries the date (and it must not:
+// that would cost tokens on every turn to answer a once-a-day question),
+// so these used to reach a model that had no way to know them and get a
+// confident invented answer. Whole-message patterns only, so "what time is
+// it in Tokyo" and "what day is my exam" are still real questions.
+internal fun MainActivity.answerClock(text: String): Boolean {
+    val ask = NcieClock.ask(text)
+    if (ask == NcieClock.Ask.NONE) return false
+    val activity = this
+    val body = NcieClock.answer(ask, System.currentTimeMillis())
+    input.setText("")
+    val um = Msg(Role.USER, text)
+    currentChat.messages.add(um); adapter.add(um); scrollToEnd()
+    postGroundReply(activity, body)
+    return true
+}
+
 internal fun MainActivity.answerFocus(text: String): Boolean {
     if (text.length > 60) return false
     val start = FOCUS_START_Q.find(text)

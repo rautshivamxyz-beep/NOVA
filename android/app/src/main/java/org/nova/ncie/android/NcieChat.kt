@@ -444,6 +444,12 @@ suspend fun MainActivity.ncieSend(raw: String? = null, offered: Boolean = false)
         // A5 "Focus mode" (v9.33.12): "focus 25" / "focus mode" /
         // "stop focus" - deterministic, fully offline, no new permission.
         if (answerFocus(text)) { input.setText(""); return }
+        // v9.33.162 "The clock it can read": "what time is it" / "what's
+        // the date" / "what day is it" - the phone's own clock, answered
+        // before any generation. The prompt carries no date (it would cost
+        // tokens every turn), so this used to be answered by a model that
+        // could not know it. Cheapest command in the turn: no IO, no model.
+        if (answerClock(text)) { input.setText(""); return }
         // v9.33.86 "Device senses" (Tier 1): "battery" / "am i online" /
         // "device status" - what the phone itself is doing. Deterministic,
         // offline, no model call and no new permission.
