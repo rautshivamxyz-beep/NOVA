@@ -14,6 +14,11 @@ internal object FollowUpIntent {
         "(?i)^\\s*(?:(?:who|what|list|tell\\s+me)\\s+)?(?:(?:is|are|was|were)\\s+)?" +
             "(?:his|her|their)\\s+(brothers?|sisters?|parents?|father|mother|wife|husband|children|sons?|daughters?)\\s*[?.!]*\\s*$"
     )
+    private val RESOLVED_PERSON_RELATION = Regex(
+        "(?i)^who\\s+(?:are|were)\\s+the\\s+" +
+            "(?:brothers?|sisters?|parents?|children|sons?|daughters?)\\s+of\\s+.+[?.!]*$|" +
+            "^who\\s+(?:is|was)\\s+the\\s+(?:father|mother|wife|husband)\\s+of\\s+.+[?.!]*$"
+    )
     private val ONLINE_PREFIXES = listOf(
         "again wrong go and check online",
         "again wrong, check online",
@@ -52,6 +57,9 @@ internal object FollowUpIntent {
 
     fun isDepthFeedback(input: String): Boolean =
         input.trim().length <= 100 && DEPTH_FEEDBACK.containsMatchIn(input)
+
+    fun isPersonRelationQuestion(input: String): Boolean =
+        input.trim().length <= 120 && RESOLVED_PERSON_RELATION.matches(input.trim())
 
     /**
      * Expand a short relationship follow-up only when a recent, explicit
