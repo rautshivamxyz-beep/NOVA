@@ -3512,6 +3512,25 @@ check("v9.33.167: new cache and correction cases have regression tests",
 check("v9.33.167: version is at least 9.33.167 (335)",
       version_at_least("9.33.167", 335))
 
+# ---- v9.33.168: topic-aware retrieval from compacted chat memory ----
+_sum168 = load("ncie/android/NcieSummary.kt")
+_chat168 = load("ncie/android/NcieChat.kt")
+check("v9.33.168: rolling memory is structured and retrieved by topic",
+      "Start each item with one label: [USER], [PREFERENCE], [PROJECT]" in _sum168 and
+      "fun retrieveRelevant(" in _sum168 and
+      "NcieSummary.retrieveRelevant(chatSumm, text, previousUser)" in _chat168)
+check("v9.33.168: memory retrieval is bounded and only used when context is rebuilt",
+      "MAX_RETRIEVED_ITEMS = 5" in _sum168 and
+      "MAX_RETRIEVED_CHARS = 1100" in _sum168 and
+      "NcieSummary.shouldInject(chatSumm, needsContextCarry" in _chat168)
+check("v9.33.168: chat memory retrieval has topic, follow-up, budget and Hindi tests",
+      "retrievalSelectsOnlyTheMatchingTopicMemory" in load_test("android/NcieSummaryTest.kt") and
+      "aContextualFollowUpUsesThePreviousUserTopic" in load_test("android/NcieSummaryTest.kt") and
+      "retrievalHonoursItemAndCharacterBudgets" in load_test("android/NcieSummaryTest.kt") and
+      "retrievalSupportsDevanagariTopics" in load_test("android/NcieSummaryTest.kt"))
+check("v9.33.168: version is at least 9.33.168 (336)",
+      version_at_least("9.33.168", 336))
+
 print("")
 if fails:
     print("VERIFY FAILED: %d problem(s)" % len(fails))
