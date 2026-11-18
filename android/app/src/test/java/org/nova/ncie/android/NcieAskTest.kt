@@ -88,7 +88,7 @@ class NcieAskTest {
         )) {
             assertFalse("must remain a normal question: $t", NcieAsk.tools(t))
         }
-        assertFalse(NcieAsk.tools("what tools do you have " + "x".repeat(TOOLS_MAX)))
+        assertFalse(NcieAsk.tools("what tools do you have " + "x".repeat(NcieAsk.TOOLS_MAX)))
     }
 
     @Test
