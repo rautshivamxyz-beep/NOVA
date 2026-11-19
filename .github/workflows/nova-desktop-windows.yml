@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: nova-native-windows-\${{ github.ref }}
+  group: nova-native-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build
-          key: \${{ runner.os }}-llama-v1.0.0-cuda12.4-arch86-msvc-ninja-multiconfig-v1
+          key: ${{ runner.os }}-llama-v1.0.0-cuda12.4-arch86-msvc-ninja-multiconfig-v1
 
       - name: Install CUDA Toolkit
         uses: ./llama-src/.github/actions/windows-setup-cuda
@@ -131,7 +131,7 @@ jobs:
       - name: Build one-click Windows installer
         shell: pwsh
         run: |
-          $iscc = Join-Path \${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
           if (-not (Test-Path $iscc)) { throw 'Inno Setup compiler was not installed.' }
           $version = if ($env:GITHUB_REF -like 'refs/tags/windows-v*') { $env:GITHUB_REF_NAME.Substring(9) } else { '1.0.2' }
           & $iscc "/DMyAppVersion=$version" 'desktop/windows/NOVA.iss'
@@ -158,6 +158,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/windows-v')
         shell: pwsh
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$env:GITHUB_REF_NAME" 'dist/NOVA-Setup.exe' --title "NOVA Windows $($env:GITHUB_REF_NAME)" --generate-notes
