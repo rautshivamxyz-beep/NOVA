@@ -3,6 +3,8 @@ name: Build NOVA Native Windows Desktop
 on:
   workflow_dispatch:
   push:
+    tags:
+      - "v*"
     branches:
       - "desktop/**"
     paths:
@@ -10,7 +12,7 @@ on:
       - ".github/workflows/nova-desktop-windows.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nova-native-windows-${{ github.ref }}
@@ -72,7 +74,8 @@ jobs:
       - name: Publish native NOVA window
         shell: pwsh
         run: |
-          dotnet publish desktop/windows/NOVA.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/NOVA-Desktop
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '1.0.1' }
+          dotnet publish desktop/windows/NOVA.csproj -c Release -r win-x64 --self-contained true -p:Version=$version -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/NOVA-Desktop
           if ($LASTEXITCODE -ne 0) { throw 'Native app publish failed.' }
 
       - name: Assemble offline package
@@ -86,6 +89,15 @@ jobs:
           Copy-Item "$bin/*" $stage -Recurse -Force
           Copy-Item 'desktop/nova-web' "$stage/nova-web" -Recurse -Force
           Copy-Item 'llama-src/LICENSE' "$stage/LLAMA-CPP-LICENSE" -Force
+          choco install openssl -y --no-progress
+          $sslCandidates = @('C:\Program Files\OpenSSL-Win64\bin', 'C:\Program Files\OpenSSL\bin')
+          foreach ($name in @('libssl-3-x64.dll', 'libcrypto-3-x64.dll')) {
+            $found = $null
+            foreach ($dir in $sslCandidates) { if (Test-Path (Join-Path $dir $name)) { $found = Join-Path $dir $name; break } }
+            if (-not $found) { $found = (Get-ChildItem 'C:\Program Files' -Filter $name -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+            if (-not $found) { throw "Required OpenSSL runtime dependency $name was not found." }
+            Copy-Item $found $stage -Force
+          }
           New-Item -ItemType Directory -Force "$stage/models" | Out-Null
           foreach ($pattern in @('cudart64_*.dll','cublas64_*.dll','cublasLt64_*.dll')) {
             Get-ChildItem (Join-Path $env:CUDA_PATH 'bin') -Filter $pattern -File | ForEach-Object { Copy-Item $_.FullName $stage -Force }
@@ -93,6 +105,7 @@ jobs:
           foreach ($dll in @('cudart64_12.dll','cublas64_12.dll','cublasLt64_12.dll')) {
             if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing CUDA runtime $dll" }
           }
+          foreach ($dll in @('libssl-3-x64.dll','libcrypto-3-x64.dll')) { if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing OpenSSL dependency $dll" } }
           if (-not (Test-Path "$stage/NOVA.exe")) { throw 'NOVA.exe missing from published output' }
 
       - name: Smoke test engine
@@ -114,7 +127,8 @@ jobs:
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
           if (-not (Test-Path $iscc)) { throw 'Inno Setup compiler was not installed.' }
-          & $iscc 'desktop/windows/NOVA.iss'
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '1.0.1' }
+          & $iscc "/DMyAppVersion=$version" 'desktop/windows/NOVA.iss'
           if ($LASTEXITCODE -ne 0) { throw 'NOVA Windows installer build failed.' }
           if (-not (Test-Path 'dist/NOVA-Setup.exe')) { throw 'NOVA-Setup.exe was not created.' }
 
@@ -133,3 +147,11 @@ jobs:
           path: dist/NOVA-Desktop-Windows-CUDA.zip
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish GitHub release with installer
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" 'dist/NOVA-Setup.exe' --title "NOVA $($env:GITHUB_REF_NAME)" --generate-notes
