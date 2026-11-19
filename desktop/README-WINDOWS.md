@@ -28,3 +28,8 @@ The Microsoft WebView2 Runtime is required to render the app window and is prese
 CUDA backend targets NVIDIA Ampere compute capability 8.6, including RTX 3050 Laptop GPUs. NOVA requests GPU layer offload; layers that do not fit in 6 GB VRAM can remain in system RAM.
 
 Startup and model errors are recorded in `nova-engine.log` beside NOVA.exe.
+
+
+## In-app updates
+
+Use **Check for updates** in the native NOVA toolbar. NOVA checks the project's GitHub Releases page and can download and run the signed-by-transport HTTPS installer when a newer version is published. Updates require an internet connection; local model inference remains offline. Chats/settings and GGUF models are kept outside the install directory.
