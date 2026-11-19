@@ -152,11 +152,13 @@ internal sealed class NovaWindow : Form
         AppendEngineLog("app", $"Starting {engineLabel} engine: {enginePath}");
         AppendEngineLog("app", $"Model: {model}; GPU layers: {gpuLayers}; working directory: {workingDirectory}");
 
+        var processStarted = false;
         try
         {
             if (!process.Start())
                 throw new InvalidOperationException($"Windows did not start the {engineLabel} engine.");
 
+            processStarted = true;
             engine = process;
             engineStdoutTask = CaptureEngineOutputAsync(process.StandardOutput, $"{engineLabel}-stdout");
             engineStderrTask = CaptureEngineOutputAsync(process.StandardError, $"{engineLabel}-stderr");
@@ -199,7 +201,7 @@ internal sealed class NovaWindow : Form
         catch (Exception ex)
         {
             AppendEngineLog("app", $"{engineLabel} engine launch error: {ex}");
-            if (!process.HasExited)
+            if (processStarted && !process.HasExited)
             {
                 try { process.Kill(true); await process.WaitForExitAsync(); } catch { }
             }
@@ -208,7 +210,7 @@ internal sealed class NovaWindow : Form
         }
         finally
         {
-            if (process.HasExited)
+            if (processStarted && process.HasExited)
             {
                 try { process.Dispose(); } catch { }
                 if (ReferenceEquals(engine, process)) engine = null;
