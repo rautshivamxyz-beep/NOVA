@@ -1,5 +1,7 @@
 #define MyAppName "NOVA"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.1"
+#endif
 #define MyAppPublisher "NOVA"
 
 [Setup]
@@ -16,6 +18,8 @@ OutputBaseFilename=NOVA-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=yes
+RestartApplications=no
 UninstallDisplayIcon={app}\NOVA.exe
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
@@ -24,7 +28,7 @@ ArchitecturesAllowed=x64
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Dirs]
-Name: "{app}\models"; Permissions: users-modify
+Name: "{localappdata}\NOVA\models"; Permissions: users-modify
 
 [Files]
 Source: "..\..\dist\NOVA-Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
