@@ -1,0 +1,25 @@
+name: NOVA Mobile Council Checks
+
+on:
+  pull_request:
+    paths:
+      - "mobile-council/**"
+      - ".github/workflows/mobile-council.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile council
+        run: python -m py_compile mobile-council/council.py
+      - name: Check CLI help
+        working-directory: mobile-council
+        run: python council.py --help
