@@ -1,76 +1,60 @@
-# NOVA Desktop
+# NOVA Desktop — Windows (offline)
 
-NOVA on your computer. Same AI brain as the NOVA phone app (same llama.cpp
-engine, same .gguf models), running fully offline on Windows, Linux or macOS.
-Nothing leaves your machine - the chat runs between your browser and a local
-engine process.
+NOVA Desktop is the Windows desktop companion to the NOVA Android project. It runs a local GGUF model on your PC using llama.cpp. The chat interface, model process, and chat storage stay on the same computer.
 
-## Quick start
+## One-time setup
 
-### Windows
-1. Unzip `NOVA-Desktop-Windows.zip`.
-2. Double-click `start-nova-windows.bat`.
-   - First time: it creates a `models` folder and asks you to put a model in it.
-3. Download a model (see below) into the `models` folder, then run the script
-   again. Your browser opens NOVA at http://127.0.0.1:8080.
-   - If Windows SmartScreen shows "Windows protected your PC", click
-     "More info" then "Run anyway" (the file has no Microsoft signature -
-     it is built by NOVA's own build server from open-source code).
+1. Download the **NOVA-Desktop-Windows-CUDA** artifact from the successful run of the [NOVA Desktop Windows workflow](https://github.com/rautshivamxyz-beep/NOVA/actions/workflows/nova-desktop-windows.yml).
+2. Extract the ZIP to a normal folder, for example `C:\\NOVA Desktop`. Do not run it from inside the ZIP.
+3. Put one `.gguf` model file in the `models` folder.
+   - You can copy a model from your phone over USB, or download a compatible GGUF model separately.
+   - The desktop build does not bundle a model because model size and licensing vary.
+4. Double-click `start-nova-windows.bat`.
 
-### Linux / macOS
-1. Unzip `NOVA-Desktop-Linux.zip` (or `NOVA-Desktop-macOS.zip`).
-2. In a terminal: `bash start-nova-linux-mac.sh`
-3. Put a `.gguf` model in the `models` folder first (see below).
+The browser opens automatically at `http://127.0.0.1:8080` after the local model reports ready. The separate **NOVA Engine** window must remain open while chatting. Close that window to stop inference.
 
-Note for macOS: the build needs an Apple Silicon Mac (M1/M2/M3/M4 - any
-Mac from late 2021 onward). On Intel Macs, use the Linux build in a
-terminal or ask for a dedicated build.
+## Offline and privacy design
 
-## Getting a model
+- No cloud model providers, external inference APIs, API keys, accounts, or sign-in.
+- No telemetry or analytics are added by this desktop launcher.
+- The model runs locally from the GGUF file on your PC.
+- The UI talks to the local engine over loopback at `127.0.0.1`; the engine is not bound to your LAN or public network.
+- Chat history and settings are stored in this computer's browser storage.
+- After the desktop package and model have been obtained, chatting does not require an internet connection.
 
-Any `.gguf` file works. Recommended (same ones the phone app uses):
+The local loopback connection is only the internal UI-to-engine transport. It does not send prompts to an online service.
 
-| Model | Size | Good for |
-|---|---|---|
-| Qwen3 1.7B Q4_K_M | ~1.1 GB | best all-rounder: study help, coding, reasoning |
-| Qwen3 0.6B Q4_K_M | ~0.4 GB | very fast even on old computers |
-| MiniCPM5 2B Q4_K_M | ~1.6 GB | strong answers, good Hindi handling |
+## GPU and performance
 
-Download links (use any browser):
-- https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf
-- https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf
-- https://huggingface.co/bartowski/MiniCPM5-2B-GGUF/resolve/main/MiniCPM5-2B-Q4_K_M.gguf
+This package builds llama.cpp with an NVIDIA CUDA backend for RTX 30-series-class Ampere hardware (including the RTX 3050 Laptop GPU, compute capability 8.6) and includes the CPU backend as a fallback. A compatible NVIDIA display driver is required; the CUDA Toolkit does not need to be installed on your PC.
 
-Shortcut if your phone already has NOVA models: connect the phone by USB and
-copy the `.gguf` files from `Android/data/org.nova/files/models` into the
-`models` folder here. Same files, no second download.
+The launcher requests GPU offload with `-ngl 99`. llama.cpp will offload as many layers as fit in available VRAM. Large models may still need some layers in system RAM. Start with a quantized model that fits your 6 GB GPU memory and 16 GB system RAM; the model's size, context length, and other running applications affect the actual fit.
 
-## What works here
+The default context is 4096 tokens. To change it, edit `-c 4096` in `start-nova-windows.bat`. To force CPU inference, change `-ngl 99` to `-ngl 0`.
 
-- Full chat with streaming answers, markdown, code blocks
-- Multiple chats, saved in your browser (stay on this computer)
-- Settings: system prompt, temperature, answer length
-- Fully offline, no account, no internet after the model download
+## Create a desktop shortcut
 
-## What stays on the phone
+Double-click `create-desktop-shortcut.bat` once. It creates a **NOVA Desktop** shortcut on your Windows desktop. After that, launch NOVA from the shortcut.
 
-The study toolkit (Knowledge notes, photo OCR, quizzes, exam countdown,
-reminders, spaced repetition) is part of the Android app. NOVA Desktop is
-the chat brain; the phone app is the study companion.
+## Included features
 
-## Advanced
+- Streaming local chat
+- Markdown and code rendering
+- Multiple conversations
+- Local chat history
+- System prompt, temperature, and answer-length settings
+- Stop generation and regenerate last answer
 
-- Speculative decoding (needs a second small model): edit the start script
-  and add `-md models\qwen3-0.6b.gguf` to the llama-server line to speed up
-  a bigger Qwen3 model.
-- Different context size: change `-c 4096` in the start script.
-- Any GGUF model from Hugging Face works - try 4B-8B models on computers
-  with 8GB+ RAM. They are noticeably smarter than the phone-sized models.
+The Windows package reuses the desktop interface in `nova-web\\`. It does not replace or modify the Android application.
 
 ## Troubleshooting
 
-- "Page not reachable" in browser: the engine is still loading the model -
-  wait a few seconds and refresh. The first load can take up to a minute.
-- Very slow answers: use Qwen3 0.6B, or a computer with more RAM/cores.
-- Port already in use: change `--port 8080` in the start script to another
-  number (and open that address in the browser).
+- **No model found:** Place a `.gguf` file in `models\\` and launch again.
+- **NOVA does not become ready:** Read the error in the NOVA Engine window. The model may be incompatible, damaged, or too large for available memory.
+- **CUDA error:** Update your NVIDIA display driver. To test CPU mode, change `-ngl 99` to `-ngl 0`.
+- **Port 8080 is in use:** Close the other process using port 8080 or change the port in the launcher and browser URL.
+- **Browser does not open:** Open `http://127.0.0.1:8080` manually while the engine window is running.
+
+## Build provenance
+
+The GitHub Actions workflow builds the Windows engine from the upstream llama.cpp `v1.0.0` source tag, then packages it with the NOVA desktop UI and launch scripts. The GGUF model is intentionally not included.

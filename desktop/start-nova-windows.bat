@@ -1,65 +1,92 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem ===== NOVA Desktop (Windows) launcher - v2, no goto labels =====
+title NOVA Desktop Launcher
 
-if not exist models mkdir models
+if not exist "llama-server.exe" (
+  echo.
+  echo  NOVA engine is missing.
+  echo  This launcher must be used with the NOVA-Desktop-Windows package.
+  echo.
+  pause
+  exit /b 1
+)
+
+if not exist "nova-web\index.html" (
+  echo.
+  echo  NOVA interface files are missing: nova-web\index.html
+  echo.
+  pause
+  exit /b 1
+)
+
+if not exist "models" mkdir "models"
 
 set "MODEL="
-for %%f in ("models\*.gguf") do if not defined MODEL set "MODEL=%%~ff"
-
-if not defined MODEL (
-  echo.
-  echo  NOVA Desktop needs a model file ^(.gguf^) in the "models" folder.
-  echo.
-  echo  I can download one for you now - internet needed, one time only:
-  echo    [1] Qwen3 1.7B  -  best answers  -  about 1.1 GB
-  echo    [2] Qwen3 0.6B  -  fastest        -  about 0.4 GB
-  echo    [3] Skip - I will add a model file myself
-  echo.
-  choice /C 123 /N /M "Choose 1, 2 or 3: "
-  if !errorlevel! LEQ 2 (
-    if !errorlevel! EQU 2 (
-      set "URL=https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf"
-      set "FNAME=Qwen3-0.6B-Q4_K_M.gguf"
-    ) else (
-      set "URL=https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
-      set "FNAME=Qwen3-1.7B-Q4_K_M.gguf"
-    )
-    echo.
-    echo  Downloading !FNAME! - please wait, this can take a while...
-    echo.
-    curl -L -C - --progress-bar -o "models\!FNAME!.part" "!URL!"
-    if not errorlevel 1 (
-      ren "models\!FNAME!.part" "!FNAME!"
-      set "MODEL=%CD%\models\!FNAME!"
-    ) else (
-      echo.
-      echo  Download did not finish. Run this file again -
-      echo  it will resume where it stopped. If it keeps failing,
-      echo  download the model manually with the links in README.md.
-    )
-  )
+for %%F in ("%~dp0models\*.gguf") do (
+  if exist "%%~fF" if not defined MODEL set "MODEL=%%~fF"
 )
 
 if not defined MODEL (
   echo.
-  echo  NOVA could not start: no model file is in the "models" folder.
-  echo  Run this file again and choose 1 or 2 to download one.
+  echo  No local GGUF model was found.
+  echo.
+  echo  Put one .gguf model file inside:
+  echo    %~dp0models
+  echo.
+  echo  You can copy a model from your phone or download one separately.
+  echo  NOVA does not download models or call cloud AI services.
   echo.
   pause
+  exit /b 2
+)
+
+rem Refuse to expose NOVA on the network. The engine listens only on localhost.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+  echo.
+  echo  Port 8080 is already in use.
+  echo  Close the other NOVA instance or change the port in this file.
+  echo.
+  start "" "http://127.0.0.1:8080"
   exit /b 0
 )
 
 echo.
 echo  Starting NOVA Desktop...
 echo  Model: %MODEL%
-echo  Chat will open at http://127.0.0.1:8080
-echo  Keep this window open while chatting. Close it to stop NOVA.
+echo  Runtime: local GGUF inference
+echo  Network access: localhost only
 echo.
-start "" http://127.0.0.1:8080
-llama-server.exe -m "%MODEL%" --alias NOVA --path web -c 4096 --port 8080 --host 127.0.0.1
+echo  A separate NOVA Engine window will open.
+echo  Keep it running while you chat. Close that window to stop NOVA.
 echo.
-echo  NOVA stopped.
-pause
+
+start "NOVA Engine" /D "%~dp0" "%~dp0llama-server.exe" -m "%MODEL%" --alias NOVA --path "%~dp0nova-web" -c 4096 --port 8080 --host 127.0.0.1 -ngl 99
+
+echo  Waiting for the model to load...
+set "READY="
+for /L %%I in (1,1,180) do (
+  curl.exe --silent --fail "http://127.0.0.1:8080/health" >nul 2>&1
+  if not errorlevel 1 (
+    set "READY=1"
+    goto :ready
+  )
+  timeout /t 1 /nobreak >nul
+)
+
+:ready
+if not defined READY (
+  echo.
+  echo  NOVA did not become ready within 3 minutes.
+  echo  Check the NOVA Engine window for the actual error.
+  echo.
+  pause
+  exit /b 3
+)
+
+echo.
+echo  NOVA is ready. Opening the chat...
+start "" "http://127.0.0.1:8080"
+exit /b 0
