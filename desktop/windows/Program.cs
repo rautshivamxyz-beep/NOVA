@@ -165,11 +165,8 @@ internal sealed class NovaWindow : Form
             }
             var start = new ProcessStartInfo(tempInstaller, "/SILENT /SUPPRESSMSGBOXES /NORESTART")
             {
-                UseShellExecute = true,
-                Verb = "runas"
+                UseShellExecute = true
             };
-            // The installer is per-user; no elevation is required. Do not request administrator access.
-            start.Verb = "";
             Process.Start(start);
             Close();
         }
