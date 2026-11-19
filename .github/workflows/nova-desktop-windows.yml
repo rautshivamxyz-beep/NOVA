@@ -80,7 +80,7 @@ jobs:
       - name: Publish native NOVA window
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF -like 'refs/tags/windows-v*') { $env:GITHUB_REF_NAME.Substring(8) } else { '1.0.2' }
+          $version = if ($env:GITHUB_REF -like 'refs/tags/windows-v*') { $env:GITHUB_REF_NAME.Substring(9) } else { '1.0.2' }
           dotnet publish desktop/windows/NOVA.csproj -c Release -r win-x64 --self-contained true -p:Version=$version -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/NOVA-Desktop
           if ($LASTEXITCODE -ne 0) { throw 'Native app publish failed.' }
 
@@ -133,7 +133,7 @@ jobs:
         run: |
           $iscc = Join-Path \${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
           if (-not (Test-Path $iscc)) { throw 'Inno Setup compiler was not installed.' }
-          $version = if ($env:GITHUB_REF -like 'refs/tags/windows-v*') { $env:GITHUB_REF_NAME.Substring(8) } else { '1.0.2' }
+          $version = if ($env:GITHUB_REF -like 'refs/tags/windows-v*') { $env:GITHUB_REF_NAME.Substring(9) } else { '1.0.2' }
           & $iscc "/DMyAppVersion=$version" 'desktop/windows/NOVA.iss'
           if ($LASTEXITCODE -ne 0) { throw 'NOVA Windows installer build failed.' }
           if (-not (Test-Path 'dist/NOVA-Setup.exe')) { throw 'NOVA-Setup.exe was not created.' }
