@@ -1,6 +1,8 @@
 package org.nova.ncie.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -66,4 +68,60 @@ class NcieSummaryTest {
     fun aNovaMarkerLineIsDropped() {
         assertEquals("Real fact", NcieSummary.sanitize("Nova: sure\nReal fact"))
     }
+
+    @Test
+    fun retrievalSelectsOnlyTheMatchingTopicMemory() {
+        val summary = listOf(
+            "[PROJECT] NOVA is an offline Android assistant built with Kotlin.",
+            "[PREFERENCE] The user prefers performance-safe model changes.",
+            "[CORRECTION] An earlier estimate of 30 days was unsupported."
+        ).joinToString("\n")
+        val picked = NcieSummary.retrieveRelevant(summary, "How is NOVA built for Android?")
+        assertTrue(picked.contains("[PROJECT]"))
+        assertFalse(picked.contains("[PREFERENCE]"))
+        assertFalse(picked.contains("[CORRECTION]"))
+    }
+
+    @Test
+    fun aContextualFollowUpUsesThePreviousUserTopic() {
+        val summary = "[PERSON] Tommy Shelby is a fictional character in Peaky Blinders."
+        val picked = NcieSummary.retrieveRelevant(
+            summary, "what about him?", "Who is Tommy Shelby?"
+        )
+        assertTrue(picked.contains("Tommy Shelby"))
+    }
+
+    @Test
+    fun unrelatedQuestionsDoNotReceiveOldSummaryItems() {
+        val summary = "[PROJECT] NOVA is an offline Android assistant."
+        assertEquals("", NcieSummary.retrieveRelevant(summary, "football scores"))
+    }
+
+    @Test
+    fun retrievalHonoursItemAndCharacterBudgets() {
+        val summary = (1..10).joinToString("\n") {
+            "[TOPIC] NOVA memory retrieval feature $it"
+        }
+        val picked = NcieSummary.retrieveRelevant(
+            summary, "NOVA memory retrieval", maxItems = 2, maxChars = 200
+        )
+        assertEquals(2, picked.lines().size)
+        assertTrue(picked.length <= 200)
+    }
+
+    @Test
+    fun retrievalSupportsDevanagariTopics() {
+        val summary = "[TOPIC] कक्षा 10 गणित का अभ्यास जारी है।"
+        val picked = NcieSummary.retrieveRelevant(summary, "कक्षा 10 गणित")
+        assertTrue(picked.contains("कक्षा 10 गणित"))
+    }
+
+    @Test
+    fun contextualFollowUpLeavesClearNewTopicsAlone() {
+        assertEquals(
+            "latest F1 champion",
+            NcieSummary.retrievalQuery("latest F1 champion", "Who is Tommy Shelby?")
+        )
+    }
+
 }
