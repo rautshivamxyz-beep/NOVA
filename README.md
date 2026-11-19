@@ -1,6 +1,6 @@
-# NOVA — Offline AI for Android
+# NOVA — Offline AI for Android and Windows Desktop
 
-NOVA runs language models directly on your Android phone. Once a model is downloaded, chatting works offline. No account or API key is required, and your chats and models stay on your device.
+NOVA runs language models directly on your Android phone and can also run on a Windows PC through NOVA Desktop. Once a model is downloaded, chatting works offline. No account, cloud inference provider, or API key is required; chats and models stay on your device.
 
 **Repository:** https://github.com/rautshivamxyz-beep/NOVA
 
@@ -56,6 +56,17 @@ cd android
 ```
 
 The debug APK should be at `android/app/build/outputs/apk/debug/app-debug.apk` relative to the repository root. Local builds need a working Android SDK setup.
+
+## NOVA Desktop for Windows
+
+A separate Windows desktop build is available from the repository's [NOVA Desktop workflow](https://github.com/rautshivamxyz-beep/NOVA/actions/workflows/nova-desktop-windows.yml).
+
+1. Open the workflow and download the `NOVA-Desktop-Windows-CUDA` artifact from a successful run.
+2. Extract the ZIP, then put one GGUF model in its `models` folder.
+3. Double-click `start-nova-windows.bat`. The browser opens after the local model is ready.
+4. Optionally run `create-desktop-shortcut.bat` once to add a NOVA icon to the Windows desktop.
+
+NOVA Desktop uses a local llama.cpp engine with NVIDIA CUDA and CPU fallback. It does not call cloud AI APIs. The browser UI communicates only with the engine bound to `127.0.0.1`. See [desktop/README.md](desktop/README.md) for setup and troubleshooting.
 
 ## Common problems
 
