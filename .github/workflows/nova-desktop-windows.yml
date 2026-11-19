@@ -105,8 +105,9 @@ jobs:
           New-Item -ItemType File -Force -Path (Join-Path $stage 'models/.gitkeep') | Out-Null
 
           # Bundle only the CUDA runtime DLLs that llama.cpp's CUDA backend needs.
-          $cudaRuntime = Join-Path $stage 'cudart'
-          New-Item -ItemType Directory -Force -Path $cudaRuntime | Out-Null
+          # Put CUDA runtime DLLs beside ggml-cuda.dll so Windows can load them
+          # without changing PATH or requiring the CUDA Toolkit on the user's PC.
+          $cudaRuntime = $stage
           foreach ($pattern in @('cudart64_*.dll', 'cublas64_*.dll', 'cublasLt64_*.dll')) {
             $found = @()
             foreach ($folder in @(
@@ -129,7 +130,6 @@ jobs:
             }
           }
 
-          Copy-Item 'llama-src/LICENSE' (Join-Path $stage 'LICENSE-llama.cpp') -Force
           Get-ChildItem $stage -Recurse -File | Select-Object FullName,Length | Format-Table -AutoSize
 
       - name: Smoke test packaged engine
