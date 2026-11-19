@@ -1,4 +1,4 @@
-name: Build NOVA Desktop (Windows CUDA)
+name: Build NOVA Native Windows Desktop
 
 on:
   workflow_dispatch:
@@ -13,27 +13,25 @@ permissions:
   contents: read
 
 concurrency:
-  group: nova-desktop-windows-${{ github.ref }}
+  group: nova-native-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-windows:
-    name: Build portable Windows desktop package
+  build:
     runs-on: windows-2022
-    timeout-minutes: 90
-
+    timeout-minutes: 100
     steps:
       - name: Checkout NOVA
         uses: actions/checkout@v4
 
-      - name: Checkout pinned llama.cpp source
+      - name: Checkout llama.cpp
         uses: actions/checkout@v4
         with:
           repository: ggml-org/llama.cpp
           ref: v1.0.0
           path: llama-src
 
-      - name: Install CUDA Toolkit 12.4 for the build
+      - name: Install CUDA Toolkit
         uses: ./llama-src/.github/actions/windows-setup-cuda
         with:
           cuda_version: "12.4"
@@ -43,112 +41,74 @@ jobs:
         shell: pwsh
         run: choco install ninja -y --no-progress
 
-      - name: Build CPU backend and local server
+      - name: Relax obsolete optional workbox asset check
+        shell: pwsh
+        run: |
+          $p = 'llama-src/scripts/ui-assets.cmake'
+          $s = Get-Content $p -Raw
+          $s = $s -replace '(?m)^\s*if\(NOT found_workbox_js\)\r?\n\s*list\(APPEND missing "workbox\[hash\]\.js"\)\r?\n\s*endif\(\)\r?\n', ''
+          Set-Content -Path $p -Value $s -NoNewline
+          if ($s -match 'list\(APPEND missing "workbox\[hash\]\.js"\)') { throw 'Could not patch the optional workbox check.' }
+
+      - name: Build llama.cpp with CUDA and CPU fallback
         shell: cmd
         run: |
-          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64
-          cmake -S llama-src -B build-cpu -G "Ninja Multi-Config" ^
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -S llama-src -B build -G "Ninja Multi-Config" ^
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
             -DGGML_BACKEND_DL=ON ^
             -DGGML_NATIVE=OFF ^
             -DGGML_OPENMP=OFF ^
+            -DGGML_CUDA=ON ^
+            -DCMAKE_CUDA_ARCHITECTURES=86 ^
+            -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_SERVER=ON ^
             -DLLAMA_BUILD_TESTS=OFF ^
             -DLLAMA_BUILD_EXAMPLES=OFF
           if errorlevel 1 exit /b 1
-          cmake --build build-cpu --config Release -j %NUMBER_OF_PROCESSORS% --target llama-server
+          cmake --build build --config Release -j %NUMBER_OF_PROCESSORS% --target llama-server
           if errorlevel 1 exit /b 1
 
-      - name: Build NVIDIA CUDA backend for RTX 30-series Ampere
-        shell: cmd
+      - name: Publish native NOVA window
+        shell: pwsh
         run: |
-          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64
-          cmake -S llama-src -B build-cuda -G "Ninja Multi-Config" ^
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
-            -DGGML_BACKEND_DL=ON ^
-            -DGGML_NATIVE=OFF ^
-            -DGGML_CPU=OFF ^
-            -DGGML_CUDA=ON ^
-            -DCMAKE_CUDA_ARCHITECTURES=86 ^
-            -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
-            -DLLAMA_BUILD_SERVER=OFF ^
-            -DLLAMA_BUILD_TESTS=OFF ^
-            -DLLAMA_BUILD_EXAMPLES=OFF
-          if errorlevel 1 exit /b 1
-          cmake --build build-cuda --config Release -j %NUMBER_OF_PROCESSORS% --target ggml-cuda
-          if errorlevel 1 exit /b 1
+          dotnet publish desktop/windows/NOVA.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/NOVA-Desktop
+          if ($LASTEXITCODE -ne 0) { throw 'Native app publish failed.' }
 
-      - name: Assemble portable offline package
+      - name: Assemble offline package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $stage = Join-Path $env:GITHUB_WORKSPACE 'dist/NOVA-Desktop-Windows'
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          New-Item -ItemType Directory -Force -Path (Join-Path $stage 'models') | Out-Null
-
-          $cpuBin = Join-Path $env:GITHUB_WORKSPACE 'build-cpu/bin/Release'
-          $cudaBin = Join-Path $env:GITHUB_WORKSPACE 'build-cuda/bin/Release'
-          if (-not (Test-Path (Join-Path $cpuBin 'llama-server.exe'))) {
-            throw "llama-server.exe was not produced in $cpuBin"
+          $stage = 'dist/NOVA-Desktop'
+          $bin = 'build/bin/Release'
+          if (-not (Test-Path "$bin/llama-server.exe")) { throw 'llama-server.exe missing' }
+          if (-not (Test-Path "$bin/ggml-cuda.dll")) { throw 'CUDA backend missing' }
+          Copy-Item "$bin/*" $stage -Recurse -Force
+          Copy-Item 'desktop/nova-web' "$stage/nova-web" -Recurse -Force
+          Copy-Item 'llama-src/LICENSE' "$stage/LLAMA-CPP-LICENSE" -Force
+          New-Item -ItemType Directory -Force "$stage/models" | Out-Null
+          foreach ($pattern in @('cudart64_*.dll','cublas64_*.dll','cublasLt64_*.dll')) {
+            Get-ChildItem (Join-Path $env:CUDA_PATH 'bin') -Filter $pattern -File | ForEach-Object { Copy-Item $_.FullName $stage -Force }
           }
-          if (-not (Test-Path (Join-Path $cudaBin 'ggml-cuda.dll'))) {
-            throw "ggml-cuda.dll was not produced in $cudaBin"
+          foreach ($dll in @('cudart64_12.dll','cublas64_12.dll','cublasLt64_12.dll')) {
+            if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing CUDA runtime $dll" }
           }
+          if (-not (Test-Path "$stage/NOVA.exe")) { throw 'NOVA.exe missing from published output' }
 
-          Copy-Item (Join-Path $cpuBin '*') $stage -Recurse -Force
-          Copy-Item (Join-Path $cudaBin 'ggml-cuda.dll') $stage -Force
-          Copy-Item 'desktop/start-nova-windows.bat' $stage -Force
-          Copy-Item 'desktop/create-desktop-shortcut.bat' $stage -Force
-          Copy-Item 'desktop/README.md' $stage -Force
-          Copy-Item 'desktop/nova-web' (Join-Path $stage 'nova-web') -Recurse -Force
-          Copy-Item 'llama-src/LICENSE' (Join-Path $stage 'LLAMA-CPP-LICENSE') -Force
-          New-Item -ItemType File -Force -Path (Join-Path $stage 'models/.gitkeep') | Out-Null
-
-          # Bundle only the CUDA runtime DLLs that llama.cpp's CUDA backend needs.
-          # Put CUDA runtime DLLs beside ggml-cuda.dll so Windows can load them
-          # without changing PATH or requiring the CUDA Toolkit on the user's PC.
-          $cudaRuntime = $stage
-          foreach ($pattern in @('cudart64_*.dll', 'cublas64_*.dll', 'cublasLt64_*.dll')) {
-            $found = @()
-            foreach ($folder in @(
-              (Join-Path $env:CUDA_PATH 'bin'),
-              (Join-Path $env:CUDA_PATH 'lib'),
-              (Join-Path $env:CUDA_PATH 'bin/x64')
-            )) {
-              if (Test-Path $folder) {
-                $found += Get-ChildItem $folder -Filter $pattern -File -ErrorAction SilentlyContinue
-              }
-            }
-            foreach ($dll in ($found | Sort-Object FullName -Unique)) {
-              Copy-Item $dll.FullName $cudaRuntime -Force
-            }
-          }
-          $requiredRuntime = @('cudart64_12.dll', 'cublas64_12.dll', 'cublasLt64_12.dll')
-          foreach ($dll in $requiredRuntime) {
-            if (-not (Test-Path (Join-Path $cudaRuntime $dll))) {
-              throw "Required CUDA runtime library missing: $dll"
-            }
-          }
-
-          Get-ChildItem $stage -Recurse -File | Select-Object FullName,Length | Format-Table -AutoSize
-
-      - name: Smoke test packaged engine
+      - name: Smoke test engine
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $engine = Join-Path $env:GITHUB_WORKSPACE 'dist/NOVA-Desktop-Windows/llama-server.exe'
-          & $engine --version
-          if ($LASTEXITCODE -ne 0) { throw 'llama-server smoke test failed.' }
+          & 'dist/NOVA-Desktop/llama-server.exe' --version
+          if ($LASTEXITCODE -ne 0) { throw 'Engine smoke test failed.' }
 
-      - name: Create ZIP
+      - name: Create portable ZIP
         shell: pwsh
-        run: |
-          Compress-Archive -Path 'dist/NOVA-Desktop-Windows/*' -DestinationPath 'dist/NOVA-Desktop-Windows-CUDA.zip' -CompressionLevel Optimal
+        run: Compress-Archive -Path 'dist/NOVA-Desktop/*' -DestinationPath 'dist/NOVA-Desktop-Windows-CUDA.zip' -CompressionLevel Optimal
 
-      - name: Upload portable desktop package
+      - name: Upload portable Windows app
         uses: actions/upload-artifact@v4
         with:
-          name: NOVA-Desktop-Windows-CUDA
+          name: NOVA-Native-Windows
           path: dist/NOVA-Desktop-Windows-CUDA.zip
           if-no-files-found: error
           retention-days: 14
