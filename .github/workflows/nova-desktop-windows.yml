@@ -72,9 +72,30 @@ jobs:
             -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_SERVER=ON ^
             -DLLAMA_BUILD_TESTS=OFF ^
-            -DLLAMA_BUILD_EXAMPLES=OFF
+            -DLLAMA_BUILD_EXAMPLES=OFF ^
+            -DLLAMA_BUILD_UI=OFF ^
+            -DLLAMA_USE_PREBUILT_UI=OFF
           if errorlevel 1 exit /b 1
           cmake --build build --config Release -j %NUMBER_OF_PROCESSORS% --target llama-server
+          if errorlevel 1 exit /b 1
+
+      - name: Build independent CPU-only fallback engine
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -S llama-src -B build-cpu -G "Ninja Multi-Config" ^
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
+            -DGGML_BACKEND_DL=OFF ^
+            -DGGML_NATIVE=OFF ^
+            -DGGML_OPENMP=OFF ^
+            -DGGML_CUDA=OFF ^
+            -DLLAMA_BUILD_SERVER=ON ^
+            -DLLAMA_BUILD_TESTS=OFF ^
+            -DLLAMA_BUILD_EXAMPLES=OFF ^
+            -DLLAMA_BUILD_UI=OFF ^
+            -DLLAMA_USE_PREBUILT_UI=OFF
+          if errorlevel 1 exit /b 1
+          cmake --build build-cpu --config Release -j %NUMBER_OF_PROCESSORS% --target llama-server
           if errorlevel 1 exit /b 1
 
       - name: Publish native NOVA window
@@ -94,6 +115,10 @@ jobs:
           if (-not (Test-Path "$bin/ggml-cuda.dll")) { throw 'CUDA backend missing' }
           Copy-Item "$bin/*" $stage -Recurse -Force
           Copy-Item 'desktop/nova-web' "$stage/nova-web" -Recurse -Force
+          $cpuStage = Join-Path $stage 'cpu-engine'
+          New-Item -ItemType Directory -Force $cpuStage | Out-Null
+          if (-not (Test-Path 'build-cpu/bin/Release/llama-server.exe')) { throw 'CPU-only llama-server.exe missing' }
+          Copy-Item 'build-cpu/bin/Release/*' $cpuStage -Recurse -Force
           Copy-Item 'llama-src/LICENSE' "$stage/LLAMA-CPP-LICENSE" -Force
           choco install openssl -y --no-progress
           $sslCandidates = @('C:\Program Files\OpenSSL-Win64\bin', 'C:\Program Files\OpenSSL\bin')
@@ -112,6 +137,7 @@ jobs:
             if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing CUDA runtime $dll" }
           }
           foreach ($dll in @('libssl-3-x64.dll','libcrypto-3-x64.dll')) { if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing OpenSSL dependency $dll" } }
+          foreach ($dll in @('libssl-3-x64.dll','libcrypto-3-x64.dll')) { Copy-Item (Join-Path $stage $dll) $cpuStage -Force }
           if (-not (Test-Path "$stage/NOVA.exe")) { throw 'NOVA.exe missing from published output' }
 
       - name: Smoke test engine
@@ -119,6 +145,8 @@ jobs:
         run: |
           & 'dist/NOVA-Desktop/llama-server.exe' --version
           if ($LASTEXITCODE -ne 0) { throw 'Engine smoke test failed.' }
+          & 'dist/NOVA-Desktop/cpu-engine/llama-server.exe' --version
+          if ($LASTEXITCODE -ne 0) { throw 'CPU-only fallback engine smoke test failed.' }
 
       - name: Create portable ZIP
         shell: pwsh

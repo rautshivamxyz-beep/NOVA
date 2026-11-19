@@ -59,77 +59,44 @@ internal sealed class NovaWindow : Form
             var model = ChooseModel(modelDir);
             if (model is null) { Close(); return; }
 
-            var enginePath = Path.Combine(root, "llama-server.exe");
-            if (!File.Exists(enginePath)) throw new FileNotFoundException("The local NOVA inference engine is missing.", enginePath);
+            var cudaEnginePath = Path.Combine(root, "llama-server.exe");
+            var cpuEnginePath = Path.Combine(root, "cpu-engine", "llama-server.exe");
+            if (!File.Exists(cudaEnginePath))
+                throw new FileNotFoundException("The local NOVA CUDA inference engine is missing.", cudaEnginePath);
 
             var webPath = Path.Combine(root, "nova-web");
-            if (!Directory.Exists(webPath)) throw new DirectoryNotFoundException($"The NOVA chat interface is missing: {webPath}");
+            if (!Directory.Exists(webPath))
+                throw new DirectoryNotFoundException($"The NOVA chat interface is missing: {webPath}");
 
-            var arguments = $"-m \"{model}\" --alias NOVA --path \"{webPath}\" -c 4096 --port {Port} --host 127.0.0.1 -ngl 99";
             File.WriteAllText(
                 EngineLogPath,
                 $"NOVA local engine log{Environment.NewLine}" +
                 $"Started: {DateTimeOffset.Now:O}{Environment.NewLine}" +
-                $"Executable: {enginePath}{Environment.NewLine}" +
                 $"Model: {model}{Environment.NewLine}" +
-                $"Working directory: {root}{Environment.NewLine}" +
-                $"Arguments: {arguments}{Environment.NewLine}" +
+                $"CUDA engine: {cudaEnginePath}{Environment.NewLine}" +
+                $"CPU fallback engine: {cpuEnginePath}{Environment.NewLine}" +
                 $"----------------------------------------{Environment.NewLine}",
                 Encoding.UTF8);
 
             status.Text = $"Loading {Path.GetFileName(model)}…";
-            engine = new Process
+            var ready = await StartEngineAsync(cudaEnginePath, root, model, webPath, 99, "CUDA");
+            var usedCpuFallback = false;
+
+            if (!ready && File.Exists(cpuEnginePath))
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = enginePath,
-                    WorkingDirectory = root,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8
-                },
-                EnableRaisingEvents = true
-            };
-
-            if (!engine.Start()) throw new InvalidOperationException("Windows did not start llama-server.exe.");
-
-            var runningEngine = engine;
-            engineStdoutTask = CaptureEngineOutputAsync(runningEngine.StandardOutput, "stdout");
-            engineStderrTask = CaptureEngineOutputAsync(runningEngine.StandardError, "stderr");
-            AppendEngineLog("app", "Engine process started.");
-
-            var ready = false;
-            for (var i = 0; i < 240; i++)
-            {
-                if (runningEngine.HasExited)
-                {
-                    await DrainEngineOutputAsync();
-                    var exitCode = runningEngine.ExitCode;
-                    throw new InvalidOperationException(
-                        $"The local model engine exited during startup. Exit code: {exitCode} (0x{unchecked((uint)exitCode):X8}). " +
-                        $"The complete engine output is saved at: {EngineLogPath}");
-                }
-
-                try
-                {
-                    using var response = await http.GetAsync($"http://127.0.0.1:{Port}/health");
-                    if (response.IsSuccessStatusCode) { ready = true; break; }
-                }
-                catch (HttpRequestException) { }
-                catch (TaskCanceledException) { }
-
-                await Task.Delay(1000);
+                usedCpuFallback = true;
+                status.Text = $"CUDA startup failed; retrying {Path.GetFileName(model)} on CPU…";
+                ready = await StartEngineAsync(cpuEnginePath, Path.GetDirectoryName(cpuEnginePath)!, model, webPath, 0, "CPU fallback");
             }
 
             if (!ready)
-                throw new TimeoutException($"NOVA did not finish loading within four minutes. Check the complete engine output at: {EngineLogPath}");
+                throw new InvalidOperationException(
+                    $"NOVA could not load this model with either the CUDA engine or the CPU-only fallback. " +
+                    $"Review the complete diagnostic log at: {EngineLogPath}");
 
-            status.Text = $"NOVA is running locally • {Path.GetFileName(model)} • Offline mode";
+            status.Text = usedCpuFallback
+                ? $"NOVA is running locally • CPU fallback • {Path.GetFileName(model)}"
+                : $"NOVA is running locally • RTX/CUDA • {Path.GetFileName(model)} • Offline mode";
             await web.EnsureCoreWebView2Async();
             web.CoreWebView2.Settings.AreDevToolsEnabled = false;
             web.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -144,6 +111,110 @@ internal sealed class NovaWindow : Form
             status.Text = "NOVA could not start.";
             MessageBox.Show(this, ex.Message, "NOVA startup error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
+        }
+    }
+
+    private async Task<bool> StartEngineAsync(
+        string enginePath, string workingDirectory, string model, string webPath, int gpuLayers, string engineLabel)
+    {
+        if (!File.Exists(enginePath))
+        {
+            AppendEngineLog("app", $"{engineLabel} engine not found: {enginePath}");
+            return false;
+        }
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = enginePath,
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            },
+            EnableRaisingEvents = true
+        };
+
+        // ArgumentList handles spaces and parentheses in Windows model paths safely.
+        foreach (var arg in new[]
+        {
+            "-m", model, "--alias", "NOVA", "--path", webPath,
+            "-c", "4096", "--port", Port.ToString(), "--host", "127.0.0.1",
+            "-ngl", gpuLayers.ToString()
+        })
+            process.StartInfo.ArgumentList.Add(arg);
+
+        AppendEngineLog("app", $"Starting {engineLabel} engine: {enginePath}");
+        AppendEngineLog("app", $"Model: {model}; GPU layers: {gpuLayers}; working directory: {workingDirectory}");
+
+        var processStarted = false;
+        try
+        {
+            if (!process.Start())
+                throw new InvalidOperationException($"Windows did not start the {engineLabel} engine.");
+
+            processStarted = true;
+            engine = process;
+            engineStdoutTask = CaptureEngineOutputAsync(process.StandardOutput, $"{engineLabel}-stdout");
+            engineStderrTask = CaptureEngineOutputAsync(process.StandardError, $"{engineLabel}-stderr");
+            AppendEngineLog("app", $"{engineLabel} engine process started (PID {process.Id}).");
+
+            for (var i = 0; i < 240; i++)
+            {
+                if (process.HasExited)
+                {
+                    await DrainEngineOutputAsync();
+                    var exitCode = process.ExitCode;
+                    AppendEngineLog("app", $"{engineLabel} engine exited during model startup: {exitCode} (0x{unchecked((uint)exitCode):X8}).");
+                    return false;
+                }
+
+                try
+                {
+                    using var response = await http.GetAsync($"http://127.0.0.1:{Port}/health");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        AppendEngineLog("app", $"{engineLabel} engine passed the health check.");
+                        return true;
+                    }
+                }
+                catch (HttpRequestException) { }
+                catch (TaskCanceledException) { }
+
+                await Task.Delay(1000);
+            }
+
+            AppendEngineLog("app", $"{engineLabel} engine did not become healthy within four minutes.");
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+                await process.WaitForExitAsync();
+            }
+            await DrainEngineOutputAsync();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            AppendEngineLog("app", $"{engineLabel} engine launch error: {ex}");
+            if (processStarted && !process.HasExited)
+            {
+                try { process.Kill(true); await process.WaitForExitAsync(); } catch { }
+            }
+            try { await DrainEngineOutputAsync(); } catch { }
+            return false;
+        }
+        finally
+        {
+            if (processStarted && process.HasExited)
+            {
+                try { process.Dispose(); } catch { }
+                if (ReferenceEquals(engine, process)) engine = null;
+            }
         }
     }
 
