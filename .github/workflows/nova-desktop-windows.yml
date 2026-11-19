@@ -72,7 +72,9 @@ jobs:
             -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_SERVER=ON ^
             -DLLAMA_BUILD_TESTS=OFF ^
-            -DLLAMA_BUILD_EXAMPLES=OFF
+            -DLLAMA_BUILD_EXAMPLES=OFF ^
+            -DLLAMA_BUILD_UI=OFF ^
+            -DLLAMA_USE_PREBUILT_UI=OFF
           if errorlevel 1 exit /b 1
           cmake --build build --config Release -j %NUMBER_OF_PROCESSORS% --target llama-server
           if errorlevel 1 exit /b 1
