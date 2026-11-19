@@ -105,6 +105,27 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path 'dist/NOVA-Desktop/*' -DestinationPath 'dist/NOVA-Desktop-Windows-CUDA.zip' -CompressionLevel Optimal
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build one-click Windows installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup compiler was not installed.' }
+          & $iscc 'desktop/windows/NOVA.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'NOVA Windows installer build failed.' }
+          if (-not (Test-Path 'dist/NOVA-Setup.exe')) { throw 'NOVA-Setup.exe was not created.' }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-Windows-Installer
+          path: dist/NOVA-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload portable Windows app
         uses: actions/upload-artifact@v4
         with:
