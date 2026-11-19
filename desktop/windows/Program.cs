@@ -145,7 +145,7 @@ internal sealed class ModelPicker : Form
     private void OpenModelsFolder()
     {
         Directory.CreateDirectory(modelDirectory);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\\\"{modelDirectory}\\\"") { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo { FileName = modelDirectory, UseShellExecute = true });
     }
 
     private void RefreshModels()
