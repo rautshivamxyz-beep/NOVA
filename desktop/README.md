@@ -29,3 +29,8 @@ The package includes an NVIDIA CUDA backend targeting Ampere compute capability 
 ## Logs
 
 Startup and model errors are written to `nova-engine.log` beside NOVA.exe.
+
+
+## In-app updates
+
+Use **Check for updates** in the native NOVA toolbar. NOVA checks the project's GitHub Releases page and can download and run the signed-by-transport HTTPS installer when a newer version is published. Updates require an internet connection; local model inference remains offline. Chats/settings and GGUF models are kept outside the install directory.
