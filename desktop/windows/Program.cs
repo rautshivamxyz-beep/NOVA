@@ -152,7 +152,7 @@ internal sealed class ModelPicker : Form
     {
         var selected = models.SelectedItem as ModelEntry;
         models.Items.Clear();
-        foreach (var file in Directory.EnumerateFiles(modelDirectory, "*.gguf", SearchOption.TopDirectoryOnly).OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        foreach (var file in Directory.EnumerateFiles(modelDirectory, "*.gguf", SearchOption.TopDirectoryOnly).OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase))
             models.Items.Add(new ModelEntry(file));
         if (models.Items.Count > 0) models.SelectedIndex = 0;
         if (selected is not null)
